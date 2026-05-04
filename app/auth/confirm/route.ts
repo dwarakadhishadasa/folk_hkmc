@@ -47,13 +47,15 @@ export async function GET(request: Request) {
       redirect("/auth/error?code=invite-verification-failed")
     }
 
+    let staff
     try {
-      const staff = await syncStaffProfileByEmail({ supabaseUserId: user.id, email })
-      redirect(safeNextPath(next, staff.role))
+      staff = await syncStaffProfileByEmail({ supabaseUserId: user.id, email })
     } catch {
       await supabase.auth.signOut()
       redirect("/auth/error?code=staff-authorization-failed")
     }
+
+    redirect(safeNextPath(next, staff.role))
   }
 
   if (!tokenHash || (type !== "invite" && type !== "magiclink" && type !== "email")) {
@@ -70,11 +72,13 @@ export async function GET(request: Request) {
     redirect("/auth/error?code=invite-verification-failed")
   }
 
+  let staff
   try {
-    const staff = await syncStaffProfileByEmail({ supabaseUserId: data.user.id, email })
-    redirect(safeNextPath(next, staff.role))
+    staff = await syncStaffProfileByEmail({ supabaseUserId: data.user.id, email })
   } catch {
     await supabase.auth.signOut()
     redirect("/auth/error?code=staff-authorization-failed")
   }
+
+  redirect(safeNextPath(next, staff.role))
 }
