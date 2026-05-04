@@ -104,7 +104,14 @@ type TableKey = "contacts" | "attendance" | "sessions" | "users" | "locations"
 interface AirtableConfig {
   apiToken: string
   baseId: string
-  tables: Record<TableKey, string>
+}
+
+const tableEnvNames: Record<TableKey, string> = {
+  contacts: "AIRTABLE_CONTACTS_TABLE_ID",
+  attendance: "AIRTABLE_ATTENDANCE_TABLE_ID",
+  sessions: "AIRTABLE_SESSIONS_TABLE_ID",
+  users: "AIRTABLE_USERS_TABLE_ID",
+  locations: "AIRTABLE_LOCATIONS_TABLE_ID",
 }
 
 export class AirtableConfigError extends Error {
@@ -138,19 +145,13 @@ function getConfig(): AirtableConfig {
   return {
     apiToken: requireEnv("AIRTABLE_API_TOKEN"),
     baseId: requireEnv("AIRTABLE_BASE_ID"),
-    tables: {
-      contacts: requireEnv("AIRTABLE_CONTACTS_TABLE_ID"),
-      attendance: requireEnv("AIRTABLE_ATTENDANCE_TABLE_ID"),
-      sessions: requireEnv("AIRTABLE_SESSIONS_TABLE_ID"),
-      users: requireEnv("AIRTABLE_USERS_TABLE_ID"),
-      locations: requireEnv("AIRTABLE_LOCATIONS_TABLE_ID"),
-    },
   }
 }
 
 function tableUrl(table: TableKey): string {
   const config = getConfig()
-  return `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tables[table])}`
+  const tableId = requireEnv(tableEnvNames[table])
+  return `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(tableId)}`
 }
 
 function recordUrl(table: TableKey, recordId: string): string {

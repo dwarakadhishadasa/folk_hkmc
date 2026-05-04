@@ -18,11 +18,20 @@ function safeNextPath(value: string | null, role: string): string {
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
+  const callbackError = requestUrl.searchParams.get("error_description") || requestUrl.searchParams.get("error")
   const code = requestUrl.searchParams.get("code")
   const tokenHash = requestUrl.searchParams.get("token_hash")
   const type = requestUrl.searchParams.get("type") as EmailOtpType | null
   const next = requestUrl.searchParams.get("next")
   const supabase = await createSupabaseServerClient()
+
+  if (callbackError) {
+    const params = new URLSearchParams({
+      code: "supabase-callback-error",
+      message: callbackError.slice(0, 240),
+    })
+    redirect(`/auth/error?${params.toString()}`)
+  }
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)

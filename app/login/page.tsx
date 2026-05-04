@@ -15,7 +15,33 @@ export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const redirectUrl = searchParams.get("redirect") || "/contact"
+  const requestedRedirectUrl = searchParams.get("redirect")
+  const redirectUrl = requestedRedirectUrl || "/contact"
+  const authCallbackCode = searchParams.get("code")
+  const authCallbackTokenHash = searchParams.get("token_hash")
+  const authCallbackType = searchParams.get("type")
+
+  useEffect(() => {
+    if (!authCallbackCode && !authCallbackTokenHash) {
+      return
+    }
+
+    const callbackParams = new URLSearchParams()
+    if (authCallbackCode) {
+      callbackParams.set("code", authCallbackCode)
+    }
+    if (authCallbackTokenHash) {
+      callbackParams.set("token_hash", authCallbackTokenHash)
+    }
+    if (authCallbackType) {
+      callbackParams.set("type", authCallbackType)
+    }
+    if (requestedRedirectUrl) {
+      callbackParams.set("next", requestedRedirectUrl)
+    }
+
+    router.replace(`/auth/confirm?${callbackParams.toString()}`)
+  }, [authCallbackCode, authCallbackTokenHash, authCallbackType, requestedRedirectUrl, router])
 
   useEffect(() => {
     if (isHydrated && isLoggedIn) {
@@ -23,7 +49,7 @@ export default function LoginPage() {
     }
   }, [isLoggedIn, isHydrated, router, redirectUrl])
 
-  if (!isHydrated) {
+  if (!isHydrated || authCallbackCode || authCallbackTokenHash) {
     return (
       <div className="min-h-screen bg-[#FFF9F0] flex items-center justify-center">
         <div className="text-center text-[#24324A]">Loading...</div>
