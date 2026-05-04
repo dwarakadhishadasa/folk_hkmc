@@ -86,7 +86,7 @@ async function syncQueuedRequests() {
         body: request.body,
       })
 
-      if (response.ok) {
+      if (response.ok || response.status === 409) {
         await removeFromQueue(request.id)
         console.log("[v0] Synced offline request:", request.url)
       }
@@ -130,7 +130,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url)
 
-  // Handle POST requests (registration, attendance) differently
+  // Handle public POST requests (registration, attendance) differently.
+  // Staff contact writes are intentionally not queued because they need a live staff session.
   if (
     event.request.method === "POST" &&
     (url.pathname.includes("/registration") || url.pathname.includes("/attendance"))

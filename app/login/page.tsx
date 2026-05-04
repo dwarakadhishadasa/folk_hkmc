@@ -7,9 +7,9 @@ import { Header } from "@/components/header"
 import { useAuth } from "@/lib/auth-context"
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
+  const [email, setEmail] = useState("")
   const [error, setError] = useState("")
+  const [message, setMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const { login, isLoggedIn, isHydrated } = useAuth()
   const router = useRouter()
@@ -38,15 +38,14 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setMessage("")
     setIsLoading(true)
 
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    const success = login(username, password)
+    const success = await login(email)
     if (success) {
-      router.push(redirectUrl)
+      setMessage("Check your email for the secure sign-in link.")
     } else {
-      setError("Invalid username or password")
+      setError("Unable to send sign-in link. Check the email and try again.")
     }
     setIsLoading(false)
   }
@@ -58,10 +57,10 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-8 text-white text-center">
             <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-4xl">🔐</span>
+              <span className="text-4xl">🔑</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-poppins)]">Welcome Back</h2>
-            <p className="text-white/70 mt-2 text-sm">Sign in to access the FOLK system</p>
+            <p className="text-white/70 mt-2 text-sm">Use your invited staff email to enter the portal</p>
           </div>
 
           <div className="p-6 sm:p-8">
@@ -72,32 +71,22 @@ export default function LoginPage() {
                   <p className="text-sm text-red-700">{error}</p>
                 </div>
               )}
+              {message && (
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+                  {message}
+                </div>
+              )}
 
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-[#24324A] mb-2">
-                  Username
+                <label htmlFor="email" className="block text-sm font-medium text-[#24324A] mb-2">
+                  Staff Email
                 </label>
                 <input
-                  id="username"
-                  type="text"
-                  placeholder="Enter username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-[#24324A] mb-2">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
                 />
@@ -108,7 +97,7 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="w-full py-4 bg-[#F98B1C] hover:bg-[#e07a10] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-[#F98B1C]/30 disabled:shadow-none"
               >
-                {isLoading ? "Signing in..." : "Sign In"}
+                {isLoading ? "Sending link..." : "Send Sign-in Link"}
               </button>
             </form>
           </div>

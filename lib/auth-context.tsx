@@ -1,27 +1,20 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
+import type { StaffContext, StaffRole } from "@/lib/authz"
 
-export type UserRole = "volunteer" | "preacher"
-
-export interface User {
-  username: string
-  password: string
-  role: UserRole
-}
-
-// Static users - anyone can use these
-export const USERS: User[] = [
-  { username: "volunteer", password: "haribol123", role: "volunteer" },
-  { username: "preacher", password: "haribol456", role: "preacher" },
-]
+export type UserRole = StaffRole
 
 interface AuthContextType {
   isLoggedIn: boolean
   username: string | null
   role: UserRole | null
-  login: (username: string, password: string) => boolean
+  staff: StaffContext | null
+  login: (email: string) => Promise<boolean>
   logout: () => void
+  refresh: () => Promise<void>
+  isAdmin: boolean
   isPreacher: boolean
   isVolunteer: boolean
   isHydrated: boolean
@@ -29,63 +22,74 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+async function loadStaff(): Promise<StaffContext | null> {
+  const response = await fetch("/api/auth/me", {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  })
+
+  if (!response.ok) {
+    return null
+  }
+
+  const data = (await response.json()) as { staff?: StaffContext }
+  return data.staff || null
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [username, setUsername] = useState<string | null>(null)
-  const [role, setRole] = useState<UserRole | null>(null)
+  const [staff, setStaff] = useState<StaffContext | null>(null)
 
-  // Hydrate from localStorage only on client
-  useEffect(() => {
-    const storedAuth = localStorage.getItem("folk_auth")
-    if (storedAuth) {
-      try {
-        const { username, role } = JSON.parse(storedAuth)
-        setIsLoggedIn(true)
-        setUsername(username)
-        setRole(role)
-      } catch {
-        localStorage.removeItem("folk_auth")
-      }
+  const refresh = useCallback(async () => {
+    try {
+      setStaff(await loadStaff())
+    } catch {
+      setStaff(null)
+    } finally {
+      setIsHydrated(true)
     }
-    setIsHydrated(true)
   }, [])
 
-  const login = (inputUsername: string, inputPassword: string): boolean => {
-    const user = USERS.find((u) => u.username === inputUsername && u.password === inputPassword)
-    if (user) {
-      setIsLoggedIn(true)
-      setUsername(user.username)
-      setRole(user.role)
-      localStorage.setItem("folk_auth", JSON.stringify({ username: user.username, role: user.role }))
-      return true
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const login = useCallback(async (email: string): Promise<boolean> => {
+    const supabase = createSupabaseBrowserClient()
+    const redirectTo = `${window.location.origin}/auth/confirm`
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim().toLowerCase(),
+      options: {
+        emailRedirectTo: redirectTo,
+      },
+    })
+
+    return !error
+  }, [])
+
+  const logout = useCallback(() => {
+    window.location.assign("/auth/signout")
+  }, [])
+
+  const value = useMemo<AuthContextType>(() => {
+    const role = staff?.role || null
+
+    return {
+      isLoggedIn: Boolean(staff),
+      username: staff?.name || staff?.email || null,
+      role,
+      staff,
+      login,
+      logout,
+      refresh,
+      isAdmin: role === "Admin",
+      isPreacher: role === "Admin" || role === "Preacher",
+      isVolunteer: role === "Volunteer",
+      isHydrated,
     }
-    return false
-  }
+  }, [isHydrated, login, logout, refresh, staff])
 
-  const logout = () => {
-    setIsLoggedIn(false)
-    setUsername(null)
-    setRole(null)
-    localStorage.removeItem("folk_auth")
-  }
-
-  return (
-    <AuthContext.Provider
-      value={{
-        isLoggedIn,
-        username,
-        role,
-        login,
-        logout,
-        isPreacher: role === "preacher",
-        isVolunteer: role === "volunteer",
-        isHydrated,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

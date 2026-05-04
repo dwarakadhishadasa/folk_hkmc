@@ -30,12 +30,7 @@ export function LiveAttendanceDashboard() {
   const [attendanceList, setAttendanceList] = useState<AttendanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
-  const [origin, setOrigin] = useState("")
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setOrigin(window.location.origin)
-  }, [])
 
   const fetchAttendance = useCallback(async () => {
     setIsLoading(true)
@@ -82,10 +77,6 @@ export function LiveAttendanceDashboard() {
     year: "numeric",
   })
 
-  const qrCodeUrl = origin
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(origin + "/attend")}`
-    : ""
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -104,36 +95,22 @@ export function LiveAttendanceDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* QR Code Card */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-4 text-white">
-            <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)]">Attendance QR Code</h2>
-            <p className="text-white/70 text-sm">Show this QR to members for quick check-in</p>
+            <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)]">Attendance Links</h2>
+            <p className="text-white/70 text-sm">Use session-specific links and QR codes</p>
           </div>
-          <div className="p-6 flex flex-col items-center">
-            <div className="bg-white p-4 rounded-2xl shadow-inner border-2 border-gray-100">
-              {qrCodeUrl ? (
-                <img
-                  src={qrCodeUrl || "/placeholder.svg"}
-                  alt="Attendance QR Code"
-                  width={220}
-                  height={220}
-                  className="rounded-lg"
-                />
-              ) : (
-                <div className="w-[220px] h-[220px] flex items-center justify-center bg-gray-50 rounded-lg">
-                  <span className="text-sm text-gray-400">Loading QR...</span>
-                </div>
-              )}
-            </div>
-            <div className="mt-4 text-center">
-              <span className="inline-block bg-[#0F1E54]/5 text-[#0F1E54] px-4 py-2 rounded-full text-sm font-medium">
-                FOLK Chennai Attendance
-              </span>
-              <p className="text-xs text-[#24324A]/50 mt-2 break-all max-w-[250px]">
-                {origin ? `${origin}/attend` : "Generating URL..."}
-              </p>
-            </div>
+          <div className="p-6">
+            <p className="text-sm text-[#24324A]/70">
+              Generic attendance links are disabled. Create or select a session to share its `/attend?session=...`
+              link and QR code.
+            </p>
+            <a
+              href="/sessions"
+              className="mt-4 inline-flex rounded-xl bg-[#0F1E54] px-5 py-3 text-sm font-semibold text-white"
+            >
+              Open Sessions
+            </a>
           </div>
         </div>
 

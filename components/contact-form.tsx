@@ -10,6 +10,7 @@ interface ContactData {
   occupation: string
   year: string
   location: string
+  assignedPreacherAirtableUserId: string
 }
 
 const initialFormData: ContactData = {
@@ -19,13 +20,22 @@ const initialFormData: ContactData = {
   occupation: "",
   year: "Unknown",
   location: "",
+  assignedPreacherAirtableUserId: "",
 }
 
-export function ContactForm() {
+export function ContactForm({
+  staffRole,
+  preachers = [],
+}: {
+  staffRole: "Admin" | "Preacher" | "Volunteer"
+  preachers?: Array<{ id: string; name: string }>
+}) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [isDuplicate, setIsDuplicate] = useState(false)
   const [formData, setFormData] = useState<ContactData>(initialFormData)
   const [phoneError, setPhoneError] = useState("")
+  const [message, setMessage] = useState("")
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -62,6 +72,8 @@ export function ContactForm() {
   const handleAddAnother = () => {
     setFormData(initialFormData)
     setIsSuccess(false)
+    setIsDuplicate(false)
+    setMessage("")
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,34 +84,60 @@ export function ContactForm() {
       return
     }
 
+    if (staffRole === "Admin" && !formData.assignedPreacherAirtableUserId) {
+      setMessage("Choose an assigned Preacher before saving this contact.")
+      return
+    }
+
     setIsSubmitting(true)
+    setMessage("")
+    setIsDuplicate(false)
 
     try {
+      if (!navigator.onLine) {
+        setMessage("Staff contact capture requires an online staff session. Please reconnect and submit again.")
+        return
+      }
+
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       })
 
-      if (!response.ok) throw new Error("Failed to generate contact")
+      const data = await response.json()
+
+      if (response.status === 409 && data.duplicate) {
+        setIsDuplicate(true)
+        setMessage("This contact already exists in Airtable.")
+        return
+      }
+
+      if (!response.ok) throw new Error(data.error || "Failed to generate contact")
 
       setIsSuccess(true)
     } catch (error) {
-      alert("Failed to save contact. Please try again.")
+      setMessage(error instanceof Error ? error.message : "Failed to save contact. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (isSuccess) {
+  if (isSuccess || isDuplicate) {
     return (
       <div className="bg-white rounded-lg shadow-lg p-8 text-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
-            <span className="text-4xl text-green-600">✓</span>
+          <div className={`h-16 w-16 rounded-full ${isDuplicate ? "bg-amber-100" : "bg-green-100"} flex items-center justify-center`}>
+            <span className={`text-4xl ${isDuplicate ? "text-amber-600" : "text-green-600"}`}>
+              {isDuplicate ? "!" : "✓"}
+            </span>
           </div>
-          <h2 className="text-2xl font-semibold text-gray-900">Contact Added Successfully!</h2>
-          <p className="text-gray-600">The contact has been saved to the FOLK database.</p>
+          <h2 className="text-2xl font-semibold text-gray-900">
+            {isDuplicate ? "Contact Already Exists" : "Contact Added Successfully!"}
+          </h2>
+          <p className="text-gray-600">
+            {isDuplicate ? "No duplicate contact was created." : "The contact has been saved to the FOLK database."}
+          </p>
           <button
             onClick={handleAddAnother}
             className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
@@ -118,6 +156,16 @@ export function ContactForm() {
         <p className="text-blue-100 text-sm mt-1">Add a new contact to the FOLK database</p>
       </div>
       <div className="p-6">
+        <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          {staffRole === "Volunteer" && "Volunteer contacts are automatically assigned to your Preacher."}
+          {staffRole === "Preacher" && "Contacts you create are assigned to you."}
+          {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
+        </div>
+        {message && (
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {message}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -213,7 +261,7 @@ export function ContactForm() {
 
           <div className="space-y-2">
             <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-              Location *
+              Location
             </label>
             <input
               id="location"
@@ -222,10 +270,32 @@ export function ContactForm() {
               placeholder="Enter city/area (e.g., Chennai, Thiruvanmiyur)"
               value={formData.location}
               onChange={handleChange}
-              required
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
+          {staffRole === "Admin" && (
+            <div className="space-y-2">
+              <label htmlFor="assignedPreacherAirtableUserId" className="block text-sm font-medium text-gray-700">
+                Assigned Preacher *
+              </label>
+              <select
+                id="assignedPreacherAirtableUserId"
+                name="assignedPreacherAirtableUserId"
+                value={formData.assignedPreacherAirtableUserId}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Preacher</option>
+                {preachers.map((preacher) => (
+                  <option key={preacher.id} value={preacher.id}>
+                    {preacher.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <button
             type="submit"

@@ -1,7 +1,13 @@
 import { AttendanceForm } from "@/components/attendance-form"
 import { Header } from "@/components/header"
 
-export default function AttendPage() {
+export default async function AttendPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ session?: string }>
+}) {
+  const { session } = await searchParams
+
   return (
     <div className="min-h-screen bg-[#FFF9F0]">
       <Header />
@@ -12,7 +18,7 @@ export default function AttendPage() {
           </h1>
           <p className="text-[#24324A]/70 text-sm">Enter your mobile number to record your attendance</p>
         </div>
-        <AttendanceForm />
+        <AttendanceForm sessionId={session || ""} />
       </main>
     </div>
   )

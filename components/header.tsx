@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 
 export function Header() {
-  const { isLoggedIn, logout, isPreacher, username, role, isHydrated } = useAuth()
+  const { isLoggedIn, logout, isAdmin, isPreacher, username, role, isHydrated } = useAuth()
 
   if (!isHydrated) {
     return (
@@ -49,11 +49,33 @@ export function Header() {
                   <span className="hidden xs:inline">Add </span>Contact
                 </Link>
                 {isPreacher && (
+                  <>
+                    <Link
+                      href="/dashboard"
+                      className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/sessions"
+                      className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
+                    >
+                      Sessions
+                    </Link>
+                    <Link
+                      href="/volunteers"
+                      className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
+                    >
+                      Invite
+                    </Link>
+                  </>
+                )}
+                {isAdmin && (
                   <Link
-                    href="/dashboard"
+                    href="/admin/invite"
                     className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
                   >
-                    Dashboard
+                    Admin
                   </Link>
                 )}
               </>

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Header } from "@/components/header"
 
 interface FormData {
@@ -15,11 +15,12 @@ interface FormData {
 }
 
 function RegisterForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState("")
+  const [sessionId, setSessionId] = useState("")
+  const [successMessage, setSuccessMessage] = useState("Registration Successful")
   const [formData, setFormData] = useState<FormData>({
     name: "",
     mobile: "",
@@ -32,7 +33,11 @@ function RegisterForm() {
   useEffect(() => {
     const mobileParam = searchParams.get("mobile")
     if (mobileParam) {
-      setFormData((prev) => ({ ...prev, mobile: mobileParam }))
+      setFormData((prev) => ({ ...prev, mobile: mobileParam.replace(/\D/g, "").slice(-10) }))
+    }
+    const sessionParam = searchParams.get("session")
+    if (sessionParam) {
+      setSessionId(sessionParam)
     }
   }, [searchParams])
 
@@ -52,6 +57,23 @@ function RegisterForm() {
     }))
   }
 
+  const completeAttendance = async (mobile: string, currentSessionId: string) => {
+    const attendanceResponse = await fetch("/attendance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mobile, sessionId: currentSessionId }),
+    })
+    const attendanceData = await attendanceResponse.json()
+
+    if (attendanceResponse.ok || (attendanceResponse.status === 409 && attendanceData.duplicate)) {
+      setSuccessMessage("Registration complete and attendance marked")
+      setSuccess(true)
+      return true
+    }
+
+    throw new Error(attendanceData.error || "Registration succeeded, but attendance could not be marked.")
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -61,7 +83,7 @@ function RegisterForm() {
       const res = await fetch("/api/registration", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, sessionId }),
       })
 
       const data = await res.json()
@@ -72,14 +94,19 @@ function RegisterForm() {
 
         if ("serviceWorker" in navigator && "sync" in ServiceWorkerRegistration.prototype) {
           const registration = await navigator.serviceWorker.ready
-          await registration.sync.register("sync-requests")
+          await (registration as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register(
+            "sync-requests",
+          )
         }
         return
       }
 
       if (res.status === 409 && data.alreadyRegistered) {
-        setError("You are already registered! Redirecting to attendance...")
-        setTimeout(() => router.push("/attend"), 2000)
+        if (sessionId) {
+          await completeAttendance(formData.mobile, sessionId)
+          return
+        }
+        setError("You are already registered. Please use your session attendance link to mark attendance.")
         return
       }
 
@@ -87,8 +114,12 @@ function RegisterForm() {
         throw new Error(data.error || "Failed to register")
       }
 
-      setSuccess(true)
-      setTimeout(() => router.push("/attend"), 2000)
+      if (sessionId) {
+        await completeAttendance(formData.mobile, sessionId)
+      } else {
+        setSuccessMessage("Registration Successful")
+        setSuccess(true)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register. Please try again.")
     } finally {
@@ -107,8 +138,8 @@ function RegisterForm() {
         <h2 className="text-2xl font-bold text-[#24324A] mb-2 font-[family-name:var(--font-poppins)]">
           Welcome to FOLK Chennai!
         </h2>
-        <p className="text-green-600 font-medium">Registration Successful</p>
-        <p className="text-[#24324A]/50 text-sm mt-2">Redirecting to attendance...</p>
+        <p className="text-green-600 font-medium">{successMessage}</p>
+        <p className="text-[#24324A]/50 text-sm mt-2">Thank you for joining us.</p>
       </div>
     )
   }
@@ -128,6 +159,11 @@ function RegisterForm() {
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
             <span className="text-red-500">⚠️</span>
             <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+        {sessionId && (
+          <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            Your attendance will be completed automatically after registration.
           </div>
         )}
 

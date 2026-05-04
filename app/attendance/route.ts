@@ -1,91 +1,130 @@
-import { NextResponse } from "next/server"
-import { findUserByPhone, createAttendanceRecord, getAttendanceByDate, hasAttendanceToday } from "@/lib/airtable"
+import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
+import {
+  createAttendanceRecord,
+  findAttendanceByContactAndSession,
+  findContactByPhone,
+  findSessionById,
+  getAttendanceByDate,
+  normalizeMobile,
+} from "@/lib/airtable"
+
+export const dynamic = "force-dynamic"
+
+interface AttendancePayload {
+  mobile?: string
+  sessionId?: string
+}
+
+function sessionWindowState(session: Awaited<ReturnType<typeof findSessionById>>) {
+  if (!session) {
+    return { ok: false, status: 404, error: "Invalid attendance session." }
+  }
+
+  if (!session.publicAttendanceEnabled) {
+    return { ok: false, status: 403, error: "Attendance is not open for this session." }
+  }
+
+  const now = Date.now()
+  if (session.attendanceOpensAt && now < Date.parse(session.attendanceOpensAt)) {
+    return { ok: false, status: 403, error: "Attendance is not open yet." }
+  }
+
+  if (session.attendanceClosesAt && now > Date.parse(session.attendanceClosesAt)) {
+    return { ok: false, status: 403, error: "Attendance is closed for this session." }
+  }
+
+  return { ok: true }
+}
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    console.log("[v0] Received body:", JSON.stringify(body))
+    const body = (await request.json()) as AttendancePayload
+    const mobile = normalizeMobile(body.mobile)
+    const sessionId = body.sessionId?.trim()
 
-    const mobile = body.mobile?.replace(/\D/g, "").slice(-10)
-    console.log("[v0] Cleaned mobile number:", mobile)
-
-    if (!mobile || mobile.length !== 10) {
-      console.log("[v0] Invalid mobile - length:", mobile?.length)
-      return NextResponse.json({ error: "Invalid mobile number" }, { status: 400 })
+    if (!mobile) {
+      return Response.json({ error: "Invalid mobile number" }, { status: 400 })
     }
 
-    console.log("[v0] Looking up user with phone:", mobile)
-    const airtableUser = await findUserByPhone(mobile)
-    console.log("[v0] Airtable user result:", airtableUser ? "Found" : "Not Found")
+    if (!sessionId) {
+      return Response.json({ error: "A session-specific attendance link is required." }, { status: 400 })
+    }
 
-    if (!airtableUser) {
-      return NextResponse.json(
-        { error: "User not found. Please register first.", notRegistered: true },
+    const session = await findSessionById(sessionId)
+    const windowState = sessionWindowState(session)
+    if (!windowState.ok) {
+      return Response.json({ error: windowState.error }, { status: windowState.status })
+    }
+
+    const contact = await findContactByPhone(mobile)
+    if (!contact) {
+      return Response.json(
+        {
+          error: "User not found. Please register first.",
+          notRegistered: true,
+          mobile,
+          sessionId,
+        },
         { status: 404 },
       )
     }
 
-    const userName = airtableUser.fields.Name || "Unknown"
-
-    const today = new Date().toISOString().split("T")[0]
-    const alreadyMarked = await hasAttendanceToday(mobile, today)
-
-    if (alreadyMarked) {
-      console.log("[v0] Duplicate attendance detected for:", mobile)
-      return NextResponse.json(
+    const existing = await findAttendanceByContactAndSession(contact.id, sessionId)
+    if (existing) {
+      return Response.json(
         {
-          error: "Attendance already marked for today",
+          error: "Attendance already marked for this session",
           duplicate: true,
-          userName: userName,
+          id: existing.id,
+          mobile,
+          userName: contact.name,
+          sessionId,
+          createdAt: existing.createdTime || new Date().toISOString(),
         },
         { status: 409 },
       )
     }
 
     const attendanceRecord = await createAttendanceRecord({
+      contactId: contact.id,
+      sessionId,
       phone: mobile,
-      name: userName,
+      name: contact.name,
     })
 
-    if (!attendanceRecord) {
-      return NextResponse.json({ error: "Failed to record attendance in Airtable" }, { status: 500 })
-    }
-
-    return NextResponse.json(
+    return Response.json(
       {
         id: attendanceRecord.id,
-        mobile: mobile,
-        userName: userName,
+        mobile,
+        userName: contact.name,
+        sessionId,
         createdAt: new Date().toISOString(),
       },
       { status: 201 },
     )
   } catch (error) {
-    console.error("[v0] Attendance error:", error)
-    return NextResponse.json({ error: "Failed to mark attendance" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Failed to mark attendance"
+    return Response.json({ error: message }, { status: 500 })
   }
 }
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
-
-  console.log("[v0] GET /attendance called with date:", date)
-
   try {
+    const staff = await getStaffContext()
+    requireRole(staff, ["Admin", "Preacher"])
+
+    const { searchParams } = new URL(request.url)
+    const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
     const airtableRecords = await getAttendanceByDate(date)
-    console.log("[v0] Airtable records received:", airtableRecords?.length || 0)
 
     const attendanceList = (airtableRecords || []).map((record) => ({
       id: record.id,
       mobile: String(record.fields.Phone || ""),
       userName: record.fields.Name || "Unknown",
-      createdAt: record.fields["Attendance Date"] || date,
+      createdAt: record.createdTime || record.fields["Attendance Date"] || date,
     }))
 
-    console.log("[v0] Mapped attendance list count:", attendanceList.length)
-
-    return NextResponse.json(attendanceList, {
+    return Response.json(attendanceList, {
       headers: {
         "Cache-Control": "no-cache, no-store, must-revalidate",
         Pragma: "no-cache",
@@ -93,8 +132,6 @@ export async function GET(request: Request) {
       },
     })
   } catch (error) {
-    console.error("[v0] Failed to fetch attendance:", error)
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    return NextResponse.json({ error: "Failed to fetch attendance", details: errorMessage }, { status: 500 })
+    return authzErrorResponse(error)
   }
 }

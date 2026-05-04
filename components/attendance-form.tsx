@@ -4,7 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
-export function AttendanceForm() {
+export function AttendanceForm({ sessionId }: { sessionId: string }) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
@@ -24,7 +24,7 @@ export function AttendanceForm() {
       const response = await fetch("/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobile: mobile.replace(/\D/g, "") }),
+        body: JSON.stringify({ mobile: mobile.replace(/\D/g, ""), sessionId }),
       })
 
       const data = await response.json()
@@ -35,14 +35,20 @@ export function AttendanceForm() {
 
         if ("serviceWorker" in navigator && "sync" in ServiceWorkerRegistration.prototype) {
           const registration = await navigator.serviceWorker.ready
-          await registration.sync.register("sync-requests")
+          await (registration as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register(
+            "sync-requests",
+          )
         }
         return
       }
 
       if (response.status === 404) {
         setTimeout(() => {
-          router.push(`/register?mobile=${mobile.replace(/\D/g, "")}`)
+          const params = new URLSearchParams({ mobile: data.mobile || mobile.replace(/\D/g, "") })
+          if (data.sessionId || sessionId) {
+            params.set("session", data.sessionId || sessionId)
+          }
+          router.push(`/register?${params.toString()}`)
         }, 1000)
         return
       }
@@ -54,12 +60,12 @@ export function AttendanceForm() {
         return
       }
 
-      if (!response.ok) throw new Error("Failed to mark attendance")
+      if (!response.ok) throw new Error(data.error || "Failed to mark attendance")
 
       setUserName(data.userName || "")
       setIsSuccess(true)
-    } catch {
-      setError("Failed to mark attendance. Please try again.")
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to mark attendance. Please try again.")
       setIsSubmitting(false)
     }
   }
@@ -145,6 +151,11 @@ export function AttendanceForm() {
       </div>
 
       <div className="p-6">
+        {!sessionId && (
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+            Please use the session-specific attendance link shared by your coordinator.
+          </div>
+        )}
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
             <span className="text-red-500 text-lg">⚠️</span>
@@ -175,7 +186,7 @@ export function AttendanceForm() {
 
           <button
             type="submit"
-            disabled={isSubmitting || !isMobileValid}
+            disabled={isSubmitting || !isMobileValid || !sessionId}
             className="w-full py-4 bg-[#F98B1C] hover:bg-[#e07a10] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-[#F98B1C]/30 disabled:shadow-none"
           >
             {isSubmitting ? (

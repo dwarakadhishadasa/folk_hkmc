@@ -1,289 +1,531 @@
+import "server-only"
+
+export type StaffRole = "Admin" | "Preacher" | "Volunteer"
+export type StaffStatus = "Active" | "Inactive"
+
+export interface AirtableRecord<TFields extends object = Record<string, unknown>> {
+  id: string
+  fields: TFields
+  createdTime?: string
+}
+
+export interface ContactFields {
+  Name?: string
+  Phone?: string | number
+  Age?: number
+  Year?: string
+  Source?: string
+  Location?: string | string[]
+  "Assigned Preacher"?: string[]
+  "Collected By"?: string[]
+}
+
+export interface AttendanceFields {
+  Phone?: string | number
+  Name?: string
+  "Attendance Date"?: string
+  Contact?: string[]
+  Session?: string[]
+  "Processed?"?: boolean
+}
+
+export interface SessionFields {
+  Name?: string
+  "Session Date"?: string
+  Preacher?: string[]
+  Location?: string[]
+  "Public Attendance Enabled"?: boolean
+  "Attendance Opens At"?: string
+  "Attendance Closes At"?: string
+  "Attendance URL"?: string
+}
+
+export interface UserFields {
+  Name?: string
+  Email?: string
+  Role?: StaffRole
+  Status?: StaffStatus
+  Locations?: string[]
+  "Portal Account"?: string
+  "Supabase User ID"?: string
+  "Invited By"?: string[]
+  "Assigned Preacher"?: string[]
+}
+
+export interface LocationFields {
+  Name?: string
+  Status?: string
+}
+
+export interface StaffUser {
+  id: string
+  email: string
+  name: string
+  role: StaffRole
+  status: StaffStatus
+  locationIds: string[]
+  portalAccount?: string
+  supabaseUserId?: string
+  invitedByAirtableUserId?: string
+  assignedPreacherAirtableUserId?: string
+}
+
+export interface ContactRecord {
+  id: string
+  name: string
+  phone: string
+  age?: number
+  year?: string
+  location?: string | string[]
+  assignedPreacherIds: string[]
+  collectedByIds: string[]
+}
+
+export interface SessionRecord {
+  id: string
+  name: string
+  sessionDate?: string
+  preacherIds: string[]
+  locationIds: string[]
+  publicAttendanceEnabled: boolean
+  attendanceOpensAt?: string
+  attendanceClosesAt?: string
+  attendanceUrl?: string
+}
+
+export interface AttendanceRecord {
+  id: string
+  fields: AttendanceFields
+  createdTime?: string
+}
+
+type TableKey = "contacts" | "attendance" | "sessions" | "users" | "locations"
+
+interface AirtableConfig {
+  apiToken: string
+  baseId: string
+  tables: Record<TableKey, string>
+}
+
+export class AirtableConfigError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "AirtableConfigError"
+  }
+}
+
+export class AirtableRequestError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = "AirtableRequestError"
+    this.status = status
+  }
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name]
 
   if (!value) {
-    throw new Error(`${name} is required`)
+    throw new AirtableConfigError(`${name} is required`)
   }
 
   return value
 }
 
-const AIRTABLE_API_TOKEN = requireEnv("AIRTABLE_API_TOKEN")
-const AIRTABLE_BASE_ID = requireEnv("AIRTABLE_BASE_ID")
-// Table IDs are base-specific, so allow overriding them and fall back to stable table names.
-const AIRTABLE_CONTACTS_TABLE = process.env.AIRTABLE_CONTACTS_TABLE_ID || process.env.AIRTABLE_CONTACTS_TABLE_NAME || "Contacts"
-const AIRTABLE_ATTENDANCE_TABLE =
-  process.env.AIRTABLE_ATTENDANCE_TABLE_ID || process.env.AIRTABLE_ATTENDANCE_TABLE_NAME || "Attendance"
-
-const AIRTABLE_CONTACTS_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_CONTACTS_TABLE)}`
-const AIRTABLE_ATTENDANCE_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(AIRTABLE_ATTENDANCE_TABLE)}`
-
-export interface AirtableRecord {
-  id: string
-  fields: {
-    Name?: string
-    Phone?: string
-    Year?: string
-    Source?: string
-    Age?: number
-    Location?: string
+function getConfig(): AirtableConfig {
+  return {
+    apiToken: requireEnv("AIRTABLE_API_TOKEN"),
+    baseId: requireEnv("AIRTABLE_BASE_ID"),
+    tables: {
+      contacts: requireEnv("AIRTABLE_CONTACTS_TABLE_ID"),
+      attendance: requireEnv("AIRTABLE_ATTENDANCE_TABLE_ID"),
+      sessions: requireEnv("AIRTABLE_SESSIONS_TABLE_ID"),
+      users: requireEnv("AIRTABLE_USERS_TABLE_ID"),
+      locations: requireEnv("AIRTABLE_LOCATIONS_TABLE_ID"),
+    },
   }
 }
 
-export interface AttendanceRecord {
-  id: string
-  fields: {
-    Phone?: string
-    Name?: string
-    "Attendance Date"?: string
-  }
+function tableUrl(table: TableKey): string {
+  const config = getConfig()
+  return `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(config.tables[table])}`
 }
 
-// Check if user exists by phone number
-export async function findUserByPhone(phone: string): Promise<AirtableRecord | null> {
-  if (!AIRTABLE_API_TOKEN) {
-    console.error("[v0] AIRTABLE_API_TOKEN not configured")
+function recordUrl(table: TableKey, recordId: string): string {
+  return `${tableUrl(table)}/${recordId}`
+}
+
+function escapeFormulaString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
+}
+
+function normalizeLinkedIds(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}
+
+function normalizeString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+export function normalizeMobile(value: unknown): string | null {
+  if (typeof value !== "string" && typeof value !== "number") {
     return null
   }
 
+  const digits = String(value).replace(/\D/g, "").slice(-10)
+  return digits.length === 10 ? digits : null
+}
+
+async function airtableFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const config = getConfig()
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${config.apiToken}`,
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new AirtableRequestError(`Airtable request failed with ${response.status}: ${text}`, response.status)
+  }
+
+  return response.json() as Promise<T>
+}
+
+async function listRecords<TFields extends object>(
+  table: TableKey,
+  options: { filterFormula?: string; pageSize?: number; maxRecords?: number } = {},
+): Promise<Array<AirtableRecord<TFields>>> {
+  const url = new URL(tableUrl(table))
+  if (options.filterFormula) {
+    url.searchParams.set("filterByFormula", options.filterFormula)
+  }
+  if (options.pageSize) {
+    url.searchParams.set("pageSize", String(options.pageSize))
+  }
+  if (options.maxRecords) {
+    url.searchParams.set("maxRecords", String(options.maxRecords))
+  }
+
+  const records: Array<AirtableRecord<TFields>> = []
+  let offset: string | undefined
+
+  do {
+    if (offset) {
+      url.searchParams.set("offset", offset)
+    }
+
+    const result = await airtableFetch<{ records?: Array<AirtableRecord<TFields>>; offset?: string }>(url.toString())
+    records.push(...(result.records || []))
+    offset = result.offset
+  } while (offset && (!options.maxRecords || records.length < options.maxRecords))
+
+  return options.maxRecords ? records.slice(0, options.maxRecords) : records
+}
+
+async function createRecord<TFields extends object>(
+  table: TableKey,
+  fields: Record<string, unknown>,
+  typecast = true,
+): Promise<AirtableRecord<TFields>> {
+  const result = await airtableFetch<{ records: Array<AirtableRecord<TFields>> }>(tableUrl(table), {
+    method: "POST",
+    body: JSON.stringify({ records: [{ fields }], typecast }),
+  })
+
+  return result.records[0]
+}
+
+async function updateRecord<TFields extends object>(
+  table: TableKey,
+  recordId: string,
+  fields: Record<string, unknown>,
+  typecast = true,
+): Promise<AirtableRecord<TFields>> {
+  const result = await airtableFetch<{ records: Array<AirtableRecord<TFields>> }>(tableUrl(table), {
+    method: "PATCH",
+    body: JSON.stringify({ records: [{ id: recordId, fields }], typecast }),
+  })
+
+  return result.records[0]
+}
+
+function mapStaffUser(record: AirtableRecord<UserFields>): StaffUser | null {
+  const email = normalizeString(record.fields.Email)?.toLowerCase()
+  const role = record.fields.Role
+  const status = record.fields.Status
+
+  if (!email || !role || !["Admin", "Preacher", "Volunteer"].includes(role)) {
+    return null
+  }
+
+  return {
+    id: record.id,
+    email,
+    name: normalizeString(record.fields.Name) || email,
+    role,
+    status: status === "Active" ? "Active" : "Inactive",
+    locationIds: normalizeLinkedIds(record.fields.Locations),
+    portalAccount: normalizeString(record.fields["Portal Account"]),
+    supabaseUserId: normalizeString(record.fields["Supabase User ID"]),
+    invitedByAirtableUserId: normalizeLinkedIds(record.fields["Invited By"])[0],
+    assignedPreacherAirtableUserId: normalizeLinkedIds(record.fields["Assigned Preacher"])[0],
+  }
+}
+
+export async function findStaffUserByEmail(email: string): Promise<StaffUser | null> {
+  const normalizedEmail = email.trim().toLowerCase()
+  const records = await listRecords<UserFields>("users", {
+    filterFormula: `LOWER({Email})='${escapeFormulaString(normalizedEmail)}'`,
+    maxRecords: 1,
+  })
+
+  return records[0] ? mapStaffUser(records[0]) : null
+}
+
+export async function findStaffUserById(recordId: string): Promise<StaffUser | null> {
   try {
-    // Try numeric comparison first (no quotes) since Phone might be stored as number
-    const filterFormula = `{Phone}=${phone}`
-    const encodedFilter = encodeURIComponent(filterFormula)
-    const url = `${AIRTABLE_CONTACTS_URL}?filterByFormula=${encodedFilter}`
-
-    console.log("[v0] Phone number being searched:", phone)
-    console.log("[v0] Filter formula:", filterFormula)
-    console.log("[v0] Full URL:", url)
-
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    })
-
-    console.log("[v0] Airtable response status:", res.status)
-
-    const responseText = await res.text()
-    console.log("[v0] Airtable raw response:", responseText)
-
-    if (!res.ok) {
-      console.error("[v0] Airtable API error:", responseText)
+    const record = await airtableFetch<AirtableRecord<UserFields>>(recordUrl("users", recordId))
+    return mapStaffUser(record)
+  } catch (error) {
+    if (error instanceof AirtableRequestError && error.status === 404) {
       return null
     }
+    throw error
+  }
+}
 
-    const data = JSON.parse(responseText)
-    console.log("[v0] Parsed records count:", data.records?.length || 0)
+export async function listActivePreachers(): Promise<StaffUser[]> {
+  const records = await listRecords<UserFields>("users", {
+    filterFormula: "AND({Role}='Preacher', {Status}='Active')",
+  })
 
-    if (data.records && data.records.length > 0) {
-      console.log("[v0] Found user:", JSON.stringify(data.records[0].fields))
-      return data.records[0]
-    }
+  return records.map(mapStaffUser).filter((user): user is StaffUser => Boolean(user))
+}
 
-    // If no records found with numeric, try string comparison
-    console.log("[v0] Trying string comparison...")
-    const stringFilterFormula = `{Phone}='${phone}'`
-    const stringEncodedFilter = encodeURIComponent(stringFilterFormula)
-    const stringUrl = `${AIRTABLE_CONTACTS_URL}?filterByFormula=${stringEncodedFilter}`
+export async function upsertStaffUser(data: {
+  email: string
+  name: string
+  role: StaffRole
+  status?: StaffStatus
+  invitedByAirtableUserId: string
+  assignedPreacherAirtableUserId?: string
+  locationIds?: string[]
+  supabaseUserId?: string
+}): Promise<StaffUser> {
+  const existing = await findStaffUserByEmail(data.email)
+  const fields: Record<string, unknown> = {
+    Email: data.email.trim().toLowerCase(),
+    Name: data.name,
+    Role: data.role,
+    Status: data.status || "Active",
+    "Invited By": [data.invitedByAirtableUserId],
+  }
 
-    console.log("[v0] String filter formula:", stringFilterFormula)
+  if (data.locationIds?.length) {
+    fields.Locations = data.locationIds
+  }
+  if (data.assignedPreacherAirtableUserId) {
+    fields["Assigned Preacher"] = [data.assignedPreacherAirtableUserId]
+  }
+  if (data.supabaseUserId) {
+    fields["Supabase User ID"] = data.supabaseUserId
+  }
 
-    const stringRes = await fetch(stringUrl, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    })
+  const record = existing
+    ? await updateRecord<UserFields>("users", existing.id, fields)
+    : await createRecord<UserFields>("users", fields)
+  const mapped = mapStaffUser(record)
 
-    const stringData = await stringRes.json()
-    console.log("[v0] String comparison records count:", stringData.records?.length || 0)
+  if (!mapped) {
+    throw new AirtableRequestError("Airtable Users record is missing required staff fields", 422)
+  }
 
-    if (stringData.records && stringData.records.length > 0) {
-      console.log("[v0] Found user with string match:", JSON.stringify(stringData.records[0].fields))
-      return stringData.records[0]
-    }
+  return mapped
+}
 
-    console.log("[v0] No records found for phone:", phone)
-    return null
-  } catch (error) {
-    console.error("[v0] Failed to query Airtable:", error)
+export async function syncStaffSupabaseUserId(recordId: string, supabaseUserId: string): Promise<void> {
+  await updateRecord<UserFields>("users", recordId, { "Supabase User ID": supabaseUserId }, true)
+}
+
+export function mapContact(record: AirtableRecord<ContactFields>): ContactRecord {
+  const phone = normalizeMobile(record.fields.Phone) || String(record.fields.Phone || "")
+
+  return {
+    id: record.id,
+    name: normalizeString(record.fields.Name) || "Unknown",
+    phone,
+    age: typeof record.fields.Age === "number" ? record.fields.Age : undefined,
+    year: normalizeString(record.fields.Year),
+    location: record.fields.Location,
+    assignedPreacherIds: normalizeLinkedIds(record.fields["Assigned Preacher"]),
+    collectedByIds: normalizeLinkedIds(record.fields["Collected By"]),
+  }
+}
+
+export async function findContactByPhone(phone: string): Promise<ContactRecord | null> {
+  const normalizedPhone = normalizeMobile(phone)
+  if (!normalizedPhone) {
     return null
   }
+
+  const records = await listRecords<ContactFields>("contacts", {
+    filterFormula: `OR({Phone}='${normalizedPhone}', {Phone}=${normalizedPhone})`,
+    maxRecords: 1,
+  })
+
+  return records[0] ? mapContact(records[0]) : null
+}
+
+export async function createContact(data: {
+  name: string
+  phone: string
+  age?: number
+  year?: string
+  source?: string
+  location?: string
+  collectedByAirtableUserId?: string
+  assignedPreacherAirtableUserId?: string
+}): Promise<ContactRecord> {
+  const normalizedPhone = normalizeMobile(data.phone)
+  if (!normalizedPhone) {
+    throw new AirtableRequestError("Invalid phone number", 422)
+  }
+
+  const fields: Record<string, unknown> = {
+    Name: data.name.trim(),
+    Phone: normalizedPhone,
+  }
+
+  if (typeof data.age === "number") {
+    fields.Age = data.age
+  }
+  if (data.year) {
+    fields.Year = data.year
+  }
+  if (data.source) {
+    fields.Source = data.source
+  }
+  if (data.location) {
+    fields.Location = data.location.startsWith("rec") ? [data.location] : data.location
+  }
+  if (data.collectedByAirtableUserId) {
+    fields["Collected By"] = [data.collectedByAirtableUserId]
+  }
+  if (data.assignedPreacherAirtableUserId) {
+    fields["Assigned Preacher"] = [data.assignedPreacherAirtableUserId]
+  }
+
+  return mapContact(await createRecord<ContactFields>("contacts", fields))
+}
+
+export async function findSessionById(recordId: string): Promise<SessionRecord | null> {
+  try {
+    const record = await airtableFetch<AirtableRecord<SessionFields>>(recordUrl("sessions", recordId))
+    return mapSession(record)
+  } catch (error) {
+    if (error instanceof AirtableRequestError && error.status === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+export function mapSession(record: AirtableRecord<SessionFields>): SessionRecord {
+  return {
+    id: record.id,
+    name: normalizeString(record.fields.Name) || "Untitled session",
+    sessionDate: normalizeString(record.fields["Session Date"]),
+    preacherIds: normalizeLinkedIds(record.fields.Preacher),
+    locationIds: normalizeLinkedIds(record.fields.Location),
+    publicAttendanceEnabled: record.fields["Public Attendance Enabled"] === true,
+    attendanceOpensAt: normalizeString(record.fields["Attendance Opens At"]),
+    attendanceClosesAt: normalizeString(record.fields["Attendance Closes At"]),
+    attendanceUrl: normalizeString(record.fields["Attendance URL"]),
+  }
+}
+
+export async function listSessions(): Promise<SessionRecord[]> {
+  const records = await listRecords<SessionFields>("sessions")
+  return records.map(mapSession)
+}
+
+export async function findLocationById(recordId: string): Promise<AirtableRecord<LocationFields> | null> {
+  try {
+    return await airtableFetch<AirtableRecord<LocationFields>>(recordUrl("locations", recordId))
+  } catch (error) {
+    if (error instanceof AirtableRequestError && error.status === 404) {
+      return null
+    }
+    throw error
+  }
+}
+
+export async function createSession(data: {
+  name: string
+  sessionDate: string
+  preacherAirtableUserId: string
+  locationId: string
+  publicAttendanceEnabled: boolean
+  attendanceOpensAt?: string
+  attendanceClosesAt?: string
+}): Promise<SessionRecord> {
+  const fields: Record<string, unknown> = {
+    Name: data.name.trim(),
+    "Session Date": data.sessionDate,
+    Preacher: [data.preacherAirtableUserId],
+    Location: [data.locationId],
+    "Public Attendance Enabled": data.publicAttendanceEnabled,
+  }
+
+  if (data.attendanceOpensAt) {
+    fields["Attendance Opens At"] = data.attendanceOpensAt
+  }
+  if (data.attendanceClosesAt) {
+    fields["Attendance Closes At"] = data.attendanceClosesAt
+  }
+
+  return mapSession(await createRecord<SessionFields>("sessions", fields))
+}
+
+export async function updateSessionAttendanceUrl(sessionId: string, attendanceUrl: string): Promise<SessionRecord> {
+  return mapSession(await updateRecord<SessionFields>("sessions", sessionId, { "Attendance URL": attendanceUrl }))
+}
+
+export async function findAttendanceByContactAndSession(contactId: string, sessionId: string): Promise<AttendanceRecord | null> {
+  const records = await listRecords<AttendanceFields>("attendance", {
+    filterFormula: `AND(FIND('${escapeFormulaString(contactId)}', ARRAYJOIN({Contact})), FIND('${escapeFormulaString(
+      sessionId,
+    )}', ARRAYJOIN({Session})))`,
+    maxRecords: 1,
+  })
+
+  return records[0] || null
 }
 
 export async function createAttendanceRecord(data: {
+  contactId: string
+  sessionId: string
   phone: string
   name: string
-}): Promise<AttendanceRecord | null> {
-  if (!AIRTABLE_API_TOKEN) {
-    console.error("AIRTABLE_API_TOKEN not configured")
-    return null
-  }
-
-  try {
-    // Format current date as YYYY-MM-DD
-    const today = new Date().toISOString().split("T")[0]
-
-    const res = await fetch(AIRTABLE_ATTENDANCE_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        records: [
-          {
-            fields: {
-              Phone: data.phone,
-              Name: data.name,
-              "Attendance Date": today,
-            },
-          },
-        ],
-      }),
-    })
-
-    if (!res.ok) {
-      console.error("Airtable Attendance API error:", await res.text())
-      return null
-    }
-
-    const result = await res.json()
-    return result.records && result.records.length > 0 ? result.records[0] : null
-  } catch (error) {
-    console.error("Failed to create attendance record:", error)
-    return null
-  }
-}
-
-// Create a new registration record
-export async function createRegistrationRecord(data: {
-  name: string
-  phone: string
-  age: number
-  year: string
-  source: string
-  location?: string
-}): Promise<AirtableRecord | null> {
-  if (!AIRTABLE_API_TOKEN) {
-    console.error("AIRTABLE_API_TOKEN not configured")
-    return null
-  }
-
-  try {
-    const res = await fetch(AIRTABLE_CONTACTS_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        records: [
-          {
-            fields: {
-              Name: data.name,
-              Phone: data.phone,
-              Age: data.age,
-              Year: data.year,
-              Source: data.source,
-              Location: data.location || "",
-            },
-          },
-        ],
-      }),
-    })
-
-    if (!res.ok) {
-      console.error("Airtable API error:", await res.text())
-      return null
-    }
-
-    const result = await res.json()
-    return result.records && result.records.length > 0 ? result.records[0] : null
-  } catch (error) {
-    console.error("Failed to create Airtable record:", error)
-    return null
-  }
+}): Promise<AttendanceRecord> {
+  return createRecord<AttendanceFields>("attendance", {
+    Contact: [data.contactId],
+    Session: [data.sessionId],
+    Phone: data.phone,
+    Name: data.name,
+    "Processed?": true,
+  })
 }
 
 export async function getAttendanceByDate(date: string): Promise<AttendanceRecord[]> {
-  if (!AIRTABLE_API_TOKEN) {
-    console.error("[v0] AIRTABLE_API_TOKEN not configured")
-    return []
-  }
-
-  try {
-    const filterFormula = `AND({Attendance Date} >= "${date}", {Attendance Date} < DATEADD("${date}", 1, 'day'))`
-    const encodedFilter = encodeURIComponent(filterFormula)
-    const url = `${AIRTABLE_ATTENDANCE_URL}?filterByFormula=${encodedFilter}`
-
-    console.log("[v0] Fetching ALL attendance records to debug date format")
-    console.log("[v0] Target date:", date)
-
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-    })
-
-    console.log("[v0] Response status:", res.status)
-
-    if (!res.ok) {
-      const errorText = await res.text()
-      console.error("[v0] Airtable Attendance fetch error:", errorText)
-      return []
-    }
-
-    const data = await res.json()
-    console.log("[v0] Total records in table:", data.records?.length || 0)
-    return data.records || []
-  } catch (error) {
-    console.error("[v0] Failed to fetch attendance:", error)
-    return []
-  }
-}
-
-export async function hasAttendanceToday(phone: string, date: string): Promise<boolean> {
-  if (!AIRTABLE_API_TOKEN) {
-    console.error("[v0] AIRTABLE_API_TOKEN not configured")
-    return false
-  }
-
-  try {
-    const filterFormula = `AND({Phone}=${phone}, {Attendance Date} >= "${date}", {Attendance Date} < DATEADD("${date}", 1, 'day'))`
-    const encodedFilter = encodeURIComponent(filterFormula)
-    const url = `${AIRTABLE_ATTENDANCE_URL}?filterByFormula=${encodedFilter}`
-
-    console.log("[v0] Checking duplicate attendance for phone:", phone)
-    console.log("[v0] Filter formula:", filterFormula)
-
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-    })
-
-    if (!res.ok) {
-      console.error("[v0] Duplicate check error:", await res.text())
-      return false
-    }
-
-    const data = await res.json()
-    const hasRecord = data.records && data.records.length > 0
-    console.log("[v0] Duplicate attendance found:", hasRecord)
-
-    return hasRecord
-  } catch (error) {
-    console.error("[v0] Failed to check duplicate attendance:", error)
-    return false
-  }
+  return listRecords<AttendanceFields>("attendance", {
+    filterFormula: `IS_SAME(CREATED_TIME(), '${escapeFormulaString(date)}', 'day')`,
+  })
 }

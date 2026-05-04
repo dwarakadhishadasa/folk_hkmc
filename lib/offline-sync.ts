@@ -3,7 +3,7 @@
 
 interface OfflineRecord {
   id: string
-  type: "registration" | "attendance" | "contact"
+  type: "registration" | "attendance"
   data: Record<string, unknown>
   timestamp: number
 }
@@ -57,7 +57,7 @@ export async function syncOfflineRecords(): Promise<{
         body: JSON.stringify(record.data),
       })
 
-      if (response.ok) {
+      if (response.ok || response.status === 409) {
         removeOfflineRecord(record.id)
         synced++
       } else {
