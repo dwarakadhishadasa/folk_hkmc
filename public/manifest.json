@@ -1,0 +1,61 @@
+{
+  "name": "FOLK Chennai - Friends of Lord Krishna",
+  "short_name": "FOLK Chennai",
+  "description": "Registration, Attendance and Contact Management System for FOLK Chennai Program",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ea580c",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-512x512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/apple-touch-icon.jpg",
+      "sizes": "180x180",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["lifestyle", "education", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
+  "display_override": ["standalone", "minimal-ui"],
+  "shortcuts": [
+    {
+      "name": "Mark Attendance",
+      "short_name": "Attend",
+      "description": "Mark your attendance for today's session",
+      "url": "/attend",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.jpg",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View live attendance dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.jpg",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

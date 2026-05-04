@@ -1,0 +1,72 @@
+import type React from "react"
+import type { Metadata, Viewport } from "next"
+import { Inter, Poppins } from "next/font/google"
+import { Providers } from "@/components/providers"
+import "./globals.css"
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-poppins",
+})
+
+export const metadata: Metadata = {
+  title: "FOLK Chennai - Friends of Lord Krishna",
+  description:
+    "A Youth Empowerment Program by HKM Chennai - Discover timeless wisdom through the Secrets of Success course",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "FOLK Chennai",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192x192.jpg", sizes: "192x192", type: "image/jpeg" },
+      { url: "/icons/icon-512x512.jpg", sizes: "512x512", type: "image/jpeg" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.jpg", sizes: "180x180", type: "image/jpeg" }],
+  },
+  generator: "v0.app",
+  applicationName: "FOLK Chennai",
+  keywords: ["FOLK", "Chennai", "HKM", "Krishna", "Youth", "Spiritual", "Bhagavad Gita"],
+  authors: [{ name: "HKM Chennai" }],
+  creator: "HKM Chennai",
+  publisher: "HKM Chennai",
+  formatDetection: {
+    telephone: true,
+    email: true,
+    address: true,
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#0F1E54",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: "cover",
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <html lang="en">
+      <head>
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="FOLK Chennai" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.jpg" />
+      </head>
+      <body className={`${inter.variable} ${poppins.variable} font-sans antialiased`}>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  )
+}
