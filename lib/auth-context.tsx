@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
-import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import type { StaffContext, StaffRole } from "@/lib/authz"
 
 export type UserRole = StaffRole
@@ -55,16 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   const login = useCallback(async (email: string): Promise<boolean> => {
-    const supabase = createSupabaseBrowserClient()
-    const redirectTo = `${window.location.origin}/auth/confirm`
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: {
-        emailRedirectTo: redirectTo,
-      },
+    const response = await fetch("/api/auth/signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
     })
 
-    return !error
+    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to send sign-in link.")
+    }
+
+    return true
   }, [])
 
   const logout = useCallback(() => {

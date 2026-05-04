@@ -41,13 +41,18 @@ export default function LoginPage() {
     setMessage("")
     setIsLoading(true)
 
-    const success = await login(email)
-    if (success) {
-      setMessage("Check your email for the secure sign-in link.")
-    } else {
-      setError("Unable to send sign-in link. Check the email and try again.")
+    try {
+      const success = await login(email)
+      if (success) {
+        setMessage("Check your email for the secure sign-in link.")
+      } else {
+        setError("Unable to send sign-in link. Check the email and try again.")
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to send sign-in link. Check the email and try again.")
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   return (

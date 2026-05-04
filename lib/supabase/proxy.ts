@@ -1,22 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
-
-function requireEnv(name: "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"): string {
-  const value = process.env[name]
-
-  if (!value) {
-    throw new Error(`${name} is required`)
-  }
-
-  return value
-}
+import { getSupabasePublicUrl, getSupabaseServerPublicKey } from "@/lib/supabase/env"
 
 export async function updateSupabaseSession(request: NextRequest) {
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
-    requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
-    requireEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
+    getSupabasePublicUrl(),
+    getSupabaseServerPublicKey(),
     {
       cookies: {
         getAll() {
