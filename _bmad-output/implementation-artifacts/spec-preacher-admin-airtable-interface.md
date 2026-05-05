@@ -12,9 +12,9 @@ context:
 
 ## Intent
 
-**Problem:** Admin and Preacher staff need a top-level Manage navigation tab that opens the Airtable interface dashboard without placing that flow inside Live Attendance.
+**Problem:** Admin and Preacher staff need a top-level Manage navigation tab that opens the Airtable interface dashboard in a separate browser tab without placing that flow inside Live Attendance.
 
-**Approach:** Add a `/manage` route for Admin and Preacher staff that builds the Airtable interface URL from `AIRTABLE_BASE_ID` and `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, defaulting the page id to `pagc77PtbNsr9ljWu`, then point the header's Manage tab at that route.
+**Approach:** Add a `/manage` route for Admin and Preacher staff that builds the Airtable interface URL from `AIRTABLE_BASE_ID` and `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, defaulting the page id to `pagc77PtbNsr9ljWu`, then point the header's Manage tab at that route with new-tab link behavior.
 
 ## Suggested Review Order
 
@@ -28,7 +28,7 @@ context:
 
 **Navigation**
 
-- Sends the visible Manage tab to the new gated Airtable redirect route.
+- Opens the visible Manage tab in a separate tab through the gated redirect route.
   [`header.tsx:71`](../../components/header.tsx#L71)
 
 **Configuration**

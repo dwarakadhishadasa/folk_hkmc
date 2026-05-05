@@ -70,6 +70,9 @@ export function Header() {
                     </Link>
                     <Link
                       href="/manage"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      prefetch={false}
                       className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
                     >
                       Manage
