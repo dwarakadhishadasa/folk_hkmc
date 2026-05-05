@@ -1,5 +1,5 @@
 ---
-title: 'Preacher Dashboard Admin Airtable Interface'
+title: 'Preacher Manage Airtable Interface'
 type: 'feature'
 created: '2026-05-05'
 status: 'done'
@@ -8,28 +8,28 @@ context:
   - '{project-root}/_bmad-output/project-context.md'
 ---
 
-# Preacher Dashboard Admin Airtable Interface
+# Preacher Manage Airtable Interface
 
 ## Intent
 
-**Problem:** Admin staff need a top-level Admin navigation tab that opens the Airtable interface dashboard for admin-level operations without placing that flow inside Live Attendance.
+**Problem:** Admin and Preacher staff need a top-level Manage navigation tab that opens the Airtable interface dashboard without placing that flow inside Live Attendance.
 
-**Approach:** Add an Admin-only `/admin` route that builds the Airtable interface URL from `AIRTABLE_BASE_ID` and `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, defaulting the page id to `pagc77PtbNsr9ljWu`, then point the header's Admin tab at that route.
+**Approach:** Add a `/manage` route for Admin and Preacher staff that builds the Airtable interface URL from `AIRTABLE_BASE_ID` and `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, defaulting the page id to `pagc77PtbNsr9ljWu`, then point the header's Manage tab at that route.
 
 ## Suggested Review Order
 
-**Admin Route**
+**Manage Route**
 
-- Builds and redirects to the Airtable page after server-side Admin authorization.
-  [`page.tsx:7`](../../app/admin/page.tsx#L7)
+- Builds and redirects to the Airtable page after server-side Admin/Preacher authorization.
+  [`page.tsx:7`](../../app/manage/page.tsx#L7)
 
 - Keeps Live Attendance focused on the dashboard content only.
   [`page.tsx:68`](../../app/dashboard/page.tsx#L68)
 
 **Navigation**
 
-- Sends the visible Admin tab to the new gated Airtable redirect route.
-  [`header.tsx:72`](../../components/header.tsx#L72)
+- Sends the visible Manage tab to the new gated Airtable redirect route.
+  [`header.tsx:71`](../../components/header.tsx#L71)
 
 **Configuration**
 

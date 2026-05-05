@@ -7,7 +7,7 @@
 - Node.js 20+
 - `pnpm`
 - Airtable API token supplied as `AIRTABLE_API_TOKEN`
-- Airtable interface dashboard page supplied as `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` for Admin dashboard access
+- Airtable interface dashboard page supplied as `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` for Manage tab access
 
 ## Installation
 
@@ -39,8 +39,8 @@ pnpm start
 
 ### Important Notes
 
-- Airtable defaults to base `apprnbZdVhoog9vgG`; table identifiers can be overridden with `AIRTABLE_CONTACTS_TABLE_ID` / `AIRTABLE_CONTACTS_TABLE_NAME` and `AIRTABLE_ATTENDANCE_TABLE_ID` / `AIRTABLE_ATTENDANCE_TABLE_NAME`
-- The Admin dashboard Airtable link uses `AIRTABLE_BASE_ID` plus `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, currently `pagc77PtbNsr9ljWu`
+- Airtable uses `AIRTABLE_BASE_ID` plus table IDs for Contacts, Attendance, Sessions, Users, and Locations. New sessions link to the singleton Analytics record from `AIRTABLE_ANALYTICS_RECORD_ID`, defaulting to `reca0aQhvHSc5d5A1`.
+- The Manage tab Airtable link uses `AIRTABLE_BASE_ID` plus `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, currently `pagc77PtbNsr9ljWu`, and is available to Admin and Preacher staff
 - without `AIRTABLE_API_TOKEN`, attendance reads and writes will fail
 
 ## Local Credentials
@@ -62,6 +62,7 @@ These are stored in client code and used only by `lib/auth-context.tsx`.
 | `/attend` | Attendance entry | Public |
 | `/contact` | Contact entry | Client-gated login required |
 | `/dashboard` | Live attendance dashboard | Client-gated preacher role |
+| `/manage` | Airtable management interface redirect | Server-gated Admin/Preacher role |
 | `/attendance` | Attendance API route | HTTP-accessible route |
 
 ## Manual Verification Checklist

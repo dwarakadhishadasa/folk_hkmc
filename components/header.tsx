@@ -68,15 +68,13 @@ export function Header() {
                     >
                       Invite
                     </Link>
+                    <Link
+                      href="/manage"
+                      className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
+                    >
+                      Manage
+                    </Link>
                   </>
-                )}
-                {isAdmin && (
-                  <Link
-                    href="/admin"
-                    className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
-                  >
-                    Admin
-                  </Link>
                 )}
               </>
             )}

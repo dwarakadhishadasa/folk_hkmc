@@ -34,6 +34,7 @@ export interface SessionFields {
   "Session Date"?: string
   Preacher?: string[]
   Location?: string[]
+  Analytics?: string[]
   "Public Attendance Enabled"?: boolean
   "Attendance Opens At"?: string
   "Attendance Closes At"?: string
@@ -93,6 +94,7 @@ export interface SessionRecord {
   sessionDate?: string
   preacherIds: string[]
   locationIds: string[]
+  analyticsIds: string[]
   publicAttendanceEnabled: boolean
   attendanceOpensAt?: string
   attendanceClosesAt?: string
@@ -119,6 +121,8 @@ const tableEnvNames: Record<TableKey, string> = {
   users: "AIRTABLE_USERS_TABLE_ID",
   locations: "AIRTABLE_LOCATIONS_TABLE_ID",
 }
+
+const DEFAULT_ANALYTICS_RECORD_ID = "reca0aQhvHSc5d5A1"
 
 export class AirtableConfigError extends Error {
   constructor(message: string) {
@@ -162,6 +166,10 @@ function tableUrl(table: TableKey): string {
 
 function recordUrl(table: TableKey, recordId: string): string {
   return `${tableUrl(table)}/${recordId}`
+}
+
+function analyticsRecordId(): string {
+  return process.env.AIRTABLE_ANALYTICS_RECORD_ID?.trim() || DEFAULT_ANALYTICS_RECORD_ID
 }
 
 function escapeFormulaString(value: string): string {
@@ -451,6 +459,7 @@ export function mapSession(record: AirtableRecord<SessionFields>): SessionRecord
     sessionDate: normalizeString(record.fields["Session Date"]),
     preacherIds: normalizeLinkedIds(record.fields.Preacher),
     locationIds: normalizeLinkedIds(record.fields.Location),
+    analyticsIds: normalizeLinkedIds(record.fields.Analytics),
     publicAttendanceEnabled: record.fields["Public Attendance Enabled"] === true,
     attendanceOpensAt: normalizeString(record.fields["Attendance Opens At"]),
     attendanceClosesAt: normalizeString(record.fields["Attendance Closes At"]),
@@ -501,6 +510,7 @@ export async function createSession(data: {
     "Session Date": data.sessionDate,
     Preacher: [data.preacherAirtableUserId],
     Location: [data.locationId],
+    Analytics: [analyticsRecordId()],
     "Public Attendance Enabled": data.publicAttendanceEnabled,
   }
 
