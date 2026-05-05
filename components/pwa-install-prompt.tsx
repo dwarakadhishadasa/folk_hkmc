@@ -1,10 +1,23 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useAuth } from "@/lib/auth-context"
+
+const DISMISSAL_TTL_MS = 24 * 60 * 60 * 1000
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>
+}
+
+type StandaloneNavigator = Navigator & { standalone?: boolean }
 
 export function PWAInstallPrompt() {
-  const [installPrompt, setInstallPrompt] = useState<any>(null)
-  const [showPrompt, setShowPrompt] = useState(false)
+  const { isHydrated, isLoggedIn, staff } = useAuth()
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [isPromptEligible, setIsPromptEligible] = useState(false)
+  const [isDismissed, setIsDismissed] = useState(false)
+  const [isIos, setIsIos] = useState(false)
 
   useEffect(() => {
     // Check if already installed
@@ -18,26 +31,51 @@ export function PWAInstallPrompt() {
       // Prevent Chrome 76+ from automatically showing the prompt
       e.preventDefault()
       // Stash the event so it can be triggered later
-      setInstallPrompt(e)
+      setInstallPrompt(e as BeforeInstallPromptEvent)
       // Show custom install prompt
-      setShowPrompt(true)
+      setIsPromptEligible(true)
     }
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
 
     // For iOS, show prompt if not installed
-    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    const isInStandaloneMode = "standalone" in window.navigator && (window.navigator as any).standalone
+    const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const standaloneNavigator = window.navigator as StandaloneNavigator
+    const isInStandaloneMode = "standalone" in standaloneNavigator && Boolean(standaloneNavigator.standalone)
+    setIsIos(isIosDevice)
 
-    if (isIos && !isInStandaloneMode) {
+    if (isIosDevice && !isInStandaloneMode) {
       console.log("[v0] iOS detected, showing manual install prompt")
-      setShowPrompt(true)
+      setIsPromptEligible(true)
     }
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
     }
   }, [])
+
+  useEffect(() => {
+    if (!staff) {
+      setIsDismissed(false)
+      return
+    }
+
+    const dismissedKey = `pwa-install-dismissed:${staff.airtableUserId}`
+    const dismissed = localStorage.getItem(dismissedKey)
+
+    if (!dismissed) {
+      setIsDismissed(false)
+      return
+    }
+
+    const dismissedTime = Number.parseInt(dismissed, 10)
+    const hasActiveDismissal = Number.isFinite(dismissedTime) && Date.now() - dismissedTime < DISMISSAL_TTL_MS
+    setIsDismissed(hasActiveDismissal)
+
+    if (!hasActiveDismissal) {
+      localStorage.removeItem(dismissedKey)
+    }
+  }, [staff])
 
   const handleInstallClick = async () => {
     if (!installPrompt) {
@@ -47,7 +85,7 @@ export function PWAInstallPrompt() {
 
     console.log("[v0] Triggering install prompt")
     // Show the install prompt
-    installPrompt.prompt()
+    await installPrompt.prompt()
 
     // Wait for the user to respond to the prompt
     const { outcome } = await installPrompt.userChoice
@@ -61,38 +99,26 @@ export function PWAInstallPrompt() {
 
     // Clear the saved prompt since it can't be used again
     setInstallPrompt(null)
-    setShowPrompt(false)
+    setIsPromptEligible(false)
   }
 
   const handleDismiss = () => {
     console.log("[v0] User dismissed custom install banner")
-    setShowPrompt(false)
-    // Remember dismissal for 7 days
-    localStorage.setItem("pwa-install-dismissed", Date.now().toString())
+    setIsDismissed(true)
+    // Remember dismissal for 1 day
+    if (staff) {
+      localStorage.setItem(`pwa-install-dismissed:${staff.airtableUserId}`, Date.now().toString())
+    }
   }
 
-  useEffect(() => {
-    // Check if user dismissed the prompt recently
-    const dismissed = localStorage.getItem("pwa-install-dismissed")
-    if (dismissed) {
-      const dismissedTime = Number.parseInt(dismissed)
-      const sevenDays = 7 * 24 * 60 * 60 * 1000
-      if (Date.now() - dismissedTime < sevenDays) {
-        setShowPrompt(false)
-      }
-    }
-  }, [])
-
-  if (!showPrompt) return null
-
-  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  if (!isHydrated || !isLoggedIn || !staff || !isPromptEligible || isDismissed) return null
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-orange-600 text-white p-4 shadow-lg border-t-4 border-orange-700">
       <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
           <div className="bg-white rounded-lg p-2 flex-shrink-0">
-            <img src="/public/images/folk-logo.png" alt="FOLK Logo" className="w-10 h-10" />
+            <img src="/images/folk-logo.png" alt="FOLK Logo" className="w-10 h-10" />
           </div>
           <div className="flex-1">
             <h3 className="font-bold text-lg">Install FOLK Chennai</h3>
