@@ -5,6 +5,7 @@ import {
   findContactByPhone,
   findSessionById,
   getAttendanceByDate,
+  getAttendanceBySession,
   normalizeMobile,
 } from "@/lib/airtable"
 
@@ -114,8 +115,30 @@ export async function GET(request: Request) {
     requireRole(staff, ["Admin", "Preacher"])
 
     const { searchParams } = new URL(request.url)
+    const sessionId = searchParams.get("session")?.trim()
     const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
-    const airtableRecords = await getAttendanceByDate(date)
+    let airtableRecords: Awaited<ReturnType<typeof getAttendanceByDate>>
+
+    if (sessionId) {
+      const session = await findSessionById(sessionId)
+
+      if (!session) {
+        return Response.json({ error: "Invalid attendance session." }, { status: 404 })
+      }
+
+      const canReadSession =
+        staff.role === "Admin" ||
+        session.preacherIds.includes(staff.airtableUserId) ||
+        session.locationIds.some((locationId) => staff.locationIds.includes(locationId))
+
+      if (!canReadSession) {
+        return Response.json({ error: "This session is outside your allowed scope." }, { status: 403 })
+      }
+
+      airtableRecords = await getAttendanceBySession(sessionId)
+    } else {
+      airtableRecords = await getAttendanceByDate(date)
+    }
 
     const attendanceList = (airtableRecords || []).map((record) => ({
       id: record.id,

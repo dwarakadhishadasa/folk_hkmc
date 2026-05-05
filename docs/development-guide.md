@@ -7,6 +7,7 @@
 - Node.js 20+
 - `pnpm`
 - Airtable API token supplied as `AIRTABLE_API_TOKEN`
+- Airtable interface dashboard page supplied as `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` for Admin dashboard access
 
 ## Installation
 
@@ -39,6 +40,7 @@ pnpm start
 ### Important Notes
 
 - Airtable defaults to base `apprnbZdVhoog9vgG`; table identifiers can be overridden with `AIRTABLE_CONTACTS_TABLE_ID` / `AIRTABLE_CONTACTS_TABLE_NAME` and `AIRTABLE_ATTENDANCE_TABLE_ID` / `AIRTABLE_ATTENDANCE_TABLE_NAME`
+- The Admin dashboard Airtable link uses `AIRTABLE_BASE_ID` plus `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, currently `pagc77PtbNsr9ljWu`
 - without `AIRTABLE_API_TOKEN`, attendance reads and writes will fail
 
 ## Local Credentials

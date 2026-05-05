@@ -57,6 +57,12 @@ export interface LocationFields {
   Status?: string
 }
 
+export interface LocationRecord {
+  id: string
+  name: string
+  status?: string
+}
+
 export interface StaffUser {
   id: string
   email: string
@@ -468,6 +474,19 @@ export async function findLocationById(recordId: string): Promise<AirtableRecord
   }
 }
 
+export function mapLocation(record: AirtableRecord<LocationFields>): LocationRecord {
+  return {
+    id: record.id,
+    name: normalizeString(record.fields.Name) || record.id,
+    status: normalizeString(record.fields.Status),
+  }
+}
+
+export async function listLocations(): Promise<LocationRecord[]> {
+  const records = await listRecords<LocationFields>("locations")
+  return records.map(mapLocation).sort((left, right) => left.name.localeCompare(right.name))
+}
+
 export async function createSession(data: {
   name: string
   sessionDate: string
@@ -528,5 +547,11 @@ export async function createAttendanceRecord(data: {
 export async function getAttendanceByDate(date: string): Promise<AttendanceRecord[]> {
   return listRecords<AttendanceFields>("attendance", {
     filterFormula: `IS_SAME(CREATED_TIME(), '${escapeFormulaString(date)}', 'day')`,
+  })
+}
+
+export async function getAttendanceBySession(sessionId: string): Promise<AttendanceRecord[]> {
+  return listRecords<AttendanceFields>("attendance", {
+    filterFormula: `FIND('${escapeFormulaString(sessionId)}', ARRAYJOIN({Session}))`,
   })
 }

@@ -10,12 +10,10 @@ export const dynamic = "force-dynamic"
 
 interface SessionPayload {
   name?: string
-  sessionDate?: string
   locationId?: string
-  publicAttendanceEnabled?: boolean
-  attendanceOpensAt?: string
-  attendanceClosesAt?: string
 }
+
+const SESSION_DURATION_MS = 2 * 60 * 60 * 1000
 
 function requireSiteUrl(): URL {
   const value = process.env.NEXT_PUBLIC_SITE_URL
@@ -67,10 +65,9 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as SessionPayload
     const name = payload.name?.trim()
     const locationId = payload.locationId?.trim()
-    const sessionDate = payload.sessionDate?.trim()
 
-    if (!name || !locationId || !sessionDate) {
-      return Response.json({ error: "Name, session date, and location are required." }, { status: 400 })
+    if (!name || !locationId) {
+      return Response.json({ error: "Session name and location are required." }, { status: 400 })
     }
 
     if (staff.role === "Preacher" && !staff.locationIds.includes(locationId)) {
@@ -83,14 +80,16 @@ export async function POST(request: Request) {
     }
 
     const siteUrl = requireSiteUrl()
+    const startsAt = new Date()
+    const closesAt = new Date(startsAt.getTime() + SESSION_DURATION_MS)
     const session = await createSession({
       name,
-      sessionDate,
+      sessionDate: startsAt.toISOString(),
       locationId,
       preacherAirtableUserId: staff.airtableUserId,
-      publicAttendanceEnabled: payload.publicAttendanceEnabled !== false,
-      attendanceOpensAt: payload.attendanceOpensAt || undefined,
-      attendanceClosesAt: payload.attendanceClosesAt || undefined,
+      publicAttendanceEnabled: true,
+      attendanceOpensAt: startsAt.toISOString(),
+      attendanceClosesAt: closesAt.toISOString(),
     })
 
     const attendanceUrl = new URL("/attend", siteUrl)

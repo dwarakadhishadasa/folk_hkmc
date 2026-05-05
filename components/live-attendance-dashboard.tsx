@@ -1,12 +1,21 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { QRCodeSVG } from "qrcode.react"
 
 interface AttendanceRecord {
   id: string
   mobile: string
   userName: string
   createdAt: string
+}
+
+export interface DashboardSessionContext {
+  id: string
+  name: string
+  locationNames: string[]
+  attendanceClosesAt: string | null
+  attendanceUrl: string | null
 }
 
 const backgroundColors = [
@@ -26,18 +35,56 @@ function getBackgroundColor(index: number): string {
   return backgroundColors[index % backgroundColors.length]
 }
 
-export function LiveAttendanceDashboard() {
+function formatRemainingTime(milliseconds: number): string {
+  const totalMinutes = Math.max(0, Math.ceil(milliseconds / 60000))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  if (hours === 0) {
+    return `${minutes}m remaining`
+  }
+
+  return `${hours}h ${minutes}m remaining`
+}
+
+export function LiveAttendanceDashboard({ activeSession }: { activeSession?: DashboardSessionContext }) {
   const [attendanceList, setAttendanceList] = useState<AttendanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  const activeSessionExpiresAt = activeSession?.attendanceClosesAt ? Date.parse(activeSession.attendanceClosesAt) : null
+  const hasActiveSession =
+    Boolean(activeSession) &&
+    activeSessionExpiresAt !== null &&
+    Number.isFinite(activeSessionExpiresAt) &&
+    activeSessionExpiresAt > now
+  const activeSessionId = hasActiveSession && activeSession ? activeSession.id : ""
+
+  useEffect(() => {
+    if (!activeSession?.attendanceClosesAt) {
+      return
+    }
+
+    const interval = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [activeSession?.attendanceClosesAt])
+
+  useEffect(() => {
+    setAttendanceList([])
+    setLastRefresh(null)
+  }, [activeSessionId])
 
   const fetchAttendance = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
       const today = new Date().toISOString().split("T")[0]
-      const res = await fetch(`/attendance?date=${today}&t=${Date.now()}`, {
+      const attendanceUrl = activeSessionId
+        ? `/attendance?session=${encodeURIComponent(activeSessionId)}&t=${Date.now()}`
+        : `/attendance?date=${today}&t=${Date.now()}`
+      const res = await fetch(attendanceUrl, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" },
       })
@@ -62,7 +109,7 @@ export function LiveAttendanceDashboard() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [activeSessionId])
 
   useEffect(() => {
     fetchAttendance()
@@ -77,6 +124,20 @@ export function LiveAttendanceDashboard() {
     year: "numeric",
   })
 
+  const activeSessionLocation =
+    hasActiveSession && activeSession ? activeSession.locationNames.join(", ") || "No location set" : ""
+  const activeSessionExpiry =
+    hasActiveSession && activeSession?.attendanceClosesAt
+      ? new Date(activeSession.attendanceClosesAt).toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : ""
+  const activeSessionRemaining =
+    hasActiveSession && activeSessionExpiresAt !== null
+      ? formatRemainingTime(activeSessionExpiresAt - now)
+      : ""
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -84,7 +145,9 @@ export function LiveAttendanceDashboard() {
           <h1 className="text-2xl sm:text-3xl font-bold text-[#24324A] font-[family-name:var(--font-poppins)]">
             Live Attendance
           </h1>
-          <p className="text-[#24324A]/70 text-sm">{todayFormatted}</p>
+          <p className="text-[#24324A]/70 text-sm">
+            {hasActiveSession && activeSession ? activeSession.name : todayFormatted}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium">
@@ -97,20 +160,50 @@ export function LiveAttendanceDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-4 text-white">
-            <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)]">Attendance Links</h2>
-            <p className="text-white/70 text-sm">Use session-specific links and QR codes</p>
+            <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)]">
+              {hasActiveSession ? "Active Session" : "Attendance Links"}
+            </h2>
+            <p className="text-white/70 text-sm">
+              {hasActiveSession ? `${activeSessionRemaining} · closes at ${activeSessionExpiry}` : "Use session-specific links and QR codes"}
+            </p>
           </div>
           <div className="p-6">
-            <p className="text-sm text-[#24324A]/70">
-              Generic attendance links are disabled. Create or select a session to share its `/attend?session=...`
-              link and QR code.
-            </p>
-            <a
-              href="/sessions"
-              className="mt-4 inline-flex rounded-xl bg-[#0F1E54] px-5 py-3 text-sm font-semibold text-white"
-            >
-              Open Sessions
-            </a>
+            {hasActiveSession && activeSession ? (
+              <div className="space-y-5">
+                <div>
+                  <p className="font-[family-name:var(--font-poppins)] text-xl font-semibold text-[#24324A]">
+                    {activeSession.name}
+                  </p>
+                  <p className="mt-1 text-sm text-[#24324A]/70">{activeSessionLocation}</p>
+                </div>
+                {activeSession.attendanceUrl && (
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="w-fit rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                      <QRCodeSVG value={activeSession.attendanceUrl} size={112} />
+                    </div>
+                    <a
+                      className="min-w-0 break-all rounded-xl bg-[#FFF9F0] px-4 py-3 text-sm font-medium text-blue-700"
+                      href={activeSession.attendanceUrl}
+                    >
+                      {activeSession.attendanceUrl}
+                    </a>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-[#24324A]/70">
+                  Generic attendance links are disabled. Start a session to share its `/attend?session=...` link and
+                  QR code.
+                </p>
+                <a
+                  href="/sessions"
+                  className="mt-4 inline-flex rounded-xl bg-[#0F1E54] px-5 py-3 text-sm font-semibold text-white"
+                >
+                  Open Sessions
+                </a>
+              </>
+            )}
           </div>
         </div>
 
