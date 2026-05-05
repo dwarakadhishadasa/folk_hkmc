@@ -268,20 +268,22 @@ function RegisterForm() {
             </div>
           )}
 
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-[#24324A] mb-1.5">
-              Location
-            </label>
-            <input
-              id="location"
-              name="location"
-              type="text"
-              placeholder="Enter your location"
-              value={formData.location}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
-            />
-          </div>
+          {!sessionId && (
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium text-[#24324A] mb-1.5">
+                Location
+              </label>
+              <input
+                id="location"
+                name="location"
+                type="text"
+                placeholder="Enter your location"
+                value={formData.location}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+              />
+            </div>
+          )}
 
           <button
             type="submit"

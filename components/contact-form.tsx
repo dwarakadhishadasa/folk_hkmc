@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Toaster } from "@/components/ui/toaster"
 import { useToast } from "@/hooks/use-toast"
 
@@ -11,8 +11,19 @@ interface ContactData {
   age: string
   occupation: string
   year: string
-  location: string
+  locationId: string
   assignedPreacherAirtableUserId: string
+}
+
+interface PreacherOption {
+  id: string
+  name: string
+  locationIds: string[]
+}
+
+interface LocationOption {
+  id: string
+  name: string
 }
 
 const initialFormData: ContactData = {
@@ -21,16 +32,20 @@ const initialFormData: ContactData = {
   age: "",
   occupation: "",
   year: "Unknown",
-  location: "",
+  locationId: "",
   assignedPreacherAirtableUserId: "",
 }
 
 export function ContactForm({
   staffRole,
   preachers = [],
+  locations = [],
+  allowedLocationIds = [],
 }: {
   staffRole: "Admin" | "Preacher" | "Volunteer"
-  preachers?: Array<{ id: string; name: string }>
+  preachers?: PreacherOption[]
+  locations?: LocationOption[]
+  allowedLocationIds?: string[]
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<ContactData>(initialFormData)
@@ -38,6 +53,33 @@ export function ContactForm({
   const [message, setMessage] = useState("")
   const nameInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+  const availableLocationIds = useMemo(
+    () =>
+      staffRole === "Admin"
+        ? preachers.find((preacher) => preacher.id === formData.assignedPreacherAirtableUserId)?.locationIds || []
+        : allowedLocationIds,
+    [allowedLocationIds, formData.assignedPreacherAirtableUserId, preachers, staffRole],
+  )
+  const locationNameById = useMemo(() => new Map(locations.map((location) => [location.id, location.name])), [locations])
+  const availableLocations = useMemo(
+    () =>
+      availableLocationIds.map((locationId) => ({
+        id: locationId,
+        name: locationNameById.get(locationId) || locationId,
+      })),
+    [availableLocationIds, locationNameById],
+  )
+  const hasAvailableLocations = availableLocationIds.length > 0
+
+  useEffect(() => {
+    setFormData((current) => {
+      if (current.locationId && availableLocationIds.includes(current.locationId)) {
+        return current
+      }
+
+      return { ...current, locationId: availableLocationIds[0] || "" }
+    })
+  }, [availableLocationIds])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -74,6 +116,7 @@ export function ContactForm({
   const resetFormAfterSave = () => {
     setFormData((prev) => ({
       ...initialFormData,
+      locationId: prev.locationId,
       assignedPreacherAirtableUserId: staffRole === "Admin" ? prev.assignedPreacherAirtableUserId : "",
     }))
     setPhoneError("")
@@ -90,6 +133,15 @@ export function ContactForm({
 
     if (staffRole === "Admin" && !formData.assignedPreacherAirtableUserId) {
       setMessage("Choose an assigned Preacher before saving this contact.")
+      return
+    }
+
+    if (!formData.locationId) {
+      setMessage(
+        hasAvailableLocations
+          ? "Choose a location before saving this contact."
+          : "No locations are configured for the assigned Preacher.",
+      )
       return
     }
 
@@ -141,8 +193,8 @@ export function ContactForm({
         </div>
         <div className="p-6">
           <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            {staffRole === "Volunteer" && "Volunteer contacts are automatically assigned to your Preacher."}
-            {staffRole === "Preacher" && "Contacts you create are assigned to you."}
+            {staffRole === "Volunteer" && "Volunteer contacts are assigned to your Preacher and location."}
+            {staffRole === "Preacher" && "Contacts you create are assigned to you and your location."}
             {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
           </div>
           {message && (
@@ -244,21 +296,6 @@ export function ContactForm({
               </div>
             )}
 
-            <div className="space-y-2">
-              <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-                Location
-              </label>
-              <input
-                id="location"
-                name="location"
-                type="text"
-                placeholder="Enter city/area (e.g., Chennai, Thiruvanmiyur)"
-                value={formData.location}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
             {staffRole === "Admin" && (
               <div className="space-y-2">
                 <label htmlFor="assignedPreacherAirtableUserId" className="block text-sm font-medium text-gray-700">
@@ -282,9 +319,37 @@ export function ContactForm({
               </div>
             )}
 
+            <div className="space-y-2">
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700">
+                Location *
+              </label>
+              <select
+                id="location"
+                name="locationId"
+                value={formData.locationId}
+                onChange={handleChange}
+                required
+                disabled={(staffRole === "Admin" && !formData.assignedPreacherAirtableUserId) || !hasAvailableLocations}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">
+                  {staffRole === "Admin" && !formData.assignedPreacherAirtableUserId
+                    ? "Choose a Preacher first"
+                    : hasAvailableLocations
+                      ? "Select location"
+                      : "No locations configured"}
+                </option>
+                {availableLocations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <button
               type="submit"
-              disabled={isSubmitting || phoneError !== ""}
+              disabled={isSubmitting || phoneError !== "" || !formData.locationId}
               className="w-full py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               {isSubmitting ? "Saving..." : "Save"}

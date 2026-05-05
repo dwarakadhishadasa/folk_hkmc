@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     }
 
     let assignedPreacherAirtableUserId: string | undefined
-    let location = payload.location
+    let locationId: string | undefined
 
     if (payload.sessionId) {
       const session = await findSessionById(payload.sessionId)
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "This attendance session is no longer available." }, { status: 400 })
       }
       assignedPreacherAirtableUserId = session.preacherIds[0]
-      location = session.locationIds[0] || location
+      locationId = session.locationIds[0]
     }
 
     const contact = await createContact({
@@ -62,7 +62,8 @@ export async function POST(request: Request) {
       age: parseAge(payload.age),
       year: payload.occupation === "Working" ? "Unknown" : payload.year || undefined,
       source: payload.sessionId ? "Attendance Registration" : "Public Registration",
-      location,
+      locationId,
+      location: locationId ? undefined : payload.location,
       assignedPreacherAirtableUserId,
     })
 

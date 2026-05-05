@@ -467,6 +467,7 @@ export async function createContact(data: {
   age?: number
   year?: string
   source?: string
+  locationId?: string
   location?: string
   collectedByAirtableUserId?: string
   assignedPreacherAirtableUserId?: string
@@ -495,7 +496,9 @@ export async function createContact(data: {
   if (data.source) {
     fields.Source = data.source
   }
-  if (data.location) {
+  if (data.locationId) {
+    fields.Location = [data.locationId]
+  } else if (data.location) {
     fields.Location = data.location.startsWith("rec") ? [data.location] : data.location
   }
   if (data.assignedPreacherAirtableUserId) {
