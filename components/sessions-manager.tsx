@@ -150,7 +150,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
 
   if (isLoading) {
     return (
-      <section className="rounded-2xl bg-white p-6 shadow-lg">
+      <section className="mx-auto max-w-5xl rounded-2xl bg-white p-6 shadow-lg">
         <p className="text-sm font-medium text-[#24324A]/70">Loading session state...</p>
       </section>
     )
@@ -161,7 +161,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
   }
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-lg">
+    <section className="mx-auto max-w-5xl rounded-2xl bg-white p-6 shadow-lg">
       <div>
         <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[#24324A]">Start Session</h1>
         <p className="mt-1 text-sm text-[#24324A]/70">

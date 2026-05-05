@@ -46,10 +46,10 @@
       ]
     },
     {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "description": "View live attendance dashboard",
-      "url": "/dashboard",
+      "name": "Sessions",
+      "short_name": "Sessions",
+      "description": "Manage sessions and view live attendance",
+      "url": "/sessions",
       "icons": [
         {
           "src": "/icons/icon-192x192.jpg",

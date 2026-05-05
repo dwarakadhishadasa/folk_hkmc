@@ -35,18 +35,6 @@ function getBackgroundColor(index: number): string {
   return backgroundColors[index % backgroundColors.length]
 }
 
-function formatRemainingTime(milliseconds: number): string {
-  const totalMinutes = Math.max(0, Math.ceil(milliseconds / 60000))
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-
-  if (hours === 0) {
-    return `${minutes}m remaining`
-  }
-
-  return `${hours}h ${minutes}m remaining`
-}
-
 export function LiveAttendanceDashboard({ activeSession }: { activeSession?: DashboardSessionContext }) {
   const [attendanceList, setAttendanceList] = useState<AttendanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -124,19 +112,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
     year: "numeric",
   })
 
-  const activeSessionLocation =
-    hasActiveSession && activeSession ? activeSession.locationNames.join(", ") || "No location set" : ""
-  const activeSessionExpiry =
-    hasActiveSession && activeSession?.attendanceClosesAt
-      ? new Date(activeSession.attendanceClosesAt).toLocaleTimeString("en-IN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : ""
-  const activeSessionRemaining =
-    hasActiveSession && activeSessionExpiresAt !== null
-      ? formatRemainingTime(activeSessionExpiresAt - now)
-      : ""
+  const attendanceLink = hasActiveSession && activeSession?.attendanceUrl ? activeSession.attendanceUrl : ""
 
   return (
     <div className="space-y-6">
@@ -145,9 +121,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
           <h1 className="text-2xl sm:text-3xl font-bold text-[#24324A] font-[family-name:var(--font-poppins)]">
             Live Attendance
           </h1>
-          <p className="text-[#24324A]/70 text-sm">
-            {hasActiveSession && activeSession ? activeSession.name : todayFormatted}
-          </p>
+          <p className="text-[#24324A]/70 text-sm">{todayFormatted}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium">
@@ -160,41 +134,27 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
           <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-4 text-white">
-            <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)]">
-              {hasActiveSession ? "Active Session" : "Attendance Links"}
-            </h2>
-            <p className="text-white/70 text-sm">
-              {hasActiveSession ? `${activeSessionRemaining} · closes at ${activeSessionExpiry}` : "Use session-specific links and QR codes"}
-            </p>
+            <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)]">Attendance QR Code</h2>
+            <p className="text-white/70 text-sm">Show this QR to members for quick check-in</p>
           </div>
-          <div className="p-6">
-            {hasActiveSession && activeSession ? (
-              <div className="space-y-5">
-                <div>
-                  <p className="font-[family-name:var(--font-poppins)] text-xl font-semibold text-[#24324A]">
-                    {activeSession.name}
-                  </p>
-                  <p className="mt-1 text-sm text-[#24324A]/70">{activeSessionLocation}</p>
-                </div>
-                {activeSession.attendanceUrl && (
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                    <div className="w-fit rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                      <QRCodeSVG value={activeSession.attendanceUrl} size={112} />
-                    </div>
-                    <a
-                      className="min-w-0 break-all rounded-xl bg-[#FFF9F0] px-4 py-3 text-sm font-medium text-blue-700"
-                      href={activeSession.attendanceUrl}
-                    >
-                      {activeSession.attendanceUrl}
-                    </a>
-                  </div>
-                )}
-              </div>
-            ) : (
+          <div className="flex min-h-[356px] flex-col items-center justify-center p-6">
+            {attendanceLink ? (
               <>
-                <p className="text-sm text-[#24324A]/70">
-                  Generic attendance links are disabled. Start a session to share its `/attend?session=...` link and
-                  QR code.
+                <div className="rounded-2xl border-2 border-gray-100 bg-white p-4 shadow-inner">
+                  <QRCodeSVG value={attendanceLink} size={220} className="rounded-lg" />
+                </div>
+                <div className="mt-4 text-center">
+                  <span className="inline-block rounded-full bg-[#0F1E54]/5 px-4 py-2 text-sm font-medium text-[#0F1E54]">
+                    FOLK Chennai Attendance
+                  </span>
+                  <p className="mt-2 max-w-[250px] break-all text-xs text-[#24324A]/50">{attendanceLink}</p>
+                </div>
+              </>
+            ) : (
+              <div className="max-w-sm text-center">
+                <p className="text-sm font-medium text-[#24324A]">No active attendance QR code</p>
+                <p className="mt-2 text-sm text-[#24324A]/60">
+                  Start a session to generate a session-specific attendance link and QR code.
                 </p>
                 <a
                   href="/sessions"
@@ -202,7 +162,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                 >
                   Open Sessions
                 </a>
-              </>
+              </div>
             )}
           </div>
         </div>

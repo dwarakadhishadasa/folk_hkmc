@@ -19,7 +19,7 @@ export default async function SessionsPage() {
     return (
       <div className="min-h-screen bg-[#FFF9F0]">
         <Header />
-        <main className="container mx-auto max-w-5xl px-4 py-8">
+        <main className="container mx-auto px-4 py-8">
           <SessionsManager locations={locations} />
         </main>
       </div>

@@ -12,19 +12,24 @@ context:
 
 ## Intent
 
-**Problem:** Admin staff can reach the preacher/dashboard page, but there was no direct path from that surface into the Airtable interface dashboard for admin-level operations.
+**Problem:** Admin staff need a top-level Admin navigation tab that opens the Airtable interface dashboard for admin-level operations without placing that flow inside Live Attendance.
 
-**Approach:** Add an Admin-only dashboard entry that builds an Airtable interface URL from `AIRTABLE_BASE_ID` and `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, defaulting the page id to `pagc77PtbNsr9ljWu`.
+**Approach:** Add an Admin-only `/admin` route that builds the Airtable interface URL from `AIRTABLE_BASE_ID` and `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, defaulting the page id to `pagc77PtbNsr9ljWu`, then point the header's Admin tab at that route.
 
 ## Suggested Review Order
 
-**Dashboard Entry**
+**Admin Route**
 
-- Builds the Airtable page URL on the server from non-secret env config.
-  [`page.tsx:10`](../../app/dashboard/page.tsx#L10)
+- Builds and redirects to the Airtable page after server-side Admin authorization.
+  [`page.tsx:7`](../../app/admin/page.tsx#L7)
 
-- Renders the Airtable admin flow only for active Admin staff.
-  [`page.tsx:72`](../../app/dashboard/page.tsx#L72)
+- Keeps Live Attendance focused on the dashboard content only.
+  [`page.tsx:68`](../../app/dashboard/page.tsx#L68)
+
+**Navigation**
+
+- Sends the visible Admin tab to the new gated Airtable redirect route.
+  [`header.tsx:72`](../../components/header.tsx#L72)
 
 **Configuration**
 

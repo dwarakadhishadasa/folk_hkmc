@@ -72,7 +72,7 @@ export function Header() {
                 )}
                 {isAdmin && (
                   <Link
-                    href="/admin/invite"
+                    href="/admin"
                     className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
                   >
                     Admin
