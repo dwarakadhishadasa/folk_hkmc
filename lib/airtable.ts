@@ -20,6 +20,7 @@ export interface ContactFields {
   Location?: string | string[]
   "Assigned Preacher"?: string[]
   "Collected By"?: string[]
+  Analytics?: string[]
 }
 
 export interface AttendanceFields {
@@ -28,7 +29,6 @@ export interface AttendanceFields {
   "Attendance Date"?: string
   Contact?: string[]
   Session?: string[]
-  Analytics?: string[]
   "Processed?"?: boolean
 }
 
@@ -92,6 +92,7 @@ export interface ContactRecord {
   location?: string | string[]
   assignedPreacherIds: string[]
   collectedByIds: string[]
+  analyticsIds: string[]
 }
 
 export interface SessionRecord {
@@ -442,6 +443,7 @@ export function mapContact(record: AirtableRecord<ContactFields>): ContactRecord
     location: record.fields.Location,
     assignedPreacherIds: normalizeLinkedIds(record.fields["Assigned Preacher"]),
     collectedByIds: normalizeLinkedIds(record.fields["Collected By"]),
+    analyticsIds: normalizeLinkedIds(record.fields.Analytics),
   }
 }
 
@@ -477,6 +479,7 @@ export async function createContact(data: {
   const fields: Record<string, unknown> = {
     Name: data.name.trim(),
     Phone: normalizedPhone,
+    Analytics: [analyticsRecordId()],
   }
   const createdDate = currentAirtableDate()
 
@@ -612,7 +615,6 @@ export async function createAttendanceRecord(data: {
   return createRecord<AttendanceFields>("attendance", {
     Contact: [data.contactId],
     Session: [data.sessionId],
-    Analytics: [analyticsRecordId()],
     Phone: data.phone,
     Name: data.name,
     "Processed?": true,

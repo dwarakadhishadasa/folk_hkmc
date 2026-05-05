@@ -36,8 +36,8 @@ Users <----> Locations
   |             |
   v             v
 Contacts <---- Attendance ----> Sessions
-    |             |              |
-    v             v              v
+    |                            |
+    v                            v
 Analytics <----------------------
 ```
 
@@ -110,11 +110,16 @@ Age
 Year
 Source
 Location
+Analytics
+Initial Contact
+Last Contacted On
+Assigned Preacher
+Collected By
 ```
 
 ### Airtable Attendance
 
-`Attendance` is the event table for attendance submissions. Newer writes should link a contact and a session; older app code still writes phone/name/date snapshots.
+`Attendance` is the event table for attendance submissions. Current app writes link a contact and a session while retaining phone/name snapshots.
 
 Source and write fields:
 
@@ -128,7 +133,6 @@ Source and write fields:
 | `Interest in Future Sessions` | `singleSelect` | Follow-up signal |
 | `Contact` | `multipleRecordLinks` | Link to `Contacts`; prefers single record |
 | `Session` | `multipleRecordLinks` | Link to `Sessions`; prefers single record |
-| `Analytics` | `multipleRecordLinks` | Link to the singleton `Analytics` record |
 | `Visible To` | `multipleCollaborators` | Writable visibility list for admins/preachers |
 
 Derived context fields:
@@ -148,7 +152,6 @@ Current Next.js `lib/airtable.ts` writes this session-linked subset:
 ```text
 Contact
 Session
-Analytics
 Phone
 Name
 Processed?
@@ -247,7 +250,6 @@ Live locations:
 | `Contacts 3` | `multipleRecordLinks` | Legacy inverse relationship |
 | `Contacts` | `multipleRecordLinks` | Canonical contact relationship |
 | `Sessions` | `multipleRecordLinks` | Linked sessions |
-| `Attendance` | `multipleRecordLinks` | Linked attendance records |
 | `TotalSessionCount` | `rollup` | Total linked sessions |
 | `Past60DaySessionCount` | `rollup` | Recent linked sessions |
 

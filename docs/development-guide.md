@@ -39,7 +39,7 @@ pnpm start
 
 ### Important Notes
 
-- Airtable uses `AIRTABLE_BASE_ID` plus table IDs for Contacts, Attendance, Sessions, Users, and Locations. New sessions link to the singleton Analytics record from `AIRTABLE_ANALYTICS_RECORD_ID`, defaulting to `reca0aQhvHSc5d5A1`.
+- Airtable uses `AIRTABLE_BASE_ID` plus table IDs for Contacts, Attendance, Sessions, Users, and Locations. New sessions and contacts link to the singleton Analytics record from `AIRTABLE_ANALYTICS_RECORD_ID`, defaulting to `reca0aQhvHSc5d5A1`.
 - The Manage tab Airtable link uses `AIRTABLE_BASE_ID` plus `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, currently `pagc77PtbNsr9ljWu`, and is available to Admin and Preacher staff
 - without `AIRTABLE_API_TOKEN`, attendance reads and writes will fail
 
