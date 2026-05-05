@@ -35,6 +35,7 @@ export interface SessionFields {
   Preacher?: string[]
   Location?: string[]
   Analytics?: string[]
+  "Attendance Records"?: string[]
   "Public Attendance Enabled"?: boolean
   "Attendance Opens At"?: string
   "Attendance Closes At"?: string
@@ -95,6 +96,7 @@ export interface SessionRecord {
   preacherIds: string[]
   locationIds: string[]
   analyticsIds: string[]
+  attendanceRecordIds: string[]
   publicAttendanceEnabled: boolean
   attendanceOpensAt?: string
   attendanceClosesAt?: string
@@ -184,6 +186,15 @@ function normalizeString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
 }
 
+function linkedIdsInclude(value: unknown, recordId: string): boolean {
+  return normalizeLinkedIds(value).includes(recordId)
+}
+
+function recordIdFormula(recordIds: string[]): string {
+  const clauses = recordIds.map((recordId) => `RECORD_ID()='${escapeFormulaString(recordId)}'`)
+  return clauses.length === 1 ? clauses[0] : `OR(${clauses.join(",")})`
+}
+
 export function normalizeMobile(value: unknown): string | null {
   if (typeof value !== "string" && typeof value !== "number") {
     return null
@@ -242,6 +253,36 @@ async function listRecords<TFields extends object>(
   } while (offset && (!options.maxRecords || records.length < options.maxRecords))
 
   return options.maxRecords ? records.slice(0, options.maxRecords) : records
+}
+
+async function listRecordsByIds<TFields extends object>(
+  table: TableKey,
+  recordIds: string[],
+): Promise<Array<AirtableRecord<TFields>>> {
+  const uniqueRecordIds = [...new Set(recordIds.map((recordId) => recordId.trim()).filter(Boolean))]
+
+  if (uniqueRecordIds.length === 0) {
+    return []
+  }
+
+  const records: Array<AirtableRecord<TFields>> = []
+  const batchSize = 50
+
+  for (let index = 0; index < uniqueRecordIds.length; index += batchSize) {
+    const batchIds = uniqueRecordIds.slice(index, index + batchSize)
+    records.push(
+      ...(await listRecords<TFields>(table, {
+        filterFormula: recordIdFormula(batchIds),
+        pageSize: batchIds.length,
+        maxRecords: batchIds.length,
+      })),
+    )
+  }
+
+  const recordsById = new Map(records.map((record) => [record.id, record]))
+  return uniqueRecordIds
+    .map((recordId) => recordsById.get(recordId))
+    .filter((record): record is AirtableRecord<TFields> => Boolean(record))
 }
 
 async function createRecord<TFields extends object>(
@@ -460,6 +501,7 @@ export function mapSession(record: AirtableRecord<SessionFields>): SessionRecord
     preacherIds: normalizeLinkedIds(record.fields.Preacher),
     locationIds: normalizeLinkedIds(record.fields.Location),
     analyticsIds: normalizeLinkedIds(record.fields.Analytics),
+    attendanceRecordIds: normalizeLinkedIds(record.fields["Attendance Records"]),
     publicAttendanceEnabled: record.fields["Public Attendance Enabled"] === true,
     attendanceOpensAt: normalizeString(record.fields["Attendance Opens At"]),
     attendanceClosesAt: normalizeString(record.fields["Attendance Closes At"]),
@@ -528,15 +570,12 @@ export async function updateSessionAttendanceUrl(sessionId: string, attendanceUr
   return mapSession(await updateRecord<SessionFields>("sessions", sessionId, { "Attendance URL": attendanceUrl }))
 }
 
-export async function findAttendanceByContactAndSession(contactId: string, sessionId: string): Promise<AttendanceRecord | null> {
-  const records = await listRecords<AttendanceFields>("attendance", {
-    filterFormula: `AND(FIND('${escapeFormulaString(contactId)}', ARRAYJOIN({Contact})), FIND('${escapeFormulaString(
-      sessionId,
-    )}', ARRAYJOIN({Session})))`,
-    maxRecords: 1,
-  })
-
-  return records[0] || null
+export async function findAttendanceByContactAndSession(
+  contactId: string,
+  sessionId: string,
+): Promise<AttendanceRecord | null> {
+  const records = await getAttendanceBySession(sessionId)
+  return records.find((record) => linkedIdsInclude(record.fields.Contact, contactId)) || null
 }
 
 export async function createAttendanceRecord(data: {
@@ -561,7 +600,11 @@ export async function getAttendanceByDate(date: string): Promise<AttendanceRecor
 }
 
 export async function getAttendanceBySession(sessionId: string): Promise<AttendanceRecord[]> {
-  return listRecords<AttendanceFields>("attendance", {
-    filterFormula: `FIND('${escapeFormulaString(sessionId)}', ARRAYJOIN({Session}))`,
-  })
+  const session = await findSessionById(sessionId)
+
+  if (!session?.attendanceRecordIds.length) {
+    return []
+  }
+
+  return listRecordsByIds<AttendanceFields>("attendance", session.attendanceRecordIds)
 }
