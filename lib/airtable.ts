@@ -15,6 +15,8 @@ export interface ContactFields {
   Age?: number
   Year?: string
   Source?: string
+  "Initial Contact"?: string
+  "Last Contacted On"?: string
   Location?: string | string[]
   "Assigned Preacher"?: string[]
   "Collected By"?: string[]
@@ -26,6 +28,7 @@ export interface AttendanceFields {
   "Attendance Date"?: string
   Contact?: string[]
   Session?: string[]
+  Analytics?: string[]
   "Processed?"?: boolean
 }
 
@@ -84,6 +87,8 @@ export interface ContactRecord {
   phone: string
   age?: number
   year?: string
+  initialContact?: string
+  lastContactedOn?: string
   location?: string | string[]
   assignedPreacherIds: string[]
   collectedByIds: string[]
@@ -125,6 +130,7 @@ const tableEnvNames: Record<TableKey, string> = {
 }
 
 const DEFAULT_ANALYTICS_RECORD_ID = "reca0aQhvHSc5d5A1"
+const AIRTABLE_DATE_TIME_ZONE = "Asia/Kolkata"
 
 export class AirtableConfigError extends Error {
   constructor(message: string) {
@@ -184,6 +190,18 @@ function normalizeLinkedIds(value: unknown): string[] {
 
 function normalizeString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function currentAirtableDate(): string {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: AIRTABLE_DATE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date())
+  const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value
+
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`
 }
 
 function linkedIdsInclude(value: unknown, recordId: string): boolean {
@@ -419,6 +437,8 @@ export function mapContact(record: AirtableRecord<ContactFields>): ContactRecord
     phone,
     age: typeof record.fields.Age === "number" ? record.fields.Age : undefined,
     year: normalizeString(record.fields.Year),
+    initialContact: normalizeString(record.fields["Initial Contact"]),
+    lastContactedOn: normalizeString(record.fields["Last Contacted On"]),
     location: record.fields.Location,
     assignedPreacherIds: normalizeLinkedIds(record.fields["Assigned Preacher"]),
     collectedByIds: normalizeLinkedIds(record.fields["Collected By"]),
@@ -458,6 +478,10 @@ export async function createContact(data: {
     Name: data.name.trim(),
     Phone: normalizedPhone,
   }
+  const createdDate = currentAirtableDate()
+
+  fields["Initial Contact"] = createdDate
+  fields["Last Contacted On"] = createdDate
 
   if (typeof data.age === "number") {
     fields.Age = data.age
@@ -471,11 +495,12 @@ export async function createContact(data: {
   if (data.location) {
     fields.Location = data.location.startsWith("rec") ? [data.location] : data.location
   }
-  if (data.collectedByAirtableUserId) {
-    fields["Collected By"] = [data.collectedByAirtableUserId]
-  }
   if (data.assignedPreacherAirtableUserId) {
     fields["Assigned Preacher"] = [data.assignedPreacherAirtableUserId]
+  }
+  const collectorId = data.collectedByAirtableUserId || data.assignedPreacherAirtableUserId
+  if (collectorId) {
+    fields["Collected By"] = [collectorId]
   }
 
   return mapContact(await createRecord<ContactFields>("contacts", fields))
@@ -587,6 +612,7 @@ export async function createAttendanceRecord(data: {
   return createRecord<AttendanceFields>("attendance", {
     Contact: [data.contactId],
     Session: [data.sessionId],
+    Analytics: [analyticsRecordId()],
     Phone: data.phone,
     Name: data.name,
     "Processed?": true,

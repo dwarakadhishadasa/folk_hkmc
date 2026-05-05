@@ -35,10 +35,10 @@ The effective model is:
 Users <----> Locations
   |             |
   v             v
-Contacts <---- Attendance ----> Sessions ----> Analytics
-    |
-    v
-Analytics
+Contacts <---- Attendance ----> Sessions
+    |             |              |
+    v             v              v
+Analytics <----------------------
 ```
 
 ## External Data Models
@@ -128,6 +128,7 @@ Source and write fields:
 | `Interest in Future Sessions` | `singleSelect` | Follow-up signal |
 | `Contact` | `multipleRecordLinks` | Link to `Contacts`; prefers single record |
 | `Session` | `multipleRecordLinks` | Link to `Sessions`; prefers single record |
+| `Analytics` | `multipleRecordLinks` | Link to the singleton `Analytics` record |
 | `Visible To` | `multipleCollaborators` | Writable visibility list for admins/preachers |
 
 Derived context fields:
@@ -142,15 +143,16 @@ Derived context fields:
 | `IsPast60Days` | `formula` | Recent-session helper |
 | `Log Line` | `formula` | Attendance rollup helper |
 
-Current Next.js `lib/airtable.ts` writes this older subset:
+Current Next.js `lib/airtable.ts` writes this session-linked subset:
 
 ```text
+Contact
+Session
+Analytics
 Phone
 Name
-Attendance Date
+Processed?
 ```
-
-That code path is behind the live relational model and should be updated before session-scoped attendance is enabled in the app.
 
 ### Airtable Sessions
 
@@ -245,6 +247,7 @@ Live locations:
 | `Contacts 3` | `multipleRecordLinks` | Legacy inverse relationship |
 | `Contacts` | `multipleRecordLinks` | Canonical contact relationship |
 | `Sessions` | `multipleRecordLinks` | Linked sessions |
+| `Attendance` | `multipleRecordLinks` | Linked attendance records |
 | `TotalSessionCount` | `rollup` | Total linked sessions |
 | `Past60DaySessionCount` | `rollup` | Recent linked sessions |
 

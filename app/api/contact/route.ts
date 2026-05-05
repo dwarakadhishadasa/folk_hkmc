@@ -71,6 +71,7 @@ export async function POST(request: Request) {
       return Response.json({ error: assignment.error }, { status: 422 })
     }
 
+    const collectorId = staff.role === "Volunteer" ? staff.airtableUserId : assignment.preacherId
     const contact = await createContact({
       name,
       phone: mobile,
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
       year: payload.occupation === "Working" ? "Unknown" : payload.year || undefined,
       source: payload.source || "Pass distribution",
       location: payload.location,
-      collectedByAirtableUserId: staff.airtableUserId,
+      collectedByAirtableUserId: collectorId,
       assignedPreacherAirtableUserId: assignment.preacherId,
     })
 
