@@ -98,7 +98,7 @@ export function ContactForm({
 
     try {
       if (!navigator.onLine) {
-        setMessage("Staff contact capture requires an online staff session. Please reconnect and submit again.")
+        setMessage("Contact capture requires an online session. Please reconnect and submit again.")
         return
       }
 

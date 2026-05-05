@@ -110,7 +110,7 @@ export default function LoginPage() {
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-[#24324A] mb-2">
-                  Staff Email
+                  Email
                 </label>
                 <input
                   id="email"

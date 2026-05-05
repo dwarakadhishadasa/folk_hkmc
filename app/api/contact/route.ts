@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       phone: mobile,
       age: parseAge(payload.age),
       year: payload.occupation === "Working" ? "Unknown" : payload.year || undefined,
-      source: payload.source || "Staff Portal",
+      source: payload.source || "Pass distribution",
       location: payload.location,
       collectedByAirtableUserId: staff.airtableUserId,
       assignedPreacherAirtableUserId: assignment.preacherId,
