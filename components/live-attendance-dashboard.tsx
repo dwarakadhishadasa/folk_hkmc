@@ -105,14 +105,9 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
     return () => clearInterval(interval)
   }, [fetchAttendance])
 
-  const todayFormatted = new Date().toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  })
-
   const attendanceLink = hasActiveSession && activeSession?.attendanceUrl ? activeSession.attendanceUrl : ""
+  const activeSessionName = activeSession?.name.trim()
+  const sessionSubtitle = hasActiveSession && activeSessionName ? activeSessionName : "No active session"
 
   return (
     <div className="space-y-6">
@@ -121,7 +116,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
           <h1 className="text-2xl sm:text-3xl font-bold text-[#24324A] font-[family-name:var(--font-poppins)]">
             Live Attendance
           </h1>
-          <p className="text-[#24324A]/70 text-sm">{todayFormatted}</p>
+          <p className="text-[#24324A]/70 text-sm">{sessionSubtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-sm font-medium">
