@@ -51,12 +51,6 @@ export function Header() {
                 {isPreacher && (
                   <>
                     <Link
-                      href="/dashboard"
-                      className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
-                    >
-                      Dashboard
-                    </Link>
-                    <Link
                       href="/sessions"
                       className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
                     >
