@@ -11,12 +11,13 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const { login, isLoggedIn, isHydrated } = useAuth()
+  const { login, isLoggedIn, isHydrated, role } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
 
   const requestedRedirectUrl = searchParams.get("redirect")
-  const redirectUrl = requestedRedirectUrl || "/contact"
+  const defaultRedirectUrl = role === "Volunteer" ? "/contact" : role === "Preacher" ? "/" : "/dashboard"
+  const redirectUrl = requestedRedirectUrl || defaultRedirectUrl
   const authCallbackCode = searchParams.get("code")
   const authCallbackTokenHash = searchParams.get("token_hash")
   const authCallbackType = searchParams.get("type")

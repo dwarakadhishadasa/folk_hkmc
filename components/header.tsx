@@ -6,7 +6,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CalendarDays,
-  Globe2,
   Home,
   LogIn,
   LogOut,
@@ -22,7 +21,6 @@ interface HeaderNavItem {
   href: string
   label: string
   icon: LucideIcon
-  external?: boolean
   newTab?: boolean
   prefetch?: boolean
 }
@@ -50,14 +48,6 @@ function NavAnchor({
     className,
     "aria-current": active ? ("page" as const) : undefined,
     title: item.label,
-  }
-
-  if (item.external) {
-    return (
-      <a href={item.href} target="_blank" rel="noopener noreferrer" {...commonProps}>
-        {children}
-      </a>
-    )
   }
 
   return (
@@ -117,6 +107,7 @@ export function Header() {
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
+        { href: "/", label: "Home", icon: Home },
         { href: "/contact", label: "Contact", icon: UserRoundPlus },
         ...(isPreacher
           ? [
@@ -125,21 +116,9 @@ export function Header() {
               { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
             ]
           : []),
-        {
-          href: "https://hkmchennai.org/folk/",
-          label: "Website",
-          icon: Globe2,
-          external: true,
-        },
       ]
     : [
         { href: "/", label: "Home", icon: Home },
-        {
-          href: "https://hkmchennai.org/folk/",
-          label: "Website",
-          icon: Globe2,
-          external: true,
-        },
       ]
 
   if (!isHydrated) {
@@ -168,7 +147,7 @@ export function Header() {
           </Link>
           <nav className="hidden items-center gap-1 rounded-lg bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
             {navItems.map((item) => (
-              <DesktopNavItem key={item.href} item={item} active={!item.external && isActivePath(pathname, item.href)} />
+              <DesktopNavItem key={item.href} item={item} active={isActivePath(pathname, item.href)} />
             ))}
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -205,7 +184,7 @@ export function Header() {
         >
           <div className="mx-auto flex max-w-md items-center gap-1">
             {navItems.map((item) => (
-              <MobileNavItem key={item.href} item={item} active={!item.external && isActivePath(pathname, item.href)} />
+              <MobileNavItem key={item.href} item={item} active={isActivePath(pathname, item.href)} />
             ))}
           </div>
         </nav>

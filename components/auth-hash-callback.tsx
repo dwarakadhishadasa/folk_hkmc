@@ -4,6 +4,18 @@ import { useEffect } from "react"
 import type { StaffContext } from "@/lib/authz"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
+function defaultLandingPath(role?: StaffContext["role"]): string {
+  if (role === "Volunteer") {
+    return "/contact"
+  }
+
+  if (role === "Preacher") {
+    return "/"
+  }
+
+  return "/dashboard"
+}
+
 export function AuthHashCallback() {
   useEffect(() => {
     const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : ""
@@ -47,7 +59,7 @@ export function AuthHashCallback() {
       }
 
       const data = (await response.json()) as { staff?: StaffContext }
-      window.location.replace(data.staff?.role === "Volunteer" ? "/contact" : "/dashboard")
+      window.location.replace(defaultLandingPath(data.staff?.role))
     }
 
     completeImplicitSignIn()

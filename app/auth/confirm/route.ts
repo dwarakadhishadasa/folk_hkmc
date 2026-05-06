@@ -13,7 +13,15 @@ function safeNextPath(value: string | null, role: string): string {
     return value
   }
 
-  return role === "Volunteer" ? "/contact" : "/dashboard"
+  if (role === "Volunteer") {
+    return "/contact"
+  }
+
+  if (role === "Preacher") {
+    return "/"
+  }
+
+  return "/dashboard"
 }
 
 export async function GET(request: Request) {

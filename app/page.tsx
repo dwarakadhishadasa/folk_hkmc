@@ -83,14 +83,6 @@ export default function Home() {
               Crystallizing the formative phase of the younger generation with key values through the timeless wisdom of
               Bhagavad Gita
             </p>
-            <a
-              href="https://hkmchennai.org/folk/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center px-6 sm:px-8 py-3 sm:py-4 bg-[#F98B1C] hover:bg-[#e07a10] text-white font-semibold rounded-xl transition-all transform hover:scale-105 shadow-lg"
-            >
-              Learn More
-            </a>
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#FFF9F0] to-transparent" />
@@ -215,7 +207,7 @@ export default function Home() {
               HKM Chennai
             </a>
             <a
-              href="https://hkmchennai.org/folk/"
+              href="https://hkmchennai.org/activities/folk"
               target="_blank"
               rel="noopener noreferrer"
               className="text-white/80 hover:text-[#F98B1C] text-sm transition-colors"
