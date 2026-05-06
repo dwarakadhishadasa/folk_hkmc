@@ -65,13 +65,14 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
   }, [activeSessionId])
 
   const fetchAttendance = useCallback(async () => {
+    if (!activeSessionId || document.hidden) {
+      return
+    }
+
     setIsLoading(true)
     setError(null)
     try {
-      const today = new Date().toISOString().split("T")[0]
-      const attendanceUrl = activeSessionId
-        ? `/attendance?session=${encodeURIComponent(activeSessionId)}&t=${Date.now()}`
-        : `/attendance?date=${today}&t=${Date.now()}`
+      const attendanceUrl = `/attendance?session=${encodeURIComponent(activeSessionId)}&t=${Date.now()}`
       const res = await fetch(attendanceUrl, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" },
@@ -100,10 +101,29 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
   }, [activeSessionId])
 
   useEffect(() => {
+    if (!activeSessionId) {
+      return
+    }
+
     fetchAttendance()
     const interval = setInterval(fetchAttendance, 20000)
     return () => clearInterval(interval)
-  }, [fetchAttendance])
+  }, [activeSessionId, fetchAttendance])
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      return
+    }
+
+    function refreshWhenVisible() {
+      if (!document.hidden) {
+        fetchAttendance()
+      }
+    }
+
+    document.addEventListener("visibilitychange", refreshWhenVisible)
+    return () => document.removeEventListener("visibilitychange", refreshWhenVisible)
+  }, [activeSessionId, fetchAttendance])
 
   const attendanceLink = hasActiveSession && activeSession?.attendanceUrl ? activeSession.attendanceUrl : ""
   const activeSessionName = activeSession?.name.trim()
