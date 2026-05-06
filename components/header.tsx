@@ -1,18 +1,153 @@
 "use client"
 
+import type { ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
+import {
+  CalendarDays,
+  Globe2,
+  Home,
+  LogIn,
+  LogOut,
+  Send,
+  Settings2,
+  UserRoundPlus,
+  type LucideIcon,
+} from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { cn } from "@/lib/utils"
+
+interface HeaderNavItem {
+  href: string
+  label: string
+  icon: LucideIcon
+  external?: boolean
+  newTab?: boolean
+  prefetch?: boolean
+}
+
+function isActivePath(pathname: string, href: string) {
+  if (href === "/") {
+    return pathname === "/"
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
+
+function NavAnchor({
+  item,
+  active,
+  className,
+  children,
+}: {
+  item: HeaderNavItem
+  active: boolean
+  className: string
+  children: ReactNode
+}) {
+  const commonProps = {
+    className,
+    "aria-current": active ? ("page" as const) : undefined,
+    title: item.label,
+  }
+
+  if (item.external) {
+    return (
+      <a href={item.href} target="_blank" rel="noopener noreferrer" {...commonProps}>
+        {children}
+      </a>
+    )
+  }
+
+  return (
+    <Link
+      href={item.href}
+      target={item.newTab ? "_blank" : undefined}
+      rel={item.newTab ? "noopener noreferrer" : undefined}
+      prefetch={item.prefetch}
+      {...commonProps}
+    >
+      {children}
+    </Link>
+  )
+}
+
+function DesktopNavItem({ item, active }: { item: HeaderNavItem; active: boolean }) {
+  const Icon = item.icon
+
+  return (
+    <NavAnchor
+      item={item}
+      active={active}
+      className={cn(
+        "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-white/80 transition-colors",
+        "hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
+        active && "bg-white text-[#0F1E54] shadow-sm hover:bg-white hover:text-[#0F1E54]",
+      )}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+      <span>{item.label}</span>
+    </NavAnchor>
+  )
+}
+
+function MobileNavItem({ item, active }: { item: HeaderNavItem; active: boolean }) {
+  const Icon = item.icon
+
+  return (
+    <NavAnchor
+      item={item}
+      active={active}
+      className={cn(
+        "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-semibold leading-none transition-colors",
+        "text-[#24324A]/70 hover:bg-[#0F1E54]/5 hover:text-[#0F1E54] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
+        active && "bg-[#0F1E54] text-white shadow-md shadow-[#0F1E54]/20 hover:bg-[#0F1E54] hover:text-white",
+      )}
+    >
+      <Icon className="h-5 w-5" aria-hidden="true" />
+      <span>{item.label}</span>
+    </NavAnchor>
+  )
+}
 
 export function Header() {
-  const { isLoggedIn, logout, isAdmin, isPreacher, username, role, isHydrated } = useAuth()
+  const { isLoggedIn, logout, isPreacher, username, role, isHydrated } = useAuth()
+  const pathname = usePathname()
+
+  const navItems: HeaderNavItem[] = isLoggedIn
+    ? [
+        { href: "/contact", label: "Contact", icon: UserRoundPlus },
+        ...(isPreacher
+          ? [
+              { href: "/sessions", label: "Sessions", icon: CalendarDays },
+              { href: "/volunteers", label: "Invite", icon: Send },
+              { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
+            ]
+          : []),
+        {
+          href: "https://hkmchennai.org/folk/",
+          label: "Website",
+          icon: Globe2,
+          external: true,
+        },
+      ]
+    : [
+        { href: "/", label: "Home", icon: Home },
+        {
+          href: "https://hkmchennai.org/folk/",
+          label: "Website",
+          icon: Globe2,
+          external: true,
+        },
+      ]
 
   if (!isHydrated) {
     return (
-      <header className="bg-[#0F1E54] text-white shadow-lg">
-        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F1E54] text-white shadow-lg">
+        <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="relative h-10 w-28 sm:h-12 sm:w-36 md:h-14 md:w-40 bg-white rounded-lg p-1">
+            <div className="relative h-10 w-28 rounded-lg bg-white p-1 sm:h-12 sm:w-36 md:h-14 md:w-40">
               <Image src="/images/folk-logo.jpg" alt="FOLK Chennai Logo" fill className="object-contain" priority />
             </div>
           </div>
@@ -22,90 +157,59 @@ export function Header() {
   }
 
   return (
-    <header className="bg-[#0F1E54] text-white shadow-lg sticky top-0 z-50">
-      <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F1E54] text-white shadow-lg">
+      <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="relative h-10 w-28 sm:h-12 sm:w-36 md:h-14 md:w-40 bg-white rounded-lg p-1 flex-shrink-0"
+            className="relative h-10 w-28 flex-shrink-0 rounded-lg bg-white p-1 ring-1 ring-white/20 sm:h-12 sm:w-36 md:h-14 md:w-40"
           >
             <Image src="/images/folk-logo.jpg" alt="FOLK Chennai Logo" fill className="object-contain" priority />
           </Link>
-          <nav className="flex items-center gap-2 sm:gap-4 md:gap-6">
-            {!isLoggedIn && (
-              <Link
-                href="/"
-                className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
-              >
-                Home
-              </Link>
-            )}
-            {isLoggedIn && (
-              <>
-                <Link
-                  href="/contact"
-                  className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
-                >
-                  <span className="hidden xs:inline">Add </span>Contact
-                </Link>
-                {isPreacher && (
-                  <>
-                    <Link
-                      href="/sessions"
-                      className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
-                    >
-                      Sessions
-                    </Link>
-                    <Link
-                      href="/volunteers"
-                      className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
-                    >
-                      Invite
-                    </Link>
-                    <Link
-                      href="/manage"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      prefetch={false}
-                      className="text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
-                    >
-                      Manage
-                    </Link>
-                  </>
-                )}
-              </>
-            )}
-            <a
-              href="https://hkmchennai.org/folk/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden md:block text-xs sm:text-sm text-white/90 hover:text-[#F98B1C] transition-colors font-medium"
-            >
-              Website
-            </a>
+          <nav className="hidden items-center gap-1 rounded-lg bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
+            {navItems.map((item) => (
+              <DesktopNavItem key={item.href} item={item} active={!item.external && isActivePath(pathname, item.href)} />
+            ))}
+          </nav>
+          <div className="flex items-center gap-2 sm:gap-3">
             {isLoggedIn ? (
-              <div className="flex items-center gap-2 sm:gap-3">
-                <span className="hidden md:inline text-xs text-white/70 capitalize">
+              <>
+                <span className="hidden text-xs capitalize text-white/70 lg:inline">
                   {username} ({role})
                 </span>
                 <button
                   onClick={logout}
-                  className="px-3 py-1.5 text-xs sm:text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-medium"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C] sm:text-sm"
+                  title="Logout"
                 >
-                  Logout
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Logout</span>
                 </button>
-              </div>
+              </>
             ) : (
               <Link
                 href="/login"
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-[#F98B1C] hover:bg-[#e07a10] rounded-lg transition-colors font-medium"
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#F98B1C] px-3 text-xs font-semibold text-[#0F1E54] transition-colors hover:bg-[#fab54d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-4 sm:text-sm"
               >
+                <LogIn className="h-4 w-4" aria-hidden="true" />
                 Login
               </Link>
             )}
-          </nav>
+          </div>
         </div>
       </div>
+      {isLoggedIn && (
+        <nav
+          data-mobile-app-nav
+          className="fixed inset-x-0 bottom-0 z-50 border-t border-[#0F1E54]/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(15,30,84,0.12)] backdrop-blur md:hidden"
+        >
+          <div className="mx-auto flex max-w-md items-center gap-1">
+            {navItems.map((item) => (
+              <MobileNavItem key={item.href} item={item} active={!item.external && isActivePath(pathname, item.href)} />
+            ))}
+          </div>
+        </nav>
+      )}
     </header>
   )
 }

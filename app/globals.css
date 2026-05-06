@@ -157,6 +157,12 @@
   }
 }
 
+@media (max-width: 767px) {
+  body:has([data-mobile-app-nav]) {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+}
+
 /* Custom animation for success state */
 @keyframes checkmark {
   0% {
