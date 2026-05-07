@@ -6,7 +6,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CalendarDays,
-  Home,
   LogIn,
   LogOut,
   Send,
@@ -108,7 +107,6 @@ export function Header() {
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
-        { href: "/", label: "Home", icon: Home },
         { href: "/contact", label: "Contact", icon: UserRoundPlus },
         ...(isPreacher
           ? [
@@ -118,9 +116,7 @@ export function Header() {
             ]
           : []),
       ]
-    : [
-        { href: "/", label: "Home", icon: Home },
-      ]
+    : []
 
   if (!isHydrated) {
     return (
@@ -147,11 +143,13 @@ export function Header() {
             >
               <Image src="/images/folk-logo.jpg" alt="FOLK Chennai Logo" fill className="object-contain" priority />
             </Link>
-            <nav className="hidden items-center gap-1 rounded-lg bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
-              {navItems.map((item) => (
-                <DesktopNavItem key={item.href} item={item} active={isActivePath(pathname, item.href)} />
-              ))}
-            </nav>
+            {navItems.length > 0 && (
+              <nav className="hidden items-center gap-1 rounded-lg bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
+                {navItems.map((item) => (
+                  <DesktopNavItem key={item.href} item={item} active={isActivePath(pathname, item.href)} />
+                ))}
+              </nav>
+            )}
             <div className="flex items-center gap-2 sm:gap-3">
               {isLoggedIn ? (
                 <>
