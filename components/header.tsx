@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode } from "react"
+import type { MouseEvent, ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -14,7 +14,10 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt"
+import { RouteProgressBar } from "@/components/route-progress-bar"
+import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/auth-context"
+import { useNavigationFeedback } from "@/components/navigation-feedback-provider"
 import { cn } from "@/lib/utils"
 
 interface HeaderNavItem {
@@ -33,21 +36,36 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
+function shouldIgnoreNavigationClick(event: MouseEvent<HTMLAnchorElement>) {
+  return event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey
+}
+
 function NavAnchor({
   item,
   active,
+  pending,
   className,
   children,
 }: {
   item: HeaderNavItem
   active: boolean
+  pending: boolean
   className: string
   children: ReactNode
 }) {
+  const { startNavigation } = useNavigationFeedback()
   const commonProps = {
     className,
     "aria-current": active ? ("page" as const) : undefined,
+    "aria-busy": pending || undefined,
     title: item.label,
+    onClick: (event: MouseEvent<HTMLAnchorElement>) => {
+      if (item.newTab || shouldIgnoreNavigationClick(event)) {
+        return
+      }
+
+      startNavigation(item.href)
+    },
   }
 
   return (
@@ -63,40 +81,68 @@ function NavAnchor({
   )
 }
 
-function DesktopNavItem({ item, active }: { item: HeaderNavItem; active: boolean }) {
+function DesktopNavItem({
+  item,
+  active,
+  navigationPending,
+  pending,
+}: {
+  item: HeaderNavItem
+  active: boolean
+  navigationPending: boolean
+  pending: boolean
+}) {
   const Icon = item.icon
 
   return (
     <NavAnchor
       item={item}
       active={active}
+      pending={pending}
       className={cn(
-        "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-white/80 transition-colors",
+        "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-white/80 transition-[background-color,box-shadow,color,transform] duration-150",
         "hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
-        active && "bg-white text-[#0F1E54] shadow-sm hover:bg-white hover:text-[#0F1E54]",
+        active && !navigationPending && "bg-white text-[#0F1E54] shadow-sm hover:bg-white hover:text-[#0F1E54]",
+        pending && "scale-[0.98] bg-white/15 text-white shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-white/15",
       )}
     >
       <Icon className="h-4 w-4" aria-hidden="true" />
       <span>{item.label}</span>
+      {pending && <Spinner className="h-3.5 w-3.5 text-[#F98B1C]" />}
     </NavAnchor>
   )
 }
 
-function MobileNavItem({ item, active }: { item: HeaderNavItem; active: boolean }) {
+function MobileNavItem({
+  item,
+  active,
+  navigationPending,
+  pending,
+}: {
+  item: HeaderNavItem
+  active: boolean
+  navigationPending: boolean
+  pending: boolean
+}) {
   const Icon = item.icon
 
   return (
     <NavAnchor
       item={item}
       active={active}
+      pending={pending}
       className={cn(
-        "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-semibold leading-none transition-colors",
+        "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-semibold leading-none transition-[background-color,box-shadow,color,transform] duration-150",
         "text-[#24324A]/70 hover:bg-[#0F1E54]/5 hover:text-[#0F1E54] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
-        active && "bg-[#0F1E54] text-white shadow-md shadow-[#0F1E54]/20 hover:bg-[#0F1E54] hover:text-white",
+        active &&
+          !navigationPending &&
+          "bg-[#0F1E54] text-white shadow-md shadow-[#0F1E54]/20 hover:bg-[#0F1E54] hover:text-white",
+        pending &&
+          "scale-[0.98] bg-[#F98B1C]/15 text-[#0F1E54] shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-[#F98B1C]/15",
       )}
     >
-      <Icon className="h-5 w-5" aria-hidden="true" />
-      <span>{item.label}</span>
+      {pending ? <Spinner className="h-5 w-5 text-[#F98B1C]" /> : <Icon className="h-5 w-5" aria-hidden="true" />}
+      <span>{pending ? "Opening" : item.label}</span>
     </NavAnchor>
   )
 }
@@ -104,6 +150,7 @@ function MobileNavItem({ item, active }: { item: HeaderNavItem; active: boolean 
 export function Header() {
   const { isLoggedIn, logout, isPreacher, username, role, isHydrated } = useAuth()
   const pathname = usePathname()
+  const { isNavigating, pendingPath } = useNavigationFeedback()
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
@@ -145,9 +192,19 @@ export function Header() {
             </Link>
             {navItems.length > 0 && (
               <nav className="hidden items-center gap-1 rounded-lg bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
-                {navItems.map((item) => (
-                  <DesktopNavItem key={item.href} item={item} active={isActivePath(pathname, item.href)} />
-                ))}
+                {navItems.map((item) => {
+                  const pending = pendingPath ? isActivePath(pendingPath, item.href) : false
+
+                  return (
+                    <DesktopNavItem
+                      key={item.href}
+                      item={item}
+                      active={isActivePath(pathname, item.href)}
+                      navigationPending={isNavigating}
+                      pending={pending}
+                    />
+                  )
+                })}
               </nav>
             )}
             <div className="flex items-center gap-2 sm:gap-3">
@@ -183,12 +240,23 @@ export function Header() {
             className="fixed inset-x-0 bottom-0 z-50 border-t border-[#0F1E54]/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(15,30,84,0.12)] backdrop-blur md:hidden"
           >
             <div className="mx-auto flex max-w-md items-center gap-1">
-              {navItems.map((item) => (
-                <MobileNavItem key={item.href} item={item} active={isActivePath(pathname, item.href)} />
-              ))}
+              {navItems.map((item) => {
+                const pending = pendingPath ? isActivePath(pendingPath, item.href) : false
+
+                return (
+                  <MobileNavItem
+                    key={item.href}
+                    item={item}
+                    active={isActivePath(pathname, item.href)}
+                    navigationPending={isNavigating}
+                    pending={pending}
+                  />
+                )
+              })}
             </div>
           </nav>
         )}
+        <RouteProgressBar />
       </header>
       <PWAInstallPrompt />
     </>
