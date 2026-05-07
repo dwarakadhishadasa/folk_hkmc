@@ -29,8 +29,8 @@ context:
 
 **Hash Callback Fallback**
 
-- Fragment-only `/auth/confirm` requests show a neutral callback shell.
-  [`route.ts:66`](../../app/auth/confirm/route.ts#L66)
+- Fragment-only and otherwise server-unverifiable `/auth/confirm` requests show a neutral callback shell before any invalid-link copy is shown.
+  [`route.ts:71`](../../app/auth/confirm/route.ts#L71)
 
 - The shell redirects truly invalid callbacks after the browser can inspect the hash.
   [`page.tsx:15`](../../app/auth/hash-callback/page.tsx#L15)
@@ -41,8 +41,29 @@ context:
 - The sync endpoint keeps Airtable work on an explicit login boundary.
   [`route.ts:6`](../../app/api/auth/complete-implicit/route.ts#L6)
 
+**Regression Hardening - 2026-05-08**
+
+- `/auth/error?code=invalid-invite` now defers the visible Sign-in Problem card while the browser checks for Supabase hash session tokens.
+  [`auth-error-content.tsx:35`](../../components/auth-error-content.tsx#L35)
+
+- Already-authenticated users who land on the transient invalid-invite route are returned to the role landing page instead of staying on the error screen.
+  [`auth-error-content.tsx:57`](../../components/auth-error-content.tsx#L57)
+
 **Verification**
 
 - `pnpm exec tsc --noEmit` passed.
 - `pnpm build` passed.
 - `pnpm lint` could not run because `eslint` is not installed in this checkout.
+
+## Dev Agent Record
+
+- 2026-05-08: Hardened the auth callback fallback so unsupported or incomplete server-side OTP query payloads defer to `/auth/hash-callback` before rendering invalid-link copy.
+- 2026-05-08: Added client-side invalid-invite guard on `/auth/error` so hash-bearing magic-link redirects show only neutral completion UI while `AuthHashCallback` completes session setup.
+- 2026-05-08: Verification run: `pnpm exec tsc --noEmit` passed; `pnpm build` passed; `pnpm lint` blocked because `eslint` is not installed.
+
+## File List
+
+- `app/auth/confirm/route.ts`
+- `app/auth/error/page.tsx`
+- `components/auth-error-content.tsx`
+- `_bmad-output/implementation-artifacts/spec-fix-volunteer-magic-link-error-flicker.md`

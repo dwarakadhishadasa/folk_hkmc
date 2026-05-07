@@ -24,6 +24,10 @@ function safeNextPath(value: string | null, role: string): string {
   return "/dashboard"
 }
 
+function isSupportedEmailOtpType(value: string | null): value is EmailOtpType {
+  return value === "invite" || value === "magiclink" || value === "email"
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const callbackError = requestUrl.searchParams.get("error_description") || requestUrl.searchParams.get("error")
@@ -31,6 +35,7 @@ export async function GET(request: Request) {
   const tokenHash = requestUrl.searchParams.get("token_hash")
   const type = requestUrl.searchParams.get("type") as EmailOtpType | null
   const next = requestUrl.searchParams.get("next")
+  const hasSupportedTokenHash = Boolean(tokenHash) && isSupportedEmailOtpType(type)
   const supabase = await createSupabaseServerClient()
 
   if (callbackError) {
@@ -63,7 +68,7 @@ export async function GET(request: Request) {
     redirect(safeNextPath(next, staff.role))
   }
 
-  if (!code && !tokenHash && !callbackError) {
+  if (!code && !hasSupportedTokenHash && !callbackError) {
     const params = new URLSearchParams()
     if (next) {
       params.set("next", next)
@@ -72,7 +77,7 @@ export async function GET(request: Request) {
     redirect(`/auth/hash-callback${params.size > 0 ? `?${params.toString()}` : ""}`)
   }
 
-  if (!tokenHash || (type !== "invite" && type !== "magiclink" && type !== "email")) {
+  if (!tokenHash || !isSupportedEmailOtpType(type)) {
     redirect("/auth/error?code=invalid-invite")
   }
 
