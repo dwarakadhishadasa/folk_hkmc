@@ -159,12 +159,16 @@ export function Header() {
   const pathname = usePathname()
   const { isNavigating, pendingPath } = useNavigationFeedback()
 
-  const navItems: HeaderNavItem[] = isLoggedIn && isPreacher
+  const navItems: HeaderNavItem[] = isLoggedIn
     ? [
         { href: "/contact", label: "Contact", icon: UserRoundPlus },
-        { href: "/sessions", label: "Sessions", icon: CalendarDays },
-        { href: "/volunteers", label: "Invite", icon: Send },
-        { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
+        ...(isPreacher
+          ? [
+              { href: "/sessions", label: "Sessions", icon: CalendarDays },
+              { href: "/volunteers", label: "Invite", icon: Send },
+              { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
+            ]
+          : []),
       ]
     : []
 

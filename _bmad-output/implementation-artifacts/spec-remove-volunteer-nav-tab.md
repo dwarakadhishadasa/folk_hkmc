@@ -1,23 +1,23 @@
 ---
-title: 'Remove Volunteer Nav Tab'
+title: 'Remove Volunteer Home Tab'
 type: 'chore'
 created: '2026-05-08'
 status: 'done'
 route: 'one-shot'
 ---
 
-# Remove Volunteer Nav Tab
+# Remove Volunteer Home Tab
 
 ## Intent
 
-**Problem:** Volunteer navigation had a single app tab for a journey that should stay limited to the contact form. With no alternate Volunteer destinations, the tab was redundant.
+**Problem:** Volunteer navigation should keep the useful Contact button, but Home is redundant because the logo already links to `/`.
 
-**Approach:** Build header app navigation only for Admin and Preacher users, and render the mobile bottom nav only when there are actual navigation items.
+**Approach:** Keep Contact in authenticated navigation for all staff roles, preserve Admin/Preacher-only destinations, and leave Home out of the nav item list.
 
 ## Suggested Review Order
 
-- Volunteer role now produces no app nav items; Admin/Preacher destinations remain unchanged.
+- Volunteer role keeps Contact; Admin/Preacher destinations remain additive.
   [`header.tsx:162`](../../components/header.tsx#L162)
 
-- Mobile bottom nav no longer renders an empty fixed shell when Volunteer nav is empty.
+- Mobile nav renders when Contact is present and still skips empty logged-out nav.
   [`header.tsx:240`](../../components/header.tsx#L240)
