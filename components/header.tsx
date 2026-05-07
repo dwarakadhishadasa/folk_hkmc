@@ -159,16 +159,12 @@ export function Header() {
   const pathname = usePathname()
   const { isNavigating, pendingPath } = useNavigationFeedback()
 
-  const navItems: HeaderNavItem[] = isLoggedIn
+  const navItems: HeaderNavItem[] = isLoggedIn && isPreacher
     ? [
         { href: "/contact", label: "Contact", icon: UserRoundPlus },
-        ...(isPreacher
-          ? [
-              { href: "/sessions", label: "Sessions", icon: CalendarDays },
-              { href: "/volunteers", label: "Invite", icon: Send },
-              { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
-            ]
-          : []),
+        { href: "/sessions", label: "Sessions", icon: CalendarDays },
+        { href: "/volunteers", label: "Invite", icon: Send },
+        { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
       ]
     : []
 
@@ -241,7 +237,7 @@ export function Header() {
             </div>
           </div>
         </div>
-        {isLoggedIn && (
+        {navItems.length > 0 && (
           <nav
             data-mobile-app-nav
             className="fixed inset-x-0 bottom-0 z-50 border-t border-[#0F1E54]/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(15,30,84,0.12)] backdrop-blur md:hidden"
