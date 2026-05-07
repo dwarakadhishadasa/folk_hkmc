@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { usePathname } from "next/navigation"
 import type { StaffContext, StaffRole } from "@/lib/authz"
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
 export type UserRole = StaffRole
 
@@ -84,9 +85,27 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
       body: JSON.stringify({ email }),
     })
 
-    const data = (await response.json().catch(() => ({}))) as { error?: string }
+    const data = (await response.json().catch(() => ({}))) as { email?: string; error?: string }
     if (!response.ok) {
       throw new Error(data.error || "Unable to send sign-in link.")
+    }
+
+    const normalizedEmail = data.email || email.trim().toLowerCase()
+    const redirectPath =
+      window.location.pathname === "/login"
+        ? `${window.location.pathname}${window.location.search}`
+        : "/login"
+    const supabase = createSupabaseBrowserClient()
+    const { error } = await supabase.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: `${window.location.origin}${redirectPath}`,
+        shouldCreateUser: false,
+      },
+    })
+
+    if (error) {
+      throw new Error(error.message || "Unable to send sign-in link.")
     }
 
     return true

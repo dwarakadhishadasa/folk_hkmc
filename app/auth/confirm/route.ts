@@ -42,22 +42,19 @@ export async function GET(request: Request) {
   }
 
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (error) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (error || !data.user) {
       redirect("/auth/error?code=invite-verification-failed")
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    const email = user?.email?.trim().toLowerCase()
-    if (!user || !email) {
+    const email = data.user.email?.trim().toLowerCase()
+    if (!email) {
       redirect("/auth/error?code=invite-verification-failed")
     }
 
     let staff
     try {
-      staff = await syncStaffProfileByEmail({ supabaseUserId: user.id, email })
+      staff = await syncStaffProfileByEmail({ supabaseUserId: data.user.id, email })
     } catch {
       await supabase.auth.signOut()
       redirect("/auth/error?code=staff-authorization-failed")

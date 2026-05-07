@@ -1,4 +1,3 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { findStaffUserByEmail, syncStaffSupabaseUserId } from "@/lib/airtable"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type { User } from "@supabase/supabase-js"
@@ -95,21 +94,7 @@ export async function POST(request: Request) {
 
     await ensureSupabaseAuthUser(email, staff.id, staff.supabaseUserId)
 
-    const origin = new URL(request.url).origin
-    const supabase = await createSupabaseServerClient()
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${origin}/auth/confirm`,
-        shouldCreateUser: false,
-      },
-    })
-
-    if (error) {
-      return Response.json({ error: error.message }, { status: 400 })
-    }
-
-    return Response.json({ sent: true })
+    return Response.json({ ready: true, email })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to send sign-in link."
     return Response.json({ error: message }, { status: 500 })
