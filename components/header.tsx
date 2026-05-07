@@ -103,12 +103,15 @@ function DesktopNavItem({
         "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-white/80 transition-[background-color,box-shadow,color,transform] duration-150",
         "hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
         active && !navigationPending && "bg-white text-[#0F1E54] shadow-sm hover:bg-white hover:text-[#0F1E54]",
-        pending && "scale-[0.98] bg-white/15 text-white shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-white/15",
+        pending && "bg-white/15 text-white shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-white/15",
       )}
     >
-      <Icon className="h-4 w-4" aria-hidden="true" />
+      {pending ? (
+        <Spinner className="h-4 w-4 shrink-0 text-[#F98B1C]" aria-hidden="true" />
+      ) : (
+        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      )}
       <span>{item.label}</span>
-      {pending && <Spinner className="h-3.5 w-3.5 text-[#F98B1C]" />}
     </NavAnchor>
   )
 }
@@ -138,11 +141,15 @@ function MobileNavItem({
           !navigationPending &&
           "bg-[#0F1E54] text-white shadow-md shadow-[#0F1E54]/20 hover:bg-[#0F1E54] hover:text-white",
         pending &&
-          "scale-[0.98] bg-[#F98B1C]/15 text-[#0F1E54] shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-[#F98B1C]/15",
+          "bg-[#F98B1C]/15 text-[#0F1E54] shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-[#F98B1C]/15",
       )}
     >
-      {pending ? <Spinner className="h-5 w-5 text-[#F98B1C]" /> : <Icon className="h-5 w-5" aria-hidden="true" />}
-      <span>{pending ? "Opening" : item.label}</span>
+      {pending ? (
+        <Spinner className="h-5 w-5 shrink-0 text-[#F98B1C]" aria-hidden="true" />
+      ) : (
+        <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+      )}
+      <span>{item.label}</span>
     </NavAnchor>
   )
 }
