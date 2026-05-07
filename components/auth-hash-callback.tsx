@@ -6,6 +6,11 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
 const STAFF_SYNC_RETRY_DELAYS_MS = [0, 150, 400]
 
+type StaffSyncResult =
+  | { status: "authenticated"; staff: StaffContext }
+  | { status: "unauthenticated" }
+  | { status: "unauthorized" }
+
 function landingPathForRole(role?: StaffContext["role"]): string {
   if (role === "Volunteer") {
     return "/contact"
@@ -35,11 +40,21 @@ function currentLandingPath(role: StaffContext["role"]): string {
   return safeLandingPath(params.get("next") || params.get("redirect"), role)
 }
 
+function authErrorPath(code: string, message?: string): string {
+  const params = new URLSearchParams({ code })
+
+  if (message) {
+    params.set("message", message.slice(0, 240))
+  }
+
+  return `/auth/error?${params.toString()}`
+}
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-async function completeImplicitStaffSignIn(): Promise<StaffContext | null> {
+async function completeImplicitStaffSignIn(): Promise<StaffSyncResult> {
   for (const delay of STAFF_SYNC_RETRY_DELAYS_MS) {
     if (delay > 0) {
       await wait(delay)
@@ -53,21 +68,53 @@ async function completeImplicitStaffSignIn(): Promise<StaffContext | null> {
 
     if (response.ok) {
       const data = (await response.json()) as { staff?: StaffContext }
-      return data.staff || null
+      return data.staff ? { status: "authenticated", staff: data.staff } : { status: "unauthorized" }
     }
 
     if (response.status !== 401) {
-      return null
+      return { status: "unauthorized" }
     }
   }
 
-  return null
+  return { status: "unauthenticated" }
 }
 
 export function AuthHashCallback() {
   useEffect(() => {
     const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : ""
+    const isHashCallbackPath = window.location.pathname === "/auth/hash-callback"
+    let isActive = true
+
     if (!hash) {
+      if (isHashCallbackPath) {
+        completeImplicitStaffSignIn()
+          .then((result) => {
+            if (!isActive) {
+              return
+            }
+
+            if (result.status === "authenticated") {
+              window.location.replace(currentLandingPath(result.staff.role))
+              return
+            }
+
+            window.location.replace(
+              result.status === "unauthenticated"
+                ? authErrorPath("invalid-invite")
+                : authErrorPath("staff-authorization-failed"),
+            )
+          })
+          .catch(() => {
+            if (isActive) {
+              window.location.replace(authErrorPath("invalid-invite"))
+            }
+          })
+
+        return () => {
+          isActive = false
+        }
+      }
+
       return
     }
 
@@ -76,6 +123,17 @@ export function AuthHashCallback() {
     const refreshToken = params.get("refresh_token")
 
     if (!accessToken || !refreshToken) {
+      const callbackError = params.get("error_description") || params.get("error")
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`)
+
+      if (isHashCallbackPath) {
+        window.location.replace(
+          callbackError
+            ? authErrorPath("supabase-callback-error", callbackError)
+            : authErrorPath("invalid-invite"),
+        )
+      }
+
       return
     }
 
@@ -83,8 +141,6 @@ export function AuthHashCallback() {
       access_token: accessToken,
       refresh_token: refreshToken,
     }
-    let isActive = true
-
     async function completeImplicitSignIn() {
       const supabase = createSupabaseBrowserClient()
       const { error } = await supabase.auth.setSession(sessionTokens)
@@ -96,19 +152,19 @@ export function AuthHashCallback() {
         return
       }
 
-      let staff: StaffContext | null = null
+      let staffSyncResult: StaffSyncResult = { status: "unauthorized" }
       try {
-        staff = await completeImplicitStaffSignIn()
+        staffSyncResult = await completeImplicitStaffSignIn()
       } catch {
-        staff = null
+        staffSyncResult = { status: "unauthorized" }
       }
 
-      if (!staff || !isActive) {
+      if (staffSyncResult.status !== "authenticated" || !isActive) {
         window.location.replace("/auth/error?code=staff-authorization-failed")
         return
       }
 
-      window.location.replace(currentLandingPath(staff.role))
+      window.location.replace(currentLandingPath(staffSyncResult.staff.role))
     }
 
     completeImplicitSignIn()
