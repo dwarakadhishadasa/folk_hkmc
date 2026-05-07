@@ -138,7 +138,8 @@ export async function getStaffContext(): Promise<StaffContext> {
     throw new AuthzError(403, "missing_email", "The signed-in user does not have an email.")
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data: profile, error: profileError } = await supabaseAdmin
     .from("staff_profiles")
     .select(
       "id,email,airtable_user_id,name,role,status,location_ids,assigned_preacher_airtable_user_id,last_synced_at,created_at,updated_at",
