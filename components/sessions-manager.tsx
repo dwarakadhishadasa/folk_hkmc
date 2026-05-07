@@ -1,8 +1,9 @@
 "use client"
 
 import type { FormEvent } from "react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { LiveAttendanceDashboard, type DashboardSessionContext } from "@/components/live-attendance-dashboard"
+import { gsap, useGSAP } from "@/lib/gsap"
 
 interface LocationOption {
   id: string
@@ -60,6 +61,98 @@ function nextSessionBoundary(sessions: SessionSummary[], now: number): number | 
 }
 
 const MAX_TIMEOUT_DELAY_MS = 2_147_483_647
+
+const SESSION_LOADING_ROWS = [
+  { titleWidth: "w-44 sm:w-64", metaWidth: "w-28 sm:w-40", pillWidth: "w-16" },
+  { titleWidth: "w-56 sm:w-80", metaWidth: "w-36 sm:w-52", pillWidth: "w-20" },
+  { titleWidth: "w-48 sm:w-72", metaWidth: "w-24 sm:w-44", pillWidth: "w-14" },
+]
+
+function LoadingBar({ className }: { className: string }) {
+  return (
+    <span className={`relative block overflow-hidden rounded-full bg-[#0F1E54]/10 ${className}`}>
+      <span
+        data-session-loader-shimmer
+        className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-gradient-to-r from-transparent via-white/90 to-transparent"
+      />
+    </span>
+  )
+}
+
+function SessionsLoadingState() {
+  const containerRef = useRef<HTMLElement>(null)
+
+  useGSAP(
+    () => {
+      const root = containerRef.current
+
+      if (!root) {
+        return
+      }
+
+      const rows = gsap.utils.toArray<HTMLElement>("[data-session-loader-row]", root)
+      const dots = gsap.utils.toArray<HTMLElement>("[data-session-loader-dot]", root)
+      const shimmers = gsap.utils.toArray<HTMLElement>("[data-session-loader-shimmer]", root)
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+      if (prefersReducedMotion) {
+        gsap.set(rows, { autoAlpha: 1, y: 0 })
+        gsap.set(shimmers, { autoAlpha: 0.45, xPercent: 0 })
+        return
+      }
+
+      gsap.fromTo(
+        rows,
+        { autoAlpha: 0, y: 8 },
+        { autoAlpha: 1, y: 0, duration: 0.28, ease: "power2.out", stagger: 0.08 },
+      )
+      gsap.fromTo(
+        dots,
+        { scale: 0.86, autoAlpha: 0.72 },
+        { scale: 1, autoAlpha: 1, duration: 0.75, ease: "sine.inOut", repeat: -1, yoyo: true, stagger: 0.12 },
+      )
+      gsap.fromTo(
+        shimmers,
+        { xPercent: -135 },
+        { xPercent: 235, duration: 1.35, ease: "none", repeat: -1, stagger: 0.08 },
+      )
+    },
+    { scope: containerRef },
+  )
+
+  return (
+    <section
+      ref={containerRef}
+      aria-busy="true"
+      aria-live="polite"
+      className="mx-auto max-w-5xl rounded-2xl bg-white p-6 shadow-lg"
+    >
+      <span className="sr-only" role="status">
+        Loading sessions...
+      </span>
+      <div className="space-y-4">
+        {SESSION_LOADING_ROWS.map((row, index) => (
+          <div
+            key={index}
+            data-session-loader-row
+            className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-xl border border-[#0F1E54]/10 bg-[#FFF9F0]/70 px-4 py-3 opacity-0"
+          >
+            <span
+              data-session-loader-dot
+              className="h-8 w-8 rounded-full bg-[#F98B1C]/20 ring-1 ring-[#F98B1C]/30"
+              aria-hidden="true"
+            />
+            <span className="min-w-0 space-y-2">
+              <LoadingBar className={`h-3 max-w-full ${row.titleWidth}`} />
+              <LoadingBar className={`h-2.5 max-w-full ${row.metaWidth}`} />
+            </span>
+            <LoadingBar className={`hidden h-6 ${row.pillWidth} sm:block`} />
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
 
 export function SessionsManager({ locations }: { locations: LocationOption[] }) {
   const defaultLocationId = locations[0]?.id || ""
@@ -169,11 +262,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
   }
 
   if (isLoading) {
-    return (
-      <section className="mx-auto max-w-5xl rounded-2xl bg-white p-6 shadow-lg">
-        <p className="text-sm font-medium text-[#24324A]/70">Loading session state...</p>
-      </section>
-    )
+    return <SessionsLoadingState />
   }
 
   if (dashboardSession) {
