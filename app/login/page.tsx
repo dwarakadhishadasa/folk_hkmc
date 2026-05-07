@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Header } from "@/components/header"
 import { useAuth } from "@/lib/auth-context"
 
+let lastAuthCallbackHandoff = ""
+
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [error, setError] = useState("")
@@ -41,8 +43,14 @@ export default function LoginPage() {
       callbackParams.set("next", requestedRedirectUrl)
     }
 
-    router.replace(`/auth/confirm?${callbackParams.toString()}`)
-  }, [authCallbackCode, authCallbackTokenHash, authCallbackType, requestedRedirectUrl, router])
+    const confirmPath = `/auth/confirm?${callbackParams.toString()}`
+    if (lastAuthCallbackHandoff === confirmPath) {
+      return
+    }
+
+    lastAuthCallbackHandoff = confirmPath
+    window.location.replace(confirmPath)
+  }, [authCallbackCode, authCallbackTokenHash, authCallbackType, requestedRedirectUrl])
 
   useEffect(() => {
     if (isHydrated && isLoggedIn) {

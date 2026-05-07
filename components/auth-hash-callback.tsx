@@ -4,7 +4,9 @@ import { useEffect } from "react"
 import type { StaffContext } from "@/lib/authz"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
-function defaultLandingPath(role?: StaffContext["role"]): string {
+const STAFF_SYNC_RETRY_DELAYS_MS = [0, 150, 400]
+
+function landingPathForRole(role?: StaffContext["role"]): string {
   if (role === "Volunteer") {
     return "/contact"
   }
@@ -14,6 +16,52 @@ function defaultLandingPath(role?: StaffContext["role"]): string {
   }
 
   return "/dashboard"
+}
+
+function safeLandingPath(value: string | null, role: StaffContext["role"]): string {
+  if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
+    if (role === "Volunteer" && value !== "/contact") {
+      return "/contact"
+    }
+
+    return value
+  }
+
+  return landingPathForRole(role)
+}
+
+function currentLandingPath(role: StaffContext["role"]): string {
+  const params = new URLSearchParams(window.location.search)
+  return safeLandingPath(params.get("next") || params.get("redirect"), role)
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+async function completeImplicitStaffSignIn(): Promise<StaffContext | null> {
+  for (const delay of STAFF_SYNC_RETRY_DELAYS_MS) {
+    if (delay > 0) {
+      await wait(delay)
+    }
+
+    const response = await fetch("/api/auth/complete-implicit", {
+      method: "POST",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+
+    if (response.ok) {
+      const data = (await response.json()) as { staff?: StaffContext }
+      return data.staff || null
+    }
+
+    if (response.status !== 401) {
+      return null
+    }
+  }
+
+  return null
 }
 
 export function AuthHashCallback() {
@@ -48,18 +96,19 @@ export function AuthHashCallback() {
         return
       }
 
-      const response = await fetch("/api/auth/me", {
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      })
+      let staff: StaffContext | null = null
+      try {
+        staff = await completeImplicitStaffSignIn()
+      } catch {
+        staff = null
+      }
 
-      if (!response.ok || !isActive) {
+      if (!staff || !isActive) {
         window.location.replace("/auth/error?code=staff-authorization-failed")
         return
       }
 
-      const data = (await response.json()) as { staff?: StaffContext }
-      window.location.replace(defaultLandingPath(data.staff?.role))
+      window.location.replace(currentLandingPath(staff.role))
     }
 
     completeImplicitSignIn()

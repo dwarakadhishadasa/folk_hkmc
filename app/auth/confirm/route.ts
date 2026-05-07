@@ -63,6 +63,15 @@ export async function GET(request: Request) {
     redirect(safeNextPath(next, staff.role))
   }
 
+  if (!code && !tokenHash && !callbackError) {
+    const params = new URLSearchParams()
+    if (next) {
+      params.set("next", next)
+    }
+
+    redirect(`/auth/hash-callback${params.size > 0 ? `?${params.toString()}` : ""}`)
+  }
+
   if (!tokenHash || (type !== "invite" && type !== "magiclink" && type !== "email")) {
     redirect("/auth/error?code=invalid-invite")
   }
