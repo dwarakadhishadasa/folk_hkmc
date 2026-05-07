@@ -73,6 +73,20 @@ Implemented the ready-for-dev performance responsiveness story chain across staf
 - Unauthenticated `GET /dashboard` redirected to `/login?redirect=/dashboard`.
 - `GET /api/auth/me` without staff cookies returned `200` with the unauthenticated staff-null contract.
 
+## Vercel Speed Insights Field Results
+
+Captured from Vercel Speed Insights on 2026-05-07 for desktop preview traffic over the last 7 days. Sample sizes are small, so treat this as directional evidence rather than a settled production baseline.
+
+- `TTFB`: 1.92s, poor, route `/` with 3 data points.
+- `FCP`: 2.04s, needs improvement, route `/` with 3 data points.
+- `LCP`: 2.04s, great.
+- `INP`: 272ms, needs improvement. Route evidence: `/contact` 272ms with 2 data points, `/` 272ms with 1 data point, `/volunteers` 216ms with 1 data point.
+- `CLS`: 0, great.
+- `FID`: 67ms, great.
+- Real Experience Score currently shows `0`.
+
+Follow-up should prioritize `/` response latency for the poor `TTFB`, then route-level interaction profiling for `/contact`, `/`, and `/volunteers`. Mobile Speed Insights results were not included in the provided screenshots and should be captured separately.
+
 ## Blocked Manual Coverage
 
 - Full Admin, Preacher, and Volunteer browser smoke was not executed because no role-specific test accounts/session cookies were provided in this environment.
