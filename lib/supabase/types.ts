@@ -36,22 +36,26 @@ export type Database = {
       }
       staff_profiles: {
         Row: {
+          assigned_preacher_airtable_user_id: string | null
           airtable_user_id: string
           created_at: string
           email: string
           id: string
           last_synced_at: string
+          location_ids: string[]
           name: string | null
           role: string
           status: string
           updated_at: string
         }
         Insert: {
+          assigned_preacher_airtable_user_id?: string | null
           airtable_user_id: string
           created_at?: string
           email: string
           id: string
           last_synced_at?: string
+          location_ids?: string[]
           name?: string | null
           role: string
           status: string

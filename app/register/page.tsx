@@ -57,23 +57,6 @@ function RegisterForm() {
     }))
   }
 
-  const completeAttendance = async (mobile: string, currentSessionId: string) => {
-    const attendanceResponse = await fetch("/attendance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mobile, sessionId: currentSessionId }),
-    })
-    const attendanceData = await attendanceResponse.json()
-
-    if (attendanceResponse.ok || (attendanceResponse.status === 409 && attendanceData.duplicate)) {
-      setSuccessMessage("Registration complete and attendance marked")
-      setSuccess(true)
-      return true
-    }
-
-    throw new Error(attendanceData.error || "Registration succeeded, but attendance could not be marked.")
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -102,10 +85,6 @@ function RegisterForm() {
       }
 
       if (res.status === 409 && data.alreadyRegistered) {
-        if (sessionId) {
-          await completeAttendance(formData.mobile, sessionId)
-          return
-        }
         setError("You are already registered. Please use your session attendance link to mark attendance.")
         return
       }
@@ -115,7 +94,11 @@ function RegisterForm() {
       }
 
       if (sessionId) {
-        await completeAttendance(formData.mobile, sessionId)
+        if (!data.completed) {
+          throw new Error("Registration completed, but attendance status was not confirmed.")
+        }
+        setSuccessMessage("Registration complete and attendance marked")
+        setSuccess(true)
       } else {
         setSuccessMessage("Registration Successful")
         setSuccess(true)

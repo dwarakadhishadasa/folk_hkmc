@@ -1,10 +1,29 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 export function OfflineIndicator() {
   const [isOnline, setIsOnline] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
+
+  const checkPendingRequests = useCallback(async () => {
+    if ("serviceWorker" in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.ready
+        const messageChannel = new MessageChannel()
+
+        messageChannel.port1.onmessage = (event) => {
+          if (event.data && event.data.count !== undefined) {
+            setPendingCount(event.data.count)
+          }
+        }
+
+        registration.active?.postMessage({ type: "GET_PENDING_COUNT" }, [messageChannel.port2])
+      } catch (error) {
+        console.error("[v0] Failed to check pending requests:", error)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const updateOnlineStatus = () => {
@@ -23,30 +42,33 @@ export function OfflineIndicator() {
   }, [])
 
   useEffect(() => {
-    const checkPendingRequests = async () => {
-      if ("serviceWorker" in navigator) {
-        try {
-          const registration = await navigator.serviceWorker.ready
-          const messageChannel = new MessageChannel()
+    const refreshWhenOnline = () => {
+      void checkPendingRequests()
+    }
 
-          messageChannel.port1.onmessage = (event) => {
-            if (event.data && event.data.count !== undefined) {
-              setPendingCount(event.data.count)
-            }
-          }
-
-          registration.active?.postMessage({ type: "GET_PENDING_COUNT" }, [messageChannel.port2])
-        } catch (error) {
-          console.error("[v0] Failed to check pending requests:", error)
-        }
+    const refreshWhenVisible = () => {
+      if (!document.hidden) {
+        void checkPendingRequests()
       }
     }
 
-    checkPendingRequests()
-    const interval = setInterval(checkPendingRequests, 5000)
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === "PENDING_COUNT_UPDATED" && typeof event.data.count === "number") {
+        setPendingCount(event.data.count)
+      }
+    }
 
-    return () => clearInterval(interval)
-  }, [isOnline])
+    void checkPendingRequests()
+    window.addEventListener("online", refreshWhenOnline)
+    document.addEventListener("visibilitychange", refreshWhenVisible)
+    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage)
+
+    return () => {
+      window.removeEventListener("online", refreshWhenOnline)
+      document.removeEventListener("visibilitychange", refreshWhenVisible)
+      navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage)
+    }
+  }, [checkPendingRequests])
 
   const handleSync = async () => {
     if ("serviceWorker" in navigator) {
@@ -56,7 +78,11 @@ export function OfflineIndicator() {
 
         messageChannel.port1.onmessage = (event) => {
           console.log("[v0] Sync result:", event.data)
-          setPendingCount(0)
+          if (typeof event.data?.count === "number") {
+            setPendingCount(event.data.count)
+            return
+          }
+          void checkPendingRequests()
         }
 
         registration.active?.postMessage({ type: "SYNC_QUEUE" }, [messageChannel.port2])

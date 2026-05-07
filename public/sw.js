@@ -89,11 +89,14 @@ async function syncQueuedRequests() {
       if (response.ok || response.status === 409) {
         await removeFromQueue(request.id)
         console.log("[v0] Synced offline request:", request.url)
+        await notifyPendingCount()
       }
     } catch (error) {
       console.error("[v0] Failed to sync request:", error)
     }
   }
+
+  return notifyPendingCount()
 }
 
 async function getPendingCount() {
@@ -103,6 +106,17 @@ async function getPendingCount() {
   } catch {
     return 0
   }
+}
+
+async function notifyPendingCount() {
+  const count = await getPendingCount()
+  const clients = await self.clients.matchAll({ includeUncontrolled: true, type: "window" })
+
+  for (const client of clients) {
+    client.postMessage({ type: "PENDING_COUNT_UPDATED", count })
+  }
+
+  return count
 }
 
 // Install event - cache essential assets
@@ -143,6 +157,7 @@ self.addEventListener("fetch", (event) => {
           // If offline, queue the request
           const body = await event.request.clone().text()
           await addToQueue(event.request.url, event.request.method, body)
+          await notifyPendingCount()
 
           return new Response(
             JSON.stringify({
@@ -210,8 +225,8 @@ self.addEventListener("message", (event) => {
 
   if (event.data && event.data.type === "SYNC_QUEUE") {
     syncQueuedRequests()
-      .then(() => {
-        event.ports[0].postMessage({ success: true })
+      .then((count) => {
+        event.ports[0].postMessage({ success: true, count })
       })
       .catch((error) => {
         event.ports[0].postMessage({ success: false, error: error.message })

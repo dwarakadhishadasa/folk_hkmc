@@ -1,11 +1,13 @@
 import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
+import { getSessionAttendanceEligibility } from "@/lib/attendance-session"
 import {
   createAttendanceRecord,
   findAttendanceByContactAndSession,
   findContactByPhone,
   findSessionById,
   getAttendanceByDate,
-  getAttendanceBySession,
+  getAttendanceByRecordIds,
+  getAttendanceBySessionRecord,
   normalizeMobile,
 } from "@/lib/airtable"
 
@@ -16,25 +18,21 @@ interface AttendancePayload {
   sessionId?: string
 }
 
-function sessionWindowState(session: Awaited<ReturnType<typeof findSessionById>>) {
-  if (!session) {
-    return { ok: false, status: 404, error: "Invalid attendance session." }
+function parseKnownAttendanceIds(value: string | null): Set<string> | null {
+  if (!value) {
+    return null
   }
 
-  if (!session.publicAttendanceEnabled) {
-    return { ok: false, status: 403, error: "Attendance is not open for this session." }
+  const ids = value
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+
+  if (ids.length === 0 || ids.length > 100 || ids.some((id) => !/^rec[a-zA-Z0-9]{4,32}$/.test(id))) {
+    return null
   }
 
-  const now = Date.now()
-  if (session.attendanceOpensAt && now < Date.parse(session.attendanceOpensAt)) {
-    return { ok: false, status: 403, error: "Attendance is not open yet." }
-  }
-
-  if (session.attendanceClosesAt && now > Date.parse(session.attendanceClosesAt)) {
-    return { ok: false, status: 403, error: "Attendance is closed for this session." }
-  }
-
-  return { ok: true }
+  return new Set(ids)
 }
 
 export async function POST(request: Request) {
@@ -52,9 +50,12 @@ export async function POST(request: Request) {
     }
 
     const session = await findSessionById(sessionId)
-    const windowState = sessionWindowState(session)
+    const windowState = getSessionAttendanceEligibility(session)
     if (!windowState.ok) {
       return Response.json({ error: windowState.error }, { status: windowState.status })
+    }
+    if (!session) {
+      return Response.json({ error: "Invalid attendance session." }, { status: 404 })
     }
 
     const contact = await findContactByPhone(mobile)
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const existing = await findAttendanceByContactAndSession(contact.id, sessionId)
+    const existing = await findAttendanceByContactAndSession(contact.id, sessionId, session)
     if (existing) {
       return Response.json(
         {
@@ -116,6 +117,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get("session")?.trim()
+    const knownAttendanceIds = parseKnownAttendanceIds(searchParams.get("knownAttendanceIds"))
     const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
     let airtableRecords: Awaited<ReturnType<typeof getAttendanceByDate>>
 
@@ -135,7 +137,12 @@ export async function GET(request: Request) {
         return Response.json({ error: "This session is outside your allowed scope." }, { status: 403 })
       }
 
-      airtableRecords = await getAttendanceBySession(sessionId)
+      if (knownAttendanceIds) {
+        const newAttendanceRecordIds = session.attendanceRecordIds.filter((recordId) => !knownAttendanceIds.has(recordId))
+        airtableRecords = await getAttendanceByRecordIds(newAttendanceRecordIds)
+      } else {
+        airtableRecords = await getAttendanceBySessionRecord(session)
+      }
     } else {
       airtableRecords = await getAttendanceByDate(date)
     }

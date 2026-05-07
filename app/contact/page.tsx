@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation"
 import { Header } from "@/components/header"
 import { ContactForm } from "@/components/contact-form"
+import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
-import { findStaffUserById, listActivePreachers, listLocations } from "@/lib/airtable"
+import { findStaffUserById, listCachedActivePreachers, listCachedLocations } from "@/lib/airtable"
 
 export const dynamic = "force-dynamic"
 
@@ -10,8 +11,8 @@ export default async function ContactPage() {
   try {
     const staff = await getStaffContext()
     const [allLocations, preachers, assignedPreacher] = await Promise.all([
-      listLocations(),
-      staff.role === "Admin" ? listActivePreachers() : Promise.resolve([]),
+      listCachedLocations(),
+      staff.role === "Admin" ? listCachedActivePreachers() : Promise.resolve([]),
       staff.role === "Volunteer" && staff.assignedPreacherAirtableUserId
         ? findStaffUserById(staff.assignedPreacherAirtableUserId)
         : Promise.resolve(null),
@@ -27,6 +28,7 @@ export default async function ContactPage() {
     const locations = allLocations.filter((location) => visibleLocationIds.has(location.id))
 
     return (
+      <StaffAuthShell staff={staff}>
       <div className="min-h-screen bg-muted/30">
         <Header />
         <main className="container mx-auto max-w-2xl px-4 py-8">
@@ -42,6 +44,7 @@ export default async function ContactPage() {
           />
         </main>
       </div>
+      </StaffAuthShell>
     )
   } catch (error) {
     if (error instanceof AuthzError && error.status === 401) {

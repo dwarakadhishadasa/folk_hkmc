@@ -1,5 +1,7 @@
 import "server-only"
 
+import { revalidateTag, unstable_cache } from "next/cache"
+
 export type StaffRole = "Admin" | "Preacher" | "Volunteer"
 export type StaffStatus = "Active" | "Inactive"
 
@@ -132,6 +134,9 @@ const tableEnvNames: Record<TableKey, string> = {
 
 const DEFAULT_ANALYTICS_RECORD_ID = "reca0aQhvHSc5d5A1"
 const AIRTABLE_DATE_TIME_ZONE = "Asia/Kolkata"
+const AIRTABLE_REFERENCE_CACHE_TTL_SECONDS = 20 * 60
+const AIRTABLE_LOCATIONS_CACHE_TAG = "airtable-locations"
+const AIRTABLE_ACTIVE_PREACHERS_CACHE_TAG = "airtable-active-preachers"
 
 export class AirtableConfigError extends Error {
   constructor(message: string) {
@@ -384,6 +389,15 @@ export async function listActivePreachers(): Promise<StaffUser[]> {
   return records.map(mapStaffUser).filter((user): user is StaffUser => Boolean(user))
 }
 
+export const listCachedActivePreachers = unstable_cache(
+  async () => listActivePreachers(),
+  [AIRTABLE_ACTIVE_PREACHERS_CACHE_TAG],
+  {
+    revalidate: AIRTABLE_REFERENCE_CACHE_TTL_SECONDS,
+    tags: [AIRTABLE_ACTIVE_PREACHERS_CACHE_TAG],
+  },
+)
+
 export async function upsertStaffUser(data: {
   email: string
   name: string
@@ -569,6 +583,21 @@ export async function listLocations(): Promise<LocationRecord[]> {
   return records.map(mapLocation).sort((left, right) => left.name.localeCompare(right.name))
 }
 
+export const listCachedLocations = unstable_cache(async () => listLocations(), [AIRTABLE_LOCATIONS_CACHE_TAG], {
+  revalidate: AIRTABLE_REFERENCE_CACHE_TTL_SECONDS,
+  tags: [AIRTABLE_LOCATIONS_CACHE_TAG],
+})
+
+export function revalidateAirtableReferenceCache(scope: "locations" | "active-preachers" | "all" = "all"): void {
+  if (scope === "locations" || scope === "all") {
+    revalidateTag(AIRTABLE_LOCATIONS_CACHE_TAG, "max")
+  }
+
+  if (scope === "active-preachers" || scope === "all") {
+    revalidateTag(AIRTABLE_ACTIVE_PREACHERS_CACHE_TAG, "max")
+  }
+}
+
 export async function createSession(data: {
   name: string
   sessionDate: string
@@ -604,8 +633,9 @@ export async function updateSessionAttendanceUrl(sessionId: string, attendanceUr
 export async function findAttendanceByContactAndSession(
   contactId: string,
   sessionId: string,
+  session?: SessionRecord,
 ): Promise<AttendanceRecord | null> {
-  const records = await getAttendanceBySession(sessionId)
+  const records = session ? await getAttendanceBySessionRecord(session) : await getAttendanceBySession(sessionId)
   return records.find((record) => linkedIdsInclude(record.fields.Contact, contactId)) || null
 }
 
@@ -633,9 +663,17 @@ export async function getAttendanceByDate(date: string): Promise<AttendanceRecor
 export async function getAttendanceBySession(sessionId: string): Promise<AttendanceRecord[]> {
   const session = await findSessionById(sessionId)
 
-  if (!session?.attendanceRecordIds.length) {
+  return session ? getAttendanceBySessionRecord(session) : []
+}
+
+export async function getAttendanceByRecordIds(recordIds: string[]): Promise<AttendanceRecord[]> {
+  return listRecordsByIds<AttendanceFields>("attendance", recordIds)
+}
+
+export async function getAttendanceBySessionRecord(session: Pick<SessionRecord, "attendanceRecordIds">): Promise<AttendanceRecord[]> {
+  if (!session.attendanceRecordIds.length) {
     return []
   }
 
-  return listRecordsByIds<AttendanceFields>("attendance", session.attendanceRecordIds)
+  return getAttendanceByRecordIds(session.attendanceRecordIds)
 }

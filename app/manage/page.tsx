@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation"
 import { Header } from "@/components/header"
+import { StaffAuthShell } from "@/components/staff-auth-shell"
+import type { StaffContext } from "@/lib/authz"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
@@ -21,9 +23,10 @@ function getAirtableInterfaceDashboardUrl(): string | null {
 
 export default async function ManagePage() {
   let airtableDashboardUrl: string | null = null
+  let staff: StaffContext | null = null
 
   try {
-    const staff = await getStaffContext()
+    staff = await getStaffContext()
     requireRole(staff, ["Admin", "Preacher"])
     airtableDashboardUrl = getAirtableInterfaceDashboardUrl()
   } catch (error) {
@@ -38,7 +41,12 @@ export default async function ManagePage() {
     redirect(airtableDashboardUrl)
   }
 
+  if (!staff) {
+    redirect("/auth/error?code=staff-authorization-failed")
+  }
+
   return (
+    <StaffAuthShell staff={staff}>
     <div className="min-h-screen bg-[#FFF9F0]">
       <Header />
       <main className="container mx-auto max-w-md px-4 py-8">
@@ -51,5 +59,6 @@ export default async function ManagePage() {
         </div>
       </main>
     </div>
+    </StaffAuthShell>
   )
 }

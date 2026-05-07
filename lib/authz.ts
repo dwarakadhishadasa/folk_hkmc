@@ -3,6 +3,7 @@ import "server-only"
 import { findStaffUserByEmail, syncStaffSupabaseUserId, type StaffRole, type StaffUser } from "@/lib/airtable"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+import type { Database } from "@/lib/supabase/types"
 
 export type { StaffRole, StaffStatus, StaffUser } from "@/lib/airtable"
 
@@ -38,6 +39,12 @@ export function requireRole(context: StaffContext, allowedRoles: StaffRole[]): v
   }
 }
 
+type StaffProfileRow = Database["public"]["Tables"]["staff_profiles"]["Row"]
+
+function isStaffRole(value: string): value is StaffRole {
+  return value === "Admin" || value === "Preacher" || value === "Volunteer"
+}
+
 function mapStaffContext(supabaseUserId: string, staffUser: StaffUser): StaffContext {
   return {
     supabaseUserId,
@@ -47,6 +54,30 @@ function mapStaffContext(supabaseUserId: string, staffUser: StaffUser): StaffCon
     role: staffUser.role,
     locationIds: staffUser.locationIds,
     assignedPreacherAirtableUserId: staffUser.assignedPreacherAirtableUserId,
+  }
+}
+
+export function mapStaffProfileRowToStaffContext(row: StaffProfileRow): StaffContext {
+  if (!row.email?.trim() || !row.airtable_user_id?.trim()) {
+    throw new AuthzError(403, "staff_profile_malformed", "This staff profile is incomplete.")
+  }
+
+  if (!isStaffRole(row.role)) {
+    throw new AuthzError(403, "unsupported_role", "This staff role is not supported.")
+  }
+
+  if (row.status !== "Active") {
+    throw new AuthzError(403, "staff_inactive", "This staff account is inactive.")
+  }
+
+  return {
+    supabaseUserId: row.id,
+    email: row.email.trim().toLowerCase(),
+    airtableUserId: row.airtable_user_id,
+    name: row.name?.trim() || row.email.trim().toLowerCase(),
+    role: row.role,
+    locationIds: Array.isArray(row.location_ids) ? row.location_ids.filter(Boolean) : [],
+    assignedPreacherAirtableUserId: row.assigned_preacher_airtable_user_id || undefined,
   }
 }
 
@@ -77,6 +108,8 @@ export async function syncStaffProfileByEmail(params: {
       name: staffUser.name,
       role: staffUser.role,
       status: staffUser.status,
+      location_ids: staffUser.locationIds,
+      assigned_preacher_airtable_user_id: staffUser.assignedPreacherAirtableUserId ?? null,
       last_synced_at: new Date().toISOString(),
     },
     { onConflict: "id" },
@@ -105,7 +138,27 @@ export async function getStaffContext(): Promise<StaffContext> {
     throw new AuthzError(403, "missing_email", "The signed-in user does not have an email.")
   }
 
-  return syncStaffProfileByEmail({ supabaseUserId: user.id, email })
+  const { data: profile, error: profileError } = await supabase
+    .from("staff_profiles")
+    .select(
+      "id,email,airtable_user_id,name,role,status,location_ids,assigned_preacher_airtable_user_id,last_synced_at,created_at,updated_at",
+    )
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    throw new AuthzError(500, "staff_profile_read_failed", "Unable to read the staff profile.")
+  }
+
+  if (!profile) {
+    throw new AuthzError(403, "staff_profile_missing", "No local staff profile is linked to this user.")
+  }
+
+  if (typeof profile.email === "string" && profile.email.trim().toLowerCase() !== email) {
+    throw new AuthzError(403, "staff_profile_mismatch", "This staff profile does not match the signed-in user.")
+  }
+
+  return mapStaffProfileRowToStaffContext(profile as StaffProfileRow)
 }
 
 export function authzErrorResponse(error: unknown): Response {

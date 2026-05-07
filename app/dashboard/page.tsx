@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Header } from "@/components/header"
 import { LiveAttendanceDashboard, type DashboardSessionContext } from "@/components/live-attendance-dashboard"
+import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { listLocations, listSessions, type SessionRecord } from "@/lib/airtable"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
 
@@ -67,12 +68,14 @@ export default async function DashboardPage() {
     }
 
     return (
+      <StaffAuthShell staff={staff}>
       <div className="min-h-screen bg-[#FFF9F0]">
         <Header />
         <main className="container mx-auto px-4 py-6">
           <LiveAttendanceDashboard activeSession={activeSession} />
         </main>
       </div>
+      </StaffAuthShell>
     )
   } catch (error) {
     if (error instanceof AuthzError && error.status === 401) {

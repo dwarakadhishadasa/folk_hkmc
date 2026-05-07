@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { QRCodeSVG } from "qrcode.react"
 
 interface AttendanceRecord {
@@ -31,6 +31,8 @@ const backgroundColors = [
   "bg-teal-50",
 ]
 
+const MAX_TIMEOUT_DELAY_MS = 2_147_483_647
+
 function getBackgroundColor(index: number): string {
   return backgroundColors[index % backgroundColors.length]
 }
@@ -40,29 +42,35 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
   const [isLoading, setIsLoading] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [now, setNow] = useState(() => Date.now())
+  const [timeSignal, setTimeSignal] = useState(() => Date.now())
+  const attendanceIdsRef = useRef<string[]>([])
 
   const activeSessionExpiresAt = activeSession?.attendanceClosesAt ? Date.parse(activeSession.attendanceClosesAt) : null
   const hasActiveSession =
     Boolean(activeSession) &&
     activeSessionExpiresAt !== null &&
     Number.isFinite(activeSessionExpiresAt) &&
-    activeSessionExpiresAt > now
+    activeSessionExpiresAt > timeSignal
   const activeSessionId = hasActiveSession && activeSession ? activeSession.id : ""
 
   useEffect(() => {
-    if (!activeSession?.attendanceClosesAt) {
+    if (!activeSession?.attendanceClosesAt || activeSessionExpiresAt === null || !Number.isFinite(activeSessionExpiresAt)) {
       return
     }
 
-    const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
-  }, [activeSession?.attendanceClosesAt])
+    const delay = Math.min(Math.max(activeSessionExpiresAt - Date.now() + 50, 0), MAX_TIMEOUT_DELAY_MS)
+    const timeout = window.setTimeout(() => setTimeSignal(Date.now()), delay)
+    return () => window.clearTimeout(timeout)
+  }, [activeSession?.attendanceClosesAt, activeSessionExpiresAt])
 
   useEffect(() => {
     setAttendanceList([])
     setLastRefresh(null)
   }, [activeSessionId])
+
+  useEffect(() => {
+    attendanceIdsRef.current = attendanceList.map((record) => record.id)
+  }, [attendanceList])
 
   const fetchAttendance = useCallback(async () => {
     if (!activeSessionId || document.hidden) {
@@ -72,7 +80,15 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
     setIsLoading(true)
     setError(null)
     try {
-      const attendanceUrl = `/attendance?session=${encodeURIComponent(activeSessionId)}&t=${Date.now()}`
+      const attendanceUrl = new URL("/attendance", window.location.origin)
+      attendanceUrl.searchParams.set("session", activeSessionId)
+      attendanceUrl.searchParams.set("t", String(Date.now()))
+
+      const knownAttendanceIds = attendanceIdsRef.current.slice(-100)
+      if (knownAttendanceIds.length > 0) {
+        attendanceUrl.searchParams.set("knownAttendanceIds", knownAttendanceIds.join(","))
+      }
+
       const res = await fetch(attendanceUrl, {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" },

@@ -49,6 +49,18 @@ function sessionStartTime(session: SessionSummary): number {
   return readTime(session.attendanceOpensAt) || readTime(session.sessionDate) || 0
 }
 
+function nextSessionBoundary(sessions: SessionSummary[], now: number): number | null {
+  const futureBoundaries = sessions.flatMap((session) =>
+    [readTime(session.attendanceOpensAt), readTime(session.attendanceClosesAt)].filter(
+      (time): time is number => time !== null && time > now,
+    ),
+  )
+
+  return futureBoundaries.length > 0 ? Math.min(...futureBoundaries) : null
+}
+
+const MAX_TIMEOUT_DELAY_MS = 2_147_483_647
+
 export function SessionsManager({ locations }: { locations: LocationOption[] }) {
   const defaultLocationId = locations[0]?.id || ""
   const [sessions, setSessions] = useState<SessionSummary[]>([])
@@ -94,6 +106,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
 
         if (response.ok) {
           setSessions(data.sessions || [])
+          setNow(Date.now())
         } else {
           setMessage(data.error || "Failed to load sessions.")
         }
@@ -118,9 +131,15 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
   }, [defaultLocationId, locations])
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
-  }, [])
+    const boundary = nextSessionBoundary(sessions, Date.now())
+    if (boundary === null) {
+      return
+    }
+
+    const delay = Math.min(Math.max(boundary - Date.now() + 50, 0), MAX_TIMEOUT_DELAY_MS)
+    const timeout = window.setTimeout(() => setNow(Date.now()), delay)
+    return () => window.clearTimeout(timeout)
+  }, [sessions, now])
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -140,6 +159,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
       }
 
       setSessions((current) => [data.session, ...current])
+      setNow(Date.now())
       setForm({ name: "", locationId: defaultLocationId })
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to start session.")
