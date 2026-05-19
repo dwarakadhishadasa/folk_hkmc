@@ -1,27 +1,24 @@
 "use client"
 
 import type React from "react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { Toaster } from "@/components/ui/toaster"
 import { useToast } from "@/hooks/use-toast"
 
 interface ContactData {
   name: string
   mobile: string
-  age: string
+  dateOfBirth: string
   occupation: string
   year: string
-  locationId: string
+  college: string
+  company: string
+  location: string
+  comments: string
   assignedPreacherAirtableUserId: string
 }
 
 interface PreacherOption {
-  id: string
-  name: string
-  locationIds: string[]
-}
-
-interface LocationOption {
   id: string
   name: string
 }
@@ -29,23 +26,22 @@ interface LocationOption {
 const initialFormData: ContactData = {
   name: "",
   mobile: "",
-  age: "",
+  dateOfBirth: "",
   occupation: "",
   year: "Unknown",
-  locationId: "",
+  college: "",
+  company: "",
+  location: "",
+  comments: "",
   assignedPreacherAirtableUserId: "",
 }
 
 export function ContactForm({
   staffRole,
   preachers = [],
-  locations = [],
-  allowedLocationIds = [],
 }: {
   staffRole: "Admin" | "Preacher" | "Volunteer"
   preachers?: PreacherOption[]
-  locations?: LocationOption[]
-  allowedLocationIds?: string[]
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<ContactData>(initialFormData)
@@ -53,35 +49,8 @@ export function ContactForm({
   const [message, setMessage] = useState("")
   const nameInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
-  const availableLocationIds = useMemo(
-    () =>
-      staffRole === "Admin"
-        ? preachers.find((preacher) => preacher.id === formData.assignedPreacherAirtableUserId)?.locationIds || []
-        : allowedLocationIds,
-    [allowedLocationIds, formData.assignedPreacherAirtableUserId, preachers, staffRole],
-  )
-  const locationNameById = useMemo(() => new Map(locations.map((location) => [location.id, location.name])), [locations])
-  const availableLocations = useMemo(
-    () =>
-      availableLocationIds.map((locationId) => ({
-        id: locationId,
-        name: locationNameById.get(locationId) || locationId,
-      })),
-    [availableLocationIds, locationNameById],
-  )
-  const hasAvailableLocations = availableLocationIds.length > 0
 
-  useEffect(() => {
-    setFormData((current) => {
-      if (current.locationId && availableLocationIds.includes(current.locationId)) {
-        return current
-      }
-
-      return { ...current, locationId: availableLocationIds[0] || "" }
-    })
-  }, [availableLocationIds])
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
 
     if (name === "mobile") {
@@ -95,17 +64,13 @@ export function ContactForm({
       return
     }
 
-    if (name === "age") {
-      const digitsOnly = value.replace(/\D/g, "")
-      setFormData((prev) => ({ ...prev, [name]: digitsOnly }))
-      return
-    }
-
     if (name === "occupation") {
       setFormData((prev) => ({
         ...prev,
         occupation: value,
-        year: value === "Working" ? "Unknown" : prev.year,
+        year: value === "Studying" ? prev.year : "Unknown",
+        college: value === "Studying" ? prev.college : "",
+        company: value === "Working" ? prev.company : "",
       }))
       return
     }
@@ -116,7 +81,7 @@ export function ContactForm({
   const resetFormAfterSave = () => {
     setFormData((prev) => ({
       ...initialFormData,
-      locationId: prev.locationId,
+      location: prev.location,
       assignedPreacherAirtableUserId: staffRole === "Admin" ? prev.assignedPreacherAirtableUserId : "",
     }))
     setPhoneError("")
@@ -136,12 +101,8 @@ export function ContactForm({
       return
     }
 
-    if (!formData.locationId) {
-      setMessage(
-        hasAvailableLocations
-          ? "Choose a location before saving this contact."
-          : "No locations are configured for the assigned Preacher.",
-      )
+    if (!formData.location.trim()) {
+      setMessage("Enter a location before saving this contact.")
       return
     }
 
@@ -193,8 +154,8 @@ export function ContactForm({
         </div>
         <div className="p-6">
           <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            {staffRole === "Volunteer" && "Volunteer contacts are assigned to your Preacher and location."}
-            {staffRole === "Preacher" && "Contacts you create are assigned to you and your location."}
+            {staffRole === "Volunteer" && "Volunteer contacts are assigned to your Preacher and the location you enter."}
+            {staffRole === "Preacher" && "Contacts you create are assigned to you and the location you enter."}
             {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
           </div>
           {message && (
@@ -242,16 +203,14 @@ export function ContactForm({
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="age" className="block text-sm font-medium text-gray-700">
-                Age
+              <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700">
+                Date of Birth
               </label>
               <input
-                id="age"
-                name="age"
-                type="tel"
-                inputMode="numeric"
-                placeholder="Enter age"
-                value={formData.age}
+                id="dateOfBirth"
+                name="dateOfBirth"
+                type="date"
+                value={formData.dateOfBirth}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -275,24 +234,58 @@ export function ContactForm({
             </div>
 
             {formData.occupation === "Studying" && (
+              <>
+                <div className="space-y-2">
+                  <label htmlFor="year" className="block text-sm font-medium text-gray-700">
+                    Year
+                  </label>
+                  <select
+                    id="year"
+                    name="year"
+                    value={formData.year}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select year</option>
+                    <option value="1st year">1st Year</option>
+                    <option value="2nd year">2nd Year</option>
+                    <option value="3rd year">3rd Year</option>
+                    <option value="4th year">4th Year</option>
+                    <option value="Passed Out">Passed Out</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="college" className="block text-sm font-medium text-gray-700">
+                    College
+                  </label>
+                  <input
+                    id="college"
+                    name="college"
+                    type="text"
+                    placeholder="Enter college name"
+                    value={formData.college}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </>
+            )}
+
+            {formData.occupation === "Working" && (
               <div className="space-y-2">
-                <label htmlFor="year" className="block text-sm font-medium text-gray-700">
-                  Year
+                <label htmlFor="company" className="block text-sm font-medium text-gray-700">
+                  Company
                 </label>
-                <select
-                  id="year"
-                  name="year"
-                  value={formData.year}
+                <input
+                  id="company"
+                  name="company"
+                  type="text"
+                  placeholder="Enter company name"
+                  value={formData.company}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select year</option>
-                  <option value="1st year">1st Year</option>
-                  <option value="2nd year">2nd Year</option>
-                  <option value="3rd year">3rd Year</option>
-                  <option value="4th year">4th Year</option>
-                  <option value="Passed Out">Passed Out</option>
-                </select>
+                />
               </div>
             )}
 
@@ -323,33 +316,36 @@ export function ContactForm({
               <label htmlFor="location" className="block text-sm font-medium text-gray-700">
                 Location *
               </label>
-              <select
+              <input
                 id="location"
-                name="locationId"
-                value={formData.locationId}
+                name="location"
+                type="text"
+                placeholder="Enter location"
+                value={formData.location}
                 onChange={handleChange}
                 required
-                disabled={(staffRole === "Admin" && !formData.assignedPreacherAirtableUserId) || !hasAvailableLocations}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">
-                  {staffRole === "Admin" && !formData.assignedPreacherAirtableUserId
-                    ? "Choose a Preacher first"
-                    : hasAvailableLocations
-                      ? "Select location"
-                      : "No locations configured"}
-                </option>
-                {availableLocations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="comments" className="block text-sm font-medium text-gray-700">
+                Comments
+              </label>
+              <textarea
+                id="comments"
+                name="comments"
+                placeholder="Add any additional comments"
+                value={formData.comments}
+                onChange={handleChange}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
 
             <button
               type="submit"
-              disabled={isSubmitting || phoneError !== "" || !formData.locationId}
+              disabled={isSubmitting || phoneError !== "" || !formData.location.trim()}
               className="w-full py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               {isSubmitting ? "Saving..." : "Save"}

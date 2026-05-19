@@ -6,6 +6,7 @@
 
 - Node.js 20+
 - `pnpm`
+- Docker Desktop or Docker Engine for the local Supabase stack
 - Airtable API token supplied as `AIRTABLE_API_TOKEN`
 - Airtable interface dashboard page supplied as `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` for Manage tab access
 
@@ -23,6 +24,28 @@ pnpm dev
 
 Default Next.js local URL is `http://localhost:3000`.
 
+## Run With Local Supabase
+
+Start Supabase locally, copy the generated local credentials into `.env.local`, and run Next.js:
+
+```bash
+pnpm supabase:start
+pnpm supabase:env
+pnpm dev
+```
+
+The local Supabase Studio URL is usually `http://127.0.0.1:54323`. To rebuild the local database from migrations and `supabase/seed.sql`, run:
+
+```bash
+pnpm supabase:reset
+```
+
+For a one-command loop after Docker is available:
+
+```bash
+pnpm dev:local
+```
+
 ## Build and Lint
 
 ```bash
@@ -36,12 +59,16 @@ pnpm start
 ### Required for Implemented Backend Logic
 
 - `AIRTABLE_API_TOKEN`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
 ### Important Notes
 
 - Airtable uses `AIRTABLE_BASE_ID` plus table IDs for Contacts, Attendance, Sessions, Users, and Locations. New sessions and contacts link to the singleton Analytics record from `AIRTABLE_ANALYTICS_RECORD_ID`, defaulting to `reca0aQhvHSc5d5A1`.
 - The Manage tab Airtable link uses `AIRTABLE_BASE_ID` plus `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`, currently `pagc77PtbNsr9ljWu`, and is available to Admin and Preacher staff
 - without `AIRTABLE_API_TOKEN`, attendance reads and writes will fail
+- `pnpm supabase:env` updates only the local Supabase block in `.env.local` and preserves Airtable variables
 
 ## Local Credentials
 
@@ -109,6 +136,15 @@ Check:
 - `AIRTABLE_API_TOKEN` is set
 - Airtable base and table identifiers resolve to the intended base/tables
 - the participant exists in the Airtable contacts table
+
+### Supabase local stack does not start
+
+Check:
+
+- Docker Desktop or Docker Engine is installed
+- the Docker daemon is running
+- your user belongs to the `docker` group if `/var/run/docker.sock` is owned by `root:docker`
+- ports `54320` through `54324` are available locally
 
 ### Service worker does not register
 

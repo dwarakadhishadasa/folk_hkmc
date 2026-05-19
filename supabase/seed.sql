@@ -1,0 +1,3 @@
+-- Local seed hook.
+-- Keep this file present so `supabase db reset` has a stable seed target.
+-- Add sanitized development rows here when the local staff/Airtable fixture strategy is finalized.

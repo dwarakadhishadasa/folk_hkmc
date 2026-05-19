@@ -6,6 +6,12 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
+    "supabase:start": "pnpm dlx supabase@2.98.2 start",
+    "supabase:reset": "pnpm dlx supabase@2.98.2 db reset",
+    "supabase:env": "bash scripts/use-local-supabase-env.sh",
+    "supabase:status": "pnpm dlx supabase@2.98.2 status",
+    "supabase:stop": "pnpm dlx supabase@2.98.2 stop",
+    "dev:local": "pnpm supabase:start && pnpm supabase:env && pnpm dev",
     "start": "next start"
   },
   "dependencies": {

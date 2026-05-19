@@ -3,29 +3,14 @@ import { Header } from "@/components/header"
 import { ContactForm } from "@/components/contact-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
-import { findStaffUserById, listCachedActivePreachers, listCachedLocations } from "@/lib/airtable"
+import { listCachedActivePreachers } from "@/lib/airtable"
 
 export const dynamic = "force-dynamic"
 
 export default async function ContactPage() {
   try {
     const staff = await getStaffContext()
-    const [allLocations, preachers, assignedPreacher] = await Promise.all([
-      listCachedLocations(),
-      staff.role === "Admin" ? listCachedActivePreachers() : Promise.resolve([]),
-      staff.role === "Volunteer" && staff.assignedPreacherAirtableUserId
-        ? findStaffUserById(staff.assignedPreacherAirtableUserId)
-        : Promise.resolve(null),
-    ])
-    const allowedLocationIds =
-      staff.role === "Preacher"
-        ? staff.locationIds
-        : assignedPreacher?.role === "Preacher" && assignedPreacher.status === "Active"
-          ? assignedPreacher.locationIds
-          : []
-    const visibleLocationIds =
-      staff.role === "Admin" ? new Set(preachers.flatMap((preacher) => preacher.locationIds)) : new Set(allowedLocationIds)
-    const locations = allLocations.filter((location) => visibleLocationIds.has(location.id))
+    const preachers = staff.role === "Admin" ? await listCachedActivePreachers() : []
 
     return (
       <StaffAuthShell staff={staff}>
@@ -37,10 +22,7 @@ export default async function ContactPage() {
             preachers={preachers.map((preacher) => ({
               id: preacher.id,
               name: preacher.name,
-              locationIds: preacher.locationIds,
             }))}
-            locations={locations.map((location) => ({ id: location.id, name: location.name }))}
-            allowedLocationIds={allowedLocationIds}
           />
         </main>
       </div>
