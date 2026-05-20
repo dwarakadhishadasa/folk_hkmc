@@ -125,14 +125,14 @@ Staff auth is Supabase-backed and Airtable-authorized.
 1. `/login` accepts an invited staff email.
 2. `/api/auth/signin` verifies that the email belongs to an active Airtable staff user.
 3. The route creates or reuses a Supabase Auth user and syncs its id back to Airtable when needed.
-4. The browser requests a Supabase magic link and email OTP.
-5. `/auth/confirm` exchanges the callback, verifies the Airtable staff record, and upserts `public.staff_profiles`.
-6. iOS Home Screen users can enter the emailed OTP on `/login`; this verifies the Supabase session inside the installed web app's own browser context, then runs `/api/auth/complete-implicit`.
+4. The browser requests a Supabase email OTP.
+5. The user enters the emailed OTP on `/login`; this verifies the Supabase session inside the current browser context, then runs `/api/auth/complete-implicit`.
+6. `/auth/confirm` remains available for Supabase invite callbacks and legacy email callbacks; it verifies the Airtable staff record and upserts `public.staff_profiles`.
 7. Server-side protected routes read the Supabase session and local `staff_profiles` row through `getStaffContext()`.
 
-For local testing, open Inbucket at `http://127.0.0.1:54324`, find the sign-in email, and use the link from there. There are no hardcoded local username/password credentials in the current auth flow.
+For local testing, open Inbucket at `http://127.0.0.1:54324`, find the sign-in email, and enter the code from there. There are no hardcoded local username/password credentials in the current auth flow.
 
-The Supabase Magic Link email template must include both the token-hash callback link and the `{{ .Token }}` OTP:
+The Supabase Magic Link email template is used as an OTP-only email and must include `{{ .Token }}`:
 
 ```html
 <p>Hare Krishna,</p>
@@ -141,23 +141,9 @@ The Supabase Magic Link email template must include both the token-hash callback
 
 <p style="font-size:24px;font-weight:700;letter-spacing:4px;">{{ .Token }}</p>
 
-<p>You can also use the button below to sign in:</p>
+<p>Enter this code on the FOLK HKMC login screen.</p>
 
-<p>
-  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email" style="display:inline-block;padding:12px 20px;background:#111827;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">
-    Sign in to FOLK HKMC
-  </a>
-</p>
-
-<p>If the button does not work, copy and paste this link into your browser:</p>
-
-<p>
-  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">
-    {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
-  </a>
-</p>
-
-<p>This link and code are valid for a limited time and can only be used once.</p>
+<p>This code is valid for a limited time and can only be used once.</p>
 
 <p>If you did not request this email, you can safely ignore it.</p>
 
@@ -214,7 +200,7 @@ The Supabase Magic Link email template must include both the token-hash callback
 
 ### Auth Flows
 
-- Log in with an active Airtable staff email and complete the local magic link through Inbucket
+- Log in with an active Airtable staff email and complete the email OTP through Inbucket
 - Confirm `/api/auth/me` returns the synced staff context after login
 - Confirm Volunteer staff can access `/contact` and are blocked from `/dashboard`
 - Confirm Preacher staff can access `/contact`, `/dashboard`, `/sessions`, and `/volunteers`

@@ -74,26 +74,6 @@ function isProtectedStaffPath(pathname: string | null): boolean {
   )
 }
 
-function safeRedirectPath(value: string | null): string | null {
-  if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
-    return value
-  }
-
-  return null
-}
-
-function buildAuthConfirmRedirect(): string {
-  const url = new URL("/auth/confirm", window.location.origin)
-  const requestedRedirectUrl = new URLSearchParams(window.location.search).get("redirect")
-  const safeRequestedRedirectUrl = safeRedirectPath(requestedRedirectUrl)
-
-  if (safeRequestedRedirectUrl) {
-    url.searchParams.set("next", safeRequestedRedirectUrl)
-  }
-
-  return url.toString()
-}
-
 export function AuthProvider({ children, initialStaff }: { children: ReactNode; initialStaff?: StaffContext | null }) {
   const pathname = usePathname()
   const hasInitialStaff = Boolean(initialStaff)
@@ -135,7 +115,7 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
 
     const data = (await response.json().catch(() => ({}))) as { email?: string; error?: string }
     if (!response.ok) {
-      throw new Error(data.error || "Unable to send sign-in link.")
+      throw new Error(data.error || "Unable to send sign-in code.")
     }
 
     const normalizedEmail = data.email || email.trim().toLowerCase()
@@ -143,13 +123,12 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
     const { error } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        emailRedirectTo: buildAuthConfirmRedirect(),
         shouldCreateUser: false,
       },
     })
 
     if (error) {
-      throw new Error(error.message || "Unable to send sign-in link.")
+      throw new Error(error.message || "Unable to send sign-in code.")
     }
 
     return true

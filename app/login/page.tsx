@@ -38,7 +38,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [verificationCode, setVerificationCode] = useState("")
   const [error, setError] = useState("")
-  const [message, setMessage] = useState("")
+  const [isCodeStep, setIsCodeStep] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
   const { login, verifyLoginCode, isLoggedIn, isHydrated, role } = useAuth()
@@ -100,18 +100,18 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    setMessage("")
+    setIsCodeStep(false)
     setIsLoading(true)
 
     try {
       const success = await login(email)
       if (success) {
-        setMessage("Check your email for the sign-in link or enter the code here.")
+        setIsCodeStep(true)
       } else {
-        setError("Unable to send sign-in link. Check the email and try again.")
+        setError("Unable to send sign-in code. Check the email and try again.")
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Unable to send sign-in link. Check the email and try again.")
+      setError(error instanceof Error ? error.message : "Unable to send sign-in code. Check the email and try again.")
     } finally {
       setIsLoading(false)
     }
@@ -146,45 +146,48 @@ export default function LoginPage() {
           </div>
 
           <div className="p-6 sm:p-8">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-                  <span className="text-red-500">⚠️</span>
-                  <p className="text-sm text-red-700">{error}</p>
+            {!isCodeStep && (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {error && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+                    <span className="text-red-500">⚠️</span>
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-[#24324A] mb-2">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    placeholder="name@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+                  />
                 </div>
-              )}
-              {message && (
-                <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-                  {message}
-                </div>
-              )}
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-[#24324A] mb-2">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
-                />
-              </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-4 bg-[#F98B1C] hover:bg-[#e07a10] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-[#F98B1C]/30 disabled:shadow-none"
+                >
+                  {isLoading ? "Sending code..." : "Send Code"}
+                </button>
+              </form>
+            )}
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-4 bg-[#F98B1C] hover:bg-[#e07a10] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-[#F98B1C]/30 disabled:shadow-none"
-              >
-                {isLoading ? "Sending link..." : "Send Sign-in Link"}
-              </button>
-            </form>
-
-            {message && (
-              <form onSubmit={handleVerifyCode} className="mt-6 space-y-5 border-t border-gray-100 pt-6">
+            {isCodeStep && (
+              <form onSubmit={handleVerifyCode} className="space-y-5">
+                {error && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+                    <span className="text-red-500">⚠️</span>
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                )}
                 <div>
                   <label htmlFor="verification-code" className="block text-sm font-medium text-[#24324A] mb-2">
                     Email code

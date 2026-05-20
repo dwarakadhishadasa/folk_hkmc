@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 
     return Response.json({ ready: true, email })
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to send sign-in link."
+    const message = error instanceof Error ? error.message : "Unable to send sign-in code."
     return Response.json({ error: message }, { status: 500 })
   }
 }
