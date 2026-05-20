@@ -8,18 +8,43 @@ import { useAuth } from "@/lib/auth-context"
 
 let lastAuthCallbackHandoff = ""
 
+function landingPathForRole(role: string | null | undefined): string {
+  if (role === "Volunteer") {
+    return "/contact"
+  }
+
+  if (role === "Preacher") {
+    return "/"
+  }
+
+  return "/dashboard"
+}
+
+function safeRedirectPath(value: string | null, role: string | null | undefined): string {
+  if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
+    if (role === "Volunteer" && value !== "/contact") {
+      return "/contact"
+    }
+
+    return value
+  }
+
+  return landingPathForRole(role)
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("")
+  const [verificationCode, setVerificationCode] = useState("")
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const { login, isLoggedIn, isHydrated, role } = useAuth()
+  const [isVerifying, setIsVerifying] = useState(false)
+  const { login, verifyLoginCode, isLoggedIn, isHydrated, role } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
 
   const requestedRedirectUrl = searchParams.get("redirect")
-  const defaultRedirectUrl = role === "Volunteer" ? "/contact" : role === "Preacher" ? "/" : "/dashboard"
-  const redirectUrl = requestedRedirectUrl || defaultRedirectUrl
+  const redirectUrl = safeRedirectPath(requestedRedirectUrl, role)
   const authCallbackCode = searchParams.get("code")
   const authCallbackTokenHash = searchParams.get("token_hash")
   const authCallbackType = searchParams.get("type")
@@ -79,7 +104,7 @@ export default function LoginPage() {
     try {
       const success = await login(email)
       if (success) {
-        setMessage("Check your email for the secure sign-in link.")
+        setMessage("Check your email for the sign-in link or enter the 6-digit code here.")
       } else {
         setError("Unable to send sign-in link. Check the email and try again.")
       }
@@ -87,6 +112,21 @@ export default function LoginPage() {
       setError(error instanceof Error ? error.message : "Unable to send sign-in link. Check the email and try again.")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setIsVerifying(true)
+
+    try {
+      const staff = await verifyLoginCode(email, verificationCode)
+      router.push(safeRedirectPath(requestedRedirectUrl, staff.role))
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to verify the sign-in code.")
+    } finally {
+      setIsVerifying(false)
     }
   }
 
@@ -140,6 +180,36 @@ export default function LoginPage() {
                 {isLoading ? "Sending link..." : "Send Sign-in Link"}
               </button>
             </form>
+
+            {message && (
+              <form onSubmit={handleVerifyCode} className="mt-6 space-y-5 border-t border-gray-100 pt-6">
+                <div>
+                  <label htmlFor="verification-code" className="block text-sm font-medium text-[#24324A] mb-2">
+                    Email code
+                  </label>
+                  <input
+                    id="verification-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    required
+                    className="w-full px-4 py-3 text-center text-2xl tracking-[0.3em] border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isVerifying || verificationCode.length !== 6}
+                  className="w-full py-4 bg-[#0F1E54] hover:bg-[#1a2d6d] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg"
+                >
+                  {isVerifying ? "Verifying..." : "Verify Code"}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </main>

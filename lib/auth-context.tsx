@@ -13,6 +13,7 @@ interface AuthContextType {
   role: UserRole | null
   staff: StaffContext | null
   login: (email: string) => Promise<boolean>
+  verifyLoginCode: (email: string, token: string) => Promise<StaffContext>
   logout: () => void
   refresh: () => Promise<void>
   isAdmin: boolean
@@ -22,6 +23,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const STAFF_SYNC_RETRY_DELAYS_MS = [0, 150, 400]
 
 async function loadStaff(): Promise<StaffContext | null> {
   const response = await fetch("/api/auth/me", {
@@ -35,6 +37,31 @@ async function loadStaff(): Promise<StaffContext | null> {
 
   const data = (await response.json()) as { staff?: StaffContext }
   return data.staff || null
+}
+
+async function completeStaffProfileSync(): Promise<StaffContext> {
+  for (const delay of STAFF_SYNC_RETRY_DELAYS_MS) {
+    if (delay > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, delay))
+    }
+
+    const response = await fetch("/api/auth/complete-implicit", {
+      method: "POST",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+
+    const data = (await response.json().catch(() => ({}))) as { staff?: StaffContext; error?: string }
+    if (response.ok && data.staff) {
+      return data.staff
+    }
+
+    if (response.status !== 401) {
+      throw new Error(data.error || "Unable to complete staff sign-in.")
+    }
+  }
+
+  throw new Error("Unable to complete staff sign-in.")
 }
 
 function isProtectedStaffPath(pathname: string | null): boolean {
@@ -127,6 +154,30 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
     return true
   }, [])
 
+  const verifyLoginCode = useCallback(async (email: string, token: string): Promise<StaffContext> => {
+    const normalizedEmail = email.trim().toLowerCase()
+    const normalizedToken = token.replace(/\D/g, "")
+    if (!normalizedEmail || normalizedToken.length !== 6) {
+      throw new Error("Enter the 6-digit code from your email.")
+    }
+
+    const supabase = createSupabaseBrowserClient()
+    const { error } = await supabase.auth.verifyOtp({
+      email: normalizedEmail,
+      token: normalizedToken,
+      type: "email",
+    })
+
+    if (error) {
+      throw new Error(error.message || "Unable to verify the sign-in code.")
+    }
+
+    const syncedStaff = await completeStaffProfileSync()
+    setStaff(syncedStaff)
+    setIsHydrated(true)
+    return syncedStaff
+  }, [])
+
   const logout = useCallback(() => {
     window.location.assign("/auth/signout")
   }, [])
@@ -140,6 +191,7 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
       role,
       staff,
       login,
+      verifyLoginCode,
       logout,
       refresh,
       isAdmin: role === "Admin",
@@ -147,7 +199,7 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
       isVolunteer: role === "Volunteer",
       isHydrated,
     }
-  }, [isHydrated, login, logout, refresh, staff])
+  }, [isHydrated, login, logout, refresh, staff, verifyLoginCode])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
