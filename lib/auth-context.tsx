@@ -24,6 +24,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const STAFF_SYNC_RETRY_DELAYS_MS = [0, 150, 400]
+const MIN_EMAIL_OTP_LENGTH = 6
 
 async function loadStaff(): Promise<StaffContext | null> {
   const response = await fetch("/api/auth/me", {
@@ -157,8 +158,8 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
   const verifyLoginCode = useCallback(async (email: string, token: string): Promise<StaffContext> => {
     const normalizedEmail = email.trim().toLowerCase()
     const normalizedToken = token.replace(/\D/g, "")
-    if (!normalizedEmail || normalizedToken.length !== 6) {
-      throw new Error("Enter the 6-digit code from your email.")
+    if (!normalizedEmail || normalizedToken.length < MIN_EMAIL_OTP_LENGTH) {
+      throw new Error("Enter the code from your email.")
     }
 
     const supabase = createSupabaseBrowserClient()

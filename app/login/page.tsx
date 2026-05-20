@@ -7,6 +7,8 @@ import { Header } from "@/components/header"
 import { useAuth } from "@/lib/auth-context"
 
 let lastAuthCallbackHandoff = ""
+const MIN_EMAIL_OTP_LENGTH = 6
+const MAX_EMAIL_OTP_LENGTH = 10
 
 function landingPathForRole(role: string | null | undefined): string {
   if (role === "Volunteer") {
@@ -104,7 +106,7 @@ export default function LoginPage() {
     try {
       const success = await login(email)
       if (success) {
-        setMessage("Check your email for the sign-in link or enter the 6-digit code here.")
+        setMessage("Check your email for the sign-in link or enter the code here.")
       } else {
         setError("Unable to send sign-in link. Check the email and try again.")
       }
@@ -192,10 +194,12 @@ export default function LoginPage() {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     pattern="[0-9]*"
-                    maxLength={6}
-                    placeholder="123456"
+                    maxLength={MAX_EMAIL_OTP_LENGTH}
+                    placeholder="12345678"
                     value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onChange={(e) =>
+                      setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, MAX_EMAIL_OTP_LENGTH))
+                    }
                     required
                     className="w-full px-4 py-3 text-center text-2xl tracking-[0.3em] border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
                   />
@@ -203,7 +207,7 @@ export default function LoginPage() {
 
                 <button
                   type="submit"
-                  disabled={isVerifying || verificationCode.length !== 6}
+                  disabled={isVerifying || verificationCode.length < MIN_EMAIL_OTP_LENGTH}
                   className="w-full py-4 bg-[#0F1E54] hover:bg-[#1a2d6d] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg"
                 >
                   {isVerifying ? "Verifying..." : "Verify Code"}
