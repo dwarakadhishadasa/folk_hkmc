@@ -81,7 +81,7 @@ pnpm build
 pnpm lint
 ```
 
-At the moment this script expects `eslint`, but ESLint is not declared in `package.json`. Treat lint as unavailable until ESLint and its config are added to the project dependencies.
+This script runs through the local ESLint CLI. Treat failures as source cleanup work rather than a missing-tool blocker.
 
 For production-mode smoke testing after a successful build:
 
@@ -227,7 +227,7 @@ The Supabase Magic Link email template is used as an OTP-only email and must inc
 
 - There is no automated test suite
 - `next.config.mjs` ignores TypeScript build errors during production build
-- `pnpm lint` is wired but not currently usable until ESLint is added to the project dependencies/config
+- `pnpm lint` runs through the local ESLint CLI, but the current codebase still has lint findings to clean up
 - Local Supabase seed data is intentionally empty; staff auth depends on real or test Airtable staff records
 - Registration and attendance are public write surfaces, but session attendance is constrained by active session windows
 - Public offline queueing covers registration and attendance only, not authenticated staff contact creation
