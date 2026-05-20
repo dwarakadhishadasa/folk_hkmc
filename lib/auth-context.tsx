@@ -159,7 +159,16 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
   }, [])
 
   const logout = useCallback(() => {
-    window.location.assign("/auth/signout")
+    setStaff(null)
+    setIsHydrated(true)
+
+    const supabase = createSupabaseBrowserClient()
+    const clientSignOut = supabase.auth.signOut().catch(() => undefined)
+    const signOutTimeout = new Promise<void>((resolve) => window.setTimeout(resolve, 1500))
+
+    void Promise.race([clientSignOut, signOutTimeout]).finally(() => {
+      window.location.replace("/auth/signout")
+    })
   }, [])
 
   const value = useMemo<AuthContextType>(() => {

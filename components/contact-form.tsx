@@ -36,6 +36,16 @@ const initialFormData: ContactData = {
   assignedPreacherAirtableUserId: "",
 }
 
+async function registerBackgroundSync() {
+  if (!("serviceWorker" in navigator)) return
+  if (typeof ServiceWorkerRegistration === "undefined" || !("sync" in ServiceWorkerRegistration.prototype)) return
+
+  const registration = await navigator.serviceWorker.ready
+  await (registration as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register(
+    "sync-requests",
+  )
+}
+
 export function ContactForm({
   staffRole,
   preachers = [],
@@ -110,11 +120,6 @@ export function ContactForm({
     setMessage("")
 
     try {
-      if (!navigator.onLine) {
-        setMessage("Contact capture requires an online session. Please reconnect and submit again.")
-        return
-      }
-
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -122,6 +127,22 @@ export function ContactForm({
       })
 
       const data = await response.json()
+
+      if (response.status === 202 && data.queued) {
+        toast({
+          title: "Contact saved offline",
+          description: "It will sync when the app is back online.",
+        })
+        setMessage("Contact saved offline. It will sync when the app is back online.")
+        resetFormAfterSave()
+
+        try {
+          await registerBackgroundSync()
+        } catch (error) {
+          console.error("[v0] Failed to register background sync:", error)
+        }
+        return
+      }
 
       if (response.status === 409 && data.duplicate) {
         toast({
