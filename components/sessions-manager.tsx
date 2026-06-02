@@ -24,7 +24,11 @@ interface SessionSummary {
 interface SessionForm {
   name: string
   locationId: string
+  durationMinutes: string
 }
+
+const DEFAULT_SESSION_DURATION_MINUTES = "15"
+const MAX_SESSION_DURATION_MINUTES = 24 * 60
 
 function readTime(value: string | null): number | null {
   if (!value) {
@@ -164,6 +168,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
   const [form, setForm] = useState<SessionForm>({
     name: "",
     locationId: defaultLocationId,
+    durationMinutes: DEFAULT_SESSION_DURATION_MINUTES,
   })
 
   const locationById = useMemo(() => new Map(locations.map((location) => [location.id, location.name])), [locations])
@@ -253,7 +258,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
 
       setSessions((current) => [data.session, ...current])
       setNow(Date.now())
-      setForm({ name: "", locationId: defaultLocationId })
+      setForm({ name: "", locationId: defaultLocationId, durationMinutes: DEFAULT_SESSION_DURATION_MINUTES })
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to start session.")
     } finally {
@@ -274,7 +279,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
       <div>
         <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[#24324A]">Start Session</h1>
         <p className="mt-1 text-sm text-[#24324A]/70">
-          Start a two-hour attendance window for one location.
+          Start an attendance window for one location.
         </p>
       </div>
 
@@ -290,7 +295,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
+      <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-3">
         <label className="space-y-1 text-sm font-medium text-[#24324A]">
           Session Name
           <input
@@ -319,10 +324,25 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
           </select>
         </label>
 
+        <label className="space-y-1 text-sm font-medium text-[#24324A]">
+          Duration (minutes)
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={MAX_SESSION_DURATION_MINUTES}
+            step={1}
+            value={form.durationMinutes}
+            onChange={(event) => setForm((current) => ({ ...current, durationMinutes: event.target.value }))}
+            required
+            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3"
+          />
+        </label>
+
         <button
           type="submit"
           disabled={isSubmitting || locations.length === 0}
-          className="rounded-xl bg-[#F98B1C] px-5 py-3 font-semibold text-white disabled:bg-gray-300 md:col-span-2"
+          className="rounded-xl bg-[#F98B1C] px-5 py-3 font-semibold text-white disabled:bg-gray-300 md:col-span-3"
         >
           {isSubmitting ? "Starting..." : "Start Session"}
         </button>

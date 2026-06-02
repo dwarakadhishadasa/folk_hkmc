@@ -46,12 +46,15 @@ The current system is best understood as a brownfield web monolith with three im
 
 - Node.js 20+ recommended
 - `pnpm`
+- Docker Desktop or Docker Engine for local Supabase
 - `AIRTABLE_API_TOKEN` for any flow that touches Airtable-backed server logic
 
 ### Setup
 
 ```bash
 pnpm install
+pnpm supabase:start
+pnpm supabase:env
 pnpm dev
 ```
 
@@ -59,6 +62,8 @@ pnpm dev
 
 ```bash
 pnpm dev
+pnpm dev:local
+pnpm supabase:reset
 pnpm lint
 pnpm build
 pnpm start

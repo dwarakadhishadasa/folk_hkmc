@@ -7,22 +7,38 @@ interface ContactPayload {
   name?: string
   mobile?: string
   age?: string | number
+  dateOfBirth?: string
   occupation?: string
   year?: string
+  college?: string
+  company?: string
   source?: string
   locationId?: string
   location?: string
+  comments?: string
   assignedPreacherAirtableUserId?: string
 }
 
 interface ResolvedPreacher {
   id: string
-  locationIds: string[]
 }
 
-function parseAge(value: unknown): number | undefined {
-  const age = typeof value === "number" ? value : Number.parseInt(String(value || ""), 10)
-  return Number.isFinite(age) && age > 0 ? age : undefined
+function parseDateOfBirth(value: unknown): { dateOfBirth?: string; error?: string } {
+  if (typeof value !== "string" || !value.trim()) {
+    return {}
+  }
+
+  const dateOfBirth = value.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+    return { error: "Date of Birth must use YYYY-MM-DD format." }
+  }
+
+  const [year, month, day] = dateOfBirth.split("-").map(Number)
+  const parsed = new Date(`${dateOfBirth}T00:00:00.000Z`)
+  const isValidDate =
+    parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+
+  return isValidDate ? { dateOfBirth } : { error: "Date of Birth must be a valid date." }
 }
 
 function activePreacherResult(preacher: StaffUser | null): { preacher?: ResolvedPreacher; error?: string } {
@@ -30,7 +46,7 @@ function activePreacherResult(preacher: StaffUser | null): { preacher?: Resolved
     return { error: "Assigned Preacher must be an active Preacher user." }
   }
 
-  return { preacher: { id: preacher.id, locationIds: preacher.locationIds } }
+  return { preacher: { id: preacher.id } }
 }
 
 async function resolveAssignedPreacher(
@@ -45,7 +61,7 @@ async function resolveAssignedPreacher(
   }
 
   if (staff.role === "Preacher") {
-    return { preacher: { id: staff.airtableUserId, locationIds: staff.locationIds } }
+    return { preacher: { id: staff.airtableUserId } }
   }
 
   const explicitPreacherId = payload.assignedPreacherAirtableUserId?.trim()
@@ -56,14 +72,13 @@ async function resolveAssignedPreacher(
   return activePreacherResult(await findStaffUserById(explicitPreacherId))
 }
 
-function resolveLocationId(payload: ContactPayload): string {
-  const locationId = payload.locationId?.trim()
-  if (locationId) {
-    return locationId
+function resolveLocation(payload: ContactPayload): string {
+  const location = payload.location?.trim()
+  if (location) {
+    return location
   }
 
-  const legacyLocation = payload.location?.trim()
-  return legacyLocation?.startsWith("rec") ? legacyLocation : ""
+  return payload.locationId?.trim() || ""
 }
 
 export async function POST(request: Request) {
@@ -93,28 +108,27 @@ export async function POST(request: Request) {
       return Response.json({ error: assignment.error }, { status: 422 })
     }
 
-    const locationId = resolveLocationId(payload)
-    if (assignment.preacher.locationIds.length === 0) {
-      return Response.json(
-        { error: "Assigned Preacher has no configured locations. Ask an Admin to update their Airtable user." },
-        { status: 422 },
-      )
+    const location = resolveLocation(payload)
+    if (!location) {
+      return Response.json({ error: "Enter a location before saving this contact." }, { status: 422 })
     }
-    if (!locationId) {
-      return Response.json({ error: "Choose a location assigned to the contact's Preacher." }, { status: 422 })
-    }
-    if (!assignment.preacher.locationIds.includes(locationId)) {
-      return Response.json({ error: "Selected location is not assigned to the contact's Preacher." }, { status: 422 })
+
+    const parsedDateOfBirth = parseDateOfBirth(payload.dateOfBirth)
+    if (parsedDateOfBirth.error) {
+      return Response.json({ error: parsedDateOfBirth.error }, { status: 400 })
     }
 
     const collectorId = staff.role === "Volunteer" ? staff.airtableUserId : assignment.preacher.id
     const contact = await createContact({
       name,
       phone: mobile,
-      age: parseAge(payload.age),
+      dateOfBirth: parsedDateOfBirth.dateOfBirth,
       year: payload.occupation === "Working" ? "Unknown" : payload.year || undefined,
+      college: payload.occupation === "Studying" ? payload.college?.trim() || undefined : undefined,
+      company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
       source: payload.source || "Pass distribution",
-      locationId,
+      location,
+      comments: payload.comments?.trim() || undefined,
       collectedByAirtableUserId: collectorId,
       assignedPreacherAirtableUserId: assignment.preacher.id,
     })

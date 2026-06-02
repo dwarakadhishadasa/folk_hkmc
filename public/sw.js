@@ -1,13 +1,25 @@
-const CACHE_NAME = "folk-chennai-v1"
+const CACHE_NAME = "folk-chennai-v3"
 const OFFLINE_URL = "/offline.html"
 const DB_NAME = "folk-offline-db"
 const DB_VERSION = 1
 const STORE_NAME = "pending-requests"
+const QUEUED_POST_PATHS = new Set(["/api/contact", "/api/registration", "/registration", "/attendance"])
+const STATIC_ASSET_DESTINATIONS = new Set(["font", "image", "manifest", "script", "style", "worker"])
+const NETWORK_ONLY_PATH_PREFIXES = [
+  "/api/",
+  "/auth/",
+  "/login",
+  "/admin",
+  "/contact",
+  "/dashboard",
+  "/manage",
+  "/sessions",
+  "/volunteers",
+]
 
 const PRECACHE_ASSETS = [
   "/",
   "/attend",
-  "/login",
   "/offline.html",
   "/manifest.json",
   "/icons/icon-192x192.jpg",
@@ -83,6 +95,7 @@ async function syncQueuedRequests() {
       const response = await fetch(request.url, {
         method: request.method,
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: request.body,
       })
 
@@ -97,6 +110,80 @@ async function syncQueuedRequests() {
   }
 
   return notifyPendingCount()
+}
+
+function isQueueablePost(request, url) {
+  return request.method === "POST" && url.origin === self.location.origin && QUEUED_POST_PATHS.has(url.pathname)
+}
+
+function queuedMessageForPath(pathname) {
+  if (pathname === "/api/contact") {
+    return "Contact queued for sync when online"
+  }
+
+  return "Request queued for sync when online"
+}
+
+function isNetworkOnlyPath(pathname) {
+  return NETWORK_ONLY_PATH_PREFIXES.some((prefix) => {
+    if (prefix.endsWith("/")) {
+      return pathname.startsWith(prefix)
+    }
+
+    return pathname === prefix || pathname.startsWith(`${prefix}/`)
+  })
+}
+
+function isRscRequest(request, url) {
+  const acceptHeader = request.headers.get("Accept") || ""
+  return (
+    url.searchParams.has("_rsc") ||
+    request.headers.get("RSC") === "1" ||
+    acceptHeader.includes("text/x-component")
+  )
+}
+
+function responseDisallowsCache(response) {
+  const cacheControl = (response.headers.get("Cache-Control") || "").toLowerCase()
+  return cacheControl.includes("no-store") || cacheControl.includes("private")
+}
+
+function shouldUseNetworkOnly(request, url) {
+  if (url.origin !== self.location.origin) {
+    return true
+  }
+
+  return request.cache === "no-store" || isRscRequest(request, url) || isNetworkOnlyPath(url.pathname)
+}
+
+function shouldCacheResponse(request, url, response) {
+  if (
+    response.status !== 200 ||
+    url.origin !== self.location.origin ||
+    response.type === "opaqueredirect" ||
+    responseDisallowsCache(response) ||
+    isRscRequest(request, url) ||
+    isNetworkOnlyPath(url.pathname)
+  ) {
+    return false
+  }
+
+  if (request.mode === "navigate") {
+    return PRECACHE_ASSETS.includes(url.pathname) && url.search === ""
+  }
+
+  return STATIC_ASSET_DESTINATIONS.has(request.destination) || PRECACHE_ASSETS.includes(url.pathname)
+}
+
+async function offlineFallbackFor(request) {
+  if (request.mode === "navigate") {
+    const offlineResponse = await caches.match(OFFLINE_URL)
+    if (offlineResponse) {
+      return offlineResponse
+    }
+  }
+
+  return new Response("Offline", { status: 503 })
 }
 
 async function getPendingCount() {
@@ -144,12 +231,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url)
 
-  // Handle public POST requests (registration, attendance) differently.
-  // Staff contact writes are intentionally not queued because they need a live staff session.
-  if (
-    event.request.method === "POST" &&
-    (url.pathname.includes("/registration") || url.pathname.includes("/attendance"))
-  ) {
+  // Queue known JSON writes while offline. Staff contact replay still depends on the
+  // Supabase session cookie being valid when the device reconnects.
+  if (isQueueablePost(event.request, url)) {
     event.respondWith(
       fetch(event.request.clone())
         .then((response) => response)
@@ -163,7 +247,7 @@ self.addEventListener("fetch", (event) => {
             JSON.stringify({
               success: false,
               queued: true,
-              message: "Request queued for sync when online",
+              message: queuedMessageForPath(url.pathname),
             }),
             {
               status: 202,
@@ -178,11 +262,15 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (event.request.method !== "GET") return
 
+  if (shouldUseNetworkOnly(event.request, url)) {
+    event.respondWith(fetch(event.request).catch(() => offlineFallbackFor(event.request)))
+    return
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Clone and cache successful responses
-        if (response.status === 200) {
+        if (shouldCacheResponse(event.request, url, response)) {
           const responseClone = response.clone()
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone)
@@ -191,16 +279,11 @@ self.addEventListener("fetch", (event) => {
         return response
       })
       .catch(async () => {
-        // Try to get from cache
         const cachedResponse = await caches.match(event.request)
         if (cachedResponse) {
           return cachedResponse
         }
-        // Return offline page for navigation requests
-        if (event.request.mode === "navigate") {
-          return caches.match(OFFLINE_URL)
-        }
-        return new Response("Offline", { status: 503 })
+        return offlineFallbackFor(event.request)
       }),
   )
 })

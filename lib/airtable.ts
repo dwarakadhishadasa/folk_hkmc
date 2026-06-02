@@ -15,8 +15,12 @@ export interface ContactFields {
   Name?: string
   Phone?: string | number
   Age?: number
+  "Date of Birth"?: string
   Year?: string
+  College?: string
+  Company?: string
   Source?: string
+  Notes?: string
   "Initial Contact"?: string
   "Last Contacted On"?: string
   Location?: string | string[]
@@ -44,6 +48,7 @@ export interface SessionFields {
   "Public Attendance Enabled"?: boolean
   "Attendance Opens At"?: string
   "Attendance Closes At"?: string
+  "Duration Minutes"?: number
   "Attendance URL"?: string
 }
 
@@ -88,7 +93,11 @@ export interface ContactRecord {
   name: string
   phone: string
   age?: number
+  dateOfBirth?: string
   year?: string
+  college?: string
+  company?: string
+  notes?: string
   initialContact?: string
   lastContactedOn?: string
   location?: string | string[]
@@ -108,6 +117,7 @@ export interface SessionRecord {
   publicAttendanceEnabled: boolean
   attendanceOpensAt?: string
   attendanceClosesAt?: string
+  durationMinutes?: number
   attendanceUrl?: string
 }
 
@@ -451,7 +461,11 @@ export function mapContact(record: AirtableRecord<ContactFields>): ContactRecord
     name: normalizeString(record.fields.Name) || "Unknown",
     phone,
     age: typeof record.fields.Age === "number" ? record.fields.Age : undefined,
+    dateOfBirth: normalizeString(record.fields["Date of Birth"]),
     year: normalizeString(record.fields.Year),
+    college: normalizeString(record.fields.College),
+    company: normalizeString(record.fields.Company),
+    notes: normalizeString(record.fields.Notes),
     initialContact: normalizeString(record.fields["Initial Contact"]),
     lastContactedOn: normalizeString(record.fields["Last Contacted On"]),
     location: record.fields.Location,
@@ -479,8 +493,12 @@ export async function createContact(data: {
   name: string
   phone: string
   age?: number
+  dateOfBirth?: string
   year?: string
+  college?: string
+  company?: string
   source?: string
+  comments?: string
   locationId?: string
   location?: string
   collectedByAirtableUserId?: string
@@ -504,11 +522,23 @@ export async function createContact(data: {
   if (typeof data.age === "number") {
     fields.Age = data.age
   }
+  if (data.dateOfBirth) {
+    fields["Date of Birth"] = data.dateOfBirth
+  }
   if (data.year) {
     fields.Year = data.year
   }
+  if (data.college) {
+    fields.College = data.college
+  }
+  if (data.company) {
+    fields.Company = data.company
+  }
   if (data.source) {
     fields.Source = data.source
+  }
+  if (data.comments) {
+    fields.Notes = data.comments
   }
   if (data.locationId) {
     fields.Location = [data.locationId]
@@ -550,6 +580,7 @@ export function mapSession(record: AirtableRecord<SessionFields>): SessionRecord
     publicAttendanceEnabled: record.fields["Public Attendance Enabled"] === true,
     attendanceOpensAt: normalizeString(record.fields["Attendance Opens At"]),
     attendanceClosesAt: normalizeString(record.fields["Attendance Closes At"]),
+    durationMinutes: typeof record.fields["Duration Minutes"] === "number" ? record.fields["Duration Minutes"] : undefined,
     attendanceUrl: normalizeString(record.fields["Attendance URL"]),
   }
 }
@@ -603,6 +634,7 @@ export async function createSession(data: {
   sessionDate: string
   preacherAirtableUserId: string
   locationId: string
+  durationMinutes?: number
   publicAttendanceEnabled: boolean
   attendanceOpensAt?: string
   attendanceClosesAt?: string
@@ -616,6 +648,9 @@ export async function createSession(data: {
     "Public Attendance Enabled": data.publicAttendanceEnabled,
   }
 
+  if (typeof data.durationMinutes === "number") {
+    fields["Duration Minutes"] = data.durationMinutes
+  }
   if (data.attendanceOpensAt) {
     fields["Attendance Opens At"] = data.attendanceOpensAt
   }
