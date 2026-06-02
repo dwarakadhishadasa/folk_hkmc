@@ -164,7 +164,7 @@ export default function Home() {
                 key={index}
                 className="bg-gradient-to-br from-[#0F1E54] to-[#1a2d6d] rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden"
               >
-                <div className="absolute top-4 right-4 text-6xl text-white/10 font-serif">"</div>
+                <div className="absolute top-4 right-4 text-6xl text-white/10 font-serif">&quot;</div>
                 <p className="text-white/90 mb-6 leading-relaxed text-sm sm:text-base relative z-10">
                   {testimonial.quote}
                 </p>
