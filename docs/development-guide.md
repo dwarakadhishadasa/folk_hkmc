@@ -10,6 +10,19 @@
 - Airtable API token and table IDs for the operational data tables
 - An active Airtable staff user record for staff login testing
 
+## Collaboration Workflow
+
+Repository collaboration rules live in [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+- `main` is the production branch and is owner-controlled by Dwaraka.
+- `dev` is the shared development branch.
+- `preview` is retired and should not be used for new work.
+- Collaborators work from `feature/*` branches and open PRs for review.
+- PRs targeting `main` require Dwaraka's `production-review-approved` label.
+- Production secrets, production environment access, and production merges stay with Dwaraka.
+
+For GitHub Copilot MCP, use `https://api.githubcopilot.com/mcp/` and follow [`.github/copilot-instructions.md`](../.github/copilot-instructions.md).
+
 ## Installation
 
 ```bash

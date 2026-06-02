@@ -1,0 +1,51 @@
+name: PR Branch Policy
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - labeled
+      - unlabeled
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  branch-policy:
+    name: Validate PR branches
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require feature branch and guarded target
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$BASE_REF" != "dev" && "$BASE_REF" != "main" ]]; then
+            echo "::error::Pull requests must target dev or main. Current target: $BASE_REF"
+            exit 1
+          fi
+
+          if [[ "$BASE_REF" == "main" && ",$PR_LABELS," != *",production-review-approved,"* ]]; then
+            echo "::error::Pull requests targeting main require Dwaraka to apply the production-review-approved label."
+            exit 1
+          fi
+
+          if [[ "$HEAD_REF" == "main" || "$HEAD_REF" == "dev" || "$HEAD_REF" == "preview" ]]; then
+            echo "::error::Protected or retired branches cannot be used as PR source branches. Use a feature/* branch."
+            exit 1
+          fi
+
+          if [[ "$HEAD_REF" != feature/* ]]; then
+            echo "::error::Collaborator PRs must come from feature/* branches. Current source: $HEAD_REF"
+            exit 1
+          fi
+
+          echo "Branch policy passed: $HEAD_REF -> $BASE_REF"
