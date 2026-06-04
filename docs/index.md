@@ -28,6 +28,7 @@ The current system is best understood as a brownfield web monolith with three im
 
 ### Core Documentation
 
+- [Executive Deck](./executive-deck.md) - Non-technical progress deck for leaders and program owners
 - [Project Overview](./project-overview.md) - Executive summary, classification, and high-level technology picture
 - [Source Tree Analysis](./source-tree-analysis.md) - Annotated repository structure and key entry points
 - [Architecture](./architecture.md) - Runtime architecture, flows, constraints, and integration details
