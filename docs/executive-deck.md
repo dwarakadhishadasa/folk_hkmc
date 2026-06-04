@@ -40,8 +40,6 @@ Role-based operations tool for registration, contact capture, attendance, and se
 6. For session-based registration, attendance is completed after registration.
 7. Duplicate attendance for the same session is prevented.
 
-**Result:** Students get a clear, forgiving flow instead of needing manual lookup or coordinator intervention.
-
 ---
 
 ## 4. The Preacher Journey
@@ -78,8 +76,6 @@ The platform improves four high-friction areas:
 - **Live awareness:** Preachers can see attendance during a session, not after the session.
 - **Role clarity:** Preachers and Volunteers each see the workflows relevant to their responsibilities.
 
-**Most important shift:** session operations can become more distributed without losing central visibility.
-
 ---
 
 ## 7. Data And Ownership
@@ -91,26 +87,16 @@ The system is designed around a simple operating model:
 - Contacts can be assigned to a Volunteer for follow-up.
 - Volunteers can add contacts and are assigned to respective Preachers.
 
-**Executive meaning:** the platform supports accountability, not just data entry.
+**Why it matters:** the platform supports accountability, not just data entry.
 
 ---
 
-## 8. Reliability And Readiness
-
-Completed readiness work:
+## 8. Current State
 
 - Session-specific registration and attendance are now connected.
 - Contact collection is now connected to the central database.
 - Role-based access with Preachers, Volunteers, Students, and Admin roles.
 - Contact collection and attendance can work offline as well.
-
-Remaining readiness work:
-
-- Run full Preacher, Volunteer, and Student walkthrough checks with real test accounts.
-- Complete code-quality cleanup so checks pass cleanly.
-- Add required automated checks for pull requests.
-- Verify production environment settings before launch.
-- Validate real Airtable saving and lookup behavior in the target environment.
 
 ---
 
