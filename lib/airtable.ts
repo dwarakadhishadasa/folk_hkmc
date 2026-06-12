@@ -601,6 +601,20 @@ export async function findLocationById(recordId: string): Promise<AirtableRecord
   }
 }
 
+export async function findLocationByName(name: string): Promise<LocationRecord | null> {
+  const normalizedName = name.trim().replace(/\s+/g, " ")
+  if (!normalizedName) {
+    return null
+  }
+
+  const records = await listRecords<LocationFields>("locations", {
+    filterFormula: `LOWER({Name})='${escapeFormulaString(normalizedName.toLowerCase())}'`,
+    maxRecords: 1,
+  })
+
+  return records[0] ? mapLocation(records[0]) : null
+}
+
 export function mapLocation(record: AirtableRecord<LocationFields>): LocationRecord {
   return {
     id: record.id,
@@ -618,6 +632,14 @@ export const listCachedLocations = unstable_cache(async () => listLocations(), [
   revalidate: AIRTABLE_REFERENCE_CACHE_TTL_SECONDS,
   tags: [AIRTABLE_LOCATIONS_CACHE_TAG],
 })
+
+export async function createLocation(data: { name: string }): Promise<LocationRecord> {
+  const name = data.name.trim().replace(/\s+/g, " ")
+  const record = await createRecord<LocationFields>("locations", { Name: name })
+  revalidateAirtableReferenceCache("locations")
+
+  return mapLocation(record)
+}
 
 export function revalidateAirtableReferenceCache(scope: "locations" | "active-preachers" | "all" = "all"): void {
   if (scope === "locations" || scope === "all") {

@@ -1,5 +1,5 @@
 import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
-import { findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/airtable"
+import { findLocationById, findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/airtable"
 import { writeInviteLog } from "@/lib/invite-log"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -15,6 +15,14 @@ interface AdminInvitePayload {
   locationIds?: string[]
 }
 
+function normalizeLocationIds(locationIds: string[] | undefined): string[] {
+  if (!Array.isArray(locationIds)) {
+    return []
+  }
+
+  return [...new Set(locationIds.map((locationId) => locationId.trim()).filter(Boolean))]
+}
+
 export async function POST(request: Request) {
   try {
     const staff = await getStaffContext()
@@ -24,6 +32,7 @@ export async function POST(request: Request) {
     const email = payload.email?.trim().toLowerCase()
     const name = payload.name?.trim()
     const role = payload.role
+    const locationIds = role === "Volunteer" ? [] : normalizeLocationIds(payload.locationIds)
 
     if (!email || !name || !role || !roles.includes(role)) {
       return Response.json({ error: "Name, email, and a valid role are required." }, { status: 400 })
@@ -41,13 +50,20 @@ export async function POST(request: Request) {
       }
     }
 
+    if (locationIds.length > 0) {
+      const locations = await Promise.all(locationIds.map((locationId) => findLocationById(locationId)))
+      if (locations.some((location) => !location)) {
+        return Response.json({ error: "One or more selected locations do not exist." }, { status: 400 })
+      }
+    }
+
     const user = await upsertStaffUser({
       email,
       name,
       role,
       invitedByAirtableUserId: staff.airtableUserId,
       assignedPreacherAirtableUserId: role === "Volunteer" ? payload.assignedPreacherAirtableUserId : undefined,
-      locationIds: payload.locationIds,
+      locationIds,
     })
 
     const supabaseAdmin = createSupabaseAdminClient()
