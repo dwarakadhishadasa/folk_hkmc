@@ -6,7 +6,7 @@ FOLK HKMC web application.
 
 New collaborators should read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. In short: `main` is owner-only production, `dev` is the shared development branch, and all code changes must come through `feature/*` branches and pull requests reviewed by Dwaraka.
 
-For local setup, quality gates, route maps, and troubleshooting, see [docs/development-guide.md](docs/development-guide.md).
+For local setup, quality gates, route maps, deployment notes, and troubleshooting, see [docs/development-guide.md](docs/development-guide.md) and [docs/deployment-guide.md](docs/deployment-guide.md).
 
 ## Documentation Index
 
@@ -18,7 +18,9 @@ Project documentation lives in [`./docs`](./docs). The full documentation landin
 - **[Architecture](./docs/architecture.md)** - Runtime flows and system constraints
 - **[Component Inventory](./docs/component-inventory.md)** - Product and infrastructure component map
 - **[Data Models](./docs/data-models.md)** - Airtable and local record shapes
+- **[Deployment Guide](./docs/deployment-guide.md)** - Supabase, Airtable, runtime env, and release checks
 - **[Development Guide](./docs/development-guide.md)** - Setup, commands, and quality gates
+- **[Contribution Guide](./docs/contribution-guide.md)** - Branch, PR, owner-review, and verification workflow
 - **[Project Overview](./docs/project-overview.md)** - Executive summary and technology picture
 - **[Source Tree Analysis](./docs/source-tree-analysis.md)** - Repository structure and entry points
 

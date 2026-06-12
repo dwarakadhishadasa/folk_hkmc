@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PRD Validation: HKM Program Operations Portals</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+    --strong: #16a34a;
+    --adequate: #65a30d;
+    --medium: #ca8a04;
+    --low: #64748b;
+    --good: #65a30d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  h1 { margin: 0; font-size: 22px; font-weight: 650; }
+  h2 { margin: 0; font-size: 16px; }
+  h3 { margin: 24px 0 8px; font-size: 15px; }
+  p { margin: 0 0 10px; }
+  .subtitle, footer { color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; }
+  .grade { padding: 10px 18px; border-radius: 8px; color: white; background: var(--good); font-weight: 650; white-space: nowrap; }
+  .synthesis, .mechanical, details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .synthesis { border-left: 3px solid var(--muted); padding: 18px 22px; margin-bottom: 24px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .card-name { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+  .verdict-strong { color: var(--strong); font-weight: 650; }
+  .verdict-adequate { color: var(--adequate); font-weight: 650; }
+  details { margin-bottom: 14px; overflow: hidden; }
+  details[open] summary { border-bottom: 1px solid var(--border); }
+  summary { cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 14px 20px; }
+  .pill { margin-left: auto; color: white; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 3px 10px; text-transform: uppercase; }
+  .pill.strong { background: var(--strong); }
+  .pill.adequate { background: var(--adequate); }
+  .body { padding: 16px 20px 18px; }
+  .finding { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .badge { border-radius: 4px; display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; margin-right: 8px; padding: 3px 8px; text-transform: uppercase; }
+  .badge.medium { background: rgba(202, 138, 4, 0.14); color: var(--medium); }
+  .badge.low { background: rgba(100, 116, 139, 0.12); color: var(--low); }
+  .finding-title { font-weight: 650; }
+  .mechanical { padding: 16px 20px; margin-top: 24px; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  footer { border-top: 1px solid var(--border); margin-top: 40px; padding-top: 16px; }
+</style>
+</head>
+<body>
+<main class="container">
+  <header>
+    <div>
+      <h1>PRD Validation: HKM Program Operations Portals</h1>
+      <div class="subtitle">_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md</div>
+    </div>
+    <div class="grade">Good</div>
+  </header>
+
+  <section class="synthesis">
+    <p>The PRD is ready for downstream UX, architecture, and epic generation. It now states the central product bets clearly: two branded Next.js Program Apps, one shared Supabase identity/authorization layer, two Airtable Bases as operational sources of truth, and role-aware portals for members/participants, volunteers, preachers/facilitators, and admins.</p>
+    <p>The remaining risk is not hidden scope; it is explicitly deferred implementation detail. Section 12 captures the decisions that must be resolved before dependent implementation stories are accepted, and the addendum now flags the only important repo-context caveat found during validation: Gita Life route/API ownership was not verified in this workspace.</p>
+  </section>
+
+  <section class="cards" aria-label="Dimension verdicts">
+    <div class="card"><div class="card-name">Decision-readiness</div><div class="verdict-adequate">adequate</div></div>
+    <div class="card"><div class="card-name">Substance over theater</div><div class="verdict-strong">strong</div></div>
+    <div class="card"><div class="card-name">Strategic coherence</div><div class="verdict-strong">strong</div></div>
+    <div class="card"><div class="card-name">Done-ness clarity</div><div class="verdict-adequate">adequate</div></div>
+    <div class="card"><div class="card-name">Scope honesty</div><div class="verdict-strong">strong</div></div>
+    <div class="card"><div class="card-name">Downstream usability</div><div class="verdict-adequate">adequate</div></div>
+    <div class="card"><div class="card-name">Shape fit</div><div class="verdict-strong">strong</div></div>
+  </section>
+
+  <details open>
+    <summary><h2>Decision-readiness</h2><span class="pill adequate">adequate</span></summary>
+    <div class="body">
+      <p>The PRD is decision-ready for the product direction. Sections 1, 7, and 8 make the biggest choices explicit: two program-specific operations apps, one shared Supabase project/database, separate Airtable Bases, no combined operations portal app in MVP, and no reuse of existing admin surfaces as the new Program operations foundation.</p>
+      <p>The document is honest about unresolved implementation decisions. Section 12 converts open questions into owned deferred decisions with revisit points and blocking scope.</p>
+      <div class="finding"><span class="badge medium">medium</span><span class="finding-title">Deferred decisions must be carried into architecture and epics</span><p>DD-1 through DD-10 are not blockers to PRD finalization, but several are blockers for implementation acceptance.</p><p><strong>Fix:</strong> Treat section 12 as prerequisite input for architecture and create explicit prerequisite stories or architecture decisions before dependent implementation stories.</p></div>
+    </div>
+  </details>
+
+  <details>
+    <summary><h2>Substance over theater</h2><span class="pill strong">strong</span></summary>
+    <div class="body">
+      <p>The personas and journeys are load-bearing rather than decorative. UJ-1 through UJ-5 map directly to FR clusters: portal entry, personal home, attendance, cohort care, and admin operations.</p>
+      <p>The NFRs in section 6 now describe product-specific constraints: no live Airtable calls on normal auth guards, fail-closed admin behavior on stale sync, mobile 360px support, and observable sync/auth events.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><h2>Strategic coherence</h2><span class="pill strong">strong</span></summary>
+    <div class="body">
+      <p>The PRD has a coherent thesis: preserve distinct Gita Life and FOLK experiences while sharing identity, data contracts, authorization semantics, and operating conventions. The feature groups serve that thesis consistently.</p>
+      <p>Success metrics and counter-metrics reinforce the thesis, especially portal access success, attendance throughput, sync confidence, member portal adoption, and the guardrails against privacy/care-quality harm and public-page friction.</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary><h2>Done-ness clarity</h2><span class="pill adequate">adequate</span></summary>
+    <div class="body">
+      <p>Most FRs include verifiable consequences. Examples include named subdomains, fail-closed admin behavior, scan outcomes, duplicate handling, and explicit cross-program report-permission limits.</p>
+      <div class="finding"><span class="badge low">low</span><span class="finding-title">Admin/reporting FRs still need story-level acceptance detail</span><p>FR-19 through FR-22 define useful capability boundaries, but not the exact dashboard widgets, export formats, filters, or role-policy edge cases.</p><p><strong>Fix:</strong> During epic/story generation, add acceptance criteria for report format, export fields, filters, permissions, and audit behavior.</p></div>
+      <div class="finding"><span class="badge low">low</span><span class="finding-title">Route naming remains intentionally flexible</span><p>The PRD allows each Program App to use `/`, `/portal`, `/ops`, or equivalent host-based routes. That is acceptable at PRD level, but implementation needs one chosen convention.</p><p><strong>Fix:</strong> Architecture should select the final app-local portal route convention before route stories are accepted.</p></div>
+    </div>
+  </details>
+
+  <details>
+    <summary><h2>Scope honesty</h2><span class="pill strong">strong</span></summary>
+    <div class="body">
+      <p>Scope is unusually clear for a cross-program operations PRD. MVP inclusions and exclusions are explicit in section 8, deferred decisions are explicit in section 12, assumptions are indexed in section 13, and the decision log records the superseded one-app decision.</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary><h2>Downstream usability</h2><span class="pill adequate">adequate</span></summary>
+    <div class="body">
+      <p>The PRD is usable for UX, architecture, and story creation. It has stable FR IDs, UJ IDs, SM IDs, a glossary, a rollout sequence, and cross-cutting requirements.</p>
+      <div class="finding"><span class="badge medium">medium</span><span class="finding-title">Gita Life public-page ownership is unverified in this workspace</span><p>The PRD assumes public Gita Life and FOLK entry points, but finalization did not find an active Gita Life route or `/api/gita-life` endpoint in this repo.</p><p><strong>Fix:</strong> Architecture should confirm whether Gita Life public-page ownership lives in this repo or another HKM site before implementation planning assigns route work.</p></div>
+    </div>
+  </details>
+
+  <details>
+    <summary><h2>Shape fit</h2><span class="pill strong">strong</span></summary>
+    <div class="body">
+      <p>The shape fits a chain-top product PRD feeding UX, architecture, and epics. The document uses journeys for multi-stakeholder operational flows and capability-oriented FRs for platform and access-control concerns.</p>
+    </div>
+  </details>
+
+  <section class="mechanical">
+    <h3>Mechanical Notes</h3>
+    <ul>
+      <li>Frontmatter status is <code>final</code>, with <code>updated: 2026-06-11</code>.</li>
+      <li>FR IDs are contiguous from FR-1 through FR-22.</li>
+      <li>UJ IDs are contiguous from UJ-1 through UJ-5.</li>
+      <li>SM IDs are contiguous for SM-1 through SM-5, with counter-metrics SM-C1 and SM-C2.</li>
+      <li>Inline <code>[ASSUMPTION]</code> tags round-trip into section 13.</li>
+      <li>The decision log records that the original one-app decision was superseded by the two-app decision.</li>
+      <li>Addendum repo facts were updated during finalization to avoid stale Next.js, React, Airtable helper, and route/API claims.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <div>Rubric: .agents/skills/bmad-prd/assets/prd-validation-checklist.md</div>
+    <div>Reviewer file: _bmad-output/planning-artifacts/prds/prd-gita-life-operations/review-rubric.md</div>
+    <div>Run at: 2026-06-11T15:07:08+05:30</div>
+  </footer>
+</main>
+</body>
+</html>
