@@ -1,46 +1,343 @@
-# folk_hkmc - API Contracts
-
-**Date:** 2026-04-23
+# API Contracts
 
 ## Overview
 
-This repository implements one server route namespace: `/attendance`. Two additional APIs are assumed by the frontend but are not present in this codebase: `/api/registration` and `/api/contact`.
+This project uses Next.js route handlers. Most APIs return JSON. Auth-protected APIs use Supabase session cookies and `getStaffContext()` from `lib/authz.ts`.
 
-## Implemented Contracts
+Important route convention: attendance is implemented at `/attendance`, not `/api/attendance`.
 
-### `POST /attendance`
+## Auth Routes
 
-Marks attendance for an already-registered participant.
+### `GET /api/auth/me`
 
-**Request Body**
+Returns the current staff context.
+
+Auth: Supabase session cookie.
+
+Responses:
+
+- `200 { staff: StaffContext }`
+- `200 { staff: null }` when unauthenticated
+- `403/500 { error, code? }` for authorization/profile errors
+
+Headers include no-store cache controls and `Vary: Cookie`.
+
+### `POST /api/auth/signin`
+
+Prepares an email OTP sign-in for an active Airtable staff user.
+
+Request:
+
+```json
+{ "email": "staff@example.com" }
+```
+
+Behavior:
+
+- Validates email format.
+- Finds active Airtable User by email.
+- Ensures Supabase Auth user exists.
+- Syncs Supabase user ID to Airtable if needed.
+- The browser then calls Supabase `signInWithOtp`.
+
+Responses:
+
+- `200 { "ready": true, "email": "staff@example.com" }`
+- `400 { "error": "A valid staff email is required." }`
+- `403 { "error": "This email is not linked to an active staff account." }`
+- `500 { "error": "..." }`
+
+### `POST /api/auth/complete-implicit`
+
+Completes staff profile sync after a Supabase browser/session callback.
+
+Auth: Supabase session cookie.
+
+Responses:
+
+- `200 { staff: StaffContext }`
+- `401/403/500 { error, code }`
+
+### `GET /auth/confirm`
+
+Supabase email callback route. Accepts either `code` or `token_hash`/`type`. On success it syncs the staff profile and redirects based on role:
+
+- Volunteer: `/contact`
+- Preacher: `/` unless a safe `next` path is allowed
+- Admin: `/dashboard` unless a safe `next` path is allowed
+
+Errors redirect to `/auth/error?code=...`.
+
+### `GET|POST /auth/signout`
+
+Signs out through Supabase server client and redirects to `/login?signedOut=1` with no-store headers.
+
+## Public Registration And Attendance
+
+### `POST /api/registration`
+
+Creates a public Contact. When `sessionId` is provided, it also marks attendance for that session.
+
+Request:
 
 ```json
 {
-  "mobile": "9876543210"
+  "name": "Arjun",
+  "mobile": "9876543210",
+  "age": "21",
+  "occupation": "Studying",
+  "year": "2nd year",
+  "location": "Anna Nagar",
+  "sessionId": "recXXXXXXXXXXXX"
 }
 ```
 
-**Behavior**
+Validation:
 
-- Normalizes the submitted mobile number to the last 10 digits
-- Looks up the participant in Airtable contacts
-- Rejects unknown users
-- Rejects duplicate same-day attendance
-- Creates a new Airtable attendance record on success
+- `name` required.
+- `mobile` must normalize to 10 digits.
+- If `sessionId` is present, session must exist, be public, be inside attendance window, and have preacher/location routing.
 
-**Responses**
+Responses without `sessionId`:
 
-| Status | Meaning | Response Shape |
-| --- | --- | --- |
-| `201` | Attendance recorded | `{ "id", "mobile", "userName", "createdAt" }` |
-| `400` | Invalid mobile number | `{ "error": "Invalid mobile number" }` |
-| `404` | User not registered | `{ "error", "notRegistered": true }` |
-| `409` | Already marked today | `{ "error", "duplicate": true, "userName" }` |
-| `500` | Airtable or server failure | `{ "error": "Failed to mark attendance" }` |
+- `201 { contact }`
+- `409 { alreadyRegistered: true, contact }`
+- `400/500 { error }`
 
-**Offline Behavior**
+Responses with `sessionId`:
 
-When the network is unavailable and the service worker intercepts the request, the browser may receive:
+- `200` or `201` with:
+
+```json
+{
+  "completed": true,
+  "sessionBacked": true,
+  "registrationOutcome": "contact_created",
+  "attendanceOutcome": "attendance_marked",
+  "contact": { "id": "rec...", "name": "Arjun", "phone": "9876543210" },
+  "attendance": { "id": "rec...", "createdAt": "2026-06-11T..." },
+  "sessionId": "rec..."
+}
+```
+
+`attendanceOutcome` may be `attendance_already_marked`.
+
+### `POST /attendance`
+
+Marks attendance for an existing Contact in a session.
+
+Request:
+
+```json
+{ "mobile": "9876543210", "sessionId": "recXXXXXXXXXXXX" }
+```
+
+Responses:
+
+- `201 { id, mobile, userName, sessionId, createdAt }`
+- `400 { error }` for invalid mobile or missing session
+- `403 { error }` for closed/not-open session
+- `404 { error, notRegistered: true, mobile, sessionId }`
+- `409 { error, duplicate: true, id, mobile, userName, sessionId, createdAt }`
+- `500 { error }`
+
+### `GET /attendance`
+
+Returns attendance records for staff dashboard views.
+
+Auth: Admin or Preacher.
+
+Query:
+
+- `session=<sessionId>`: read session-linked attendance.
+- `knownAttendanceIds=recA,recB`: optional incremental fetch, max 100 record IDs.
+- `date=YYYY-MM-DD`: used only when no session is supplied.
+
+Responses:
+
+- `200 [{ id, mobile, userName, createdAt }]`
+- `403 { error, code? }` when outside role/session scope
+- `404 { error }` for invalid session
+
+## Staff Contact API
+
+### `POST /api/contact`
+
+Creates a Contact from staff-entered outreach data.
+
+Auth: any active staff role.
+
+Request:
+
+```json
+{
+  "name": "Arjun",
+  "mobile": "9876543210",
+  "dateOfBirth": "2003-01-15",
+  "occupation": "Working",
+  "college": "",
+  "company": "Example Co",
+  "year": "Unknown",
+  "source": "Pass distribution",
+  "location": "Anna Nagar",
+  "comments": "Met near campus",
+  "assignedPreacherAirtableUserId": "rec..."
+}
+```
+
+Role behavior:
+
+- Volunteer: assigned Preacher comes from staff profile.
+- Preacher: assigned Preacher is the current staff user.
+- Admin: must provide `assignedPreacherAirtableUserId`.
+
+Responses:
+
+- `201 { contact }`
+- `400 { error }` for invalid required fields or invalid DOB
+- `409 { duplicate: true, contact }`
+- `422 { error }` for missing location/routing
+- `401/403/500 { error, code? }`
+
+## Sessions API
+
+### `GET /api/sessions`
+
+Lists sessions visible to Admin or Preacher users.
+
+Auth: Admin or Preacher.
+
+Response:
+
+```json
+{
+  "sessions": [
+    {
+      "id": "rec...",
+      "name": "Sunday FOLK",
+      "sessionDate": "2026-06-11T15:30:00.000Z",
+      "locationIds": ["rec..."],
+      "preacherIds": ["rec..."],
+      "publicAttendanceEnabled": true,
+      "attendanceOpensAt": "2026-06-11T15:30:00.000Z",
+      "attendanceClosesAt": "2026-06-11T15:45:00.000Z",
+      "attendanceUrl": "https://.../attend?session=rec..."
+    }
+  ]
+}
+```
+
+Preachers see sessions where they are linked as Preacher or where the session location overlaps their staff profile locations.
+
+### `POST /api/sessions`
+
+Creates a new attendance session and public attendance URL.
+
+Auth: Admin or Preacher.
+
+Request:
+
+```json
+{
+  "name": "Sunday FOLK",
+  "locationId": "rec...",
+  "durationMinutes": 15
+}
+```
+
+Validation:
+
+- `NEXT_PUBLIC_SITE_URL` must be set.
+- Duration must be an integer from 1 to 1440.
+- Preachers can create sessions only for scoped locations.
+- Location must exist in Airtable.
+
+Responses:
+
+- `201 { session }`
+- `400/403/500 { error, code? }`
+
+## Admin APIs
+
+### `POST /api/admin/invite-user`
+
+Invites Admin, Preacher, or Volunteer users.
+
+Auth: Admin.
+
+Request:
+
+```json
+{
+  "name": "Madhav",
+  "email": "madhav@example.com",
+  "role": "Preacher",
+  "locationIds": ["rec..."],
+  "assignedPreacherAirtableUserId": "rec..."
+}
+```
+
+Rules:
+
+- Role must be `Admin`, `Preacher`, or `Volunteer`.
+- Volunteer invites require an active assigned Preacher.
+- Non-Volunteer roles may receive location access.
+- Route upserts Airtable User, sends Supabase invite, and writes `invite_log`.
+
+Responses:
+
+- `201 { invited: true, user: { id, email, role } }`
+- `400 { error }`
+- `502 { error: "Airtable user saved, but Supabase invite failed." }`
+- `401/403/500 { error, code? }`
+
+### `POST /api/admin/locations`
+
+Creates an Airtable Location or returns an existing one.
+
+Auth: Admin.
+
+Request:
+
+```json
+{ "name": "Anna Nagar" }
+```
+
+Responses:
+
+- `201 { location, existing: false }`
+- `200 { location, existing: true }`
+- `400 { error }`
+- `401/403/500 { error, code? }`
+
+## Volunteer Invite API
+
+### `POST /api/volunteers/invite`
+
+Invites a Volunteer. Admins may choose assigned Preacher; Preachers assign the volunteer to themselves.
+
+Auth: Admin or Preacher.
+
+Request:
+
+```json
+{
+  "name": "Nitai",
+  "email": "nitai@example.com",
+  "role": "Volunteer",
+  "assignedPreacherAirtableUserId": "rec..."
+}
+```
+
+Responses:
+
+- `201 { invited: true, user: { id, email, role: "Volunteer" } }`
+- `400/403/502 { error }`
+- `401/500 { error, code? }`
+
+## Service Worker Offline Responses
+
+When `public/sw.js` cannot reach the network for queueable POST paths, it stores the request in IndexedDB and returns:
 
 ```json
 {
@@ -50,102 +347,6 @@ When the network is unavailable and the service worker intercepts the request, t
 }
 ```
 
-with HTTP status `202`. This response is generated by `public/sw.js`, not by `app/attendance/route.ts`.
+with status `202`.
 
-### `GET /attendance?date=YYYY-MM-DD`
-
-Fetches attendance records for a date, defaulting to the current day.
-
-**Query Parameters**
-
-| Parameter | Required | Notes |
-| --- | --- | --- |
-| `date` | No | Defaults to today's date in ISO format |
-
-**Success Response**
-
-```json
-[
-  {
-    "id": "rec123",
-    "mobile": "9876543210",
-    "userName": "Example User",
-    "createdAt": "2026-04-23"
-  }
-]
-```
-
-**Responses**
-
-| Status | Meaning |
-| --- | --- |
-| `200` | Attendance array returned |
-| `500` | Airtable fetch failure |
-
-**Important Note**
-
-The dashboard page is client-gated, but this HTTP endpoint itself is not protected by auth in the route handler.
-
-## Client-Assumed but Missing Contracts
-
-### `POST /api/registration`
-
-Expected by:
-
-- `app/register/page.tsx`
-- `components/registration-form.tsx`
-- `public/sw.js` offline queue logic
-
-Expected request shape:
-
-```json
-{
-  "name": "Participant Name",
-  "mobile": "9876543210",
-  "age": "21",
-  "occupation": "Studying",
-  "year": "3rd year",
-  "location": "Chennai"
-}
-```
-
-Expected client behaviors:
-
-- `202` with `queued: true` when offline
-- `409` with `alreadyRegistered: true` when a duplicate registration exists
-- success redirect to `/attend`
-
-### `POST /api/contact`
-
-Expected by:
-
-- `components/contact-form.tsx`
-
-Expected request shape:
-
-```json
-{
-  "name": "Contact Name",
-  "mobile": "9876543210",
-  "age": "24",
-  "occupation": "Working",
-  "year": "Unknown",
-  "location": "Chennai"
-}
-```
-
-Expected client behavior:
-
-- successful save shows a confirmation panel
-- failure triggers a browser alert
-
-## Integration Notes
-
-- Airtable is the real backing system for the implemented attendance route
-- Any future registration/contact routes should reuse `lib/airtable.ts`
-- Mobile numbers are consistently normalized to 10 digits in UI and route logic
-- Response shapes are tightly coupled to current UI state transitions
-
----
-
-Generated using the BMAD `document-project` workflow pattern.
+For `/api/contact`, the message is `Contact queued for sync when online`.

@@ -1,374 +1,233 @@
-# folk_hkmc - Data Models
-
-**Date:** 2026-05-04
+# Data Models
 
 ## Overview
 
-The application does not use a traditional relational database, ORM, or migration system. The live operational data model is an Airtable base, while the current Next.js code still reads and writes only a smaller subset of that base through `lib/airtable.ts`.
+The project has two persistence layers:
 
-Live Airtable base:
+- Airtable: operational application records
+- Supabase Postgres/Auth: staff authentication bridge and invite logging
 
-| Property | Value |
+There are also browser-side transient shapes for auth state, offline queueing, and form state.
+
+## Airtable Configuration
+
+`lib/airtable.ts` requires these environment variables:
+
+| Variable | Purpose |
 | --- | --- |
-| Base id | `appqea9DRLOXqErXb` |
-| Contacts table | `tbltzdtCmCHf6gJKD` |
-| Attendance table | `tblxfB2W2l6OXc2IX` |
-| Sessions table | `tbl9AbwkiIaAwK20X` |
-| Analytics table | `tbldQTIJb7EgPIDVE` |
-| Locations table | `tbl5IOOcS2RUkXzyG` |
-| Users table | `tbl2aiD2NfvrBMnfI` |
+| `AIRTABLE_API_TOKEN` | Airtable REST token |
+| `AIRTABLE_BASE_ID` | Airtable base |
+| `AIRTABLE_CONTACTS_TABLE_ID` | Contacts table |
+| `AIRTABLE_ATTENDANCE_TABLE_ID` | Attendance table |
+| `AIRTABLE_SESSIONS_TABLE_ID` | Sessions table |
+| `AIRTABLE_USERS_TABLE_ID` | Staff users table |
+| `AIRTABLE_LOCATIONS_TABLE_ID` | Locations table |
+| `AIRTABLE_ANALYTICS_RECORD_ID` | Optional analytics link default |
+| `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` | Optional `/manage` interface page |
 
-Live record counts from Airtable MCP:
+## Airtable Records
 
-| Table | Records | Purpose |
-| --- | ---: | --- |
-| `Contacts` | 546 | Master person/contact records, outreach state, ownership, and engagement analytics |
-| `Attendance` | 904 | Attendance event records linked to contacts and sessions |
-| `Sessions` | 84 | Session catalog and public-attendance control records |
-| `Analytics` | 1 | Singleton aggregate support record |
-| `Locations` | 2 | Location reference records |
-| `Users` | 3 | Staff/operator reference and authorization records |
+### Contact
 
-The effective model is:
+Source types: `ContactFields`, `ContactRecord`.
 
-```text
-Users <----> Locations
-  |             |
-  v             v
-Contacts <---- Attendance ----> Sessions
-    |                            |
-    v                            v
-Analytics <----------------------
+Fields used:
+
+| Airtable field | Type/shape | Notes |
+| --- | --- | --- |
+| `Name` | string | Required for creation |
+| `Phone` | string/number | Normalized to last 10 digits |
+| `Age` | number | Public registration only |
+| `Date of Birth` | string | Staff contact form; `YYYY-MM-DD` |
+| `Year` | string | Student year or `Unknown` for working |
+| `College` | string | Student contacts |
+| `Company` | string | Working contacts |
+| `Source` | string | e.g. `Public Registration`, `Attendance Registration`, `Pass distribution` |
+| `Notes` | string | Staff comments |
+| `Initial Contact` | date string | Current Asia/Kolkata date on create |
+| `Last Contacted On` | date string | Current Asia/Kolkata date on create |
+| `Location` | string or linked record array | Free text or Location record ID depending flow |
+| `Assigned Preacher` | linked User IDs | Owner/routing |
+| `Collected By` | linked User IDs | Collector or assigned Preacher |
+| `Analytics` | linked Analytics IDs | Defaults to `AIRTABLE_ANALYTICS_RECORD_ID` |
+
+### Attendance
+
+Source types: `AttendanceFields`, `AttendanceRecord`.
+
+Fields used:
+
+| Airtable field | Type/shape | Notes |
+| --- | --- | --- |
+| `Contact` | linked Contact IDs | Required on create |
+| `Session` | linked Session IDs | Required on create |
+| `Phone` | string | Denormalized mobile |
+| `Name` | string | Denormalized contact name |
+| `Processed?` | boolean | Set to true |
+| `Attendance Date` | string | Read fallback |
+
+Attendance duplicate detection is by Contact within Session.
+
+### Session
+
+Source types: `SessionFields`, `SessionRecord`.
+
+Fields used:
+
+| Airtable field | Type/shape | Notes |
+| --- | --- | --- |
+| `Name` | string | Session name |
+| `Session Date` | datetime string | Creation/start time |
+| `Preacher` | linked User IDs | Current staff Preacher/Admin creator |
+| `Location` | linked Location IDs | Session scope |
+| `Analytics` | linked Analytics IDs | Default analytics record |
+| `Attendance Records` | linked Attendance IDs | Used for efficient session reads |
+| `Public Attendance Enabled` | boolean | Must be true to accept public attendance |
+| `Attendance Opens At` | datetime string | Window start |
+| `Attendance Closes At` | datetime string | Window end |
+| `Duration Minutes` | number | 1 to 1440 |
+| `Attendance URL` | string | Generated `/attend?session=<id>` URL |
+
+### Staff User
+
+Source types: `UserFields`, `StaffUser`.
+
+Fields used:
+
+| Airtable field | Type/shape | Notes |
+| --- | --- | --- |
+| `Name` | string | Staff display name |
+| `Email` | string | Lowercased, used for sign-in |
+| `Role` | `Admin`, `Preacher`, `Volunteer` | Required |
+| `Status` | `Active`, `Inactive` | Only active users can sign in |
+| `Locations` | linked Location IDs | Admin/Preacher scope |
+| `Portal Account` | string | Present but not central to current auth |
+| `Supabase User ID` | string | Synced to Supabase Auth user ID |
+| `Invited By` | linked User IDs | Invite audit in Airtable |
+| `Assigned Preacher` | linked User IDs | Volunteer routing |
+
+### Location
+
+Source types: `LocationFields`, `LocationRecord`.
+
+Fields used:
+
+| Airtable field | Type/shape | Notes |
+| --- | --- | --- |
+| `Name` | string | Display and duplicate lookup |
+| `Status` | string | Shown in admin invite form if not active |
+
+## Supabase Tables
+
+Defined in `supabase/migrations/*` and typed in `lib/supabase/types.ts`.
+
+### `public.staff_profiles`
+
+Local authorization cache keyed by Supabase Auth user ID.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid | Primary key; references `auth.users(id)` |
+| `email` | text | Unique |
+| `airtable_user_id` | text | Required Airtable User ID |
+| `name` | text nullable | Staff display name |
+| `role` | text | `Admin`, `Preacher`, `Volunteer` |
+| `status` | text | `Active`, `Inactive` |
+| `location_ids` | text[] | Staff location scope |
+| `assigned_preacher_airtable_user_id` | text nullable | Volunteer routing |
+| `last_synced_at` | timestamptz | Updated on profile sync |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Trigger-maintained |
+
+RLS is enabled. Current server access uses the Supabase service-role client.
+
+### `public.invite_log`
+
+Invite audit log written by `lib/invite-log.ts`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | bigint identity | Primary key |
+| `invitee_email` | text | Lowercased |
+| `airtable_user_id` | text nullable | Invited Airtable User |
+| `inviter_airtable_user_id` | text nullable | Inviter in Airtable |
+| `inviter_supabase_user_id` | uuid nullable | Inviter Supabase user |
+| `invitee_role` | text | Staff role |
+| `status` | text | `pending`, `sent`, `failed`, `accepted` |
+| `error_message` | text nullable | Supabase invite error |
+| `invited_at` | timestamptz | Defaults to now |
+| `accepted_at` | timestamptz nullable | Present but not currently updated in code |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Trigger-maintained |
+
+## In-Memory And Client State
+
+### `StaffContext`
+
+Returned by `/api/auth/me` and used by `AuthProvider`:
+
+```ts
+interface StaffContext {
+  supabaseUserId: string
+  email: string
+  airtableUserId: string
+  name: string
+  role: "Admin" | "Preacher" | "Volunteer"
+  locationIds: string[]
+  assignedPreacherAirtableUserId?: string
+}
 ```
 
-## External Data Models
+### Auth Provider State
 
-### Airtable Contacts
+`lib/auth-context.tsx` stores React state only:
 
-`Contacts` is the master record for students, contacts, outreach state, assigned ownership, and contact-level analytics.
+- `staff`
+- `isHydrated`
+- derived role booleans
 
-Core identity and profile fields:
+It does not own durable auth credentials. Supabase cookies and Supabase browser client session state do that.
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `Name` | `singleLineText` | Primary display field |
-| `Phone` | `singleLineText` | Main lookup key; app code normalizes phone numbers to 10 digits |
-| `Year` | `singleSelect` | `1st year`, `2nd year`, `3rd year`, `4th year`, `Unknown` |
-| `Age` | `number` | Captured by registration/contact flows |
-| `Date of Birth` | `date` | Optional profile data |
-| `Current status` | `singleSelect` | `Studying`, `Working` |
-| `Branch` | `singleSelect` | Academic branch/category |
-| `Photo` | `multipleAttachments` | Contact media |
+### Service Worker Queue
 
-Outreach and follow-up fields:
+`public/sw.js` stores failed POST requests in IndexedDB:
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `WhatsappEnabled?` | `singleSelect` | WhatsApp contact state |
-| `Interest` | `singleSelect` | Interest category |
-| `Source` | `singleSelect` | `Pass distribution`, `Reference`, `College orientation `, `Old`, `new`, `Unknown` |
-| `Interest level` | `singleSelect` | Engagement level |
-| `Status` | `singleSelect` | Contact lifecycle state |
-| `Rounds` | `number` | Outreach count/tracking |
-| `Notes` | `singleLineText` | Operator notes |
-| `Initial Contact` | `date` | First contact date |
-| `Last Contacted On` | `date` | Follow-up history |
-| `Next Follow-up` | `date` | Follow-up planning |
-| `Delete` | `singleSelect` | Soft-delete/manual cleanup marker |
-
-Relationship and access fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `Location` | `multipleRecordLinks` | Link to `Locations`; intended as one logical primary location |
-| `Assigned Preacher` | `multipleRecordLinks` | Link to `Users`; prefers single record in Airtable config |
-| `Collected By` | `multipleRecordLinks` | Link to `Users`; staff member who submitted the contact |
-| `Analytics` | `multipleRecordLinks` | Link to the singleton `Analytics` record |
-| `Attendance Records` | `multipleRecordLinks` | Inverse link from `Attendance.Contact` |
-| `Visible To` | `multipleLookupValues` | Read-only lookup from `Assigned Preacher` to `Users.Portal Account`; not a writable collaborator field in the current MCP schema |
-
-Derived analytics and legacy audit fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `ContactId` | `formula` | Airtable record id helper |
-| `TotalAttendanceCount` | `count` | Count of linked attendance records |
-| `AttendanceLog` | `rollup` | Attendance log rollup |
-| `Past60DayAttendanceCount_New` | `rollup` | Recent attendance count |
-| `TotalSessionCount` | `multipleLookupValues` | Lookup through analytics |
-| `Past60DaySessionCount` | `multipleLookupValues` | Lookup through analytics |
-| `Past60DayPercentage` | `formula` | Recent attendance percentage |
-| `Status Quo` | `formula` | Engagement bucket |
-| `*_Legacy` fields | mixed | Retained for audit/comparison after migration |
-
-Current Next.js `lib/airtable.ts` writes only this subset for registration/contact-style records:
-
-```text
-Name
-Phone
-Age
-Year
-Source
-Location
-Analytics
-Initial Contact
-Last Contacted On
-Assigned Preacher
-Collected By
-```
-
-### Airtable Attendance
-
-`Attendance` is the event table for attendance submissions. Current app writes link a contact and a session while retaining phone/name snapshots.
-
-Source and write fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `Phone` | `singleLineText` | Snapshot phone value |
-| `Name` | `singleLineText` | Snapshot participant name |
-| `Year` | `singleSelect` | Snapshot year/classification |
-| `Processed?` | `checkbox` | Marks processed attendance |
-| `Feedback` | `singleLineText` | Optional feedback |
-| `Interest in Future Sessions` | `singleSelect` | Follow-up signal |
-| `Contact` | `multipleRecordLinks` | Link to `Contacts`; prefers single record |
-| `Session` | `multipleRecordLinks` | Link to `Sessions`; prefers single record |
-| `Visible To` | `multipleCollaborators` | Writable visibility list for admins/preachers |
-
-Derived context fields:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `Session Date` | `multipleLookupValues` | From linked session |
-| `Location` | `multipleLookupValues` | From linked session |
-| `Session Preacher` | `multipleLookupValues` | From linked session owner |
-| `Attendance Date` | `multipleLookupValues` | From linked session date |
-| `Session Name` | `multipleLookupValues` | From linked session |
-| `IsPast60Days` | `formula` | Recent-session helper |
-| `Log Line` | `formula` | Attendance rollup helper |
-
-Current Next.js `lib/airtable.ts` writes this session-linked subset:
-
-```text
-Contact
-Session
-Phone
-Name
-Processed?
-```
-
-### Airtable Sessions
-
-`Sessions` is the catalog for operational sessions and the control point for public attendance links.
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `Name` | `singleLineText` | Primary display field |
-| `Notes` | `multilineText` | Operator notes |
-| `Session Date` | `date` | Canonical session date |
-| `Location` | `multipleRecordLinks` | Link to `Locations`; prefers single logical location |
-| `Preacher` | `multipleRecordLinks` | Link to `Users`; prefers single record |
-| `Status` | `singleSelect` | `Planned`, `Open`, `Completed`, `Cancelled` |
-| `Public Attendance Enabled` | `checkbox` | Public attendance route gate |
-| `Attendance Opens At` | `dateTime` | Optional open timestamp, `Asia/Kolkata` |
-| `Attendance Closes At` | `dateTime` | Optional close timestamp, `Asia/Kolkata` |
-| `Attendance URL` | `url` | Public attendance URL generated by Next.js |
-| `Visible To` | `multipleCollaborators` | Writable visibility list for admins/preachers |
-| `Analytics` | `multipleRecordLinks` | Link to singleton analytics record |
-| `Attendance Records` | `multipleRecordLinks` | Inverse link from `Attendance.Session` |
-| `Session Key` | `formula` | Human-readable computed key |
-| `IsPast60Days` | `formula` | Recent-session helper |
-| `Location Users` | `multipleLookupValues` | Users linked to the session location |
-| `Attendee Count` | `count` | Count of linked attendance records |
-| `Attachments` | `multipleAttachments` | Session attachments |
-| `Attachment Summary` | `aiText` | Airtable AI-generated attachment summary |
-
-### Airtable Users
-
-`Users` is the staff/operator reference table and the business authorization source for the planned Supabase staff-auth migration.
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `Name` | `singleLineText` | Primary display field |
-| `Email` | `email` | Used to map Supabase users to Airtable staff records |
-| `Role` | `singleSelect` | Live choices: `Admin`, `Preacher`, `Volunteer` |
-| `Status` | `singleSelect` | `Active`, `Inactive` |
-| `Locations` | `multipleRecordLinks` | Allowed/associated locations |
-| `Portal Account` | `singleCollaborator` | Airtable runtime identity for current-user filtering |
-| `Supabase User ID` | `singleLineText` | Planned bridge to Supabase `auth.users.id` |
-| `Invited By` | `multipleRecordLinks` | Staff user who invited/created this user |
-| `Assigned Preacher` | `multipleRecordLinks` | For volunteers, the preacher responsible for their submitted contacts |
-| `Invite Status` | `singleSelect` | `Not Invited`, `Invited`, `Accepted`, `Revoked` |
-| `Invite Sent At` | `dateTime` | Invite audit timestamp |
-| `Deactivated At` | `dateTime` | Offboarding timestamp |
-| `Deactivated By` | `singleLineText` | Offboarding actor/process |
-| `Deactivation Reason` | `multilineText` | Offboarding note |
-| `Assigned Contacts` | `multipleRecordLinks` | Inverse of `Contacts.Assigned Preacher` |
-| `Collected Contacts` | `multipleRecordLinks` | Inverse of `Contacts.Collected By` |
-| `Sessions` | `multipleRecordLinks` | Inverse of `Sessions.Preacher` |
-| `Invited Users` | `multipleRecordLinks` | Inverse of `Users.Invited By` |
-| `Assigned Volunteers` | `multipleRecordLinks` | Inverse of `Users.Assigned Preacher` |
-
-Live staff records returned by MCP:
-
-| Name | Email | Role | Status | Location scope | Portal account |
-| --- | --- | --- | --- | --- | --- |
-| Dwarakadhisha Dasa | `dwkd@hkmchennai.org` | `Admin` | `Active` | `Selaiyur` | populated |
-| Dinesh Gudi | `gdinesh.8055@gmail.com` | `Preacher` | `Active` | `Bharath` | populated |
-| Saikrishna Yarajarla | `yarajarlasaikrishna@gmail.com` | `Volunteer` | `Active` | empty | empty |
-
-Observed gap: the active volunteer record did not return an `Assigned Preacher` value in the MCP read. Volunteer contact-routing depends on that relationship being populated.
-
-### Airtable Locations
-
-`Locations` is the reference table for location scope and session/contact grouping.
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `Name` | `singleLineText` | Primary display field |
-| `Code` | `singleLineText` | Stable lowercase code |
-| `Status` | `singleSelect` | `Active`, `Inactive` |
-| `Users` | `multipleRecordLinks` | Inverse of `Users.Locations` |
-| `Contacts` | `multipleRecordLinks` | Inverse of `Contacts.Location` |
-| `Sessions` | `multipleRecordLinks` | Inverse of `Sessions.Location` |
-
-Live locations:
-
-| Name | Code | Status |
-| --- | --- | --- |
-| Selaiyur | `selaiyur` | `Active` |
-| Bharath | `bharath` | `Active` |
-
-### Airtable Analytics
-
-`Analytics` is a singleton aggregate-support table.
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `SessionLog` | `multilineText` | Historical session-date evidence |
-| `CommonID` | `multilineText` | Shared/singleton identifier |
-| `Contacts 3` | `multipleRecordLinks` | Legacy inverse relationship |
-| `Contacts` | `multipleRecordLinks` | Canonical contact relationship |
-| `Sessions` | `multipleRecordLinks` | Linked sessions |
-| `TotalSessionCount` | `rollup` | Total linked sessions |
-| `Past60DaySessionCount` | `rollup` | Recent linked sessions |
-
-There is one live analytics record: `reca0aQhvHSc5d5A1`.
-
-## Browser-Side Data Models
-
-### Current Auth Session
-
-The checked-in app still uses local browser auth in `lib/auth-context.tsx`.
-
-Stored in localStorage key `folk_auth`:
-
-```json
+```ts
 {
-  "username": "preacher",
-  "role": "preacher"
-}
-```
-
-Current static role type:
-
-```ts
-type UserRole = "volunteer" | "preacher"
-
-interface User {
-  username: string
-  password: string
-  role: UserRole
-}
-```
-
-Planned staff auth moves the identity source to Supabase and keeps Airtable `Users.Role` plus `Users.Status` as the final business authorization source.
-
-### Offline Queue Record
-
-There are two queue-related models in the repo:
-
-1. `public/sw.js` IndexedDB queue entries
-2. `lib/offline-sync.ts` localStorage queue records
-
-The explicit TypeScript shape exists in `lib/offline-sync.ts`:
-
-```ts
-interface OfflineRecord {
-  id: string
-  type: "registration" | "attendance" | "contact"
-  data: Record<string, unknown>
+  id: number,
+  url: string,
+  method: "POST",
+  body: string,
   timestamp: number
 }
 ```
 
-The service worker queue stores:
+The store is `pending-requests` in `folk-offline-db`.
 
-- `id` as an auto-increment key
-- `url`
-- `method`
-- `body`
-- `timestamp`
+### Legacy Local Offline Store
 
-## Feature Form Shapes
+`lib/offline-sync.ts` defines a separate localStorage queue:
 
-### Registration Form
+```ts
+{
+  id: string,
+  type: "registration" | "attendance",
+  data: Record<string, unknown>,
+  timestamp: number
+}
+```
 
-Used in `app/register/page.tsx` and `components/registration-form.tsx`.
+This path is not active because `OfflineSyncProvider` is not mounted.
 
-| Field | Type |
-| --- | --- |
-| `name` | string |
-| `mobile` | string |
-| `age` | string |
-| `occupation` | string |
-| `year` | string |
-| `location` | string |
+### Legacy In-Memory Store
 
-### Contact Form
+`lib/store.ts` defines `registrations`, `attendances`, and static `CENTERS`. Current route handlers do not use this store for production behavior.
 
-Used in `components/contact-form.tsx`.
+## Data Integrity Rules
 
-| Field | Type |
-| --- | --- |
-| `name` | string |
-| `mobile` | string |
-| `age` | string |
-| `occupation` | string |
-| `year` | string |
-| `location` | string |
-
-### Dashboard Attendance Record
-
-Used in `components/live-attendance-dashboard.tsx`.
-
-| Field | Type |
-| --- | --- |
-| `id` | string |
-| `mobile` | string |
-| `userName` | string |
-| `createdAt` | string |
-
-## Legacy / Transitional Models
-
-`lib/store.ts` defines local `Registration` and `Attendance` interfaces plus sample centers:
-
-- `registrations: Registration[]`
-- `attendances: Attendance[]`
-- `CENTERS`
-
-These structures are not part of the active Airtable-backed attendance flow and should be treated as legacy or incomplete migration remnants unless proven otherwise.
-
-## Schema Observations
-
-- Airtable field names are part of the effective app/database contract and must be preserved carefully.
-- Mobile number normalization to 10 digits remains a cross-cutting data rule.
-- The live Airtable base is more advanced than the current `lib/airtable.ts` integration.
-- Attendance should move from phone/date duplicate checks to `Contact + Session` duplicate checks.
-- `Contacts.Visible To` is currently read-only lookup data; `Sessions.Visible To` and `Attendance.Visible To` are writable collaborator fields.
-- Interface and portal filters are Airtable UI configuration, not managed by this repository.
-- The active volunteer needs an `Assigned Preacher` before volunteer-created contact routing can be production-safe.
-
----
-
-Generated from live Airtable MCP schema and record reads.
+- Mobile numbers normalize to the last 10 digits.
+- Staff email is trimmed and lowercased.
+- Session attendance requires an open eligible session.
+- Contact creation always links the default analytics record.
+- Staff profile sync rejects inactive or missing Airtable staff users.
+- Preacher session access is limited by linked Preacher ID or overlapping location scope.
