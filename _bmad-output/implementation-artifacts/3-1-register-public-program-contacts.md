@@ -2,115 +2,112 @@
 
 Status: ready-for-dev
 
-<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+<!-- Freshly generated from `_bmad-output/planning-artifacts/epics.md` on 2026-06-13T00:44:20+05:30. -->
 
 ## Story
 
 As a public visitor,
 I want to register for the active Program with basic profile details,
-So that I can join without staff intervention.
+so that I can join without staff intervention.
 
 ## Acceptance Criteria
 
 1. Given a public visitor opens a Program registration page
-When the form renders
-Then it displays fields enabled for the active Program, including name, mobile number, age or date details where configured, occupation, year where relevant, and location
-And the visitor does not need staff authentication.
+   When the form renders
+   Then it displays fields enabled for the active Program, including name, mobile number, age or date details where configured, occupation, year where relevant, and location
+   And the visitor does not need staff authentication.
 2. Given the visitor submits a mobile number
-When the client and server validate it
-Then the value is normalized to the last 10 digits
-And invalid values are rejected before Airtable mutation.
+   When the client and server validate it
+   Then the value is normalized to the last 10 digits
+   And invalid values are rejected before Airtable mutation.
 3. Given a normalized mobile number already exists in the active Program Airtable Contacts table
-When registration is submitted
-Then the route returns a clear already-registered state
-And no duplicate Contact is created.
+   When registration is submitted
+   Then the route returns a clear already-registered state
+   And no duplicate Contact is created.
 4. Given a valid new registration is submitted
-When the API route writes Airtable
-Then it creates a Contact only in the active Program Base
-And it writes only fields allowed by that Program's Capability Profile.
+   When the API route writes Airtable
+   Then it creates a Contact only in the active Program Base
+   And it writes only fields allowed by that Program's Capability Profile.
 5. Given the registration succeeds, duplicates, queues, or fails
-When the response reaches the UI
-Then the user sees a clear status message
-And the message does not expose Airtable internals.
+   When the response reaches the UI
+   Then the user sees a clear status message
+   And the message does not expose Airtable internals.
 
 ## Tasks / Subtasks
 
-- [ ] Read and protect the existing brownfield behavior before implementation (AC: 1-5)
-  - [ ] Open every listed UPDATE file before editing and note current route/component behavior.
-  - [ ] Confirm the work follows the in-place Turborepo migration sequence rather than replacing the app.
-- [ ] Implement `Register Public Program Contacts` according to the acceptance criteria (AC: 1-5)
-  - [ ] Keep Program context explicit in server-side reads/writes and avoid unscoped cross-program data paths.
-  - [ ] Reuse existing components/helpers before adding new primitives or route contracts.
-- [ ] Keep server-only integration boundaries intact (AC: 1-5)
-  - [ ] Do not import Airtable, Supabase admin, or authz server helpers into client components.
-- [ ] Preserve existing FOLK parity API response shapes where this story touches active flows
-  - [ ] Keep `{ error: string, code?: string }` errors and existing duplicate/queued flags where applicable.
+- [ ] Re-read the source story and dependent decisions before implementation (AC: 1, 2, 3, 4, 5)
+  - [ ] Confirm unresolved DD gates are resolved or explicitly waived where this story depends on them.
+  - [ ] Identify every existing route/component/helper listed below that will be updated and read it before editing.
+- [ ] Implement `Register Public Program Contacts` according to the acceptance criteria (AC: 1, 2, 3, 4, 5)
+  - [ ] Keep Program context explicit at every server boundary.
+  - [ ] Reuse existing helpers, contracts, UI primitives, and route patterns before adding new abstractions.
+  - [ ] Preserve current FOLK behavior unless the acceptance criteria explicitly require a change.
+- [ ] Preserve duplicate, validation, mobile normalization, and safe status-message behavior in affected public or staff forms.
 - [ ] Verify the implementation
-  - [ ] Run `pnpm lint` and `pnpm exec tsc --noEmit` for code changes.
-  - [ ] Manually smoke-test the affected flow on a 360px-wide viewport when UI or route behavior changes.
+  - [ ] Run required lint/type checks for product code changes.
+  - [ ] Record manual smoke-test notes for affected staff/public flows.
 
 ## Dev Notes
 
-### Non-Negotiable Brownfield Guardrails
+### Epic Context
 
-- Use the Turborepo workspace as an adapted in-place target, not as a fresh generated replacement. Preserve the current working app while moving/extracting it.
-- Follow the architecture sequence: workspace first, `apps/folk` split, shared packages, Supabase membership schema, `apps/gita-life`, Vercel/env/domain setup, then sync/audit/Program-scoped contracts.
-- Keep `lib/airtable.ts` and future Airtable helpers server-only. Frontend code must never call Airtable directly or import server-only Airtable/Supabase admin/authz helpers.
-- Preserve current FOLK parity contracts for registration, attendance, session-backed registration, duplicate handling, mobile normalization, session creation, dashboard polling, invite flows, and service-worker queueing.
-- Resolve Program context before every Program-scoped read/write; never trust a client-supplied Program ID for cross-program access.
-- Run `pnpm lint` and `pnpm exec tsc --noEmit` for code changes because Next build ignores TypeScript errors in this repo.
+- Epic: Public Registration And Session Attendance.
+- Epic goal: Public visitors and attendees can register, mark Session attendance by mobile number, recover from unknown-mobile handoff, and rely on offline queueing where supported.
+- Story source: `_bmad-output/planning-artifacts/epics.md` section `Story 3.1: Register Public Program Contacts`.
 
-### Story-Specific Implementation Notes
+### Non-Negotiable Guardrails
 
-- Epic context: Public Registration And Session Attendance: public contacts, attendance, unknown-attendee handoff, and offline queueing.
-- Implementation focus: Preserve `/api/registration` duplicate/mobile behavior while making Contact writes Program-scoped and config-driven.
-- Dependency/decision gate: Depends on Story 0.1 for Program Airtable mapping before production Airtable writes.
-- Preserve: `/attendance` is the active live attendance route; do not rename it to `/api/attendance` unless every client and service-worker dependency is updated.
-- Preserve: Preserve duplicate flags, already-registered states, not-registered session handoff, and 10-digit mobile normalization.
-- Current working application is the source of truth for behavior. The architecture target is a migration/extraction path, not permission to discard existing flows.
+- Resolve Program context before reading or writing Program-scoped data; never trust a client-supplied Program ID for cross-program access.
+- Keep Airtable REST access, Airtable credentials, Supabase service-role operations, and authz server helpers out of client components.
+- Preserve current FOLK parity contracts for registration, attendance, session-backed registration, duplicate handling, mobile normalization, sessions, dashboard polling, invite flows, manage handoff, and service-worker queueing unless this story explicitly changes them.
+- Use stable Program IDs `folk` and `gita-life`; API payloads use `camelCase`, while Supabase tables and columns use `snake_case`.
+- Keep errors safe and actionable. API error responses should use `{ error: string, code?: string }` and must not expose Airtable API details, Supabase service-role errors, tokens, or OTP values.
+- Reuse existing `components/ui/*`, feature components, `lib/utils.ts`, Supabase helpers, and Airtable helper patterns before adding new primitives or route contracts.
+
+### Story-Specific Notes
+
+- Mobile numbers must normalize to the last 10 digits at both client and server boundaries; duplicate behavior must remain safe and user-understandable.
+- Public registration and attendance stay unauthenticated, Program-scoped, duplicate-safe, and compatible with service-worker queueing where the story touches offline behavior.
+- Before implementation, check lower-numbered stories in Epic 3 and any completed readiness gates for decisions this story depends on.
 
 ### Files / Areas To Read Before Editing
 
 - `app/register/page.tsx`
 - `components/registration-form.tsx`
 - `app/api/registration/route.ts`
-- `app/attend/page.tsx`
-- `components/attendance-form.tsx`
-- `app/attendance/route.ts`
+- `lib/airtable.ts`
 - `public/sw.js`
 - `components/offline-indicator.tsx`
 
 ### Architecture Compliance
 
-- App-local routes keep current nouns: `/api/registration`, `/api/contact`, `/api/sessions`, `/attendance`, auth routes, invite routes, and Manage unless a story explicitly migrates all dependents.
-- Program IDs are stable slugs: `folk` and `gita-life`.
-- API payloads use `camelCase`; Supabase tables/columns use `snake_case`; Airtable field labels remain external mapping strings.
-- Shared package targets are `packages/ui`, `packages/program-config`, `packages/data-contracts`, `packages/authz`, `packages/airtable`, and supporting utilities.
-- Do not create a third combined operations app or a single runtime app that multiplexes both Programs.
+- Target architecture is an adapted in-place Turborepo workspace with `apps/folk`, `apps/gita-life`, and shared packages for `ui`, `program-config`, `data-contracts`, `authz`, and `airtable`.
+- Each Program App should deploy as its own Vercel Project with app-specific `NEXT_PUBLIC_SITE_URL`, Supabase redirect URLs, Airtable Base/table env vars, and management interface configuration.
+- Shared staff identity lives in one Supabase project; authorization is Program-scoped through memberships, role cache, Airtable identity mapping, sync state, and audit data.
+- Airtable remains the operational source for Contacts, Attendance, Sessions, Users/Staff, Locations, and management interfaces. Supabase is the runtime authorization mirror, not the primary store for operational records.
+- Admin and role-changing actions fail closed when sync state is stale, unknown, or unresolved by policy.
 
 ### Testing Requirements
 
-- Run `pnpm lint`.
-- Run `pnpm exec tsc --noEmit`.
-- For UI work, manually verify a 360px-wide viewport and keyboard/focus behavior.
-- For auth or server route work, smoke-test authorized, unauthorized, stale/inactive where applicable, and wrong-role access.
-- For Airtable/PWA work, smoke-test success, duplicate/already-existing, validation error, and offline/queued states where applicable.
+- Run `pnpm lint` for product code changes.
+- Run `pnpm exec tsc --noEmit` because this repo can ignore TypeScript errors during Next builds.
+- For UI work, manually verify the affected workflow at 360px width, keyboard navigation, focus visibility, labels, and status messaging.
+- For auth/server-route work, smoke-test authorized, unauthorized, wrong-role, inactive/revoked, and stale-sync paths as applicable.
+- For Airtable/PWA work, smoke-test success, duplicate/already-existing, validation failure, offline/queued, replay, and safe error states as applicable.
+
+### Project Structure Notes
+
+- Current workspace still contains a top-level brownfield app plus a nascent `apps/gita-life` boundary; verify current file locations before moving or importing code.
+- Keep app-local pages and Program-specific copy/assets in the relevant app boundary once the split exists.
+- Shared contracts, Program config, authz helpers, Airtable adapters, and UI primitives should move into packages only when the story owns or requires that extraction.
 
 ### References
 
 - `_bmad-output/planning-artifacts/epics.md`
+- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md`
 - `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/architecture.md`
 - `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/addendum.md`
-- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md`
 - `_bmad-output/project-context.md`
-- `app/register/page.tsx`
-- `components/registration-form.tsx`
-- `app/api/registration/route.ts`
-- `app/attend/page.tsx`
-- `components/attendance-form.tsx`
-- `app/attendance/route.ts`
-- `public/sw.js`
-- `components/offline-indicator.tsx`
 
 ## Dev Agent Record
 
@@ -122,7 +119,6 @@ And the message does not expose Airtable internals.
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created.
+- Fresh story context generated from current epic and architecture sources.
 
 ### File List
-

@@ -2,115 +2,111 @@
 
 Status: ready-for-dev
 
-<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+<!-- Freshly generated from `_bmad-output/planning-artifacts/epics.md` on 2026-06-13T00:44:20+05:30. -->
 
 ## Story
 
 As an authorized Admin or Preacher,
 I want to open the configured Airtable management interface,
-So that deeper operational review remains available when needed.
+so that deeper operational review remains available when needed.
 
 ## Acceptance Criteria
 
 1. Given an active Admin or permitted Preacher opens Manage
-When the route authorizes the request
-Then it verifies active Program membership and role server-side
-And it redirects only to the active Program's configured Airtable Interface URL.
+   When the route authorizes the request
+   Then it verifies active Program membership and role server-side
+   And it redirects only to the active Program's configured Airtable Interface URL.
 2. Given an active Volunteer opens Manage
-When server authorization runs
-Then access is denied
-And no Airtable Interface URL is returned to the browser.
+   When server authorization runs
+   Then access is denied
+   And no Airtable Interface URL is returned to the browser.
 3. Given an unauthenticated or inactive user opens Manage
-When the route handles the request
-Then the user is redirected or shown a safe denial state
-And no Program operational data is exposed.
+   When the route handles the request
+   Then the user is redirected or shown a safe denial state
+   And no Program operational data is exposed.
 4. Given the active Program's Airtable Interface URL is missing or invalid
-When an authorized staff user opens Manage
-Then the app shows a clear unavailable state
-And the issue is logged for operators without exposing secret environment values.
+   When an authorized staff user opens Manage
+   Then the app shows a clear unavailable state
+   And the issue is logged for operators without exposing secret environment values.
 5. Given management links are configured for both Programs
-When Gita Life and FOLK users open Manage from their respective apps
-Then each user lands only in the matching Program's Airtable management surface
-And cross-program access requires explicit permission checks.
+   When Gita Life and FOLK users open Manage from their respective apps
+   Then each user lands only in the matching Program's Airtable management surface
+   And cross-program access requires explicit permission checks.
 
 ## Tasks / Subtasks
 
-- [ ] Read and protect the existing brownfield behavior before implementation (AC: 1-5)
-  - [ ] Open every listed UPDATE file before editing and note current route/component behavior.
-  - [ ] Confirm the work follows the in-place Turborepo migration sequence rather than replacing the app.
-- [ ] Implement `Open Airtable Management Handoff Safely` according to the acceptance criteria (AC: 1-5)
-  - [ ] Keep Program context explicit in server-side reads/writes and avoid unscoped cross-program data paths.
-  - [ ] Reuse existing components/helpers before adding new primitives or route contracts.
-- [ ] Keep server-only integration boundaries intact (AC: 1-5)
-  - [ ] Do not import Airtable, Supabase admin, or authz server helpers into client components.
-- [ ] Preserve existing FOLK parity API response shapes where this story touches active flows
-  - [ ] Keep `{ error: string, code?: string }` errors and existing duplicate/queued flags where applicable.
+- [ ] Re-read the source story and dependent decisions before implementation (AC: 1, 2, 3, 4, 5)
+  - [ ] Confirm unresolved DD gates are resolved or explicitly waived where this story depends on them.
+  - [ ] Identify every existing route/component/helper listed below that will be updated and read it before editing.
+- [ ] Implement `Open Airtable Management Handoff Safely` according to the acceptance criteria (AC: 1, 2, 3, 4, 5)
+  - [ ] Keep Program context explicit at every server boundary.
+  - [ ] Reuse existing helpers, contracts, UI primitives, and route patterns before adding new abstractions.
+  - [ ] Preserve current FOLK behavior unless the acceptance criteria explicitly require a change.
+- [ ] Validate privileged route authorization server-side and keep user-facing failures actionable but non-sensitive.
 - [ ] Verify the implementation
-  - [ ] Run `pnpm lint` and `pnpm exec tsc --noEmit` for code changes.
-  - [ ] Manually smoke-test the affected flow on a 360px-wide viewport when UI or route behavior changes.
+  - [ ] Run required lint/type checks for product code changes.
+  - [ ] Record manual smoke-test notes for affected staff/public flows.
 
 ## Dev Notes
 
-### Non-Negotiable Brownfield Guardrails
+### Epic Context
 
-- Use the Turborepo workspace as an adapted in-place target, not as a fresh generated replacement. Preserve the current working app while moving/extracting it.
-- Follow the architecture sequence: workspace first, `apps/folk` split, shared packages, Supabase membership schema, `apps/gita-life`, Vercel/env/domain setup, then sync/audit/Program-scoped contracts.
-- Keep `lib/airtable.ts` and future Airtable helpers server-only. Frontend code must never call Airtable directly or import server-only Airtable/Supabase admin/authz helpers.
-- Preserve current FOLK parity contracts for registration, attendance, session-backed registration, duplicate handling, mobile normalization, session creation, dashboard polling, invite flows, and service-worker queueing.
-- Resolve Program context before every Program-scoped read/write; never trust a client-supplied Program ID for cross-program access.
-- Run `pnpm lint` and `pnpm exec tsc --noEmit` for code changes because Next build ignores TypeScript errors in this repo.
+- Epic: Staff Administration And Airtable Handoff.
+- Epic goal: Admins can invite staff, manage role/location access details, create locations inline, audit invite attempts, and authorized staff can open the Airtable management surface safely.
+- Story source: `_bmad-output/planning-artifacts/epics.md` section `Story 6.4: Open Airtable Management Handoff Safely`.
 
-### Story-Specific Implementation Notes
+### Non-Negotiable Guardrails
 
-- Epic context: Staff Administration And Airtable Handoff: staff invites, location management, Volunteer invite support, and Airtable handoff.
-- Implementation focus: Preserve Manage handoff but redirect only to the active Program's configured Airtable Interface after server role checks.
-- Dependency/decision gate: Depends on Story 2.5 Program management URL config and role guards from Story 2.2.
-- Preserve: Invite flows must keep Supabase service-role access server-only and must log safe invite outcomes.
-- Preserve: Manage links are privileged server-side redirects; do not expose configured Airtable management URLs to unauthorized users.
-- Current working application is the source of truth for behavior. The architecture target is a migration/extraction path, not permission to discard existing flows.
+- Resolve Program context before reading or writing Program-scoped data; never trust a client-supplied Program ID for cross-program access.
+- Keep Airtable REST access, Airtable credentials, Supabase service-role operations, and authz server helpers out of client components.
+- Preserve current FOLK parity contracts for registration, attendance, session-backed registration, duplicate handling, mobile normalization, sessions, dashboard polling, invite flows, manage handoff, and service-worker queueing unless this story explicitly changes them.
+- Use stable Program IDs `folk` and `gita-life`; API payloads use `camelCase`, while Supabase tables and columns use `snake_case`.
+- Keep errors safe and actionable. API error responses should use `{ error: string, code?: string }` and must not expose Airtable API details, Supabase service-role errors, tokens, or OTP values.
+- Reuse existing `components/ui/*`, feature components, `lib/utils.ts`, Supabase helpers, and Airtable helper patterns before adding new primitives or route contracts.
+
+### Story-Specific Notes
+
+- Airtable IDs and field labels may be documented in server/planning artifacts, but tokens and secrets must never be committed or exposed to client-readable payloads.
+- Invite and management flows are privileged surfaces; validate roles, locations, assigned Preacher rules, logging, and safe error messages server-side.
+- Before implementation, check lower-numbered stories in Epic 6 and any completed readiness gates for decisions this story depends on.
 
 ### Files / Areas To Read Before Editing
 
-- `app/admin/invite/page.tsx`
-- `components/invite-user-form.tsx`
-- `app/api/admin/invite-user/route.ts`
-- `app/api/admin/locations/route.ts`
-- `app/volunteers/page.tsx`
-- `app/api/volunteers/invite/route.ts`
 - `app/manage/page.tsx`
-- `lib/invite-log.ts`
+- `lib/authz.ts`
+- `lib/airtable.ts`
+- `packages/program-config/**`
+- `app/admin/page.tsx`
 
 ### Architecture Compliance
 
-- App-local routes keep current nouns: `/api/registration`, `/api/contact`, `/api/sessions`, `/attendance`, auth routes, invite routes, and Manage unless a story explicitly migrates all dependents.
-- Program IDs are stable slugs: `folk` and `gita-life`.
-- API payloads use `camelCase`; Supabase tables/columns use `snake_case`; Airtable field labels remain external mapping strings.
-- Shared package targets are `packages/ui`, `packages/program-config`, `packages/data-contracts`, `packages/authz`, `packages/airtable`, and supporting utilities.
-- Do not create a third combined operations app or a single runtime app that multiplexes both Programs.
+- Target architecture is an adapted in-place Turborepo workspace with `apps/folk`, `apps/gita-life`, and shared packages for `ui`, `program-config`, `data-contracts`, `authz`, and `airtable`.
+- Each Program App should deploy as its own Vercel Project with app-specific `NEXT_PUBLIC_SITE_URL`, Supabase redirect URLs, Airtable Base/table env vars, and management interface configuration.
+- Shared staff identity lives in one Supabase project; authorization is Program-scoped through memberships, role cache, Airtable identity mapping, sync state, and audit data.
+- Airtable remains the operational source for Contacts, Attendance, Sessions, Users/Staff, Locations, and management interfaces. Supabase is the runtime authorization mirror, not the primary store for operational records.
+- Admin and role-changing actions fail closed when sync state is stale, unknown, or unresolved by policy.
 
 ### Testing Requirements
 
-- Run `pnpm lint`.
-- Run `pnpm exec tsc --noEmit`.
-- For UI work, manually verify a 360px-wide viewport and keyboard/focus behavior.
-- For auth or server route work, smoke-test authorized, unauthorized, stale/inactive where applicable, and wrong-role access.
-- For Airtable/PWA work, smoke-test success, duplicate/already-existing, validation error, and offline/queued states where applicable.
+- Run `pnpm lint` for product code changes.
+- Run `pnpm exec tsc --noEmit` because this repo can ignore TypeScript errors during Next builds.
+- For UI work, manually verify the affected workflow at 360px width, keyboard navigation, focus visibility, labels, and status messaging.
+- For auth/server-route work, smoke-test authorized, unauthorized, wrong-role, inactive/revoked, and stale-sync paths as applicable.
+- For Airtable/PWA work, smoke-test success, duplicate/already-existing, validation failure, offline/queued, replay, and safe error states as applicable.
+
+### Project Structure Notes
+
+- Current workspace still contains a top-level brownfield app plus a nascent `apps/gita-life` boundary; verify current file locations before moving or importing code.
+- Keep app-local pages and Program-specific copy/assets in the relevant app boundary once the split exists.
+- Shared contracts, Program config, authz helpers, Airtable adapters, and UI primitives should move into packages only when the story owns or requires that extraction.
 
 ### References
 
 - `_bmad-output/planning-artifacts/epics.md`
+- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md`
 - `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/architecture.md`
 - `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/addendum.md`
-- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md`
 - `_bmad-output/project-context.md`
-- `app/admin/invite/page.tsx`
-- `components/invite-user-form.tsx`
-- `app/api/admin/invite-user/route.ts`
-- `app/api/admin/locations/route.ts`
-- `app/volunteers/page.tsx`
-- `app/api/volunteers/invite/route.ts`
-- `app/manage/page.tsx`
-- `lib/invite-log.ts`
 
 ## Dev Agent Record
 
@@ -122,7 +118,6 @@ And cross-program access requires explicit permission checks.
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created.
+- Fresh story context generated from current epic and architecture sources.
 
 ### File List
-

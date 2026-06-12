@@ -1,5 +1,5 @@
 # generated: 2026-06-12T21:29:56+05:30
-# last_updated: 2026-06-12T22:48:28+05:30
+# last_updated: 2026-06-13T00:45:25+05:30
 # project: folk_hkmc
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-06-12T21:29:56+05:30
-last_updated: 2026-06-12T22:48:28+05:30
+last_updated: 2026-06-13T00:45:25+05:30
 project: folk_hkmc
 project_key: NOKEY
 tracking_system: file-system

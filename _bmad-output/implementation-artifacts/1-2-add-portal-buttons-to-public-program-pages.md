@@ -2,110 +2,110 @@
 
 Status: ready-for-dev
 
-<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+<!-- Freshly generated from `_bmad-output/planning-artifacts/epics.md` on 2026-06-13T00:44:20+05:30. -->
 
 ## Story
 
 As an existing staff user,
 I want a clear Portal button on each public Program page,
-So that I can reach the correct staff portal without distracting new visitors.
+so that I can reach the correct staff portal without distracting new visitors.
 
 ## Acceptance Criteria
 
 1. Given the public Gita Life page exists in this repo or its ownership has been confirmed
-When the page renders
-Then it includes a `Gita Life Portal` entry that links to the configured Gita Life Program App URL
-And the Portal entry is visually secondary to public discovery, inquiry, and registration actions.
+   When the page renders
+   Then it includes a `Gita Life Portal` entry that links to the configured Gita Life Program App URL
+   And the Portal entry is visually secondary to public discovery, inquiry, and registration actions.
 2. Given the public FOLK page exists in this repo or its ownership has been confirmed
-When the page renders
-Then it includes a `FOLK Portal` entry that links to the configured FOLK Program App URL
-And the Portal entry is visually secondary to public discovery, inquiry, and registration actions.
+   When the page renders
+   Then it includes a `FOLK Portal` entry that links to the configured FOLK Program App URL
+   And the Portal entry is visually secondary to public discovery, inquiry, and registration actions.
 3. Given a Portal button is displayed on either public Program page
-When the user views it on desktop or mobile
-Then the label uses public-friendly Portal language
-And it does not use internal terms such as backend, admin, or operations.
+   When the user views it on desktop or mobile
+   Then the label uses public-friendly Portal language
+   And it does not use internal terms such as backend, admin, or operations.
 4. Given Program App URLs differ by environment
-When the Portal button href is resolved
-Then it comes from Program configuration or environment-backed app configuration
-And it does not hard-code production-only domains in reusable UI.
+   When the Portal button href is resolved
+   Then it comes from Program configuration or environment-backed app configuration
+   And it does not hard-code production-only domains in reusable UI.
 5. Given the page is used by keyboard and screen-reader users
-When the Portal entry receives focus or is announced
-Then it has an accessible name matching the Program-specific Portal label
-And focus visibility meets the shared portal accessibility expectations.
+   When the Portal entry receives focus or is announced
+   Then it has an accessible name matching the Program-specific Portal label
+   And focus visibility meets the shared portal accessibility expectations.
 
 ## Tasks / Subtasks
 
-- [ ] Read and protect the existing brownfield behavior before implementation (AC: 1-5)
-  - [ ] Open every listed UPDATE file before editing and note current route/component behavior.
-  - [ ] Confirm the work follows the in-place Turborepo migration sequence rather than replacing the app.
-- [ ] Implement `Add Portal Buttons To Public Program Pages` according to the acceptance criteria (AC: 1-5)
-  - [ ] Keep Program context explicit in server-side reads/writes and avoid unscoped cross-program data paths.
-  - [ ] Reuse existing components/helpers before adding new primitives or route contracts.
+- [ ] Re-read the source story and dependent decisions before implementation (AC: 1, 2, 3, 4, 5)
+  - [ ] Confirm unresolved DD gates are resolved or explicitly waived where this story depends on them.
+  - [ ] Identify every existing route/component/helper listed below that will be updated and read it before editing.
+- [ ] Implement `Add Portal Buttons To Public Program Pages` according to the acceptance criteria (AC: 1, 2, 3, 4, 5)
+  - [ ] Keep Program context explicit at every server boundary.
+  - [ ] Reuse existing helpers, contracts, UI primitives, and route patterns before adding new abstractions.
+  - [ ] Preserve current FOLK behavior unless the acceptance criteria explicitly require a change.
+- [ ] Verify mobile, keyboard, focus, and status-message behavior for every changed user-facing surface.
 - [ ] Verify the implementation
-  - [ ] Run `pnpm lint` and `pnpm exec tsc --noEmit` for code changes.
-  - [ ] Manually smoke-test the affected flow on a 360px-wide viewport when UI or route behavior changes.
+  - [ ] Run required lint/type checks for product code changes.
+  - [ ] Record manual smoke-test notes for affected staff/public flows.
 
 ## Dev Notes
 
-### Non-Negotiable Brownfield Guardrails
+### Epic Context
 
-- Use the Turborepo workspace as an adapted in-place target, not as a fresh generated replacement. Preserve the current working app while moving/extracting it.
-- Follow the architecture sequence: workspace first, `apps/folk` split, shared packages, Supabase membership schema, `apps/gita-life`, Vercel/env/domain setup, then sync/audit/Program-scoped contracts.
-- Keep `lib/airtable.ts` and future Airtable helpers server-only. Frontend code must never call Airtable directly or import server-only Airtable/Supabase admin/authz helpers.
-- Preserve current FOLK parity contracts for registration, attendance, session-backed registration, duplicate handling, mobile normalization, session creation, dashboard polling, invite flows, and service-worker queueing.
-- Resolve Program context before every Program-scoped read/write; never trust a client-supplied Program ID for cross-program access.
-- Run `pnpm lint` and `pnpm exec tsc --noEmit` for code changes because Next build ignores TypeScript errors in this repo.
+- Epic: Branded Program Portal Entry.
+- Epic goal: Public visitors and staff can reach the correct Gita Life or FOLK portal entry without disrupting public discovery and registration.
+- Story source: `_bmad-output/planning-artifacts/epics.md` section `Story 1.2: Add Portal Buttons To Public Program Pages`.
 
-### Story-Specific Implementation Notes
+### Non-Negotiable Guardrails
 
-- Epic context: Branded Program Portal Entry: introduce app boundaries and portal entry while preserving current public/staff behavior.
-- Implementation focus: Add public Portal entry points from Program pages to configured Program App URLs; keep public discovery/registration primary.
-- Preserve: Current FOLK public, staff, auth, registration, contact, sessions, dashboard, invite, manage, PWA, and `/attendance` behavior must remain route-compatible.
-- Preserve: Use the Turborepo starter only as a reference; migrate this repo in place instead of replacing the working app with generated scaffold code.
-- Current working application is the source of truth for behavior. The architecture target is a migration/extraction path, not permission to discard existing flows.
+- Resolve Program context before reading or writing Program-scoped data; never trust a client-supplied Program ID for cross-program access.
+- Keep Airtable REST access, Airtable credentials, Supabase service-role operations, and authz server helpers out of client components.
+- Preserve current FOLK parity contracts for registration, attendance, session-backed registration, duplicate handling, mobile normalization, sessions, dashboard polling, invite flows, manage handoff, and service-worker queueing unless this story explicitly changes them.
+- Use stable Program IDs `folk` and `gita-life`; API payloads use `camelCase`, while Supabase tables and columns use `snake_case`.
+- Keep errors safe and actionable. API error responses should use `{ error: string, code?: string }` and must not expose Airtable API details, Supabase service-role errors, tokens, or OTP values.
+- Reuse existing `components/ui/*`, feature components, `lib/utils.ts`, Supabase helpers, and Airtable helper patterns before adding new primitives or route contracts.
+
+### Story-Specific Notes
+
+- This epic changes app boundaries and user entry points; protect existing FOLK operational routes while adding Program-specific shells and labels.
+- Before implementation, check lower-numbered stories in Epic 1 and any completed readiness gates for decisions this story depends on.
 
 ### Files / Areas To Read Before Editing
 
-- `package.json`
-- `pnpm-lock.yaml`
-- `next.config.mjs`
-- `tsconfig.json`
-- `app/**`
-- `components/**`
-- `public/**`
-- `proxy.ts`
+- `app/page.tsx`
+- `app/**/page.tsx`
+- `components/header.tsx`
+- `packages/program-config/**`
+- `app/globals.css`
 
 ### Architecture Compliance
 
-- App-local routes keep current nouns: `/api/registration`, `/api/contact`, `/api/sessions`, `/attendance`, auth routes, invite routes, and Manage unless a story explicitly migrates all dependents.
-- Program IDs are stable slugs: `folk` and `gita-life`.
-- API payloads use `camelCase`; Supabase tables/columns use `snake_case`; Airtable field labels remain external mapping strings.
-- Shared package targets are `packages/ui`, `packages/program-config`, `packages/data-contracts`, `packages/authz`, `packages/airtable`, and supporting utilities.
-- Do not create a third combined operations app or a single runtime app that multiplexes both Programs.
+- Target architecture is an adapted in-place Turborepo workspace with `apps/folk`, `apps/gita-life`, and shared packages for `ui`, `program-config`, `data-contracts`, `authz`, and `airtable`.
+- Each Program App should deploy as its own Vercel Project with app-specific `NEXT_PUBLIC_SITE_URL`, Supabase redirect URLs, Airtable Base/table env vars, and management interface configuration.
+- Shared staff identity lives in one Supabase project; authorization is Program-scoped through memberships, role cache, Airtable identity mapping, sync state, and audit data.
+- Airtable remains the operational source for Contacts, Attendance, Sessions, Users/Staff, Locations, and management interfaces. Supabase is the runtime authorization mirror, not the primary store for operational records.
+- Admin and role-changing actions fail closed when sync state is stale, unknown, or unresolved by policy.
 
 ### Testing Requirements
 
-- Run `pnpm lint`.
-- Run `pnpm exec tsc --noEmit`.
-- For UI work, manually verify a 360px-wide viewport and keyboard/focus behavior.
-- For auth or server route work, smoke-test authorized, unauthorized, stale/inactive where applicable, and wrong-role access.
-- For Airtable/PWA work, smoke-test success, duplicate/already-existing, validation error, and offline/queued states where applicable.
+- Run `pnpm lint` for product code changes.
+- Run `pnpm exec tsc --noEmit` because this repo can ignore TypeScript errors during Next builds.
+- For UI work, manually verify the affected workflow at 360px width, keyboard navigation, focus visibility, labels, and status messaging.
+- For auth/server-route work, smoke-test authorized, unauthorized, wrong-role, inactive/revoked, and stale-sync paths as applicable.
+- For Airtable/PWA work, smoke-test success, duplicate/already-existing, validation failure, offline/queued, replay, and safe error states as applicable.
+
+### Project Structure Notes
+
+- Current workspace still contains a top-level brownfield app plus a nascent `apps/gita-life` boundary; verify current file locations before moving or importing code.
+- Keep app-local pages and Program-specific copy/assets in the relevant app boundary once the split exists.
+- Shared contracts, Program config, authz helpers, Airtable adapters, and UI primitives should move into packages only when the story owns or requires that extraction.
 
 ### References
 
 - `_bmad-output/planning-artifacts/epics.md`
+- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md`
 - `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/architecture.md`
 - `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/addendum.md`
-- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md`
 - `_bmad-output/project-context.md`
-- `package.json`
-- `pnpm-lock.yaml`
-- `next.config.mjs`
-- `tsconfig.json`
-- `app/**`
-- `components/**`
-- `public/**`
-- `proxy.ts`
 
 ## Dev Agent Record
 
@@ -117,7 +117,6 @@ And focus visibility meets the shared portal accessibility expectations.
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created.
+- Fresh story context generated from current epic and architecture sources.
 
 ### File List
-

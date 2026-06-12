@@ -2,93 +2,106 @@
 
 Status: ready-for-dev
 
-<!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
+<!-- Freshly generated from `_bmad-output/planning-artifacts/epics.md` on 2026-06-13T00:44:20+05:30. -->
 
 ## Story
 
 As an implementation agent,
 I want revocation threshold, login method, and launch domain decisions recorded,
-So that auth, stale-sync, redirects, and deployment configuration can be accepted cleanly.
+so that auth, stale-sync, redirects, and deployment configuration can be accepted cleanly.
 
 ## Acceptance Criteria
 
 1. Given revocation and stale-sync behavior gates staff authorization
-When DD-3 is resolved
-Then the approved revocation stale-sync threshold is recorded in product or architecture configuration guidance
-And dependent access-control stories can fail closed against a concrete threshold.
+   When DD-3 is resolved
+   Then the approved revocation stale-sync threshold is recorded in product or architecture configuration guidance
+   And dependent access-control stories can fail closed against a concrete threshold.
 2. Given the architecture has selected the staff login method
-When DD-6 is recorded in the backlog
-Then Supabase email OTP/invite is the accepted implementation default unless the product owner changes it
-And Story 2.3 does not reopen login-method selection during implementation.
+   When DD-6 is recorded in the backlog
+   Then Supabase email OTP/invite is the accepted implementation default unless the product owner changes it
+   And Story 2.3 does not reopen login-method selection during implementation.
 3. Given Vercel, Supabase redirects, and generated attendance links require launch URLs
-When DD-10 is resolved or temporarily waived
-Then final or interim production domains are recorded for Vercel, Supabase redirect URLs, and `NEXT_PUBLIC_SITE_URL` planning
-And dependent deployment setup and Story 5.1 can be accepted against documented values.
+   When DD-10 is resolved or temporarily waived
+   Then final or interim production domains are recorded for Vercel, Supabase redirect URLs, and `NEXT_PUBLIC_SITE_URL` planning
+   And dependent deployment setup and Story 5.1 can be accepted against documented values.
 4. Given dependent implementation stories need access and deployment decisions
-When stories 1.1b, 2.3, 2.4, 5.1, or deployment setup are assigned
-Then DD-3, DD-6, and DD-10 are complete where applicable or explicitly waived with acceptance risk.
+   When stories 1.1b, 2.3, 2.4, 5.1, or deployment setup are assigned
+   Then DD-3, DD-6, and DD-10 are complete where applicable or explicitly waived with acceptance risk.
 
 ## Tasks / Subtasks
 
-- [ ] Read and protect the existing brownfield behavior before implementation (AC: 1-4)
-  - [ ] Open every listed UPDATE file before editing and note current route/component behavior.
-  - [ ] Confirm the work follows the in-place Turborepo migration sequence rather than replacing the app.
-- [ ] Implement `Resolve Access And Auth Gates DD-3, DD-6, DD-10` according to the acceptance criteria (AC: 1-4)
-  - [ ] Keep Program context explicit in server-side reads/writes and avoid unscoped cross-program data paths.
-  - [ ] Reuse existing components/helpers before adding new primitives or route contracts.
-- [ ] Update planning artifacts with the resolved decision or explicit waiver (AC: 1-3)
-  - [ ] Include owner, date, accepted values, dependent stories unblocked, and acceptance risk if waived.
+- [ ] Produce or update the decision artifact for `Resolve Access And Auth Gates DD-3, DD-6, DD-10` (AC: 1, 2, 3, 4)
+  - [ ] Record decision status, owner, date, source of truth, dependent stories, waiver expiry if applicable, and acceptance risk.
+  - [ ] Keep secrets out of docs and client-readable config.
+- [ ] Update dependent planning references without pretending unresolved decisions are complete
+  - [ ] Leave blocking dependencies visible when a gate is only waived.
 - [ ] Verify the implementation
-  - [ ] Run `pnpm lint` and `pnpm exec tsc --noEmit` for code changes.
-  - [ ] Manually smoke-test the affected flow on a 360px-wide viewport when UI or route behavior changes.
+  - [ ] Run required lint/type checks for product code changes.
+  - [ ] Record manual smoke-test notes for affected staff/public flows.
 
 ## Dev Notes
 
-### Non-Negotiable Brownfield Guardrails
+### Epic Context
 
-- Use the Turborepo workspace as an adapted in-place target, not as a fresh generated replacement. Preserve the current working app while moving/extracting it.
-- Follow the architecture sequence: workspace first, `apps/folk` split, shared packages, Supabase membership schema, `apps/gita-life`, Vercel/env/domain setup, then sync/audit/Program-scoped contracts.
-- Keep `lib/airtable.ts` and future Airtable helpers server-only. Frontend code must never call Airtable directly or import server-only Airtable/Supabase admin/authz helpers.
-- Preserve current FOLK parity contracts for registration, attendance, session-backed registration, duplicate handling, mobile normalization, session creation, dashboard polling, invite flows, and service-worker queueing.
-- Resolve Program context before every Program-scoped read/write; never trust a client-supplied Program ID for cross-program access.
-- Run `pnpm lint` and `pnpm exec tsc --noEmit` for code changes because Next build ignores TypeScript errors in this repo.
+- Epic: Implementation Readiness Gates.
+- Epic goal: Decision gates that must be resolved or explicitly waived before dependent implementation stories proceed.
+- Story source: `_bmad-output/planning-artifacts/epics.md` section `Story 0.2: Resolve Access And Auth Gates DD-3, DD-6, DD-10`.
 
-### Story-Specific Implementation Notes
+### Non-Negotiable Guardrails
 
-- Epic context: Implementation readiness gates that remove deferred-decision ambiguity before code work proceeds.
-- Implementation focus: Record revocation stale-sync threshold, Supabase email OTP/invite login default, and final/interim domain values without implementing auth flows.
-- Dependency/decision gate: Decision gate for DD-3, DD-6, and DD-10. Unblocks stories 1.1b, 2.3, 2.4, 5.1, and deployment setup.
-- Current working application is the source of truth for behavior. The architecture target is a migration/extraction path, not permission to discard existing flows.
+- Resolve Program context before reading or writing Program-scoped data; never trust a client-supplied Program ID for cross-program access.
+- Keep Airtable REST access, Airtable credentials, Supabase service-role operations, and authz server helpers out of client components.
+- Preserve current FOLK parity contracts for registration, attendance, session-backed registration, duplicate handling, mobile normalization, sessions, dashboard polling, invite flows, manage handoff, and service-worker queueing unless this story explicitly changes them.
+- Use stable Program IDs `folk` and `gita-life`; API payloads use `camelCase`, while Supabase tables and columns use `snake_case`.
+- Keep errors safe and actionable. API error responses should use `{ error: string, code?: string }` and must not expose Airtable API details, Supabase service-role errors, tokens, or OTP values.
+- Reuse existing `components/ui/*`, feature components, `lib/utils.ts`, Supabase helpers, and Airtable helper patterns before adding new primitives or route contracts.
+
+### Story-Specific Notes
+
+- This is an implementation readiness gate. Prefer durable planning/configuration artifacts and explicit waiver language over product-code changes unless the acceptance criteria require code updates.
+- Record owner, date, decision status, source of truth, dependent stories allowed to proceed, expiry conditions, and acceptance risk for any unresolved gate.
+- Do not unblock dependent implementation stories silently; unresolved gates must remain visible in the artifact.
+- This readiness-gate story may unblock later implementation stories only through a resolved decision or explicit waiver.
 
 ### Files / Areas To Read Before Editing
 
-- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/*.md`
-- `_bmad-output/planning-artifacts/epics.md`
+- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/addendum.md`
+- `app/login/**`
+- `app/auth/**`
+- `app/api/auth/**`
+- `lib/authz.ts`
+- `lib/supabase/**`
+- `proxy.ts`
 
 ### Architecture Compliance
 
-- App-local routes keep current nouns: `/api/registration`, `/api/contact`, `/api/sessions`, `/attendance`, auth routes, invite routes, and Manage unless a story explicitly migrates all dependents.
-- Program IDs are stable slugs: `folk` and `gita-life`.
-- API payloads use `camelCase`; Supabase tables/columns use `snake_case`; Airtable field labels remain external mapping strings.
-- Shared package targets are `packages/ui`, `packages/program-config`, `packages/data-contracts`, `packages/authz`, `packages/airtable`, and supporting utilities.
-- Do not create a third combined operations app or a single runtime app that multiplexes both Programs.
+- Target architecture is an adapted in-place Turborepo workspace with `apps/folk`, `apps/gita-life`, and shared packages for `ui`, `program-config`, `data-contracts`, `authz`, and `airtable`.
+- Each Program App should deploy as its own Vercel Project with app-specific `NEXT_PUBLIC_SITE_URL`, Supabase redirect URLs, Airtable Base/table env vars, and management interface configuration.
+- Shared staff identity lives in one Supabase project; authorization is Program-scoped through memberships, role cache, Airtable identity mapping, sync state, and audit data.
+- Airtable remains the operational source for Contacts, Attendance, Sessions, Users/Staff, Locations, and management interfaces. Supabase is the runtime authorization mirror, not the primary store for operational records.
+- Admin and role-changing actions fail closed when sync state is stale, unknown, or unresolved by policy.
 
 ### Testing Requirements
 
-- Run `pnpm lint`.
-- Run `pnpm exec tsc --noEmit`.
-- For UI work, manually verify a 360px-wide viewport and keyboard/focus behavior.
-- For auth or server route work, smoke-test authorized, unauthorized, stale/inactive where applicable, and wrong-role access.
-- For Airtable/PWA work, smoke-test success, duplicate/already-existing, validation error, and offline/queued states where applicable.
+- Run `pnpm lint` for product code changes.
+- Run `pnpm exec tsc --noEmit` because this repo can ignore TypeScript errors during Next builds.
+- For UI work, manually verify the affected workflow at 360px width, keyboard navigation, focus visibility, labels, and status messaging.
+- For auth/server-route work, smoke-test authorized, unauthorized, wrong-role, inactive/revoked, and stale-sync paths as applicable.
+- For Airtable/PWA work, smoke-test success, duplicate/already-existing, validation failure, offline/queued, replay, and safe error states as applicable.
+
+### Project Structure Notes
+
+- Current workspace still contains a top-level brownfield app plus a nascent `apps/gita-life` boundary; verify current file locations before moving or importing code.
+- Keep app-local pages and Program-specific copy/assets in the relevant app boundary once the split exists.
+- Shared contracts, Program config, authz helpers, Airtable adapters, and UI primitives should move into packages only when the story owns or requires that extraction.
 
 ### References
 
 - `_bmad-output/planning-artifacts/epics.md`
+- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md`
 - `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/architecture.md`
 - `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/addendum.md`
-- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/prd.md`
 - `_bmad-output/project-context.md`
-- `_bmad-output/planning-artifacts/prds/prd-gita-life-operations/*.md`
 
 ## Dev Agent Record
 
@@ -100,7 +113,6 @@ Then DD-3, DD-6, and DD-10 are complete where applicable or explicitly waived wi
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created.
+- Fresh story context generated from current epic and architecture sources.
 
 ### File List
-
