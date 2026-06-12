@@ -1,0 +1,84 @@
+# generated: 2026-06-12T21:29:56+05:30
+# last_updated: 2026-06-12T22:48:28+05:30
+# project: folk_hkmc
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: /home/dwarakadas/projects/hkmc/folk_hkmc/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-06-12T21:29:56+05:30
+last_updated: 2026-06-12T22:48:28+05:30
+project: folk_hkmc
+project_key: NOKEY
+tracking_system: file-system
+story_location: /home/dwarakadas/projects/hkmc/folk_hkmc/_bmad-output/implementation-artifacts
+
+development_status:
+  0-1-resolve-airtable-schema-gate-dd-1: ready-for-dev
+  0-2-resolve-access-and-auth-gates-dd-3-dd-6-dd-10: ready-for-dev
+  0-3-resolve-contact-privacy-and-retention-gates-dd-8-dd-9: ready-for-dev
+  epic-1: in-progress
+  1-1a-move-current-folk-runtime-into-the-folk-program-app-boundary: ready-for-dev
+  1-1b-add-gita-life-app-shell-and-shared-program-configuration: ready-for-dev
+  1-2-add-portal-buttons-to-public-program-pages: ready-for-dev
+  1-3-build-program-branded-landing-pages: ready-for-dev
+  epic-1-retrospective: optional
+  epic-2: in-progress
+  2-1-create-program-scoped-staff-identity-schema: ready-for-dev
+  2-2-resolve-program-aware-staff-context: ready-for-dev
+  2-3-implement-staff-sign-in-and-role-routing: ready-for-dev
+  2-4-enforce-revocation-and-stale-sync-policy: ready-for-dev
+  2-5-configure-program-airtable-bases-and-credentials: ready-for-dev
+  2-6-surface-critical-sync-and-audit-status: ready-for-dev
+  epic-2-retrospective: optional
+  epic-3: in-progress
+  3-1-register-public-program-contacts: ready-for-dev
+  3-2-capture-attendance-from-session-links: ready-for-dev
+  3-3-hand-unknown-attendees-into-session-backed-registration: ready-for-dev
+  3-4-queue-and-replay-public-registration-and-attendance: ready-for-dev
+  epic-3-retrospective: optional
+  epic-4: in-progress
+  4-1-create-program-contacts-from-authenticated-staff: ready-for-dev
+  4-2-enforce-role-based-contact-ownership: ready-for-dev
+  4-3-build-role-safe-staff-contact-ui: ready-for-dev
+  epic-4-retrospective: optional
+  epic-5: in-progress
+  5-1-create-scoped-sessions-with-attendance-urls: ready-for-dev
+  5-2-inspect-sessions-by-staff-scope: ready-for-dev
+  5-3-display-session-qr-and-sharing-tools: ready-for-dev
+  5-4-monitor-live-attendance-with-incremental-refresh: ready-for-dev
+  epic-5-retrospective: optional
+  epic-6: in-progress
+  6-1-invite-program-staff-with-role-guardrails: ready-for-dev
+  6-2-build-admin-invite-and-location-management-ui: ready-for-dev
+  6-3-support-preacher-volunteer-invites: ready-for-dev
+  6-4-open-airtable-management-handoff-safely: ready-for-dev
+  epic-6-retrospective: optional
