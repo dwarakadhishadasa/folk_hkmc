@@ -1,56 +1,47 @@
 # folk_hkmc Documentation Index
 
-**Type:** monolith
-**Primary Language:** TypeScript
-**Architecture:** Client-heavy Next.js App Router web application with Airtable-backed server logic and PWA offline support
-**Last Updated:** 2026-04-23
+**Type:** monolith  
+**Primary Language:** TypeScript  
+**Architecture:** Next.js App Router web application with Supabase staff authentication, Airtable operational data, and PWA offline queueing  
+**Last Updated:** 2026-06-11
+
+## Current State Check
+
+The previous generated docs were last updated on 2026-04-23 and no longer reflected the codebase. The current code now includes Supabase authentication, a local Supabase staff profile bridge, implemented registration/contact/session/admin APIs, role-scoped staff pages, an ESLint setup, and additional operational scripts.
 
 ## Project Overview
 
-`folk_hkmc` is the frontend application for the FOLK Chennai program. It combines a public landing experience, a registration journey, attendance capture, a protected contact-entry flow, and a live attendance dashboard for staff users. The product is implemented as a single Next.js App Router application, with most user-facing logic in client components and a small server surface for attendance operations.
-
-The current system is best understood as a brownfield web monolith with three important architectural characteristics:
-
-- Client-side authentication and route gating for staff experiences
-- Airtable as the operational data store for contacts and attendance
-- Progressive Web App behavior with a service worker and offline POST queueing
+`folk_hkmc` is the FOLK Chennai web application for public registration, session-specific attendance, staff contact capture, live attendance monitoring, and staff invitation workflows. It is a single Next.js 16 App Router application. Supabase handles staff authentication and local authorization profile reads, while Airtable remains the operational system of record for contacts, attendance, sessions, staff users, and locations.
 
 ## Quick Reference
 
-- **Tech Stack:** Next.js 16, React 19, TypeScript, Tailwind CSS v4, shadcn/Radix UI primitives, Airtable REST API
-- **Entry Point:** `app/layout.tsx` and `app/page.tsx`
-- **Architecture Pattern:** Single-part App Router monolith
-- **Primary Data Store:** Airtable base `apprnbZdVhoog9vgG`
-- **Offline Support:** `public/sw.js` + IndexedDB queue in the browser
-- **Package Manager:** `pnpm`
+- **Entry point:** `app/layout.tsx`
+- **Public pages:** `/`, `/register`, `/attend`
+- **Staff pages:** `/contact`, `/sessions`, `/dashboard`, `/volunteers`, `/admin/invite`, `/manage`
+- **Auth:** Supabase email OTP/invite flow with server cookies and `staff_profiles`
+- **Operational store:** Airtable REST API via `lib/airtable.ts`
+- **Local auth bridge:** Supabase tables `staff_profiles` and `invite_log`
+- **Offline/PWA:** `public/sw.js`, `public/manifest.json`, `components/offline-indicator.tsx`
+- **Package manager:** `pnpm`
 
 ## Generated Documentation
 
-### Core Documentation
+- [Executive Deck](./executive-deck.md) - Leadership-facing summary of the current product and risks
+- [Project Overview](./project-overview.md) - Purpose, capabilities, classification, and current-state delta
+- [Architecture](./architecture.md) - Runtime architecture, auth, data flows, and constraints
+- [Source Tree Analysis](./source-tree-analysis.md) - Annotated repository structure and critical files
+- [Component Inventory](./component-inventory.md) - Active UI surfaces, infrastructure components, and legacy leftovers
+- [Development Guide](./development-guide.md) - Local setup, commands, environment, and verification notes
+- [Deployment Guide](./deployment-guide.md) - Deployment prerequisites, secrets, Supabase, Airtable, and PWA concerns
+- [Contribution Guide](./contribution-guide.md) - Branch, PR, owner-review, and local verification workflow
+- [API Contracts](./api-contracts.md) - Implemented route handlers, auth requirements, payloads, and responses
+- [Data Models](./data-models.md) - Airtable records, Supabase tables, auth context, and offline queue shapes
 
-- [Executive Deck](./executive-deck.md) - Non-technical progress deck for leaders and program owners
-- [Project Overview](./project-overview.md) - Executive summary, classification, and high-level technology picture
-- [Source Tree Analysis](./source-tree-analysis.md) - Annotated repository structure and key entry points
-- [Architecture](./architecture.md) - Runtime architecture, flows, constraints, and integration details
-- [Component Inventory](./component-inventory.md) - Reusable, route-specific, and infrastructure UI components
-- [Development Guide](./development-guide.md) - Local setup, commands, credentials, and manual verification notes
-- [API Contracts](./api-contracts.md) - Implemented route contracts plus client-assumed but missing APIs
-- [Data Models](./data-models.md) - Airtable records, local session shapes, offline queue records, and legacy store types
+## Existing Reference Documentation
 
-## Existing Documentation
-
-- [NestJS Backend Reference](./nestjs-backend.md) - Reference notes for a future separate backend implementation
+- [NestJS Backend Reference](./nestjs-backend.md) - Historical/reference notes for a possible separate backend
 
 ## Getting Started
-
-### Prerequisites
-
-- Node.js 20+ recommended
-- `pnpm`
-- Docker Desktop or Docker Engine for local Supabase
-- `AIRTABLE_API_TOKEN` for any flow that touches Airtable-backed server logic
-
-### Setup
 
 ```bash
 pnpm install
@@ -59,35 +50,32 @@ pnpm supabase:env
 pnpm dev
 ```
 
-### Common Commands
+For production-like behavior, provide Airtable table IDs and Supabase credentials from `.env.example`. Do not commit real Airtable tokens or Supabase service-role keys.
+
+## Common Checks
 
 ```bash
-pnpm dev
-pnpm dev:local
-pnpm supabase:reset
+pnpm exec tsc --noEmit
 pnpm lint
 pnpm build
-pnpm start
 ```
 
-### Tests
-
-There is no automated test suite configured in this repository today. Validation is currently manual.
+There is no automated application test suite in this repository today. Use manual smoke checks for staff auth, route redirects, contact creation, session creation, attendance registration, live dashboard refresh, admin/volunteer invites, and offline queueing.
 
 ## For AI-Assisted Development
 
-This documentation is intended to make brownfield planning and implementation safer. Before changing behavior in this app, read:
+Read these first before planning or implementation:
 
-- `architecture.md` for route, auth, Airtable, and offline constraints
+- `architecture.md` for system constraints and auth/data flow
 - `api-contracts.md` before wiring or changing requests
-- `data-models.md` before changing payload shapes or Airtable field assumptions
-- `component-inventory.md` before adding new primitives or duplicating UI
+- `data-models.md` before changing Airtable or Supabase fields
+- `component-inventory.md` before adding or replacing UI
+- `development-guide.md` before running local checks
 
-For brownfield planning artifacts, also see:
+Important current caveats:
 
-- [`_bmad-output/planning-artifacts/prd.md`](../_bmad-output/planning-artifacts/prd.md)
-- [`_bmad-output/planning-artifacts/architecture.md`](../_bmad-output/planning-artifacts/architecture.md)
+- `next.config.mjs` still ignores TypeScript build errors, so run `pnpm exec tsc --noEmit` explicitly.
+- `components/registration-form.tsx`, `components/offline-sync-provider.tsx`, `lib/offline-sync.ts`, and `lib/store.ts` are present but not part of the active mounted runtime path.
+- Staff access is not localStorage-based anymore; Supabase cookies and `staff_profiles` are the source for staff session state.
 
----
-
-Generated as part of the BMAD `document-project` brownfield scan.
+Generated as part of a BMAD `document-project` full rescan on 2026-06-11.

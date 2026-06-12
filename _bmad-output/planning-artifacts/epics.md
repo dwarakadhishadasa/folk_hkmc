@@ -159,7 +159,7 @@ NFR18: Operational errors from Supabase, Airtable, and Vercel deployment/runtime
 - `Contacts.Visible To` is currently read-only lookup data; `Sessions.Visible To` and `Attendance.Visible To` are writable collaborator fields.
 - The active volunteer record observed in MCP did not include `Assigned Preacher`; volunteer contact routing is not production-safe until that relationship is populated or guarded.
 - The existing browser `AuthProvider` role model is lowercase `volunteer`/`preacher`; the target Airtable/Supabase role model is `Admin`/`Preacher`/`Volunteer`.
-- Existing public attendance, registration, contact, dashboard, service worker, and offline behavior should be smoke-tested after route and payload changes.
+- Existing public attendance, registration, contact, dashboard, service worker, and offline behavior should be smoke-tested after route and payload changes.g
 
 ### UX Design Requirements
 

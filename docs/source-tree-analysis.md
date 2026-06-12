@@ -1,170 +1,134 @@
-# folk_hkmc - Source Tree Analysis
+# Source Tree Analysis
 
-**Date:** 2026-04-23
+## Repository Shape
 
-## Overview
-
-This repository is organized as a single web application with supporting BMAD planning assets. The product code is concentrated in `app/`, `components/`, `lib/`, `hooks/`, and `public/`. The rest of the tree mainly supports planning, design artifacts, or generated outputs.
-
-## Complete Directory Structure
+The project is a single Next.js application with supporting BMAD/planning artifacts. Product code lives mainly in `app/`, `components/`, `lib/`, `public/`, `scripts/`, and `supabase/`.
 
 ```text
 folk_hkmc/
-├── app/
-│   ├── attendance/route.ts
-│   ├── attend/page.tsx
-│   ├── contact/page.tsx
-│   ├── dashboard/page.tsx
-│   ├── login/
-│   │   ├── loading.tsx
-│   │   └── page.tsx
-│   ├── register/
-│   │   ├── loading.tsx
-│   │   └── page.tsx
-│   ├── globals.css
-│   ├── layout.tsx
-│   └── page.tsx
+├── app/                         # Next.js App Router pages and route handlers
+│   ├── api/                     # API route handlers under /api
+│   │   ├── admin/               # Admin invite and location routes
+│   │   ├── auth/                # Staff auth helper routes
+│   │   ├── contact/             # Staff contact creation
+│   │   ├── registration/        # Public registration and session-backed attendance
+│   │   ├── sessions/            # Staff session list/create API
+│   │   └── volunteers/          # Volunteer invite API
+│   ├── attendance/route.ts      # Public POST + protected staff GET attendance API at /attendance
+│   ├── auth/                    # Supabase callback, hash callback, signout, error UI
+│   ├── contact/                 # Staff contact capture page
+│   ├── dashboard/               # Staff live attendance dashboard
+│   ├── sessions/                # Staff session manager page
+│   ├── volunteers/              # Volunteer invite page
+│   ├── admin/invite/            # Admin staff invite page
+│   ├── manage/                  # Airtable interface redirect
+│   ├── register/                # Active public registration page
+│   ├── attend/                  # Public attendance page
+│   ├── page.tsx                 # Public landing page
+│   ├── layout.tsx               # Root layout, metadata, fonts, providers
+│   └── globals.css              # Active Tailwind/theme CSS
 ├── components/
-│   ├── attendance-form.tsx
-│   ├── contact-form.tsx
-│   ├── header.tsx
+│   ├── ui/                      # shadcn/Radix-style UI primitives
+│   ├── attendance-form.tsx      # Public attendance form
+│   ├── contact-form.tsx         # Staff contact form
+│   ├── invite-user-form.tsx     # Admin/volunteer invite form
 │   ├── live-attendance-dashboard.tsx
-│   ├── offline-indicator.tsx
-│   ├── offline-sync-provider.tsx
+│   ├── sessions-manager.tsx
+│   ├── header.tsx
 │   ├── providers.tsx
-│   ├── pwa-install-prompt.tsx
-│   ├── registration-form.tsx
+│   ├── staff-auth-shell.tsx
 │   ├── service-worker-register.tsx
-│   └── ui/...
+│   └── offline-indicator.tsx
 ├── lib/
-│   ├── airtable.ts
-│   ├── auth-context.tsx
-│   ├── offline-sync.ts
-│   ├── store.ts
-│   └── utils.ts
-├── hooks/
-│   ├── use-mobile.ts
-│   └── use-toast.ts
+│   ├── airtable.ts              # Server-only Airtable REST integration
+│   ├── auth-context.tsx         # Client auth provider and OTP flow
+│   ├── authz.ts                 # Server-side staff context and role guards
+│   ├── supabase/                # Browser/server/admin/proxy Supabase clients
+│   ├── attendance-session.ts    # Session attendance window eligibility
+│   ├── invite-log.ts            # Supabase invite_log writer
+│   ├── offline-sync.ts          # Legacy localStorage offline helper, not mounted
+│   └── store.ts                 # Legacy in-memory registration/attendance store
 ├── public/
-│   ├── icons/...
-│   ├── images/...
-│   ├── manifest.json
-│   ├── offline.html
-│   └── sw.js
-├── docs/
-├── design-artifacts/
-├── _bmad/
-├── _bmad-output/
+│   ├── sw.js                    # Service worker and IndexedDB POST queue
+│   ├── manifest.json            # PWA manifest
+│   ├── offline.html             # Offline fallback shell
+│   ├── icons/                   # PWA icons
+│   └── images/                  # FOLK assets
+├── supabase/
+│   ├── config.toml              # Local Supabase configuration
+│   ├── seed.sql                 # Empty stable local seed hook
+│   └── migrations/              # staff_profiles and invite_log migrations
+├── scripts/
+│   └── use-local-supabase-env.sh
+├── .github/
+│   ├── workflows/pr-branch-policy.yml
+│   ├── CODEOWNERS
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── copilot-instructions.md
+├── docs/                        # Generated project documentation
+├── _bmad-output/                # Planning and implementation artifacts
 ├── package.json
 ├── next.config.mjs
+├── eslint.config.mjs
 ├── tsconfig.json
-├── postcss.config.mjs
-└── components.json
+└── proxy.ts                     # Next proxy for Supabase cookie/session refresh
 ```
-
-## Critical Directories
-
-### `app/`
-
-**Purpose:** Next.js App Router entry points and the only implemented backend route.
-**Contains:** Public pages, protected staff pages, loading boundaries, global layout, brand CSS, and `app/attendance/route.ts`.
-**Entry Points:** `app/layout.tsx`, `app/page.tsx`, `app/attendance/route.ts`
-
-### `components/`
-
-**Purpose:** Feature UI, shared layout, and browser integration components.
-**Contains:** Forms, dashboard views, auth-aware header, PWA helpers, and shadcn-style UI primitives.
-
-### `components/ui/`
-
-**Purpose:** Reusable base UI primitives.
-**Contains:** Buttons, inputs, select, toast, dialogs, navigation, tables, and other generated wrappers around Radix primitives.
-
-### `lib/`
-
-**Purpose:** Non-visual application logic and integration code.
-**Contains:** Airtable fetch helpers, local auth context, local offline queue helpers, and legacy in-memory store types.
-
-### `public/`
-
-**Purpose:** Static assets and PWA infrastructure.
-**Contains:** Icons, logos, manifest, offline page, and the service worker implementation.
-
-### `docs/`
-
-**Purpose:** Brownfield documentation for this system.
-**Contains:** Existing reference docs plus generated project documentation.
-
-### `_bmad/`, `.agents/`, `design-artifacts/`, `_bmad-output/`
-
-**Purpose:** Planning, workflow, and AI-assistance assets rather than runtime product code.
-**Contains:** BMAD configurations, skills, design outputs, and generated planning artifacts.
 
 ## Entry Points
 
-- **Main UI Bootstrap:** `app/layout.tsx`
-- **Public Homepage:** `app/page.tsx`
-- **Attendance Server Endpoint:** `app/attendance/route.ts`
-- **Global Providers:** `components/providers.tsx`
-- **Service Worker:** `public/sw.js`
-- **PWA Manifest:** `public/manifest.json`
+| Entry point | Purpose |
+| --- | --- |
+| `app/layout.tsx` | App metadata, fonts, root providers, Speed Insights |
+| `components/providers.tsx` | Wraps navigation feedback, auth provider, hash callback, service worker, offline indicator |
+| `proxy.ts` | Refreshes Supabase session cookies for protected app/API paths |
+| `app/page.tsx` | Public marketing/landing surface |
+| `app/register/page.tsx` | Active public registration UI |
+| `app/attend/page.tsx` | Public attendance UI |
+| `app/attendance/route.ts` | Attendance API at `/attendance` |
 
-## File Organization Patterns
+## Critical Directories
 
-- Route folders under `app/` contain `page.tsx` and optional `loading.tsx`.
-- Feature components live directly in `components/`, while generated/shared primitives live in `components/ui/`.
-- Browser-only logic is isolated in client components and provider helpers.
-- External integration and data-shape logic are stored under `lib/`.
-- Static assets required by branding and PWA installation live under `public/`.
+### `app/api`
 
-## Key File Types
+Contains implemented server routes for auth, contact creation, registration, sessions, admin location/invite, and volunteer invite. These are the first files to inspect before changing any client `fetch()` calls.
 
-### Route files
+### `app/auth`
 
-- **Pattern:** `app/**/page.tsx`, `app/**/route.ts`
-- **Purpose:** User-facing pages and server handlers
-- **Examples:** `app/register/page.tsx`, `app/attendance/route.ts`
+Contains Supabase callback handling:
 
-### Infrastructure components
+- `confirm/route.ts`: code/token hash callback and staff profile sync
+- `signout/route.ts`: server signout redirect
+- `hash-callback/page.tsx`: client-side implicit callback bridge
+- `error/page.tsx`: staff auth error page
 
-- **Pattern:** `components/*provider*.tsx`, `components/*indicator*.tsx`, `components/*register*.tsx`
-- **Purpose:** App-wide browser integrations and bootstrapping
-- **Examples:** `components/providers.tsx`, `components/service-worker-register.tsx`
+### `lib/supabase`
 
-### Integration files
+Defines browser, server, admin, proxy, env, and typed database helpers. `admin.ts` uses the service-role key and must remain server-only.
 
-- **Pattern:** `lib/*.ts`, `lib/*.tsx`
-- **Purpose:** Airtable, auth, offline, and utility logic
-- **Examples:** `lib/airtable.ts`, `lib/auth-context.tsx`
+### `lib/airtable.ts`
 
-### Static platform assets
+Server-only integration for all Airtable operational records. Table IDs are environment-driven. This file also contains cache helpers for locations and active Preachers.
 
-- **Pattern:** `public/*`
-- **Purpose:** PWA installability, offline fallback, branding assets
-- **Examples:** `public/manifest.json`, `public/sw.js`, `public/images/folk-logo.jpg`
+### `supabase/migrations`
 
-## Asset Locations
+Defines the local Postgres auth bridge:
 
-- **Brand images:** `public/images/`
-- **PWA icons:** `public/icons/`
-- **Fallback/offline HTML:** `public/offline.html`
-- **Generic placeholders:** `public/placeholder*`
+- `staff_profiles`
+- `invite_log`
+- indexes, updated-at trigger, scope fields
 
-## Configuration Files
+### `public/sw.js`
 
-- **`package.json`**: Scripts and runtime dependencies
-- **`next.config.mjs`**: Build/runtime behavior, including ignored TS build errors and unoptimized images
-- **`tsconfig.json`**: TypeScript configuration with `@/*` alias
-- **`postcss.config.mjs`**: Tailwind CSS PostCSS integration
-- **`components.json`**: shadcn/ui generator configuration
-- **`app/globals.css`**: Brand tokens and base Tailwind theme variables
+Owns PWA caching and offline queue behavior. Changes to public POST route paths must be mirrored here.
 
-## Notes for Development
+## Legacy Or Low-Confidence Files
 
-- `components/registration-form.tsx` appears to be an older or alternate implementation; the active registration UX is the inline form inside `app/register/page.tsx`.
-- `lib/store.ts` contains in-memory registrations and attendances, but the implemented attendance flow uses Airtable instead.
-- The dashboard and contact pages are protected in the UI, but the only implemented server route is still public at the HTTP layer.
+These files are present but not currently part of the active mounted runtime path:
 
----
+- `components/registration-form.tsx`: alternate registration component; active registration is inline in `app/register/page.tsx`.
+- `components/offline-sync-provider.tsx`: context provider not mounted in `components/providers.tsx`.
+- `lib/offline-sync.ts`: localStorage offline helper only used by `OfflineSyncProvider`.
+- `lib/store.ts`: in-memory store types from an older implementation.
+- `styles/globals.css`: additional CSS file outside the active `app/globals.css` import path.
 
-Generated using the BMAD `document-project` workflow pattern.
+Treat these as legacy unless a future change explicitly reconnects them.

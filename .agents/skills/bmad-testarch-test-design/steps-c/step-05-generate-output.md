@@ -130,7 +130,9 @@ Epic-level mode remains single-worker by default (one output artifact).
 Ensure the outputs include:
 
 - Risk assessment matrix
+- NFR planning summary (thresholds, missing thresholds, planned evidence, and NFR-derived risks) — when NFRs are in scope
 - Coverage matrix and priorities
+- NFR coverage and planned evidence mapping — when NFRs are in scope
 - Execution strategy
 - Resource estimates (ranges)
 - Quality gate criteria
@@ -226,3 +228,11 @@ Summarize:
 
 - Skipped sequence steps or missing outputs
   **Master Rule:** Skipping steps is FORBIDDEN.
+
+## On Complete
+
+Run: `python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow.on_complete`
+
+If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
+
+If the resolver fails, returns no output, or resolves an empty value, skip the hook and exit normally.

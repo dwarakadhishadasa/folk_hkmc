@@ -1,112 +1,55 @@
-# FOLK HKMC Digital Operations Platform
+# Executive Deck
 
----
+## 1. Current Product
 
-## 1. Introduction
+`folk_hkmc` is the FOLK Chennai web app for public onboarding, attendance, staff outreach, live monitoring, and staff invitations.
 
-FOLK HKMC now has a working role-based digital platform that can be used to manage our FOLK operations:
+## 2. What Changed Since The Old Docs
 
-- Students can register and mark attendance.
-- Preachers can invite Volunteers, start attendance sessions, and monitor live turnout.
-- Volunteers add new contacts.
-- Airtable remains the central operations database and the single source of truth.
+The April documentation is stale. The code now includes Supabase staff authentication, a local staff profile bridge, implemented contact and registration APIs, session-scoped attendance, staff invite workflows, and GitHub branch-policy automation.
 
-Role-based operations tool for registration, contact capture, attendance, and session visibility.
+## 3. Current Architecture
 
----
+The app is one Next.js web application:
 
-## 2. What We Have Built So Far
+- Next.js renders pages and route handlers.
+- Supabase authenticates staff and stores local staff profiles.
+- Airtable stores operational program records.
+- A service worker supports installability and offline queueing for selected form submissions.
 
-| Area | Built Capability | Why It Matters |
-| --- | --- | --- |
-| Public experience | FOLK Chennai landing page with program story, topics, and testimonials | Gives Students a clear entry point |
-| Registration | Mobile-friendly form for new Students | Captures Student details without paper handoffs |
-| Attendance | Session-specific QR/link check-in by mobile number | Speeds up session entry and reduces confusion |
-| Contact capture | Volunteer and Preacher contact-entry flows | Keeps outreach data organized by owner |
-| Live visibility | Real-time attendance dashboard for active sessions | Lets Preachers see turnout while the session is happening |
-| Role access | Preacher and Volunteer access rules | Keeps each role focused on the right actions |
-| Invites | Preacher invite flow for Volunteers | Makes Volunteer onboarding controlled and traceable |
-| Offline support | Queues selected contact collection and attendance submissions during weak connectivity | Helps during real-world session conditions |
+## 4. Main Workflows
 
----
+- Public visitors learn about FOLK and register.
+- Participants mark attendance from a session QR/link.
+- Staff create contacts after outreach.
+- Preachers/Admins create live attendance sessions.
+- Admins invite staff and manage locations.
+- Preachers/Admins invite Volunteers.
 
-## 3. The Student Journey
+## 5. Role Model
 
-1. A Student learns about FOLK Chennai on the public site.
-2. The Student receives or scans a session-specific attendance link.
-3. They enter their 10-digit mobile number.
-4. If already registered, attendance is marked.
-5. If not registered, they are guided to registration.
-6. For session-based registration, attendance is completed after registration.
-7. Duplicate attendance for the same session is prevented.
+- Volunteer: contact capture only.
+- Preacher: contact capture, sessions, dashboard, volunteer invites, Airtable manage link.
+- Admin: all staff actions, including staff invite and location creation.
 
----
+## 6. Operational Dependencies
 
-## 4. The Preacher Journey
+- Supabase must be configured for staff auth and callbacks.
+- Airtable must provide compatible tables and field names.
+- Environment variables are required for both systems.
+- HTTPS is needed for PWA/service worker behavior outside local development.
 
-1. A Preacher signs in through invited email access.
-2. The Preacher invites and manages Volunteers.
-3. The Preacher starts an attendance session for an assigned location.
-4. The platform creates a session-specific attendance link and QR code.
-5. Students use that link to check in.
-6. The Preacher watches the live attendance count and list update during the session.
+## 7. Current Risks
 
-**Result:** Preachers get control of session attendance without waiting for manual end-of-session reconciliation.
+- There is no automated product test suite.
+- `next build` ignores TypeScript errors.
+- Airtable schema drift can break runtime behavior.
+- Service-worker queue paths must stay aligned with actual routes.
+- Some legacy files remain in the repo and should not be mistaken for active runtime code.
 
----
+## 8. Recommended Next Steps
 
-## 5. The Volunteer Journey
-
-1. A Volunteer signs in through invited email access.
-2. The Volunteer adds new contacts from outreach or pass distribution.
-3. Volunteers are assigned to their respective Preachers.
-4. The form collects useful follow-up details: mobile, date of birth, occupation, college/company, location, and comments.
-5. Duplicate mobile numbers are blocked before creating another record.
-
-**Result:** Volunteers can capture outreach data quickly while preserving ownership and follow-up context.
-
----
-
-## 6. Operational Value
-
-The platform improves four high-friction areas:
-
-- **Check-in speed:** Students use a QR/link and mobile number instead of manual registration desks.
-- **Cleaner records:** duplicate attendance and duplicate contacts are handled at save time.
-- **Live awareness:** Preachers can see attendance during a session, not after the session.
-- **Role clarity:** Preachers and Volunteers each see the workflows relevant to their responsibilities.
-
----
-
-## 7. Data And Ownership
-
-The system is designed around a simple operating model:
-
-- Airtable is the central database for contacts, sessions, locations, users, and attendance.
-- Each attendance session has a specific location, Preacher, time window, and QR/link.
-- Contacts can be assigned to a Volunteer for follow-up.
-- Volunteers can add contacts and are assigned to respective Preachers.
-
-**Why it matters:** the platform supports accountability, not just data entry.
-
----
-
-## 8. Current State
-
-- Session-specific registration and attendance are now connected.
-- Contact collection is now connected to the central database.
-- Role-based access with Preachers, Volunteers, Students, and Admin roles.
-- Contact collection and attendance can work offline as well.
-
----
-
-## 9. What This Enables
-
-With the current build, FOLK HKMC can pilot a more reliable session workflow:
-
-- Preachers start a session and share a QR code.
-- Students self-check-in.
-- New Students register and complete attendance in one path.
-- Volunteers capture outreach contacts.
-- Preachers can invite and manage Volunteers.
-- Airtable remains the single source of truth for managing contact related data and useful insights through dashboards.
+- Treat `docs/index.md` as the primary AI context entry point.
+- Keep `_bmad-output/project-context.md` aligned with route/auth/data changes.
+- Add automated coverage around auth, registration, attendance, and staff invite flows when practical.
+- Confirm production Supabase redirect URLs and Airtable table IDs before deployment changes.

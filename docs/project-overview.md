@@ -1,96 +1,95 @@
-# folk_hkmc - Project Overview
+# Project Overview
 
-**Date:** 2026-04-23
-**Type:** Web Application
-**Architecture:** Single-part Next.js App Router monolith
+## Summary
 
-## Executive Summary
+`folk_hkmc` is the FOLK Chennai web application. It supports three public flows and several staff-only workflows:
 
-`folk_hkmc` supports the FOLK Chennai registration and attendance workflow. Public users can discover the program, register, and mark attendance. Logged-in staff can add contacts and, if they have the preacher role, access a live attendance dashboard. The system is implemented as a client-heavy Next.js application backed by Airtable for operational data.
+- Public program landing page
+- Public registration, including registration from an attendance session link
+- Public session attendance marking
+- Staff contact capture
+- Staff session creation and QR-based live attendance monitoring
+- Staff invitation flows for Admin, Preacher, and Volunteer users
+- Airtable interface redirect for operational management
 
-Although the product includes a protected staff experience, authentication is entirely local to the browser and uses hardcoded credentials stored in `localStorage`. The only implemented server route in this repository is `app/attendance/route.ts`, which handles attendance lookup, duplicate checks, creation, and dashboard reads against Airtable. Registration and contact submission are expected by the UI but do not currently have matching route handlers in this repo.
+The application is a single Next.js App Router monolith. Supabase now provides staff authentication and a local staff authorization bridge. Airtable remains the operational data store for most program records.
 
-## Project Classification
+## Current-State Delta From Previous Docs
 
-- **Repository Type:** Monolith
-- **Project Type(s):** Web application
-- **Primary Language(s):** TypeScript, CSS
-- **Architecture Pattern:** Client-heavy App Router UI with a thin server integration layer
+The prior documentation from 2026-04-23 is stale. Current code includes:
 
-## Technology Stack Summary
+- Supabase auth clients under `lib/supabase/*`
+- Supabase migrations under `supabase/migrations/*`
+- `staff_profiles` and `invite_log` local tables
+- `proxy.ts` for Supabase cookie refresh on protected paths
+- Implemented `/api/registration`, `/api/contact`, `/api/sessions`, `/api/admin/*`, `/api/volunteers/invite`, and `/api/auth/*` routes
+- Server-seeded staff auth shells through `StaffAuthShell`
+- Staff role scoping for Admin, Preacher, and Volunteer roles
+- Admin location creation and staff invitation
+- Session-specific attendance windows and QR links
+- ESLint config and GitHub branch-policy workflow
 
-| Category | Technology | Notes |
-| --- | --- | --- |
-| Framework | Next.js 16.0.7 | App Router project under `app/` |
-| UI Runtime | React 19.2.0 | Client components drive most feature logic |
-| Language | TypeScript | `strict: true`, path alias `@/*` |
-| Styling | Tailwind CSS v4 | Brand palette defined in `app/globals.css` |
-| UI Toolkit | Radix + shadcn-style wrappers | Large `components/ui/*` inventory |
-| Data Integration | Airtable REST API | Contacts and attendance tables in `lib/airtable.ts` |
-| Offline/PWA | Service worker + manifest + IndexedDB | Request queue handled in `public/sw.js` |
-| Package Manager | pnpm | `pnpm-lock.yaml` present |
+## Classification
 
-## Key Features
+| Area | Current classification |
+| --- | --- |
+| Repository shape | Single application monolith |
+| Primary framework | Next.js 16 App Router |
+| Runtime split | Server route handlers plus client-heavy React UI |
+| Auth architecture | Supabase email OTP/invite session cookies plus local `staff_profiles` authorization bridge |
+| Operational data | Airtable REST API |
+| Local relational data | Supabase Postgres for staff profile cache and invite log |
+| Offline support | Service worker queue for selected POST requests |
+| Tests | No automated product test suite; linting is configured |
 
-- Public marketing homepage for the FOLK Chennai program
-- Registration flow for new users
-- Attendance capture using a mobile-number-based lookup
-- Duplicate-attendance prevention for same-day check-ins
-- Protected contact-entry workflow for authenticated staff
-- Protected live attendance dashboard with QR code sharing
-- PWA installation prompt and offline request queueing
+## Main User Roles
 
-## Architecture Highlights
+| Role | Access |
+| --- | --- |
+| Public visitor | Landing page, registration, attendance link |
+| Volunteer | `/contact` only; contacts route to assigned Preacher |
+| Preacher | Contact capture, sessions, live dashboard, volunteer invite, Airtable manage redirect |
+| Admin | All staff actions, including staff invite and location creation |
 
-- The app is a single deployable unit with both UI routes and one server route in the same Next.js project.
-- Authentication and authorization are enforced in client components, not at the API boundary.
-- Airtable is the live system of record for attendance and contact lookups used by implemented backend logic.
-- Offline support is coordinated through the service worker, browser APIs, and UI messaging.
-- Some code paths reflect an unfinished transition: the UI expects `/api/registration` and `/api/contact`, but those endpoints are absent from the repository.
+## Product Capabilities
 
-## Development Overview
+### Public Onboarding
 
-### Prerequisites
+The landing page at `/` describes the FOLK Chennai program. `/register` captures name, mobile, age, occupation, year, and optional location. When opened with `?session=<sessionId>`, registration also marks attendance for that session.
 
-- Node.js 20+
-- `pnpm`
-- `AIRTABLE_API_TOKEN`
+### Attendance
 
-### Getting Started
+`/attend?session=<sessionId>` lets a participant mark attendance with a 10-digit mobile number. Unknown mobile numbers are redirected to `/register` with the mobile and session pre-filled.
 
-Install dependencies, provide `AIRTABLE_API_TOKEN`, and run the dev server with `pnpm dev`. Use the attendance flow to exercise the implemented server route. Staff-only views require local credentials from `lib/auth-context.tsx`.
+### Staff Contact Capture
 
-### Key Commands
+`/contact` is staff-only. Admins choose an active Preacher owner. Preachers own their own contacts. Volunteers create contacts assigned to their configured Preacher.
 
-- **Install:** `pnpm install`
-- **Dev:** `pnpm dev`
-- **Build:** `pnpm build`
-- **Lint:** `pnpm lint`
+### Session Operations
 
-## Repository Structure
+`/sessions` lets Admin and Preacher users create an attendance session for a location and duration. The app generates a public `/attend` link and QR code, then shows live attendance while the session is active.
 
-The active product code lives primarily under:
+### Staff Invites
 
-- `app/` for route entry points and the attendance route handler
-- `components/` for feature UI, provider wiring, and infrastructure widgets
-- `lib/` for auth, Airtable integration, offline utilities, and legacy store types
-- `public/` for PWA assets, manifest, icons, and service worker
+Admins can invite Admin, Preacher, or Volunteer users from `/admin/invite`. Admin/Preacher users can invite Volunteers from `/volunteers`. Invites upsert Airtable Users, send Supabase invite email, and write an `invite_log` row.
 
-Supporting brownfield/planning material also exists under:
+## High-Level Dependencies
 
-- `docs/`
-- `_bmad/`
-- `.agents/`
-- `_bmad-output/`
-- `design-artifacts/`
+| Category | Technology |
+| --- | --- |
+| Framework | Next.js `16.0.7` |
+| UI | React `19.2.0`, Tailwind CSS `4.1.9`, Radix/shadcn-style primitives |
+| Auth | `@supabase/ssr`, `@supabase/supabase-js` |
+| Operational API | Airtable REST API |
+| Forms | Native React forms plus installed `react-hook-form`/`zod` support |
+| Animation | GSAP, `tw-animate-css` |
+| QR | `qrcode.react` |
+| Monitoring | Vercel Speed Insights |
 
-## Documentation Map
+## Principal Risks
 
-- [index.md](./index.md) - Master documentation index
-- [architecture.md](./architecture.md) - Runtime and integration architecture
-- [source-tree-analysis.md](./source-tree-analysis.md) - Directory structure and entry points
-- [development-guide.md](./development-guide.md) - Local development and validation workflow
-
----
-
-Generated using the BMAD `document-project` workflow pattern.
+- `next build` ignores TypeScript errors, so type checking must be run separately.
+- Supabase service-role access is required server-side for admin/auth bridge operations.
+- Airtable schema/table IDs are environment-driven and required for most useful flows.
+- The service worker has both active and legacy queue paths; keep request paths synchronized if routes change.
+- Several legacy helpers/components remain in the repo but are not active runtime paths.
