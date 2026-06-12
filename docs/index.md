@@ -1,8 +1,8 @@
 # folk_hkmc Documentation Index
 
-**Type:** monolith  
-**Primary Language:** TypeScript  
-**Architecture:** Next.js App Router web application with Supabase staff authentication, Airtable operational data, and PWA offline queueing  
+**Type:** monolith
+**Primary Language:** TypeScript
+**Architecture:** Next.js App Router web application with Supabase staff authentication, Airtable operational data, and PWA offline queueing
 **Last Updated:** 2026-06-11
 
 ## Current State Check
