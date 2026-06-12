@@ -1,219 +1,159 @@
-# folk_hkmc - Architecture
-
-**Date:** 2026-04-23
-**Type:** Single-part web application
+# Architecture
 
 ## Executive Summary
 
-`folk_hkmc` is a single Next.js App Router application that combines public marketing content, user onboarding, attendance capture, staff workflows, and basic offline/PWA support. Most application logic runs in client components. The backend surface is intentionally thin: this repository only implements the `/attendance` route, which acts as a server-side adapter over Airtable for attendance and contact lookup operations.
+`folk_hkmc` is a Next.js App Router monolith with a client-heavy UI, server route handlers for mutations and protected reads, Supabase for staff authentication, and Airtable as the operational data backend. The current architecture is best described as:
 
-The architecture is effective for a lightweight operational tool, but it carries brownfield constraints that any future work needs to respect:
+```text
+Browser / PWA
+  -> Next.js App Router pages and client components
+  -> Next.js route handlers
+  -> Supabase Auth + Supabase Postgres staff bridge
+  -> Airtable REST API operational tables
+```
 
-- staff authentication is browser-local and not backed by a server session
-- public and protected experiences coexist in the same frontend codebase
-- offline support is coupled across the service worker, forms, and UI indicators
-- the UI expects registration and contact APIs that are not currently implemented here
+The application does not have a separate backend service. Server-only modules in `lib/` are the backend boundary.
 
-## System Context
+## Runtime Layers
 
-### Primary Actors
-
-- **Visitor / participant:** views the program site, registers, and marks attendance
-- **Volunteer:** authenticates locally and accesses the contact-entry screen
-- **Preacher:** authenticates locally and accesses the live dashboard in addition to the contact-entry screen
-- **Airtable:** system of record for contacts and attendance records
-
-### External Systems
-
-- **Airtable REST API:** contact lookup, attendance reads, attendance writes, and registration writes if corresponding routes are added
-- **Browser platform APIs:** localStorage, service workers, IndexedDB, background sync, install prompt APIs
-- **QR image service:** dashboard generates QR codes through `api.qrserver.com`
-
-## Architecture Pattern
-
-The app follows a **client-heavy monolith** pattern:
-
-- **Presentation layer:** App Router pages and feature components
-- **Browser integration layer:** auth hydration, service worker registration, offline state, PWA prompts
-- **Thin server adapter layer:** `app/attendance/route.ts`
-- **External data layer:** Airtable REST tables for contacts and attendance
-
-This is not a strict API-first architecture. UI flows directly assume route paths and response shapes, and some behaviors such as `202 queued` are injected by the service worker rather than a server implementation.
-
-## Runtime Components
-
-### 1. App Router UI Layer
-
-- `app/page.tsx` serves the public marketing homepage
-- `app/register/page.tsx` implements the registration journey
-- `app/attend/page.tsx` hosts attendance capture
-- `app/contact/page.tsx` gates contact entry behind client-side auth
-- `app/dashboard/page.tsx` gates the dashboard behind client-side auth and preacher role checks
-
-### 2. Shared Browser Infrastructure
-
-- `components/providers.tsx` wires global client-only providers
-- `components/service-worker-register.tsx` registers `public/sw.js` in secure contexts
-- `components/offline-indicator.tsx` reads queue status from the service worker
-- `components/pwa-install-prompt.tsx` manages browser install affordances
-- `lib/auth-context.tsx` hydrates and stores auth in `localStorage`
-
-### 3. Server Integration Layer
-
-- `app/attendance/route.ts` exposes:
-  - `POST /attendance`
-  - `GET /attendance?date=YYYY-MM-DD`
-- `lib/airtable.ts` encapsulates Airtable calls used by the route handler
-
-### 4. Offline/PWA Layer
-
-- `public/sw.js` precaches key assets and intercepts POST requests to attendance and registration paths
-- failed POSTs are written into IndexedDB and replayed later
-- UI components interpret `202 queued` as a successful offline capture event
-
-## Key Flows
-
-### Registration Flow
-
-1. User opens `/register`
-2. `app/register/page.tsx` collects participant details
-3. UI posts to `/api/registration`
-4. When offline, the service worker can queue matching POST requests
-5. In the current repo, there is no route implementation for `/api/registration`
-
-### Attendance Flow
-
-1. User opens `/attend`
-2. `components/attendance-form.tsx` normalizes the mobile number to 10 digits
-3. UI posts to `/attendance`
-4. Route handler looks up the user in Airtable contacts, checks for same-day duplicates, and writes attendance
-5. Success returns `{ id, mobile, userName, createdAt }`
-6. If not found, the UI redirects the user to `/register?mobile=...`
-
-### Dashboard Flow
-
-1. Preacher logs in through the local auth screen
-2. `app/dashboard/page.tsx` client-gates the page
-3. `components/live-attendance-dashboard.tsx` polls `GET /attendance` every 20 seconds
-4. Newly returned records are appended by record ID
-5. QR code points participants to `/attend`
-
-### Contact Flow
-
-1. Logged-in staff open `/contact`
-2. `components/contact-form.tsx` posts to `/api/contact`
-3. In the current repo, no `/api/contact` route exists
-
-## Technology Stack
-
-| Category | Decision | Notes |
+| Layer | Files | Responsibilities |
 | --- | --- | --- |
-| UI framework | Next.js 16 App Router | Route segments under `app/` |
-| Rendering style | Mostly client-side | Hooks, browser APIs, and auth hydration dominate |
-| Language | TypeScript | Strict mode enabled in TS config |
-| Styling | Tailwind CSS v4 + brand CSS vars | Defined in `app/globals.css` |
-| UI primitives | Radix + shadcn wrappers | `components/ui/*` |
-| Data store | Airtable | Contacts and Attendance tables |
-| Auth | Client-side localStorage auth | No real backend session or token model |
-| Offline | Service worker + IndexedDB | Queue replay logic in `public/sw.js` |
+| App shell | `app/layout.tsx`, `components/providers.tsx` | Fonts, metadata, global providers, Speed Insights, service worker registration |
+| Public pages | `app/page.tsx`, `app/register/page.tsx`, `app/attend/page.tsx` | Program landing, registration, attendance |
+| Staff pages | `app/contact/page.tsx`, `app/sessions/page.tsx`, `app/dashboard/page.tsx`, `app/volunteers/page.tsx`, `app/admin/invite/page.tsx`, `app/manage/page.tsx` | Server-side staff context checks and staff workflows |
+| Client state | `lib/auth-context.tsx`, `components/navigation-feedback-provider.tsx` | Auth hydration, OTP flow, navigation feedback |
+| Route handlers | `app/api/**/route.ts`, `app/attendance/route.ts`, `app/auth/**/route.ts` | API contracts, auth callbacks, staff mutations, attendance |
+| Authorization | `lib/authz.ts`, `proxy.ts`, `lib/supabase/*` | Supabase cookies, local profile reads, role checks |
+| Airtable data | `lib/airtable.ts` | Operational records and Airtable REST helpers |
+| PWA/offline | `public/sw.js`, `components/offline-indicator.tsx`, `public/manifest.json` | Asset caching and selected offline POST queueing |
 
-## State and Auth
+## Authentication And Authorization
 
-- Auth state is stored in `localStorage` key `folk_auth`
-- Valid users are hardcoded in `lib/auth-context.tsx`
-- Role checks (`volunteer`, `preacher`) are enforced only in client components
-- Feature state is local React state rather than centralized global state
-- There is a secondary local offline queue helper in `lib/offline-sync.ts`, but the active UX also depends on the service worker queue
+### Sign-In Flow
+
+1. Staff enters email on `/login`.
+2. `POST /api/auth/signin` verifies the email against active Airtable Users.
+3. The route ensures a Supabase Auth user exists and syncs its ID back to Airtable.
+4. Browser calls `supabase.auth.signInWithOtp`.
+5. Staff enters email OTP, or follows an invite/callback link.
+6. `POST /api/auth/complete-implicit` or `GET /auth/confirm` syncs Airtable staff data into Supabase `staff_profiles`.
+7. Client stores no custom local session. Supabase cookies represent the session.
+8. `GET /api/auth/me` returns the current `StaffContext`.
+
+### Staff Context
+
+`getStaffContext()` in `lib/authz.ts` is the protected server boundary. It reads the Supabase user from cookies, loads `staff_profiles` with the service-role client, validates active status and role, and returns:
+
+```ts
+interface StaffContext {
+  supabaseUserId: string
+  email: string
+  airtableUserId: string
+  name: string
+  role: "Admin" | "Preacher" | "Volunteer"
+  locationIds: string[]
+  assignedPreacherAirtableUserId?: string
+}
+```
+
+### Role Matrix
+
+| Surface | Public | Volunteer | Preacher | Admin |
+| --- | --- | --- | --- | --- |
+| `/` | Yes | Yes | Yes | Yes |
+| `/register` | Yes | Yes | Yes | Yes |
+| `/attend` | Yes | Yes | Yes | Yes |
+| `/contact` | No | Yes | Yes | Yes |
+| `/sessions` | No | No | Yes | Yes |
+| `/dashboard` | No | No | Yes | Yes |
+| `/volunteers` | No | No | Yes | Yes |
+| `/admin/invite` | No | No | No | Yes |
+| `/manage` | No | No | Yes | Yes |
 
 ## Data Architecture
 
-### Airtable Contacts Record
+### Airtable
 
-Used to resolve participants and, if implemented, to create registrations.
+Airtable is the main operational data store. `lib/airtable.ts` requires:
 
-Fields used in code:
+- `AIRTABLE_API_TOKEN`
+- `AIRTABLE_BASE_ID`
+- `AIRTABLE_CONTACTS_TABLE_ID`
+- `AIRTABLE_ATTENDANCE_TABLE_ID`
+- `AIRTABLE_SESSIONS_TABLE_ID`
+- `AIRTABLE_USERS_TABLE_ID`
+- `AIRTABLE_LOCATIONS_TABLE_ID`
+- Optional `AIRTABLE_ANALYTICS_RECORD_ID`
+- Optional `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`
 
-- `Name`
-- `Phone`
-- `Year`
-- `Source`
-- `Age`
-- `Location`
+The app stores Contacts, Attendance, Sessions, Users, and Locations in Airtable. All Airtable calls are server-only and `cache: "no-store"` except cached reference lists using Next `unstable_cache`.
 
-### Airtable Attendance Record
+### Supabase
 
-Used by the implemented attendance route.
+Supabase has two local tables:
 
-Fields used in code:
+- `staff_profiles`: local authorization cache keyed by Supabase Auth user ID
+- `invite_log`: invite audit log
 
-- `Phone`
-- `Name`
-- `Attendance Date`
+Supabase migrations live under `supabase/migrations/`. The service-role key is used only server-side.
 
-### Local Browser Models
+## Key Flows
 
-- `folk_auth` localStorage session
-- IndexedDB `pending-requests` queue inside `public/sw.js`
-- Optional localStorage queue under `lib/offline-sync.ts`
+### Public Registration Without Session
 
-## API Surface
+`app/register/page.tsx` posts to `POST /api/registration`. The route validates name/mobile, rejects duplicates, creates an Airtable Contact, and returns `201`.
 
-### Implemented
+### Session-Backed Registration
 
-- `POST /attendance`
-- `GET /attendance`
+When `/register?session=<id>` is used, `POST /api/registration` validates session eligibility, creates or reuses the contact, then creates attendance for the same session. Duplicate attendance returns a completed success response rather than requiring a second call.
 
-### Expected by the UI but Missing in This Repo
+### Attendance
 
-- `POST /api/registration`
-- `POST /api/contact`
+`/attend?session=<id>` posts mobile/session to `POST /attendance`. The route validates the session window, looks up the contact, prevents duplicate attendance, and creates an Airtable Attendance record.
 
-This mismatch is one of the most important brownfield constraints in the system.
+### Live Dashboard
 
-## Security and Operational Considerations
+`LiveAttendanceDashboard` polls `GET /attendance?session=<id>` every 20 seconds while visible. It sends up to 100 known attendance IDs so the server can return only new records from the Airtable-linked session record.
 
-- Credentials are hardcoded in client code and visible to anyone with repo or bundle access
-- Protected pages rely on client redirects rather than server authorization checks
-- `GET /attendance` is not access-controlled even though the dashboard page is
-- Airtable base and table identifiers are embedded in the source; only the API token is environment-backed
-- Service worker registration only happens in secure contexts
+### Staff Contact Creation
 
-## Performance Considerations
+`POST /api/contact` requires staff context. Routing differs by role:
 
-- Dashboard polling is interval-based every 20 seconds
-- Attendance reads bypass cache with query-string busting and `no-store`
-- Images are configured as `unoptimized`, so the app does not rely on Next.js image optimization
-- The app is small enough for this architecture today, but polling and repeated Airtable queries will become more expensive as usage grows
+- Volunteer: contact is assigned to the volunteer's configured Preacher.
+- Preacher: contact is assigned to that Preacher.
+- Admin: request must include `assignedPreacherAirtableUserId`.
 
-## Deployment Architecture
+### Session Creation
 
-- The app can run anywhere that supports a standard Next.js App Router deployment
-- `AIRTABLE_API_TOKEN` must be present for implemented server-side Airtable access
-- PWA capabilities require HTTPS or localhost for service worker registration
-- Because registration and contact routes are missing, deployments only fully support the attendance flow unless those endpoints exist elsewhere
+`POST /api/sessions` requires Admin or Preacher. The route validates location scope, creates an Airtable Session, generates `/attend?session=<id>` using `NEXT_PUBLIC_SITE_URL`, and writes the attendance URL back to Airtable.
 
-## Testing and Quality
+### Staff Invites
 
-- No automated tests are configured
-- `next.config.mjs` ignores TypeScript build errors during production build
-- Manual QA is the only reliable validation path today
+Admin invite and volunteer invite routes upsert Airtable Users, send Supabase invite email, and write `invite_log`. Admins can create Admin, Preacher, and Volunteer users. Preachers can invite Volunteers assigned to themselves.
 
-Recommended smoke checks:
+## Offline/PWA Architecture
 
-- public homepage rendering
-- login redirect behavior
-- attendance success, not-found, and duplicate cases
-- dashboard polling and QR generation
-- offline queue behavior on supported browsers
+`public/sw.js` precaches the landing page, `/attend`, offline shell, manifest, icons, and logo. It queues selected same-origin POST requests when fetch fails:
 
-## Known Gaps and Brownfield Risks
+- `/api/contact`
+- `/api/registration`
+- `/registration` legacy path
+- `/attendance`
 
-- Registration and contact routes are assumed but absent
-- `components/registration-form.tsx` is likely unused duplicate UI
-- `lib/store.ts` suggests an earlier in-memory design that no longer matches the Airtable-backed flow
-- Two offline queue strategies exist (`public/sw.js` and `lib/offline-sync.ts`), which increases maintenance risk
-- Contact and dashboard protection is UI-only, not API-level
+The active UI listens for service worker pending-count messages through `components/offline-indicator.tsx`. `components/offline-sync-provider.tsx` and `lib/offline-sync.ts` are present but not currently mounted.
 
----
+## Caching
 
-Generated using the BMAD `document-project` workflow pattern.
+- Airtable request helpers default to `cache: "no-store"`.
+- `listCachedLocations()` and `listCachedActivePreachers()` use `unstable_cache` with a 20-minute TTL and tags.
+- `createLocation()` revalidates the locations cache.
+- Auth-related routes set no-store behavior where needed.
+
+## Important Constraints
+
+- Keep secrets server-only. Never move Airtable tokens or Supabase service-role keys into client code.
+- Do not restore the old localStorage demo auth model; current auth is Supabase-backed.
+- Preserve the `/attendance` route path. It is intentionally not under `/api`.
+- Preserve 10-digit mobile normalization on both client and server.
+- Any session attendance changes must keep registration, attendance, dashboard polling, Airtable session fields, and service worker queue paths aligned.
+- Run `pnpm exec tsc --noEmit` because Next build ignores TypeScript errors.

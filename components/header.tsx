@@ -155,7 +155,7 @@ function MobileNavItem({
 }
 
 export function Header() {
-  const { isLoggedIn, logout, isPreacher, username, role, isHydrated } = useAuth()
+  const { isLoggedIn, logout, isAdmin, isPreacher, username, role, isHydrated } = useAuth()
   const pathname = usePathname()
   const { isNavigating, pendingPath } = useNavigationFeedback()
 
@@ -165,7 +165,7 @@ export function Header() {
         ...(isPreacher
           ? [
               { href: "/sessions", label: "Sessions", icon: CalendarDays },
-              { href: "/volunteers", label: "Invite", icon: Send },
+              { href: isAdmin ? "/admin/invite" : "/volunteers", label: "Invite", icon: Send },
               { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
             ]
           : []),
