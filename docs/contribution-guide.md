@@ -30,13 +30,21 @@ PRs into `main` require Dwaraka to apply the `production-review-approved` label 
 - PR source must be `feature/*`.
 - `main` target requires `production-review-approved`.
 
+`.github/workflows/quality-gates.yml` enforces:
+
+- `pnpm guardrails`
+- `pnpm typecheck:workspace` before app builds
+- `pnpm build:apps`
+- `pnpm lint`
+
 ## Local Verification
 
 Before opening a PR, run the checks that fit the change:
 
 ```bash
-pnpm exec tsc --noEmit
-pnpm build
+pnpm guardrails
+pnpm typecheck:workspace
+pnpm build:apps
 pnpm lint
 ```
 
@@ -54,6 +62,9 @@ Repository-level Copilot/agent instructions live in `.github/copilot-instruction
 
 - Read `_bmad-output/project-context.md` before product-code changes.
 - Keep secrets server-only.
-- Do not modify `app/api/admin/invite-user/route.ts` for GitHub collaborator access; that route invites application staff, not repository collaborators.
+- Treat Turborepo as the task runner, not the package-boundary enforcer; run `pnpm guardrails` after workspace/package/import changes.
+- Never rely on `next build` alone for type safety because build-time type errors are ignored by Next config.
+- Keep `@hkmc/airtable`, `@hkmc/authz`, `@hkmc/program-config/server`, and server `lib/*` services out of client component runtime graphs.
+- Do not modify `apps/*/app/api/admin/invite-user/route.ts` for GitHub collaborator access; that route invites application staff, not repository collaborators.
 - Use existing Next.js App Router and `pnpm` patterns.
 - Preserve staff auth, Airtable integration, route paths, and service-worker coupling unless the task explicitly changes them.

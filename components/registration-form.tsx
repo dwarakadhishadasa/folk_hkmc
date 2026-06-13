@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
+import { currentProgramProfile } from "@/lib/current-program"
 
 interface RegistrationData {
   name: string
@@ -21,6 +22,7 @@ interface RegistrationData {
 }
 
 export function RegistrationForm() {
+  const { branding } = currentProgramProfile
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const { toast } = useToast()
@@ -118,7 +120,7 @@ export function RegistrationForm() {
         <CardHeader className="bg-primary text-primary-foreground rounded-t-lg">
           <CardTitle className="text-xl">New Registration</CardTitle>
           <CardDescription className="text-primary-foreground/80">
-            Join the FOLK Chennai - Youth Empowerment Club
+            Join {branding.name}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 pt-8">

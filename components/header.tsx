@@ -17,6 +17,7 @@ import { PWAInstallPrompt } from "@/components/pwa-install-prompt"
 import { RouteProgressBar } from "@/components/route-progress-bar"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/auth-context"
+import { currentProgramProfile } from "@/lib/current-program"
 import { useNavigationFeedback } from "@/components/navigation-feedback-provider"
 import { cn } from "@/lib/utils"
 
@@ -101,13 +102,15 @@ function DesktopNavItem({
       pending={pending}
       className={cn(
         "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-white/80 transition-[background-color,box-shadow,color,transform] duration-150",
-        "hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
-        active && !navigationPending && "bg-white text-[#0F1E54] shadow-sm hover:bg-white hover:text-[#0F1E54]",
-        pending && "bg-white/15 text-white shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-white/15",
+        "hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
+        active &&
+          !navigationPending &&
+          "bg-white text-[var(--program-primary)] shadow-sm hover:bg-white hover:text-[var(--program-primary)]",
+        pending && "bg-white/15 text-white shadow-sm ring-1 ring-[var(--program-accent)] hover:bg-white/15",
       )}
     >
       {pending ? (
-        <Spinner className="h-4 w-4 shrink-0 text-[#F98B1C]" aria-hidden="true" />
+        <Spinner className="h-4 w-4 shrink-0 text-[var(--program-accent)]" aria-hidden="true" />
       ) : (
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       )}
@@ -136,16 +139,16 @@ function MobileNavItem({
       pending={pending}
       className={cn(
         "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-semibold leading-none transition-[background-color,box-shadow,color,transform] duration-150",
-        "text-[#24324A]/70 hover:bg-[#0F1E54]/5 hover:text-[#0F1E54] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
+        "text-[#24324A]/70 hover:bg-black/5 hover:text-[var(--program-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
         active &&
           !navigationPending &&
-          "bg-[#0F1E54] text-white shadow-md shadow-[#0F1E54]/20 hover:bg-[#0F1E54] hover:text-white",
+          "bg-[var(--program-primary)] text-white shadow-md shadow-black/15 hover:bg-[var(--program-primary)] hover:text-white",
         pending &&
-          "bg-[#F98B1C]/15 text-[#0F1E54] shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-[#F98B1C]/15",
+          "bg-[#FFF3DF] text-[var(--program-primary)] shadow-sm ring-1 ring-[var(--program-accent)] hover:bg-[#FFF3DF]",
       )}
     >
       {pending ? (
-        <Spinner className="h-5 w-5 shrink-0 text-[#F98B1C]" aria-hidden="true" />
+        <Spinner className="h-5 w-5 shrink-0 text-[var(--program-accent)]" aria-hidden="true" />
       ) : (
         <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
       )}
@@ -158,6 +161,7 @@ export function Header() {
   const { isLoggedIn, logout, isAdmin, isPreacher, username, role, isHydrated } = useAuth()
   const pathname = usePathname()
   const { isNavigating, pendingPath } = useNavigationFeedback()
+  const { branding } = currentProgramProfile
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
@@ -174,11 +178,11 @@ export function Header() {
 
   if (!isHydrated) {
     return (
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F1E54] text-white shadow-lg">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--program-primary)] text-white shadow-lg">
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="relative h-10 w-28 rounded-lg bg-white p-1 sm:h-12 sm:w-36 md:h-14 md:w-40">
-              <Image src="/images/folk-logo.jpg" alt="FOLK Chennai Logo" fill className="object-contain" priority />
+              <Image src={branding.logoSrc} alt={branding.logoAlt} fill className="object-contain" priority />
             </div>
           </div>
         </div>
@@ -188,14 +192,14 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F1E54] text-white shadow-lg">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--program-primary)] text-white shadow-lg">
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <Link
               href="/"
               className="relative h-10 w-28 flex-shrink-0 rounded-lg bg-white p-1 ring-1 ring-white/20 sm:h-12 sm:w-36 md:h-14 md:w-40"
             >
-              <Image src="/images/folk-logo.jpg" alt="FOLK Chennai Logo" fill className="object-contain" priority />
+              <Image src={branding.logoSrc} alt={branding.logoAlt} fill className="object-contain" priority />
             </Link>
             {navItems.length > 0 && (
               <nav className="hidden items-center gap-1 rounded-lg bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
@@ -222,7 +226,7 @@ export function Header() {
                   </span>
                   <button
                     onClick={logout}
-                    className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C] sm:text-sm"
+                    className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] sm:text-sm"
                     title="Logout"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -232,7 +236,7 @@ export function Header() {
               ) : (
                 <Link
                   href="/login"
-                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#F98B1C] px-3 text-xs font-semibold text-[#0F1E54] transition-colors hover:bg-[#fab54d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-4 sm:text-sm"
+                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--program-accent)] px-3 text-xs font-semibold text-white transition-colors hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-4 sm:text-sm"
                 >
                   <LogIn className="h-4 w-4" aria-hidden="true" />
                   Login
@@ -244,7 +248,7 @@ export function Header() {
         {navItems.length > 0 && (
           <nav
             data-mobile-app-nav
-            className="fixed inset-x-0 bottom-0 z-50 border-t border-[#0F1E54]/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(15,30,84,0.12)] backdrop-blur md:hidden"
+            className="fixed inset-x-0 bottom-0 z-50 border-t border-black/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(0,0,0,0.12)] backdrop-blur md:hidden"
           >
             <div className="mx-auto flex max-w-md items-center gap-1">
               {navItems.map((item) => {

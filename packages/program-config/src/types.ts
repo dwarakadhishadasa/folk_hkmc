@@ -7,6 +7,7 @@ export interface ProgramBranding {
   publicPath: string
   primaryColor: string
   accentColor: string
+  logoSrc: string
   logoAlt: string
 }
 

@@ -2,7 +2,7 @@
 
 ## Deployment Shape
 
-The app deploys as a standard Next.js App Router application. There is no separate backend service. Route handlers in `app/api` and `app/attendance/route.ts` are the server boundary.
+Each program app deploys as its own standard Next.js App Router application from `apps/folk` or `apps/gita-life`. There is no separate backend service. Route handlers in each app's `app/api` tree and `app/attendance/route.ts` are the server boundary.
 
 The repo includes `@vercel/speed-insights`, so Vercel is a natural deployment target, but no `vercel.json` is present.
 
@@ -94,7 +94,7 @@ If any route paths change, update:
 Run before deploy or PR merge:
 
 ```bash
-pnpm exec tsc --noEmit
+pnpm typecheck:workspace
 pnpm lint
 pnpm build
 ```
@@ -116,5 +116,5 @@ Manual checks should cover:
 - Production secrets must remain owner-controlled.
 - `SUPABASE_SERVICE_ROLE_KEY` grants privileged access and must never reach client code.
 - Airtable schema drift will break runtime operations because field names are referenced directly.
-- `next build` ignores TypeScript errors; use explicit type checking.
+- `next build` ignores TypeScript errors; use explicit workspace type checking.
 - No automated product test suite currently guards regressions.

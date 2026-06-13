@@ -251,14 +251,14 @@ export function InviteUserForm({
         )}
 
         {mode === "admin" && role !== "Volunteer" && (
-          <fieldset className="space-y-3 rounded-2xl border border-[#0F1E54]/10 bg-[#FFF9F0]/60 p-4">
+          <fieldset className="space-y-3 rounded-2xl border border-black/10 bg-[#FFF9F0]/60 p-4">
             <legend className="text-sm font-semibold text-[#24324A]">Location access</legend>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <p className="text-xs text-[#24324A]/65">
                 Select the locations this staff user can access.
               </p>
               <span
-                className="rounded-full bg-[#0F1E54]/10 px-3 py-1 text-xs font-semibold text-[#0F1E54]"
+                className="rounded-full bg-black/5 px-3 py-1 text-xs font-semibold text-[var(--program-primary)]"
                 aria-live="polite"
               >
                 {selectedLocationCount} selected
@@ -266,7 +266,7 @@ export function InviteUserForm({
             </div>
 
             {availableLocations.length > 0 ? (
-              <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-[#0F1E54]/10 bg-white p-2">
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-black/10 bg-white p-2">
                 {availableLocations.map((location) => {
                   const checkboxId = `invite-location-${location.id}`
                   const checked = form.locationIds.includes(location.id)
@@ -277,8 +277,8 @@ export function InviteUserForm({
                       htmlFor={checkboxId}
                       className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition-colors ${
                         checked
-                          ? "border-[#F98B1C] bg-[#F98B1C]/10 text-[#24324A]"
-                          : "border-transparent text-[#24324A] hover:border-[#0F1E54]/10 hover:bg-[#0F1E54]/5"
+                          ? "border-[var(--program-accent)] bg-[#FFF3DF] text-[#24324A]"
+                          : "border-transparent text-[#24324A] hover:border-black/10 hover:bg-black/5"
                       }`}
                     >
                       <input
@@ -286,7 +286,7 @@ export function InviteUserForm({
                         type="checkbox"
                         checked={checked}
                         onChange={(event) => setLocationSelected(location.id, event.target.checked)}
-                        className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[#F98B1C]"
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[var(--program-accent)]"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block font-medium">{location.name}</span>
@@ -319,7 +319,7 @@ export function InviteUserForm({
                 type="button"
                 onClick={handleAddLocation}
                 disabled={isAddingLocation || isSubmitting}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border-2 border-[#F98B1C] px-4 text-sm font-semibold text-[#0F1E54] transition-colors hover:bg-[#F98B1C]/10 disabled:border-gray-200 disabled:text-gray-400 sm:self-end"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border-2 border-[var(--program-accent)] px-4 text-sm font-semibold text-[var(--program-primary)] transition-colors hover:bg-[#FFF3DF] disabled:border-gray-200 disabled:text-gray-400 sm:self-end"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 {isAddingLocation ? "Adding..." : "Add"}
@@ -331,7 +331,7 @@ export function InviteUserForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full rounded-xl bg-[#F98B1C] px-5 py-3 font-semibold text-white disabled:bg-gray-300"
+          className="w-full rounded-xl bg-[var(--program-accent)] px-5 py-3 font-semibold text-white disabled:bg-gray-300"
         >
           {isSubmitting ? "Sending..." : "Send Invite"}
         </button>

@@ -1,1 +1,3 @@
-export { default } from "../../../../app/register/loading"
+export default function Loading() {
+  return null
+}

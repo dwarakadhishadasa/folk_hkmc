@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { AlertTriangle } from "lucide-react"
 
 export function AttendanceForm({ sessionId }: { sessionId: string }) {
   const router = useRouter()
@@ -83,8 +84,8 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
     return (
       <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 text-center animate-fade-in-up">
         <div className="mb-6">
-          <div className="mx-auto w-20 h-20 bg-[#F98B1C]/10 rounded-full flex items-center justify-center mb-4 animate-checkmark">
-            <svg className="w-10 h-10 text-[#F98B1C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="mx-auto w-20 h-20 bg-[#FFF3DF] rounded-full flex items-center justify-center mb-4 animate-checkmark">
+            <svg className="w-10 h-10 text-[var(--program-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -93,7 +94,7 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
               />
             </svg>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-[#24324A] mb-2 font-[family-name:var(--font-poppins)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-[var(--program-text)] mb-2 font-[family-name:var(--font-poppins)]">
             Hare Krishna {userName}!
           </h2>
           <p className="text-[#24324A]/70 text-sm sm:text-base">Your attendance has already been marked for today</p>
@@ -101,7 +102,7 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
         </div>
         <button
           onClick={handleMarkAnother}
-          className="w-full sm:w-auto px-6 py-3 bg-[#0F1E54] hover:bg-[#1a2d6d] text-white font-medium rounded-xl transition-colors"
+          className="w-full sm:w-auto px-6 py-3 bg-[var(--program-primary)] hover:bg-[var(--program-primary-light)] text-white font-medium rounded-xl transition-colors"
         >
           Mark Another Attendance
         </button>
@@ -119,7 +120,7 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-[#24324A] mb-2 font-[family-name:var(--font-poppins)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-[var(--program-text)] mb-2 font-[family-name:var(--font-poppins)]">
             Hare Krishna {userName}!
           </h2>
           <p className="text-green-600 font-medium text-base sm:text-lg">Attendance marked successfully</p>
@@ -127,7 +128,7 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
         </div>
         <button
           onClick={handleMarkAnother}
-          className="w-full sm:w-auto px-6 py-3 bg-[#0F1E54] hover:bg-[#1a2d6d] text-white font-medium rounded-xl transition-colors"
+          className="w-full sm:w-auto px-6 py-3 bg-[var(--program-primary)] hover:bg-[var(--program-primary-light)] text-white font-medium rounded-xl transition-colors"
         >
           Mark Another Attendance
         </button>
@@ -138,7 +139,7 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
   // Form view
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-      <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-5 text-white">
+      <div className="bg-[var(--program-primary)] px-6 py-5 text-white">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
             <span className="text-xl">📱</span>
@@ -158,14 +159,14 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
         )}
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <span className="text-red-500 text-lg">⚠️</span>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
             <p className="text-sm text-red-700">{error}</p>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label htmlFor="mobile" className="block text-sm font-medium text-[#24324A] mb-2">
+            <label htmlFor="mobile" className="block text-sm font-medium text-[var(--program-text)] mb-2">
               Mobile Number
             </label>
             <input
@@ -177,7 +178,7 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
               onChange={(e) => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
               maxLength={10}
               required
-              className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all placeholder:text-gray-400"
+              className="w-full px-4 py-3.5 text-lg border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[var(--program-accent)] focus:border-[var(--program-accent)] transition-all placeholder:text-gray-400"
             />
             {mobile && !isMobileValid && (
               <p className="text-xs text-red-600 mt-2">Please enter a valid 10-digit number</p>
@@ -187,7 +188,7 @@ export function AttendanceForm({ sessionId }: { sessionId: string }) {
           <button
             type="submit"
             disabled={isSubmitting || !isMobileValid || !sessionId}
-            className="w-full py-4 bg-[#F98B1C] hover:bg-[#e07a10] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-[#F98B1C]/30 disabled:shadow-none"
+            className="w-full py-4 bg-[var(--program-accent)] hover:bg-[var(--program-accent-dark)] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-black/10 disabled:shadow-none"
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center gap-2">

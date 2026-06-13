@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useAuth } from "@/lib/auth-context"
+import { currentProgramProfile } from "@/lib/current-program"
 
 const DISMISSAL_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -14,6 +15,7 @@ type StandaloneNavigator = Navigator & { standalone?: boolean }
 
 export function PWAInstallPrompt() {
   const { isHydrated, isLoggedIn, staff } = useAuth()
+  const { branding } = currentProgramProfile
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [isPromptEligible, setIsPromptEligible] = useState(false)
   const [isDismissed, setIsDismissed] = useState(false)
@@ -114,18 +116,18 @@ export function PWAInstallPrompt() {
   if (!isHydrated || !isLoggedIn || !staff || !isPromptEligible || isDismissed) return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-orange-600 text-white p-4 shadow-lg border-t-4 border-orange-700">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--program-accent)] text-white p-4 shadow-lg border-t-4 border-[var(--program-accent-dark)]">
       <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
           <div className="bg-white rounded-lg p-2 flex-shrink-0">
-            <img src="/images/folk-logo.png" alt="FOLK Logo" className="w-10 h-10" />
+            <img src={branding.logoSrc} alt={branding.logoAlt} className="w-10 h-10 object-contain" />
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-lg">Install FOLK Chennai</h3>
+            <h3 className="font-bold text-lg">Install {branding.shortName}</h3>
             {isIos ? (
-              <p className="text-sm text-orange-100">Tap the Share button, then {"'Add to Home Screen'"}</p>
+              <p className="text-sm text-white/80">Tap the Share button, then {"'Add to Home Screen'"}</p>
             ) : (
-              <p className="text-sm text-orange-100">Install the app for quick access and offline support</p>
+              <p className="text-sm text-white/80">Install the app for quick access and offline support</p>
             )}
           </div>
         </div>
@@ -133,14 +135,14 @@ export function PWAInstallPrompt() {
           {!isIos && installPrompt && (
             <button
               onClick={handleInstallClick}
-              className="px-4 py-2 bg-white text-orange-600 font-semibold rounded-lg hover:bg-orange-50 transition-colors"
+              className="px-4 py-2 bg-white text-[var(--program-primary)] font-semibold rounded-lg hover:bg-[#FFF9F0] transition-colors"
             >
               Install
             </button>
           )}
           <button
             onClick={handleDismiss}
-            className="px-4 py-2 bg-orange-700 text-white font-semibold rounded-lg hover:bg-orange-800 transition-colors"
+            className="px-4 py-2 bg-black/15 text-white font-semibold rounded-lg hover:bg-black/25 transition-colors"
           >
             Later
           </button>

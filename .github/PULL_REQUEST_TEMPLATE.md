@@ -13,9 +13,11 @@
 
 ## Local Verification
 
-- [ ] `pnpm exec tsc --noEmit`
-- [ ] `pnpm build`
+- [ ] `pnpm guardrails`
+- [ ] `pnpm typecheck:workspace`
+- [ ] `pnpm build:apps`
 - [ ] `pnpm lint`
+- [ ] CI Quality Gates pass with typecheck before build.
 - [ ] Manual checks documented below, if relevant.
 
 ## Manual Checks

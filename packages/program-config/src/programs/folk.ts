@@ -11,6 +11,7 @@ export const folkProgramProfile = {
     publicPath: "/activities/folk",
     primaryColor: "#0F1E54",
     accentColor: "#F98B1C",
+    logoSrc: "/images/folk-logo.jpg",
     logoAlt: "FOLK Chennai Logo",
   },
   modules: {

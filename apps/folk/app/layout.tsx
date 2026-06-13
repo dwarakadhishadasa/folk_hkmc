@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from "next"
 import { Inter, Poppins } from "next/font/google"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Providers } from "@/components/providers"
-import "../../../app/globals.css"
+import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const poppins = Poppins({

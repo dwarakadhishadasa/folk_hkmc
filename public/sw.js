@@ -22,10 +22,14 @@ const PRECACHE_ASSETS = [
   "/attend",
   "/offline.html",
   "/manifest.json",
+  "/manifest.webmanifest",
   "/icons/icon-192x192.jpg",
   "/icons/icon-512x512.jpg",
   "/icons/apple-touch-icon.jpg",
   "/images/folk-logo.png",
+  "/assets/activities/gita-life/Gita_life_logo.png",
+  "/assets/about-hkm-krishna-arjuna.jpg",
+  "/assets/srila-prabhupada.png",
 ]
 
 function openDB() {

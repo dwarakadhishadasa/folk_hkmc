@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Copy, Share2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
+import { currentProgramProfile } from "@/lib/current-program"
 
 interface AttendanceRecord {
   id: string
@@ -39,6 +40,7 @@ function getBackgroundColor(index: number): string {
 }
 
 export function LiveAttendanceDashboard({ activeSession }: { activeSession?: DashboardSessionContext }) {
+  const { branding } = currentProgramProfile
   const [attendanceList, setAttendanceList] = useState<AttendanceRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
@@ -193,7 +195,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-4 text-white">
+          <div className="bg-[var(--program-primary)] px-6 py-4 text-white">
             <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)]">Attendance QR Code</h2>
             <p className="text-white/70 text-sm">Show this QR to members for quick check-in</p>
           </div>
@@ -204,15 +206,15 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                   <QRCodeSVG value={attendanceLink} size={220} className="rounded-lg" />
                 </div>
                 <div className="mt-4 text-center">
-                  <span className="inline-block rounded-full bg-[#0F1E54]/5 px-4 py-2 text-sm font-medium text-[#0F1E54]">
-                    FOLK Chennai Attendance
+                  <span className="inline-block rounded-full bg-black/5 px-4 py-2 text-sm font-medium text-[var(--program-primary)]">
+                    {branding.shortName} Attendance
                   </span>
                   <p className="mt-2 max-w-[250px] break-all text-xs text-[#24324A]/50">{attendanceLink}</p>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={copyAttendanceLink}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#0F1E54]/15 px-3 text-sm font-semibold text-[#0F1E54] transition-colors hover:bg-[#0F1E54]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-black/10 px-3 text-sm font-semibold text-[var(--program-primary)] transition-colors hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
                     >
                       <Copy className="h-4 w-4" aria-hidden="true" />
                       Copy
@@ -220,7 +222,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                     <button
                       type="button"
                       onClick={shareAttendanceLink}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#F98B1C] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#e07a10] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F1E54]"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--program-accent)] px-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
                     >
                       <Share2 className="h-4 w-4" aria-hidden="true" />
                       Share
@@ -241,7 +243,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                 </p>
                 <a
                   href="/sessions"
-                  className="mt-4 inline-flex rounded-xl bg-[#0F1E54] px-5 py-3 text-sm font-semibold text-white"
+                  className="mt-4 inline-flex rounded-xl bg-[var(--program-primary)] px-5 py-3 text-sm font-semibold text-white"
                 >
                   Open Sessions
                 </a>
@@ -252,12 +254,12 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
 
         {/* Attendance List Card */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-4 text-white">
+          <div className="bg-[var(--program-primary)] px-6 py-4 text-white">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)] flex items-center gap-2">
                   {"Today's Attendance"}
-                  <span className="inline-block bg-[#F98B1C] text-white px-2.5 py-0.5 rounded-full text-xs font-bold">
+                  <span className="inline-block bg-[var(--program-accent)] text-white px-2.5 py-0.5 rounded-full text-xs font-bold">
                     {attendanceList.length}
                   </span>
                 </h2>
@@ -291,7 +293,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                     className={`flex items-center justify-between p-3 ${getBackgroundColor(index)} rounded-xl transition-all hover:scale-[1.01]`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="flex items-center justify-center h-9 w-9 rounded-full bg-[#0F1E54] text-white text-sm font-bold">
+                      <span className="flex items-center justify-center h-9 w-9 rounded-full bg-[var(--program-primary)] text-white text-sm font-bold">
                         {index + 1}
                       </span>
                       <div>

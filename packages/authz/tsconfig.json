@@ -8,5 +8,5 @@
       "@hkmc/program-config/server": ["../program-config/src/server.ts"]
     }
   },
-  "include": ["src/**/*.ts", "../../lib/**/*.ts"]
+  "include": ["src/**/*.ts", "../../lib/authz.ts"]
 }

@@ -1,1 +1,7 @@
-export { default } from "../../../../app/admin/page"
+import { redirect } from "next/navigation"
+
+export const dynamic = "force-dynamic"
+
+export default function AdminPage() {
+  redirect("/manage")
+}

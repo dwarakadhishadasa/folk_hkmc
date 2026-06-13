@@ -4,6 +4,7 @@ import type React from "react"
 import { useRef, useState } from "react"
 import { Toaster } from "@/components/ui/toaster"
 import { useToast } from "@/hooks/use-toast"
+import { currentProgramProfile } from "@/lib/current-program"
 
 interface ContactData {
   name: string
@@ -53,6 +54,7 @@ export function ContactForm({
   staffRole: "Admin" | "Preacher" | "Volunteer"
   preachers?: PreacherOption[]
 }) {
+  const { branding } = currentProgramProfile
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<ContactData>(initialFormData)
   const [phoneError, setPhoneError] = useState("")
@@ -169,12 +171,12 @@ export function ContactForm({
   return (
     <>
       <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="bg-blue-600 text-white p-6">
+        <div className="bg-[var(--program-primary)] text-white p-6">
           <h2 className="text-xl font-bold">New Contact</h2>
-          <p className="text-blue-100 text-sm mt-1">Add a new contact to the FOLK database</p>
+          <p className="text-white/75 text-sm mt-1">Add a new contact to the {branding.shortName} database</p>
         </div>
         <div className="p-6">
-          <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <div className="mb-4 rounded-md border border-black/10 bg-[#FFF9F0] px-4 py-3 text-sm text-[var(--program-primary)]">
             {staffRole === "Volunteer" && "Volunteer contacts are assigned to your Preacher and the location you enter."}
             {staffRole === "Preacher" && "Contacts you create are assigned to you and the location you enter."}
             {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
@@ -198,7 +200,7 @@ export function ContactForm({
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
               />
             </div>
 
@@ -216,7 +218,7 @@ export function ContactForm({
                 onChange={handleChange}
                 required
                 maxLength={10}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)] ${
                   phoneError ? "border-red-500" : "border-gray-300"
                 }`}
               />
@@ -233,7 +235,7 @@ export function ContactForm({
                 type="date"
                 value={formData.dateOfBirth}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
               />
             </div>
 
@@ -246,7 +248,7 @@ export function ContactForm({
                 name="occupation"
                 value={formData.occupation}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
               >
                 <option value="">Select occupation type</option>
                 <option value="Studying">Student</option>
@@ -265,7 +267,7 @@ export function ContactForm({
                     name="year"
                     value={formData.year}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
                   >
                     <option value="">Select year</option>
                     <option value="1st year">1st Year</option>
@@ -287,7 +289,7 @@ export function ContactForm({
                     placeholder="Enter college name"
                     value={formData.college}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
                   />
                 </div>
               </>
@@ -305,7 +307,7 @@ export function ContactForm({
                   placeholder="Enter company name"
                   value={formData.company}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
                 />
               </div>
             )}
@@ -321,7 +323,7 @@ export function ContactForm({
                   value={formData.assignedPreacherAirtableUserId}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
                 >
                   <option value="">Select Preacher</option>
                   {preachers.map((preacher) => (
@@ -345,7 +347,7 @@ export function ContactForm({
                 value={formData.location}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
               />
             </div>
 
@@ -360,14 +362,14 @@ export function ContactForm({
                 value={formData.comments}
                 onChange={handleChange}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--program-accent)]"
               />
             </div>
 
             <button
               type="submit"
               disabled={isSubmitting || phoneError !== "" || !formData.location.trim()}
-              className="w-full py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className="w-full py-3 bg-[var(--program-accent)] text-white font-medium rounded-md hover:bg-[var(--program-accent-dark)] disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               {isSubmitting ? "Saving..." : "Save"}
             </button>

@@ -74,7 +74,7 @@ const SESSION_LOADING_ROWS = [
 
 function LoadingBar({ className }: { className: string }) {
   return (
-    <span className={`relative block overflow-hidden rounded-full bg-[#0F1E54]/10 ${className}`}>
+    <span className={`relative block overflow-hidden rounded-full bg-black/5 ${className}`}>
       <span
         data-session-loader-shimmer
         className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-gradient-to-r from-transparent via-white/90 to-transparent"
@@ -139,11 +139,11 @@ function SessionsLoadingState() {
           <div
             key={index}
             data-session-loader-row
-            className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-xl border border-[#0F1E54]/10 bg-[#FFF9F0]/70 px-4 py-3 opacity-0"
+            className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-xl border border-black/10 bg-[#FFF9F0]/70 px-4 py-3 opacity-0"
           >
             <span
               data-session-loader-dot
-              className="h-8 w-8 rounded-full bg-[#F98B1C]/20 ring-1 ring-[#F98B1C]/30"
+              className="h-8 w-8 rounded-full bg-[#FFF3DF] ring-1 ring-[var(--program-accent)]"
               aria-hidden="true"
             />
             <span className="min-w-0 space-y-2">
@@ -342,7 +342,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
         <button
           type="submit"
           disabled={isSubmitting || locations.length === 0}
-          className="rounded-xl bg-[#F98B1C] px-5 py-3 font-semibold text-white disabled:bg-gray-300 md:col-span-3"
+          className="rounded-xl bg-[var(--program-accent)] px-5 py-3 font-semibold text-white disabled:bg-gray-300 md:col-span-3"
         >
           {isSubmitting ? "Starting..." : "Start Session"}
         </button>

@@ -6,6 +6,11 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    settings: {
+      next: {
+        rootDir: ["apps/folk/", "apps/gita-life/"],
+      },
+    },
     rules: {
       "react-hooks/error-boundaries": "off",
       "react-hooks/purity": "off",

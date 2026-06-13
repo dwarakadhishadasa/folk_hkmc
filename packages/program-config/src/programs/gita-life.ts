@@ -9,8 +9,9 @@ export const gitaLifeProgramProfile = {
     shortName: "Gita Life",
     portalLabel: "Gita Life Portal",
     publicPath: "/activities/gita-life",
-    primaryColor: "#123A5A",
-    accentColor: "#D99A20",
+    primaryColor: "#2D0A0A",
+    accentColor: "#EA580C",
+    logoSrc: "/assets/activities/gita-life/Gita_life_logo.png",
     logoAlt: "Gita Life Logo",
   },
   modules: {
