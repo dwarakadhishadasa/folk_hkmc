@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { Header } from "@/components/header"
 import { SessionsManager } from "@/components/sessions-manager"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
-import { listCachedLocations } from "@/lib/airtable"
+import { listLocations } from "@/lib/airtable"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
@@ -11,7 +11,7 @@ export default async function SessionsPage() {
   try {
     const staff = await getStaffContext()
     requireRole(staff, ["Admin", "Preacher"])
-    const allLocations = await listCachedLocations()
+    const allLocations = await listLocations()
     const locations =
       staff.role === "Admin"
         ? allLocations

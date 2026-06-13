@@ -3,7 +3,7 @@ import { Header } from "@/components/header"
 import { InviteUserForm } from "@/components/invite-user-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
-import { listCachedActivePreachers, listCachedLocations } from "@/lib/airtable"
+import { listCachedActivePreachers, listLocations } from "@/lib/airtable"
 
 export const dynamic = "force-dynamic"
 
@@ -11,7 +11,7 @@ export default async function AdminInvitePage() {
   try {
     const staff = await getStaffContext()
     requireRole(staff, ["Admin"])
-    const [preachers, locations] = await Promise.all([listCachedActivePreachers(), listCachedLocations()])
+    const [preachers, locations] = await Promise.all([listCachedActivePreachers(), listLocations()])
 
     return (
       <StaffAuthShell staff={staff}>
