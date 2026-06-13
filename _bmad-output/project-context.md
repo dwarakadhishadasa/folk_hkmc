@@ -123,7 +123,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Use `pnpm` conventions because the repo includes `pnpm-lock.yaml` and package scripts for `dev`, `build`, `start`, `lint`, and Supabase helpers.
 - Use `pnpm quality:ci` for the full local quality gate: guardrails, recursive workspace typecheck, app builds, then lint.
 - Use `pnpm supabase:start`, `pnpm supabase:env`, and `pnpm dev` or `pnpm dev:gita-life` for local Supabase-backed development.
-- Branch workflow: normal work happens on `feature/*` branches, targeting `dev`; `main` is owner-controlled production.
+- Branch workflow: normal work happens on `feature/*` or `fix/*` branches, targeting `dev`; `main` is owner-controlled production.
 - Treat `_bmad-output/`, `design-artifacts/`, and `docs/` as supporting artifacts and references; the actual product code lives under `apps/`, `components/`, `hooks/`, `lib/`, `packages/`, `public/`, `scripts/`, `supabase/`, and `styles/`.
 
 ### Critical Don't-Miss Rules

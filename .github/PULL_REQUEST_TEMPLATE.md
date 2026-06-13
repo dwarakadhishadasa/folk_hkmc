@@ -4,7 +4,7 @@
 
 ## Branch and Access Checklist
 
-- [ ] This PR is from a `feature/*` branch.
+- [ ] This PR is from a `feature/*` or `fix/*` branch.
 - [ ] This PR targets `dev`, or Dwaraka explicitly requested a `main` target.
 - [ ] If this PR targets `main`, Dwaraka will apply the `production-review-approved` label.
 - [ ] I did not push directly to `main` or `dev`.
