@@ -49,7 +49,7 @@ function parseDurationMinutes(value: unknown): { durationMinutes?: number; error
 
 export async function GET() {
   try {
-    const staff = await getStaffContext()
+    const staff = await getStaffContext({ refresh: true })
     requireRole(staff, ["Admin", "Preacher"])
 
     const sessions = await listSessions()
@@ -82,7 +82,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const staff = await getStaffContext()
+    const staff = await getStaffContext({ refresh: true })
     requireRole(staff, ["Admin", "Preacher"])
 
     const payload = (await request.json()) as SessionPayload

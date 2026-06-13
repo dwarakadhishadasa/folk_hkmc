@@ -49,6 +49,12 @@ type StaffMembershipRow = Database["public"]["Tables"]["staff_memberships"]["Row
 
 const DEFAULT_STAFF_SYNC_STALE_AFTER_MINUTES = 24 * 60
 
+interface StaffContextOptions {
+  programId?: ProgramId
+  action?: string
+  refresh?: boolean
+}
+
 function staleThresholdMs(programId: ProgramId): number {
   const profile = getServerProgramProfile(programId)
   const value =
@@ -282,7 +288,7 @@ export async function syncStaffProfileByEmail(params: {
   }
 }
 
-export async function getStaffContext(options: { programId?: ProgramId; action?: string } = {}): Promise<StaffContext> {
+export async function getStaffContext(options: StaffContextOptions = {}): Promise<StaffContext> {
   const programId = options.programId || resolveProgramId()
   const supabase = await createSupabaseServerClient()
   const {
@@ -297,6 +303,10 @@ export async function getStaffContext(options: { programId?: ProgramId; action?:
   const email = user.email?.trim().toLowerCase()
   if (!email) {
     throw new AuthzError(403, "missing_email", "The signed-in user does not have an email.")
+  }
+
+  if (options.refresh) {
+    return syncStaffProfileByEmail({ supabaseUserId: user.id, email, programId })
   }
 
   const supabaseAdmin = createSupabaseAdminClient()

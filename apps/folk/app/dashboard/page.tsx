@@ -34,7 +34,7 @@ function sessionStartTime(session: SessionRecord): number {
 
 export default async function DashboardPage() {
   try {
-    const staff = await getStaffContext()
+    const staff = await getStaffContext({ refresh: true })
     requireRole(staff, ["Admin", "Preacher"])
     let activeSession: DashboardSessionContext | undefined
 

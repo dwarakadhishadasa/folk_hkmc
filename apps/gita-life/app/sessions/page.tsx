@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 
 export default async function SessionsPage() {
   try {
-    const staff = await getStaffContext()
+    const staff = await getStaffContext({ refresh: true })
     requireRole(staff, ["Admin", "Preacher"])
     const allLocations = await listLocations()
     const locations =
