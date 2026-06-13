@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@hkmc/data-contracts": ["../data-contracts/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

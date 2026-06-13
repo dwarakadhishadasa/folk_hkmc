@@ -14,7 +14,9 @@ const eslintConfig = defineConfig([
   },
   globalIgnores([
     ".next/**",
+    "apps/*/.next/**",
     ".agents/**",
+    "_bmad/**",
     "_bmad-output/**",
     "out/**",
     "build/**",

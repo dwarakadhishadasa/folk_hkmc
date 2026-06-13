@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+import { LogIn, UserPlus } from "lucide-react"
 import { Header } from "@/components/header"
 
 const courseTopics = [
@@ -83,6 +85,22 @@ export default function Home() {
               Crystallizing the formative phase of the younger generation with key values through the timeless wisdom of
               Bhagavad Gita
             </p>
+            <div className="flex flex-col justify-center gap-3 sm:flex-row">
+              <Link
+                href="/login"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#F98B1C] px-5 text-sm font-semibold text-[#0F1E54] transition-colors hover:bg-[#fab54d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <LogIn className="h-4 w-4" aria-hidden="true" />
+                FOLK Portal
+              </Link>
+              <Link
+                href="/register"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/70 px-5 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]"
+              >
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
+                Register
+              </Link>
+            </div>
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#FFF9F0] to-transparent" />

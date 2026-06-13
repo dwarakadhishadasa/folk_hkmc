@@ -1,0 +1,179 @@
+import type { ServerProgramProfile } from "../types"
+
+type TableSet = ServerProgramProfile["airtable"]["tables"]
+
+const writable = "writable" as const
+const readOnly = "read-only" as const
+
+export const operationalTables: TableSet = {
+  contacts: {
+    id: "tbltzdtCmCHf6gJKD",
+    name: "Contacts",
+    primaryFieldId: "fld8SsX2vXZU3uE1g",
+    fields: {
+      name: { id: "fld8SsX2vXZU3uE1g", label: "Name", type: "singleLineText", access: writable },
+      phone: { id: "fld746R8PKbcKRXse", label: "Phone", type: "singleLineText", access: writable },
+      year: { id: "fldXK5bdOsHyIn6r7", label: "Year", type: "singleSelect", access: writable },
+      source: { id: "fld2oGmIKM21mGpDM", label: "Source", type: "singleSelect", access: writable },
+      notes: { id: "fldkz2Wy0kBySyMUs", label: "Notes", type: "singleLineText", access: writable },
+      initialContact: { id: "fldA7u04AN1QGJiZd", label: "Initial Contact", type: "date", access: writable },
+      lastContactedOn: { id: "fldCo370C6hCcgKcC", label: "Last Contacted On", type: "date", access: writable },
+      age: { id: "fldEwgdNymKULq2el", label: "Age", type: "number", access: writable },
+      dateOfBirth: { id: "fldvU1WsX1FV7BxxK", label: "Date of Birth", type: "date", access: writable },
+      location: { id: "fldvkZbuEvFr8WW72", label: "Location", type: "multipleRecordLinks", access: writable },
+      assignedPreacher: {
+        id: "fldiG9nSAfBWbw3ij",
+        label: "Assigned Preacher",
+        type: "multipleRecordLinks",
+        access: writable,
+      },
+      collectedBy: { id: "fldOiszMxhsWOI9OC", label: "Collected By", type: "multipleRecordLinks", access: writable },
+      analytics: { id: "fldSzNUmuGmbE1i9U", label: "Analytics", type: "multipleRecordLinks", access: writable },
+      college: { id: "fldtbZToYqsJx3O1m", label: "College", type: "singleLineText", access: writable },
+      company: { id: "fldZGRXtDgGGHdlk9", label: "Company", type: "singleLineText", access: writable },
+      totalAttendanceCount: {
+        id: "fldxdZSq7gfqfgueW",
+        label: "TotalAttendanceCount",
+        type: "count",
+        access: readOnly,
+      },
+      attendanceLog: { id: "flduEPGzcn2ZNpUi0", label: "AttendanceLog", type: "rollup", access: readOnly },
+      past60DayAttendanceCount: {
+        id: "fldL6lzjy9Vh9EljR",
+        label: "Past60DayAttendanceCount",
+        type: "rollup",
+        access: readOnly,
+      },
+      visibleTo: {
+        id: "fldS01FusXYZWa2Fw",
+        label: "Visible To",
+        type: "multipleLookupValues",
+        access: readOnly,
+      },
+    },
+  },
+  attendance: {
+    id: "tblxfB2W2l6OXc2IX",
+    name: "Attendance",
+    primaryFieldId: "fldlneeesd7tMxUIG",
+    fields: {
+      phone: { id: "fldlneeesd7tMxUIG", label: "Phone", type: "singleLineText", access: writable },
+      name: { id: "fldhZJflE7RhUqwST", label: "Name", type: "singleLineText", access: writable },
+      processed: { id: "fldxdx1BjiZF11s8m", label: "Processed?", type: "checkbox", access: writable },
+      session: { id: "fldJ9Yhz6NbrE6MhR", label: "Session", type: "multipleRecordLinks", access: writable },
+      contact: { id: "fld5uKAqO8yXFlg5F", label: "Contact", type: "multipleRecordLinks", access: writable },
+      sessionDate: { id: "fldF7ABQORmBaJerW", label: "Session Date", type: "multipleLookupValues", access: readOnly },
+      location: { id: "fldg8foQRZt9QMecn", label: "Location", type: "multipleLookupValues", access: readOnly },
+      sessionPreacher: {
+        id: "fldCqWQRp8Yg66XeJ",
+        label: "Session Preacher",
+        type: "multipleLookupValues",
+        access: readOnly,
+      },
+      sessionName: { id: "fldlO1ArsNlhOOESz", label: "Session Name", type: "multipleLookupValues", access: readOnly },
+      visibleTo: { id: "fldddXEd3muq0vqVZ", label: "Visible To", type: "multipleCollaborators", access: writable },
+    },
+  },
+  sessions: {
+    id: "tbl9AbwkiIaAwK20X",
+    name: "Sessions",
+    primaryFieldId: "fld5z4R4R9ervCeGR",
+    fields: {
+      name: { id: "fld5z4R4R9ervCeGR", label: "Name", type: "singleLineText", access: writable },
+      notes: { id: "fldjT8HjxdRzfqrmv", label: "Notes", type: "multilineText", access: writable },
+      sessionDate: { id: "fldamDX1vEq58nWae", label: "Session Date", type: "date", access: writable },
+      location: { id: "fldQ4SaaJGTgAMYCG", label: "Location", type: "multipleRecordLinks", access: writable },
+      preacher: { id: "fld7LZkXSACmRhB3H", label: "Preacher", type: "multipleRecordLinks", access: writable },
+      status: { id: "fldfrj7Oi85vh04mo", label: "Status", type: "singleSelect", access: writable },
+      analytics: { id: "fldcIHPHRFL5Hs0Fo", label: "Analytics", type: "multipleRecordLinks", access: writable },
+      publicAttendanceEnabled: {
+        id: "fldVkmOgalZOWAwoB",
+        label: "Public Attendance Enabled",
+        type: "checkbox",
+        access: writable,
+      },
+      attendanceOpensAt: {
+        id: "fld2il5FEK1fDBeN4",
+        label: "Attendance Opens At",
+        type: "dateTime",
+        access: writable,
+      },
+      attendanceClosesAt: {
+        id: "fldOamVt7HE6Cf2s4",
+        label: "Attendance Closes At",
+        type: "dateTime",
+        access: writable,
+      },
+      attendanceUrl: { id: "fldScLbxVMHehGpnP", label: "Attendance URL", type: "url", access: writable },
+      durationMinutes: { id: "fldrke8mwfTq1N0Hq", label: "Duration Minutes", type: "number", access: writable },
+      attendanceRecords: {
+        id: "fld4EgGpwwnBklsED",
+        label: "Attendance Records",
+        type: "multipleRecordLinks",
+        access: readOnly,
+      },
+      attendeeCount: { id: "fldUwvrIZrSUv51Gp", label: "Attendee Count", type: "count", access: readOnly },
+      locationUsers: {
+        id: "fldGgNARXLlta5Lne",
+        label: "Location Users",
+        type: "multipleLookupValues",
+        access: readOnly,
+      },
+    },
+  },
+  users: {
+    id: "tbl2aiD2NfvrBMnfI",
+    name: "Users",
+    primaryFieldId: "fldAxt0CvuegC3MnZ",
+    fields: {
+      name: { id: "fldAxt0CvuegC3MnZ", label: "Name", type: "singleLineText", access: writable },
+      email: { id: "fldJEg1ZKuJXbDwja", label: "Email", type: "email", access: writable },
+      role: { id: "fld3gD17qO9nk4sxz", label: "Role", type: "singleSelect", access: writable },
+      status: { id: "fldH77NSXKAxbecCp", label: "Status", type: "singleSelect", access: writable },
+      locations: { id: "fldtk1f5Mi45xmdMG", label: "Locations", type: "multipleRecordLinks", access: writable },
+      portalAccount: { id: "fldWfRLhTc29I1FSb", label: "Portal Account", type: "singleCollaborator", access: writable },
+      supabaseUserId: { id: "fldDvNXnFXRoaLhIq", label: "Supabase User ID", type: "singleLineText", access: writable },
+      invitedBy: { id: "fld0pNLxBz7VsyIgo", label: "Invited By", type: "multipleRecordLinks", access: writable },
+      invitedUsers: { id: "fldyU6Zsw3Frt4UE2", label: "Invited Users", type: "multipleRecordLinks", access: readOnly },
+      assignedPreacher: {
+        id: "fldlzGkIw4LS0MbPS",
+        label: "Assigned Preacher",
+        type: "multipleRecordLinks",
+        access: writable,
+      },
+      assignedVolunteers: {
+        id: "fldec5Zqr33dDwVQd",
+        label: "Assigned Volunteers",
+        type: "multipleRecordLinks",
+        access: readOnly,
+      },
+      inviteStatus: { id: "fldXpdnmu0UUKlUXc", label: "Invite Status", type: "singleSelect", access: writable },
+      inviteSentAt: { id: "fldDiJksXJZjVt0k0", label: "Invite Sent At", type: "dateTime", access: writable },
+      deactivatedAt: { id: "fldiyvPHh4GXupVFy", label: "Deactivated At", type: "dateTime", access: writable },
+    },
+  },
+  locations: {
+    id: "tbl5IOOcS2RUkXzyG",
+    name: "Locations",
+    primaryFieldId: "fldarUNLPjl1aCg2M",
+    fields: {
+      name: { id: "fldarUNLPjl1aCg2M", label: "Name", type: "singleLineText", access: writable },
+      code: { id: "fld6Zi4QlWPlNj63y", label: "Code", type: "singleLineText", access: writable },
+      status: { id: "fldcqcFRLJrFd77Iw", label: "Status", type: "singleSelect", access: writable },
+      users: { id: "fldsg5L3wsi5lSYZR", label: "Users", type: "multipleRecordLinks", access: readOnly },
+      contacts: { id: "fldKyJe4gDRuq4T3O", label: "Contacts", type: "multipleRecordLinks", access: readOnly },
+      sessions: { id: "fldU6o0N4Evb1Ju98", label: "Sessions", type: "multipleRecordLinks", access: readOnly },
+    },
+  },
+}
+
+export const adminPortalInterface = {
+  id: "pbdulzzIJXUBqdPut",
+  name: "Admin Portal",
+  pages: {
+    contacts: { id: "pagHmCzuqPSMcXjZx", name: "Contacts", type: "list", sourceTable: "contacts" },
+    dashboard: { id: "pagc77PtbNsr9ljWu", name: "Dashboard", type: "dashboard", sourceTable: "contacts" },
+    sessions: { id: "pager0WDWhaPcr3B5", name: "Sessions", type: "list", sourceTable: "sessions" },
+    contactDetails: { id: "paglQ8Ap69TqRidpA", name: "Contact Details", type: "list", sourceTable: "contacts" },
+  },
+} satisfies ServerProgramProfile["airtable"]["interfaces"]["adminPortal"]

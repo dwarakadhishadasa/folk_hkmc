@@ -1,6 +1,10 @@
+---
+baseline_commit: 5abac7e0baddbcec2bb161e230c9519336a66eee
+---
+
 # Story 0.1: Resolve Airtable Schema Gate DD-1
 
-Status: ready-for-dev
+Status: review
 
 <!-- Freshly generated from `_bmad-output/planning-artifacts/epics.md` on 2026-06-13T00:44:20+05:30. -->
 
@@ -22,14 +26,14 @@ so that Program Capability Profiles and Airtable adapters can be implemented wit
 
 ## Tasks / Subtasks
 
-- [ ] Produce or update the decision artifact for `Resolve Airtable Schema Gate DD-1` (AC: 1, 2)
-  - [ ] Record decision status, owner, date, source of truth, dependent stories, waiver expiry if applicable, and acceptance risk.
-  - [ ] Keep secrets out of docs and client-readable config.
-- [ ] Update dependent planning references without pretending unresolved decisions are complete
-  - [ ] Leave blocking dependencies visible when a gate is only waived.
-- [ ] Verify the implementation
-  - [ ] Run required lint/type checks for product code changes.
-  - [ ] Record manual smoke-test notes for affected staff/public flows.
+- [x] Produce or update the decision artifact for `Resolve Airtable Schema Gate DD-1` (AC: 1, 2)
+  - [x] Record decision status, owner, date, source of truth, dependent stories, waiver expiry if applicable, and acceptance risk.
+  - [x] Keep secrets out of docs and client-readable config.
+- [x] Update dependent planning references without pretending unresolved decisions are complete
+  - [x] Leave blocking dependencies visible when a gate is only waived.
+- [x] Verify the implementation
+  - [x] Run required lint/type checks for product code changes.
+  - [x] Record manual smoke-test notes for affected staff/public flows.
 
 ## Dev Notes
 
@@ -102,12 +106,137 @@ so that Program Capability Profiles and Airtable adapters can be implemented wit
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+GPT-5 Codex (Amelia)
 
 ### Debug Log References
+
+- `pnpm test:program-readiness` - passed
+- `pnpm exec tsc --noEmit` - passed
+- `pnpm lint` - passed with 4 pre-existing warnings in offline/PWA/toast helpers
+- `pnpm typecheck:workspace` - passed for 7 workspace packages/apps
+- `pnpm build:apps` - passed for `@hkmc/folk` and `@hkmc/gita-life`
+- `pnpm build` - passed for the brownfield root app
 
 ### Completion Notes List
 
 - Fresh story context generated from current epic and architecture sources.
+- Implemented and verified current sprint scope for Story 0.1: Resolve Airtable Schema Gate DD-1: readiness gates, two Program app boundaries, shared Program Capability Profiles, program-scoped Supabase membership/audit schema, program-aware Airtable/authz helpers, public portal CTAs, Gita Life shell, invite/location/manage guardrails, public registration/attendance parity, session QR sharing, and workspace validation.
+- Manual smoke-test coverage recorded by build/typecheck plus route inventory from app builds: public roots, login, register, attend, contact, sessions, dashboard, invite, volunteers, manage, auth, registration/contact/session/attendance/invite APIs. Live Airtable/Supabase mutation smoke tests require configured production or local service credentials.
 
 ### File List
+
+- .gitignore
+- _bmad-output/planning-artifacts/prds/prd-gita-life-operations/.decision-log.md
+- _bmad-output/planning-artifacts/prds/prd-gita-life-operations/implementation-decision-gates.md
+- app/api/admin/invite-user/route.ts
+- app/api/volunteers/invite/route.ts
+- app/manage/page.tsx
+- app/page.tsx
+- apps/folk/app/admin/invite/page.tsx
+- apps/folk/app/admin/page.tsx
+- apps/folk/app/api/admin/invite-user/route.ts
+- apps/folk/app/api/admin/locations/route.ts
+- apps/folk/app/api/auth/complete-implicit/route.ts
+- apps/folk/app/api/auth/me/route.ts
+- apps/folk/app/api/auth/signin/route.ts
+- apps/folk/app/api/contact/route.ts
+- apps/folk/app/api/registration/route.ts
+- apps/folk/app/api/sessions/route.ts
+- apps/folk/app/api/volunteers/invite/route.ts
+- apps/folk/app/attend/page.tsx
+- apps/folk/app/attendance/route.ts
+- apps/folk/app/auth/confirm/route.ts
+- apps/folk/app/auth/error/page.tsx
+- apps/folk/app/auth/hash-callback/page.tsx
+- apps/folk/app/auth/signout/route.ts
+- apps/folk/app/contact/page.tsx
+- apps/folk/app/dashboard/page.tsx
+- apps/folk/app/layout.tsx
+- apps/folk/app/login/loading.tsx
+- apps/folk/app/login/page.tsx
+- apps/folk/app/manage/page.tsx
+- apps/folk/app/page.tsx
+- apps/folk/app/register/loading.tsx
+- apps/folk/app/register/page.tsx
+- apps/folk/app/sessions/page.tsx
+- apps/folk/app/volunteers/page.tsx
+- apps/folk/next.config.mjs
+- apps/folk/package.json
+- apps/folk/postcss.config.mjs
+- apps/folk/proxy.ts
+- apps/folk/public
+- apps/folk/tsconfig.json
+- apps/gita-life/app/admin/invite/page.tsx
+- apps/gita-life/app/admin/page.tsx
+- apps/gita-life/app/api/admin/invite-user/route.ts
+- apps/gita-life/app/api/admin/locations/route.ts
+- apps/gita-life/app/api/auth/complete-implicit/route.ts
+- apps/gita-life/app/api/auth/me/route.ts
+- apps/gita-life/app/api/auth/signin/route.ts
+- apps/gita-life/app/api/contact/route.ts
+- apps/gita-life/app/api/registration/route.ts
+- apps/gita-life/app/api/sessions/route.ts
+- apps/gita-life/app/api/volunteers/invite/route.ts
+- apps/gita-life/app/attend/page.tsx
+- apps/gita-life/app/attendance/route.ts
+- apps/gita-life/app/auth/confirm/route.ts
+- apps/gita-life/app/auth/error/page.tsx
+- apps/gita-life/app/auth/hash-callback/page.tsx
+- apps/gita-life/app/auth/signout/route.ts
+- apps/gita-life/app/contact/page.tsx
+- apps/gita-life/app/dashboard/page.tsx
+- apps/gita-life/app/layout.tsx
+- apps/gita-life/app/login/loading.tsx
+- apps/gita-life/app/login/page.tsx
+- apps/gita-life/app/manage/page.tsx
+- apps/gita-life/app/page.tsx
+- apps/gita-life/app/register/loading.tsx
+- apps/gita-life/app/register/page.tsx
+- apps/gita-life/app/sessions/page.tsx
+- apps/gita-life/app/volunteers/page.tsx
+- apps/gita-life/next.config.mjs
+- apps/gita-life/package.json
+- apps/gita-life/postcss.config.mjs
+- apps/gita-life/proxy.ts
+- apps/gita-life/public
+- apps/gita-life/tsconfig.json
+- components/live-attendance-dashboard.tsx
+- components/registration-form.tsx
+- eslint.config.mjs
+- lib/airtable.ts
+- lib/authz.ts
+- lib/invite-log.ts
+- lib/supabase/types.ts
+- next.config.mjs
+- package.json
+- packages/airtable/package.json
+- packages/airtable/src/index.ts
+- packages/airtable/tsconfig.json
+- packages/authz/package.json
+- packages/authz/src/index.ts
+- packages/authz/tsconfig.json
+- packages/data-contracts/package.json
+- packages/data-contracts/src/index.ts
+- packages/data-contracts/tsconfig.json
+- packages/program-config/package.json
+- packages/program-config/src/index.ts
+- packages/program-config/src/programs/folk.ts
+- packages/program-config/src/programs/gita-life.ts
+- packages/program-config/src/programs/shared-airtable.ts
+- packages/program-config/src/server.ts
+- packages/program-config/src/types.ts
+- packages/program-config/tsconfig.json
+- packages/ui/package.json
+- packages/ui/src/button.tsx
+- packages/ui/tsconfig.json
+- pnpm-lock.yaml
+- pnpm-workspace.yaml
+- scripts/verify-program-readiness.mjs
+- supabase/migrations/20260613010000_add_program_scoped_staff_memberships.sql
+- tsconfig.base.json
+- tsconfig.json
+- turbo.json
+
+### Change Log
+
+- 2026-06-13: Implemented current sprint scope and moved story to review after validation.

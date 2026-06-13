@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { Copy, Share2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 
 interface AttendanceRecord {
@@ -42,6 +43,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
   const [isLoading, setIsLoading] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [shareMessage, setShareMessage] = useState<string | null>(null)
   const [timeSignal, setTimeSignal] = useState(() => Date.now())
   const attendanceIdsRef = useRef<string[]>([])
 
@@ -145,6 +147,33 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
   const activeSessionName = activeSession?.name.trim()
   const sessionSubtitle = hasActiveSession && activeSessionName ? activeSessionName : "No active session"
 
+  const copyAttendanceLink = async () => {
+    if (!attendanceLink) {
+      return
+    }
+
+    await navigator.clipboard.writeText(attendanceLink)
+    setShareMessage("Attendance link copied.")
+  }
+
+  const shareAttendanceLink = async () => {
+    if (!attendanceLink) {
+      return
+    }
+
+    if (navigator.share) {
+      await navigator.share({
+        title: activeSessionName || "Attendance",
+        text: "Mark attendance using this session link.",
+        url: attendanceLink,
+      })
+      setShareMessage("Attendance link shared.")
+      return
+    }
+
+    await copyAttendanceLink()
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -179,6 +208,29 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                     FOLK Chennai Attendance
                   </span>
                   <p className="mt-2 max-w-[250px] break-all text-xs text-[#24324A]/50">{attendanceLink}</p>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={copyAttendanceLink}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#0F1E54]/15 px-3 text-sm font-semibold text-[#0F1E54] transition-colors hover:bg-[#0F1E54]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]"
+                    >
+                      <Copy className="h-4 w-4" aria-hidden="true" />
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={shareAttendanceLink}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#F98B1C] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#e07a10] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F1E54]"
+                    >
+                      <Share2 className="h-4 w-4" aria-hidden="true" />
+                      Share
+                    </button>
+                  </div>
+                  {shareMessage && (
+                    <p className="mt-3 text-xs font-medium text-green-700" role="status">
+                      {shareMessage}
+                    </p>
+                  )}
                 </div>
               </>
             ) : (

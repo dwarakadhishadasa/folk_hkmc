@@ -64,7 +64,25 @@ export function RegistrationForm() {
         body: JSON.stringify(formData),
       })
 
-      if (!response.ok) throw new Error("Failed to register")
+      const data = await response.json().catch(() => ({}))
+
+      if (response.status === 202 && data.queued) {
+        toast({
+          title: "Registration saved offline",
+          description: "It will sync when the app is back online.",
+        })
+        return
+      }
+
+      if (response.status === 409 && data.alreadyRegistered) {
+        toast({
+          title: "Already registered",
+          description: "No duplicate registration was created.",
+        })
+        return
+      }
+
+      if (!response.ok) throw new Error(data.error || "Failed to register")
 
       setIsSuccess(true)
       toast({
@@ -165,8 +183,8 @@ export function RegistrationForm() {
                   <SelectValue placeholder="Select occupation type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="working">Working Professional</SelectItem>
+                  <SelectItem value="Studying">Student</SelectItem>
+                  <SelectItem value="Working">Working Professional</SelectItem>
                 </SelectContent>
               </Select>
             </div>

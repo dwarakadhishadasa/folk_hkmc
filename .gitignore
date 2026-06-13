@@ -2,9 +2,12 @@
 
 # dependencies
 /node_modules
+apps/*/node_modules
+packages/*/node_modules
 
 # next.js
 /.next/
+apps/*/.next/
 /out/
 
 # production
@@ -26,3 +29,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# turbo
+.turbo/
+apps/*/.turbo/
+packages/*/.turbo/

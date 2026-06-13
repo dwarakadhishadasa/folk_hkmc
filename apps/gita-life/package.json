@@ -1,0 +1,20 @@
+{
+  "name": "@hkmc/gita-life",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "PROGRAM_ID=gita-life NEXT_PUBLIC_PROGRAM_ID=gita-life next dev",
+    "build": "PROGRAM_ID=gita-life NEXT_PUBLIC_PROGRAM_ID=gita-life next build",
+    "start": "PROGRAM_ID=gita-life NEXT_PUBLIC_PROGRAM_ID=gita-life next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hkmc/airtable": "workspace:*",
+    "@hkmc/authz": "workspace:*",
+    "@hkmc/data-contracts": "workspace:*",
+    "@hkmc/program-config": "workspace:*",
+    "@hkmc/ui": "workspace:*"
+  }
+}

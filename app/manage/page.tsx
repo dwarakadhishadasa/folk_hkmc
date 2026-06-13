@@ -2,24 +2,10 @@ import { redirect } from "next/navigation"
 import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import type { StaffContext } from "@/lib/authz"
-import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
+import { AuthzError, getStaffContext, requireRole, writeAuditEvent } from "@/lib/authz"
+import { getProgramAirtableManagementUrl } from "@hkmc/program-config/server"
 
 export const dynamic = "force-dynamic"
-
-const DEFAULT_AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID = "pagc77PtbNsr9ljWu"
-
-function getAirtableInterfaceDashboardUrl(): string | null {
-  const baseId = process.env.AIRTABLE_BASE_ID?.trim()
-  const pageId = (
-    process.env.AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID || DEFAULT_AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID
-  ).trim()
-
-  if (!baseId || !pageId) {
-    return null
-  }
-
-  return `https://airtable.com/${baseId}/${pageId}`
-}
 
 export default async function ManagePage() {
   let airtableDashboardUrl: string | null = null
@@ -28,7 +14,7 @@ export default async function ManagePage() {
   try {
     staff = await getStaffContext()
     requireRole(staff, ["Admin", "Preacher"])
-    airtableDashboardUrl = getAirtableInterfaceDashboardUrl()
+    airtableDashboardUrl = getProgramAirtableManagementUrl(staff.programId)
   } catch (error) {
     if (error instanceof AuthzError && error.status === 401) {
       redirect("/login?redirect=/manage")
@@ -45,6 +31,16 @@ export default async function ManagePage() {
     redirect("/auth/error?code=staff-authorization-failed")
   }
 
+  await writeAuditEvent({
+    programId: staff.programId,
+    actorSupabaseUserId: staff.supabaseUserId,
+    actorAirtableUserId: staff.airtableUserId,
+    actorRole: staff.role,
+    action: "management.misconfigured",
+    source: "manage-page",
+    syncState: "ok",
+  })
+
   return (
     <StaffAuthShell staff={staff}>
     <div className="min-h-screen bg-[#FFF9F0]">
@@ -54,7 +50,7 @@ export default async function ManagePage() {
           <h1 className="mb-2 text-xl font-bold text-[#24324A]">Manage Link Unavailable</h1>
           <p className="text-[#24324A]/70">
             AIRTABLE_BASE_ID and AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID are required to open the Airtable management
-            interface.
+            interface for this Program.
           </p>
         </div>
       </main>

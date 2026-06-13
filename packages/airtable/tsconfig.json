@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../../*"],
+      "@hkmc/program-config/server": ["../program-config/src/server.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "../../lib/airtable.ts"]
+}

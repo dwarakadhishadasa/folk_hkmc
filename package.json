@@ -2,17 +2,25 @@
   "name": "folk_hkmc",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "next build",
+    "build:apps": "turbo run build --filter=@hkmc/folk --filter=@hkmc/gita-life",
     "dev": "next dev",
+    "dev:folk": "pnpm --filter @hkmc/folk dev",
+    "dev:gita-life": "pnpm --filter @hkmc/gita-life dev",
     "lint": "eslint .",
+    "lint:workspace": "turbo run lint",
     "supabase:start": "pnpm dlx supabase@2.98.2 start",
     "supabase:reset": "pnpm dlx supabase@2.98.2 db reset",
     "supabase:env": "bash scripts/use-local-supabase-env.sh",
     "supabase:status": "pnpm dlx supabase@2.98.2 status",
     "supabase:stop": "pnpm dlx supabase@2.98.2 stop",
     "dev:local": "pnpm supabase:start && pnpm supabase:env && pnpm dev",
-    "start": "next start"
+    "start": "next start",
+    "test:program-readiness": "node scripts/verify-program-readiness.mjs",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "typecheck:workspace": "turbo run typecheck"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
@@ -81,6 +89,7 @@
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
+    "turbo": "^2.5.6",
     "typescript": "^5"
   }
 }

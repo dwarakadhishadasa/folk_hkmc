@@ -72,6 +72,7 @@ export async function POST(request: Request) {
     })
 
     await writeInviteLog({
+      programId: staff.programId,
       inviteeEmail: email,
       airtableUserId: user.id,
       inviterAirtableUserId: staff.airtableUserId,
