@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "PROGRAM_ID=folk NEXT_PUBLIC_PROGRAM_ID=folk next dev",
-    "build": "PROGRAM_ID=folk NEXT_PUBLIC_PROGRAM_ID=folk next build",
+    "build": "node ../../scripts/remove-broken-env-symlinks.mjs . && PROGRAM_ID=folk NEXT_PUBLIC_PROGRAM_ID=folk next build",
     "start": "PROGRAM_ID=folk NEXT_PUBLIC_PROGRAM_ID=folk next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json"
