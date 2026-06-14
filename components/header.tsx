@@ -6,7 +6,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CalendarDays,
-  LayoutDashboard,
   LogIn,
   LogOut,
   Send,
@@ -194,7 +193,6 @@ export function Header() {
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
-        ...(isPreacher ? [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
         { href: "/contact", label: "Contact", icon: UserRoundPlus },
         ...(isPreacher
           ? [
