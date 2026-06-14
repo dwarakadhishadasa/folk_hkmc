@@ -4,7 +4,6 @@
 **Primary Language:** TypeScript
 **Architecture:** Program-scoped Next.js App Router apps with Supabase staff authentication, Airtable operational data, and PWA offline queueing
 **Last Updated:** 2026-06-13
-
 ## Current State Check
 
 The older generated docs described a single root app and no longer reflected the current codebase. The current code now includes program-scoped Next.js app workspaces, Supabase authentication, a program-scoped staff membership bridge, implemented registration/contact/session/admin APIs in each app, role-scoped staff pages, monorepo guardrails, quality gates, and additional operational scripts.
