@@ -1,4 +1,4 @@
-const CACHE_NAME = "folk-chennai-v3"
+const CACHE_NAME = "folk-chennai-v4"
 const OFFLINE_URL = "/offline.html"
 const DB_NAME = "folk-offline-db"
 const DB_VERSION = 1
@@ -28,6 +28,8 @@ const PRECACHE_ASSETS = [
   "/icons/apple-touch-icon.jpg",
   "/images/folk-logo.png",
   "/assets/activities/gita-life/Gita_life_logo.png",
+  "/assets/activities/gita-life/iskcon-thiruvanmiyur-header.webp",
+  "/assets/activities/gita-life/krishna-arjuna-hero-full.jpg",
   "/assets/about-hkm-krishna-arjuna.jpg",
   "/assets/srila-prabhupada.png",
 ]

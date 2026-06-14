@@ -9,6 +9,8 @@ export interface ProgramBranding {
   accentColor: string
   logoSrc: string
   logoAlt: string
+  headerLogoSrc?: string
+  headerLogoAlt?: string
 }
 
 export interface PublicProgramProfile {

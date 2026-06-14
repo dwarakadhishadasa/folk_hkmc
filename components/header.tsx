@@ -165,6 +165,14 @@ const headerThemeVars = {
   "--header-border": "var(--program-header-border, rgb(255 255 255 / 0.1))",
   "--header-logo-bg": "var(--program-header-logo-bg, #ffffff)",
   "--header-logo-ring": "var(--program-header-logo-ring, rgb(255 255 255 / 0.2))",
+  "--header-logo-width": "var(--program-header-logo-width, 7rem)",
+  "--header-logo-height": "var(--program-header-logo-height, 2.5rem)",
+  "--header-logo-width-sm": "var(--program-header-logo-width-sm, 9rem)",
+  "--header-logo-height-sm": "var(--program-header-logo-height-sm, 3rem)",
+  "--header-logo-width-md": "var(--program-header-logo-width-md, 10rem)",
+  "--header-logo-height-md": "var(--program-header-logo-height-md, 3.5rem)",
+  "--header-logo-width-lg": "var(--program-header-logo-width-lg, var(--header-logo-width-md))",
+  "--header-logo-height-lg": "var(--program-header-logo-height-lg, var(--header-logo-height-md))",
   "--header-nav-bg": "var(--program-header-nav-bg, rgb(255 255 255 / 0.1))",
   "--header-nav-ring": "var(--program-header-nav-ring, rgb(255 255 255 / 0.1))",
   "--header-nav-text": "var(--program-header-nav-text, rgb(255 255 255 / 0.8))",
@@ -190,6 +198,14 @@ export function Header() {
   const pathname = usePathname()
   const { isNavigating, pendingPath } = useNavigationFeedback()
   const { branding } = currentProgramProfile
+  const hasHeaderLogoOverride = Boolean(branding.headerLogoSrc)
+  const headerLogoSrc = branding.headerLogoSrc ?? branding.logoSrc
+  const headerLogoAlt = branding.headerLogoAlt ?? branding.logoAlt
+  const logoShellClassName = cn(
+    "relative h-[var(--header-logo-height)] w-[var(--header-logo-width)] max-w-[calc(100vw-10.5rem)] flex-shrink-0 sm:h-[var(--header-logo-height-sm)] sm:w-[var(--header-logo-width-sm)] md:h-[var(--header-logo-height-md)] md:w-[var(--header-logo-width-md)] lg:h-[var(--header-logo-height-lg)] lg:w-[var(--header-logo-width-lg)]",
+    !hasHeaderLogoOverride &&
+      "rounded-xl bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)]",
+  )
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
@@ -212,8 +228,15 @@ export function Header() {
       >
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="relative h-10 w-28 rounded-xl bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)] sm:h-12 sm:w-36 md:h-14 md:w-40">
-              <Image src={branding.logoSrc} alt={branding.logoAlt} fill className="object-contain" priority />
+            <div className={logoShellClassName}>
+              <Image
+                src={headerLogoSrc}
+                alt={headerLogoAlt}
+                fill
+                sizes="(min-width: 1024px) 14rem, (min-width: 768px) 13rem, (min-width: 640px) 11.5rem, 8.75rem"
+                className="object-contain"
+                priority
+              />
             </div>
           </div>
         </div>
@@ -231,9 +254,20 @@ export function Header() {
           <div className="flex items-center justify-between">
             <Link
               href="/"
-              className="relative h-10 w-28 flex-shrink-0 rounded-xl bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:h-12 sm:w-36 md:h-14 md:w-40"
+              aria-label={`${branding.shortName} home`}
+              className={cn(
+                logoShellClassName,
+                "transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)]",
+              )}
             >
-              <Image src={branding.logoSrc} alt={branding.logoAlt} fill className="object-contain" priority />
+              <Image
+                src={headerLogoSrc}
+                alt=""
+                fill
+                sizes="(min-width: 1024px) 14rem, (min-width: 768px) 13rem, (min-width: 640px) 11.5rem, 8.75rem"
+                className="object-contain"
+                priority
+              />
             </Link>
             {navItems.length > 0 && (
               <nav className="hidden items-center gap-1 rounded-full bg-[var(--header-nav-bg)] p-1 ring-1 ring-[var(--header-nav-ring)] backdrop-blur md:flex">
@@ -270,10 +304,10 @@ export function Header() {
               ) : (
                 <Link
                   href="/login"
-                  className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full bg-[var(--header-login-bg)] px-4 text-xs font-semibold text-[var(--header-login-text)] shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-login-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:text-sm"
+                  className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full bg-[var(--header-login-bg)] px-3 text-xs font-semibold text-[var(--header-login-text)] shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-login-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] min-[360px]:px-4 sm:text-sm"
                 >
                   <LogIn className="h-4 w-4" aria-hidden="true" />
-                  Staff Login
+                  <span className="hidden min-[360px]:inline">Staff Login</span>
                 </Link>
               )}
             </div>

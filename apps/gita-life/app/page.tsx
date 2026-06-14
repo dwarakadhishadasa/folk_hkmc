@@ -62,26 +62,19 @@ export default function GitaLifeHome() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#2D0A0A] via-[#3B0D0D] to-[#2D0A0A]" aria-hidden="true" />
 
-        <div className="relative mx-auto grid min-h-[calc(100svh-4.5rem)] max-w-6xl gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:py-14">
+        <div className="relative mx-auto grid min-h-[calc(100svh-4.5rem)] max-w-6xl gap-10 px-4 py-9 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:py-12">
           <div>
-            <div className="mb-8">
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#FFB81C]">Dakshina Dwaraka Dham</p>
-              <p className="mt-2 text-xs font-medium uppercase tracking-[0.24em] text-white/70">
-                ISKCON Thiruvanmiyur Presents
-              </p>
-            </div>
-
             <Image
               src="/assets/activities/gita-life/Gita_life_logo.png"
               alt="Gita Life Logo"
               width={500}
               height={500}
               priority
-              className="h-auto w-52 drop-shadow-2xl sm:w-64 lg:w-72"
+              className="mx-auto h-auto w-64 drop-shadow-2xl sm:w-80 lg:mx-0 lg:w-96"
             />
 
-            <h1 className="mt-8 max-w-3xl font-[family-name:var(--font-poppins)] text-4xl font-bold leading-tight text-white sm:text-6xl">
-              Foundational Concepts of the Gita
+            <h1 className="mt-7 max-w-xl font-serif text-2xl font-medium italic leading-snug text-[#FFB81C] sm:text-3xl lg:mt-8">
+              &ldquo;Foundational Concepts of the Gita&rdquo;
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-white/80 sm:text-lg">
               An accessible programme for families to explore the timeless wisdom of the Bhagavad Gita and apply its
@@ -96,32 +89,32 @@ export default function GitaLifeHome() {
                 Register Now
                 <Send className="h-4 w-4" aria-hidden="true" />
               </Link>
-              <Link
-                href="tel:9600967108"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-[#FFB81C]/70 px-6 text-sm font-bold text-[#FFB81C] transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB81C]"
-              >
-                <Phone className="h-4 w-4" aria-hidden="true" />
-                Call Coordinator
-              </Link>
             </div>
           </div>
 
           <div className="relative">
-            <div className="overflow-hidden rounded-lg border border-[#FFB81C]/30 bg-white/5 shadow-2xl shadow-black/25">
-              <Image
-                src="/assets/about-hkm-krishna-arjuna.jpg"
-                alt="Krishna and Arjuna"
-                width={900}
-                height={675}
-                priority
-                className="aspect-[4/3] h-auto w-full object-cover"
-              />
-              <div className="border-t border-white/10 bg-[#2D0A0A]/95 p-5">
-                <p className="text-sm font-medium leading-6 text-[#FFB81C]">
-                  &ldquo;Simply by knowing the science of Krishna, one becomes free.&rdquo;
-                </p>
+            <figure className="relative rounded-[1.15rem] bg-gradient-to-br from-[#FFB81C]/80 via-white/15 to-[#EA580C]/60 p-[1px] shadow-2xl shadow-black/30 ring-1 ring-[#FFB81C]/20">
+              <div className="relative overflow-hidden rounded-[1.08rem] bg-[#2D0A0A] ring-1 ring-black/25">
+                <Image
+                  src="/assets/activities/gita-life/krishna-arjuna-hero-full.jpg"
+                  alt="Krishna and Arjuna"
+                  width={1200}
+                  height={1162}
+                  priority
+                  className="h-auto w-full object-cover"
+                />
+                <div
+                  className="pointer-events-none absolute inset-0 bg-[linear-gradient(32deg,rgba(45,10,10,0.95)_0%,rgba(45,10,10,0.72)_30%,rgba(45,10,10,0.24)_52%,transparent_78%)]"
+                  aria-hidden="true"
+                />
+                <figcaption className="absolute inset-x-0 bottom-0 px-5 pb-5 sm:px-7 sm:pb-7">
+                  <div className="h-px w-14 bg-[#FFB81C]" aria-hidden="true" />
+                  <p className="mt-4 max-w-sm font-[family-name:var(--font-poppins)] text-base font-semibold leading-snug text-white drop-shadow-md sm:max-w-md sm:text-2xl">
+                    &ldquo;Simply by knowing the science of Krishna, one becomes free.&rdquo;
+                  </p>
+                </figcaption>
               </div>
-            </div>
+            </figure>
           </div>
         </div>
       </section>

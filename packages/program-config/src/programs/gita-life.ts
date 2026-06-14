@@ -13,6 +13,8 @@ export const gitaLifeProgramProfile = {
     accentColor: "#EA580C",
     logoSrc: "/assets/activities/gita-life/Gita_life_logo.png",
     logoAlt: "Gita Life Logo",
+    headerLogoSrc: "/assets/activities/gita-life/iskcon-thiruvanmiyur-header.webp",
+    headerLogoAlt: "Srila Prabhupada's ISKCON Thiruvanmiyur Chennai Logo",
   },
   modules: {
     publicRegistration: true,
