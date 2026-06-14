@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILES=(
-  "$ROOT_DIR/apps/folk/.env.local"
-  "$ROOT_DIR/apps/gita-life/.env.local"
+ENV_TARGETS=(
+  "$ROOT_DIR/apps/folk/.env.local|http://localhost:3000"
+  "$ROOT_DIR/apps/gita-life/.env.local|http://localhost:3001"
 )
 STATUS_FILE="$(mktemp)"
 BASE_ENV_FILE="$(mktemp)"
@@ -34,6 +34,7 @@ fi
 
 update_env_file() {
   local env_file="$1"
+  local site_url="$2"
 
   mkdir -p "$(dirname "$env_file")"
   touch "$env_file"
@@ -49,7 +50,7 @@ update_env_file() {
   {
     cat "$BASE_ENV_FILE"
     printf '\n# BEGIN LOCAL SUPABASE\n'
-    printf 'NEXT_PUBLIC_SITE_URL=http://localhost:3000\n'
+    printf 'NEXT_PUBLIC_SITE_URL=%s\n' "$site_url"
     printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$api_url"
     printf 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%s\n' "$anon_key"
     printf 'NEXT_PUBLIC_SUPABASE_ANON_KEY=%s\n' "$anon_key"
@@ -62,6 +63,7 @@ update_env_file() {
   echo "Updated ${env_file#"$ROOT_DIR"/} with local Supabase values."
 }
 
-for env_file in "${ENV_FILES[@]}"; do
-  update_env_file "$env_file"
+for target in "${ENV_TARGETS[@]}"; do
+  IFS='|' read -r env_file site_url <<< "$target"
+  update_env_file "$env_file" "$site_url"
 done

@@ -166,13 +166,13 @@ export function InviteUserForm({
           locationIds,
         }),
       })
-      const data = await response.json()
+      const data = (await response.json()) as { delivery?: "invite" | "sign-in-link"; error?: string }
 
       if (!response.ok) {
         throw new Error(data.error || "Invite failed.")
       }
 
-      setMessage("Invite sent.")
+      setMessage(data.delivery === "sign-in-link" ? "This user already exists. A sign-in link was sent." : "Invite sent.")
       setForm(emptyInviteForm())
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invite failed.")

@@ -74,9 +74,18 @@ Tables expected after migrations:
 
 Supabase Auth redirect URLs must include:
 
-- `https://your-domain.example`
-- `https://your-domain.example/auth/confirm`
+- Each deployed app origin, for example `https://folk.example.org` and `https://gita-life.example.org`
+- Each deployed invite callback, for example `https://folk.example.org/auth/confirm` and `https://gita-life.example.org/auth/confirm`
 - Local equivalents for development
+
+For invite emails in a shared Supabase project, prefer a template that uses the per-request redirect target:
+
+```html
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite">Accept invite</a>
+```
+
+Each Vercel app must set its own `NEXT_PUBLIC_SITE_URL` to the matching deployed origin so invite APIs pass the correct `/auth/confirm` callback to Supabase.
+Invite APIs also prefer the current request origin when constructing `redirectTo`; if an email still shows the wrong app domain, update the hosted Supabase invite template to use `{{ .RedirectTo }}` or `{{ .ConfirmationURL }}` instead of `{{ .SiteURL }}`.
 
 ## Airtable Deployment
 

@@ -1,7 +1,7 @@
 import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
 import { findLocationById, findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/airtable"
 import { writeInviteLog } from "@/lib/invite-log"
-import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { sendStaffInviteEmail } from "@/lib/supabase/invite"
 
 export const dynamic = "force-dynamic"
 
@@ -66,10 +66,7 @@ export async function POST(request: Request) {
       locationIds,
     })
 
-    const supabaseAdmin = createSupabaseAdminClient()
-    const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || ""}/auth/confirm`,
-    })
+    const inviteResult = await sendStaffInviteEmail(email, request)
 
     await writeInviteLog({
       programId: staff.programId,
@@ -78,15 +75,18 @@ export async function POST(request: Request) {
       inviterAirtableUserId: staff.airtableUserId,
       inviterSupabaseUserId: staff.supabaseUserId,
       inviteeRole: role,
-      status: error ? "failed" : "sent",
-      errorMessage: error?.message,
+      status: inviteResult.error ? "failed" : "sent",
+      errorMessage: inviteResult.error?.message,
     })
 
-    if (error) {
-      return Response.json({ error: "Airtable user saved, but Supabase invite failed." }, { status: 502 })
+    if (inviteResult.error) {
+      return Response.json({ error: inviteResult.safeErrorMessage }, { status: 502 })
     }
 
-    return Response.json({ invited: true, user: { id: user.id, email: user.email, role: user.role } }, { status: 201 })
+    return Response.json(
+      { invited: true, delivery: inviteResult.delivery, user: { id: user.id, email: user.email, role: user.role } },
+      { status: 201 },
+    )
   } catch (error) {
     return authzErrorResponse(error)
   }

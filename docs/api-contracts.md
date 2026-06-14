@@ -284,13 +284,13 @@ Rules:
 - Role must be `Admin`, `Preacher`, or `Volunteer`.
 - Volunteer invites require an active assigned Preacher.
 - Non-Volunteer roles may receive location access.
-- Route upserts Airtable User, sends Supabase invite, and writes `invite_log`.
+- Route upserts Airtable User, sends a Supabase invite or existing-user sign-in link, and writes `invite_log`.
 
 Responses:
 
-- `201 { invited: true, user: { id, email, role } }`
+- `201 { invited: true, delivery: "invite" | "sign-in-link", user: { id, email, role } }`
 - `400 { error }`
-- `502 { error: "Airtable user saved, but Supabase invite failed." }`
+- `502 { error }` for safe Supabase email, SMTP, rate-limit, or redirect setup failures
 - `401/403/500 { error, code? }`
 
 ### `POST /api/admin/locations`
@@ -333,7 +333,7 @@ Request:
 
 Responses:
 
-- `201 { invited: true, user: { id, email, role: "Volunteer" } }`
+- `201 { invited: true, delivery: "invite" | "sign-in-link", user: { id, email, role: "Volunteer" } }`
 - `400/403/502 { error }`
 - `401/500 { error, code? }`
 
