@@ -17,6 +17,8 @@ interface FormData {
 
 function RegisterForm() {
   const searchParams = useSearchParams()
+  const source = searchParams.get("source")
+  const showHkmcReturn = source === "hkmc-gita-life"
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState("")
@@ -124,6 +126,14 @@ function RegisterForm() {
         </h2>
         <p className="text-green-600 font-medium">{successMessage}</p>
         <p className="mt-2 text-sm text-[#5F3B2E]/70">Thank you for joining us.</p>
+        {showHkmcReturn && (
+          <a
+            href="https://hkmchennai.org"
+            className="mt-6 inline-flex h-12 items-center justify-center rounded-full bg-[#EA580C] px-6 text-sm font-semibold text-white shadow-lg shadow-[#EA580C]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[#D97706] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D0A0A]"
+          >
+            Visit HKM Chennai
+          </a>
+        )}
       </div>
     )
   }
