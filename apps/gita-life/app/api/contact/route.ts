@@ -20,32 +20,12 @@ interface ResolvedPreacher {
   id: string
 }
 
-function safeTrim(value: unknown): string | undefined {
-  if (typeof value !== "string") {
-    return undefined
-  }
-
-  const trimmed = value.trim()
-  return trimmed || undefined
-}
-
-function isWorkingProfessional(value: unknown): boolean {
-  const occupation = safeTrim(value)
-  return occupation === "Working" || occupation === "Working Professional"
-}
-
 function parseDateOfBirth(value: unknown): { dateOfBirth?: string; error?: string } {
-  if (value === undefined || value === null) {
+  if (typeof value !== "string" || !value.trim()) {
     return {}
-  }
-  if (typeof value !== "string") {
-    return { error: "Date of Birth must use YYYY-MM-DD format." }
   }
 
-  const dateOfBirth = safeTrim(value)
-  if (!dateOfBirth) {
-    return {}
-  }
+  const dateOfBirth = value.trim()
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
     return { error: "Date of Birth must use YYYY-MM-DD format." }
   }
@@ -54,11 +34,6 @@ function parseDateOfBirth(value: unknown): { dateOfBirth?: string; error?: strin
   const parsed = new Date(`${dateOfBirth}T00:00:00.000Z`)
   const isValidDate =
     parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
-
-  const currentYear = new Date().getUTCFullYear()
-  if (isValidDate && (parsed > new Date() || year < currentYear - 120)) {
-    return { error: "Date of Birth must be a reasonable past date." }
-  }
 
   return isValidDate ? { dateOfBirth } : { error: "Date of Birth must be a valid date." }
 }
@@ -86,7 +61,7 @@ async function resolveAssignedPreacher(
     return { preacher: { id: staff.airtableUserId } }
   }
 
-  const explicitPreacherId = safeTrim(payload.assignedPreacherAirtableUserId)
+  const explicitPreacherId = payload.assignedPreacherAirtableUserId?.trim()
   if (!explicitPreacherId) {
     return { error: "Assigned Preacher is required for Admin contact creation." }
   }
@@ -95,12 +70,12 @@ async function resolveAssignedPreacher(
 }
 
 function resolveLocation(payload: ContactPayload): string {
-  const location = safeTrim(payload.address) || safeTrim(payload.location)
+  const location = payload.address?.trim() || payload.location?.trim()
   if (location) {
     return location
   }
 
-  return safeTrim(payload.locationId) || ""
+  return payload.locationId?.trim() || ""
 }
 
 export async function POST(request: Request) {
@@ -108,7 +83,7 @@ export async function POST(request: Request) {
     const staff = await getStaffContext()
     const payload = (await request.json()) as ContactPayload
     const mobile = normalizeMobile(payload.mobile)
-    const name = safeTrim(payload.name)
+    const name = payload.name?.trim()
 
     if (!name || !mobile) {
       return Response.json({ error: "Name and a valid 10-digit mobile number are required." }, { status: 400 })
@@ -145,7 +120,7 @@ export async function POST(request: Request) {
       name,
       phone: mobile,
       dateOfBirth: parsedDateOfBirth.dateOfBirth,
-      company: isWorkingProfessional(payload.occupation) ? safeTrim(payload.company) : undefined,
+      company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
       source: payload.source || "Pass distribution",
       location,
       collectedByAirtableUserId: collectorId,

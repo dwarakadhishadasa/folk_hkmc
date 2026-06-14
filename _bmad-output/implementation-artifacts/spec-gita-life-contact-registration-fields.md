@@ -2,7 +2,7 @@
 title: 'Gita Life Contact Registration Fields'
 type: 'feature'
 created: '2026-06-14'
-status: 'done'
+status: 'in-review'
 baseline_commit: '140fe4f06c9bcc405f60f081773907115007b4d7'
 context:
   - '{project-root}/_bmad-output/project-context.md'
@@ -71,43 +71,3 @@ context:
 **Manual checks:**
 - Open Gita Life `/register` and verify the requested field set, Working Professional Company reveal/clear behavior, HKMC source success button, duplicate handling copy, and session-backed attendance message.
 - Open Gita Life `/contact` as a role with access and verify the requested field set plus any role-required routing controls.
-
-## Suggested Review Order
-
-**Public Registration**
-
-- Start here to see the requested Gita Life field set.
-  [`page.tsx:223`](../../apps/gita-life/app/register/page.tsx#L223)
-
-- Company appears only for working professionals.
-  [`page.tsx:241`](../../apps/gita-life/app/register/page.tsx#L241)
-
-- Address stays out of session-backed handoff routing.
-  [`page.tsx:258`](../../apps/gita-life/app/register/page.tsx#L258)
-
-**Registration API**
-
-- Payload helpers normalize legacy and new occupation values safely.
-  [`route.ts:29`](../../apps/gita-life/app/api/registration/route.ts#L29)
-
-- Contact creation forwards DOB, Company, and no-session Address.
-  [`route.ts:155`](../../apps/gita-life/app/api/registration/route.ts#L155)
-
-**Staff Contact**
-
-- Program-aware branch narrows only Gita Life contact capture.
-  [`contact-form.tsx:69`](../../components/contact-form.tsx#L69)
-
-- Gita Life gets Housewife while FOLK keeps Student.
-  [`contact-form.tsx:255`](../../components/contact-form.tsx#L255)
-
-- Gita Life hides student details and comments without affecting FOLK.
-  [`contact-form.tsx:272`](../../components/contact-form.tsx#L272)
-
-**Contact API**
-
-- Safe parsing protects Gita Life staff contact submissions.
-  [`route.ts:23`](../../apps/gita-life/app/api/contact/route.ts#L23)
-
-- Contact writes ignore removed fields and preserve Company behavior.
-  [`route.ts:143`](../../apps/gita-life/app/api/contact/route.ts#L143)

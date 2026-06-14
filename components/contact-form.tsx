@@ -38,10 +38,6 @@ const initialFormData: ContactData = {
   assignedPreacherAirtableUserId: "",
 }
 
-function isWorkingProfessional(value: string) {
-  return value === "Working" || value === "Working Professional"
-}
-
 async function registerBackgroundSync() {
   if (!("serviceWorker" in navigator)) return
   if (typeof ServiceWorkerRegistration === "undefined" || !("sync" in ServiceWorkerRegistration.prototype)) return
@@ -97,7 +93,7 @@ export function ContactForm({
         occupation: value,
         year: value === "Studying" ? prev.year : "Unknown",
         college: value === "Studying" ? prev.college : "",
-        company: isWorkingProfessional(value) ? prev.company : "",
+        company: value === "Working" ? prev.company : "",
       }))
       return
     }
@@ -129,7 +125,7 @@ export function ContactForm({
     }
 
     if (!formData.location.trim()) {
-      setMessage(isGitaLife ? "Enter an address before saving this contact." : "Enter a location before saving this contact.")
+      setMessage(`Enter an ${isGitaLife ? "address" : "location"} before saving this contact.`)
       return
     }
 
@@ -264,7 +260,7 @@ export function ContactForm({
                 className={fieldClass}
               >
                 <option value="">Select occupation type</option>
-                <option value={isGitaLife ? "Working Professional" : "Working"}>Working Professional</option>
+                <option value="Working">Working Professional</option>
                 {isGitaLife ? <option value="Housewife">Housewife</option> : <option value="Studying">Student</option>}
               </select>
             </div>
@@ -308,7 +304,7 @@ export function ContactForm({
               </>
             )}
 
-            {isWorkingProfessional(formData.occupation) && (
+            {formData.occupation === "Working" && (
               <div className="space-y-2">
                 <label htmlFor="company" className={labelClass}>
                   Company
