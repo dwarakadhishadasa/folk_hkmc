@@ -270,10 +270,10 @@ export function Header() {
               ) : (
                 <Link
                   href="/login"
-                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--header-login-bg)] px-4 text-xs font-semibold text-[var(--header-login-text)] shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-login-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:text-sm"
+                  className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full bg-[var(--header-login-bg)] px-4 text-xs font-semibold text-[var(--header-login-text)] shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-login-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:text-sm"
                 >
                   <LogIn className="h-4 w-4" aria-hidden="true" />
-                  Login
+                  Staff Login
                 </Link>
               )}
             </div>

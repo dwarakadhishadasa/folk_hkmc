@@ -59,9 +59,9 @@
   --program-header-action-bg: rgb(45 10 10 / 0.08);
   --program-header-action-hover-bg: rgb(234 88 12 / 0.14);
   --program-header-action-text: var(--program-primary);
-  --program-header-login-bg: var(--program-accent);
-  --program-header-login-hover-bg: var(--program-accent-dark);
-  --program-header-login-text: #ffffff;
+  --program-header-login-bg: rgb(45 10 10 / 0.08);
+  --program-header-login-hover-bg: rgb(234 88 12 / 0.14);
+  --program-header-login-text: var(--program-primary);
   --program-header-focus-ring: var(--program-primary);
 
   --background: #fff9f0;

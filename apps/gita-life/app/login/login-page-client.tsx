@@ -2,8 +2,9 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { AlertTriangle, KeyRound } from "lucide-react"
+import { AlertTriangle, KeyRound, UserPlus } from "lucide-react"
 import { Header } from "@/components/header"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/auth-context"
@@ -146,11 +147,29 @@ export function LoginPageClient() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
               <KeyRound className="h-8 w-8 text-[#FFB81C]" aria-hidden="true" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-poppins)]">Welcome Back</h2>
-            <p className="text-white/70 mt-2 text-sm">Use your invited staff email to enter the portal</p>
+            <h2 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-poppins)]">Staff Portal</h2>
+            <p className="text-white/70 mt-2 text-sm">For invited coordinators and volunteers only</p>
           </div>
 
           <div className="p-5 sm:p-8">
+            <div className="mb-6 rounded-lg border border-[#EA580C]/15 bg-[#FFF3DF] p-4">
+              <div className="flex items-start gap-3">
+                <UserPlus className="mt-0.5 h-4 w-4 shrink-0 text-[#EA580C]" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-semibold text-[#2D0A0A]">Joining as a participant?</p>
+                  <p className="mt-1 text-sm leading-6 text-[#5F3B2E]">
+                    Please register instead. Staff login works only for invited team members.
+                  </p>
+                  <Link
+                    href="/register"
+                    className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-[#EA580C] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#D97706] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D0A0A]"
+                  >
+                    Register Now
+                  </Link>
+                </div>
+              </div>
+            </div>
+
             {!isCodeStep && (
               <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (

@@ -1,12 +1,10 @@
 import Image from "next/image"
 import Link from "next/link"
 import {
-  ArrowRight,
   BookOpen,
   CalendarDays,
   Clock,
   Gift,
-  LogIn,
   MapPin,
   Phone,
   Send,
@@ -99,11 +97,11 @@ export default function GitaLifeHome() {
                 <Send className="h-4 w-4" aria-hidden="true" />
               </Link>
               <Link
-                href="/login"
+                href="tel:9600967108"
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-[#FFB81C]/70 px-6 text-sm font-bold text-[#FFB81C] transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB81C]"
               >
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                Gita Life Portal
+                <Phone className="h-4 w-4" aria-hidden="true" />
+                Call Coordinator
               </Link>
             </div>
           </div>
@@ -194,17 +192,17 @@ export default function GitaLifeHome() {
       <section className="border-t border-[#EA580C]/15 bg-white px-4 py-10 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-[#D97706]">Participant access</p>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-[#D97706]">Participant registration</p>
             <h2 className="mt-2 text-2xl font-bold text-[#2D0A0A] sm:text-3xl">
-              Already part of Gita Life? Open your Portal.
+              Joining Gita Life? Register first and our team will guide you.
             </h2>
           </div>
           <Link
-            href="/login"
+            href="/register"
             className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#2D0A0A] px-6 text-sm font-bold text-[#FFB81C] transition-colors hover:bg-[#451010] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EA580C]"
           >
-            Open Portal
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            Register Now
+            <Send className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
       </section>
