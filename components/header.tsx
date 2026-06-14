@@ -1,6 +1,6 @@
 "use client"
 
-import type { MouseEvent, ReactNode } from "react"
+import type { CSSProperties, MouseEvent, ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -102,16 +102,17 @@ function DesktopNavItem({
       active={active}
       pending={pending}
       className={cn(
-        "inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white/80 transition-[background-color,box-shadow,color,transform] duration-150",
-        "hover:-translate-y-0.5 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
+        "inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-[var(--header-nav-text)] transition-[background-color,box-shadow,color,transform] duration-150",
+        "hover:-translate-y-0.5 hover:bg-[var(--header-nav-hover-bg)] hover:text-[var(--header-nav-hover-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)]",
         active &&
           !navigationPending &&
-          "bg-white text-[var(--program-primary)] shadow-sm shadow-black/10 hover:bg-white hover:text-[var(--program-primary)]",
-        pending && "bg-white/15 text-white shadow-sm ring-1 ring-[var(--program-accent)] hover:bg-white/15",
+          "bg-[var(--header-nav-active-bg)] text-[var(--header-nav-active-text)] shadow-sm shadow-black/10 hover:bg-[var(--header-nav-active-bg)] hover:text-[var(--header-nav-active-text)]",
+        pending &&
+          "bg-[var(--header-nav-pending-bg)] text-[var(--header-nav-pending-text)] shadow-sm ring-1 ring-[var(--header-nav-pending-ring)] hover:bg-[var(--header-nav-pending-bg)]",
       )}
     >
       {pending ? (
-        <Spinner className="h-4 w-4 shrink-0 text-[var(--program-accent)]" aria-hidden="true" />
+        <Spinner className="h-4 w-4 shrink-0 text-[var(--header-nav-pending-spinner)]" aria-hidden="true" />
       ) : (
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       )}
@@ -158,6 +159,33 @@ function MobileNavItem({
   )
 }
 
+const headerThemeVars = {
+  "--header-bg": "var(--program-header-bg, var(--program-primary))",
+  "--header-text": "var(--program-header-text, #ffffff)",
+  "--header-muted-text": "var(--program-header-muted-text, rgb(255 255 255 / 0.7))",
+  "--header-border": "var(--program-header-border, rgb(255 255 255 / 0.1))",
+  "--header-logo-bg": "var(--program-header-logo-bg, #ffffff)",
+  "--header-logo-ring": "var(--program-header-logo-ring, rgb(255 255 255 / 0.2))",
+  "--header-nav-bg": "var(--program-header-nav-bg, rgb(255 255 255 / 0.1))",
+  "--header-nav-ring": "var(--program-header-nav-ring, rgb(255 255 255 / 0.1))",
+  "--header-nav-text": "var(--program-header-nav-text, rgb(255 255 255 / 0.8))",
+  "--header-nav-hover-bg": "var(--program-header-nav-hover-bg, rgb(255 255 255 / 0.1))",
+  "--header-nav-hover-text": "var(--program-header-nav-hover-text, #ffffff)",
+  "--header-nav-active-bg": "var(--program-header-nav-active-bg, #ffffff)",
+  "--header-nav-active-text": "var(--program-header-nav-active-text, var(--program-primary))",
+  "--header-nav-pending-bg": "var(--program-header-nav-pending-bg, rgb(255 255 255 / 0.15))",
+  "--header-nav-pending-text": "var(--program-header-nav-pending-text, #ffffff)",
+  "--header-nav-pending-ring": "var(--program-header-nav-pending-ring, var(--program-accent))",
+  "--header-nav-pending-spinner": "var(--program-header-nav-pending-spinner, var(--program-accent))",
+  "--header-action-bg": "var(--program-header-action-bg, rgb(255 255 255 / 0.1))",
+  "--header-action-hover-bg": "var(--program-header-action-hover-bg, rgb(255 255 255 / 0.2))",
+  "--header-action-text": "var(--program-header-action-text, #ffffff)",
+  "--header-login-bg": "var(--program-header-login-bg, var(--program-accent))",
+  "--header-login-hover-bg": "var(--program-header-login-hover-bg, var(--program-accent-dark))",
+  "--header-login-text": "var(--program-header-login-text, #ffffff)",
+  "--header-focus-ring": "var(--program-header-focus-ring, var(--program-accent))",
+} as CSSProperties
+
 export function Header() {
   const { isLoggedIn, logout, isAdmin, isPreacher, username, role, isHydrated } = useAuth()
   const pathname = usePathname()
@@ -180,10 +208,13 @@ export function Header() {
 
   if (!isHydrated) {
     return (
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--program-primary)] text-white shadow-lg shadow-black/10">
+      <header
+        className="sticky top-0 z-50 border-b border-[var(--header-border)] bg-[var(--header-bg)] text-[var(--header-text)] shadow-lg shadow-black/10"
+        style={headerThemeVars}
+      >
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="relative h-10 w-28 rounded-xl bg-white p-1 shadow-sm sm:h-12 sm:w-36 md:h-14 md:w-40">
+            <div className="relative h-10 w-28 rounded-xl bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)] sm:h-12 sm:w-36 md:h-14 md:w-40">
               <Image src={branding.logoSrc} alt={branding.logoAlt} fill className="object-contain" priority />
             </div>
           </div>
@@ -194,17 +225,20 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--program-primary)] text-white shadow-lg shadow-black/10">
+      <header
+        className="sticky top-0 z-50 border-b border-[var(--header-border)] bg-[var(--header-bg)] text-[var(--header-text)] shadow-lg shadow-black/10"
+        style={headerThemeVars}
+      >
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <Link
               href="/"
-              className="relative h-10 w-28 flex-shrink-0 rounded-xl bg-white p-1 shadow-sm ring-1 ring-white/20 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] sm:h-12 sm:w-36 md:h-14 md:w-40"
+              className="relative h-10 w-28 flex-shrink-0 rounded-xl bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:h-12 sm:w-36 md:h-14 md:w-40"
             >
               <Image src={branding.logoSrc} alt={branding.logoAlt} fill className="object-contain" priority />
             </Link>
             {navItems.length > 0 && (
-              <nav className="hidden items-center gap-1 rounded-full bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
+              <nav className="hidden items-center gap-1 rounded-full bg-[var(--header-nav-bg)] p-1 ring-1 ring-[var(--header-nav-ring)] backdrop-blur md:flex">
                 {navItems.map((item) => {
                   const pending = pendingPath ? isActivePath(pendingPath, item.href) : false
 
@@ -223,12 +257,12 @@ export function Header() {
             <div className="flex items-center gap-2 sm:gap-3">
               {isLoggedIn ? (
                 <>
-                  <span className="hidden text-xs capitalize text-white/70 lg:inline">
+                  <span className="hidden text-xs capitalize text-[var(--header-muted-text)] lg:inline">
                     {username} ({role})
                   </span>
                   <button
                     onClick={logout}
-                    className="inline-flex h-10 items-center gap-2 rounded-full bg-white/10 px-3 text-xs font-semibold transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] sm:text-sm"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--header-action-bg)] px-3 text-xs font-semibold text-[var(--header-action-text)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-action-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:text-sm"
                     title="Logout"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -238,7 +272,7 @@ export function Header() {
               ) : (
                 <Link
                   href="/login"
-                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--program-accent)] px-4 text-xs font-semibold text-white shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:text-sm"
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--header-login-bg)] px-4 text-xs font-semibold text-[var(--header-login-text)] shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-login-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:text-sm"
                 >
                   <LogIn className="h-4 w-4" aria-hidden="true" />
                   Login
