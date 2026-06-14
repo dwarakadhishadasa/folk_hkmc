@@ -2,7 +2,7 @@
 
 ## Deployment Shape
 
-The app deploys as a standard Next.js App Router application. There is no separate backend service. Route handlers in `app/api` and `app/attendance/route.ts` are the server boundary.
+Each program app deploys as its own standard Next.js App Router application from `apps/folk` or `apps/gita-life`. There is no separate backend service. Route handlers in each app's `app/api` tree and `app/attendance/route.ts` are the server boundary.
 
 The repo includes `@vercel/speed-insights`, so Vercel is a natural deployment target, but no `vercel.json` is present.
 
@@ -11,13 +11,15 @@ The repo includes `@vercel/speed-insights`, so Vercel is a natural deployment ta
 | Service | Purpose |
 | --- | --- |
 | Supabase Auth | Staff OTP/invite authentication |
-| Supabase Postgres | `staff_profiles` and `invite_log` |
+| Supabase Postgres | Programs, staff memberships/profiles, Airtable identities, audit events, invite log |
 | Airtable | Operational Contacts, Attendance, Sessions, Users, Locations |
 | HTTPS hosting | Required for PWA/service worker outside localhost |
 
 ## Required Environment Variables
 
 ```bash
+PROGRAM_ID=folk
+NEXT_PUBLIC_PROGRAM_ID=folk
 NEXT_PUBLIC_SITE_URL=https://your-domain.example
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
@@ -37,9 +39,14 @@ Optional/fallback variables:
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_URL=...
 SUPABASE_PUBLISHABLE_KEY=...
+STAFF_SYNC_STALE_AFTER_MINUTES=15
+STAFF_PROFILE_STALE_AFTER_MINUTES=15
 AIRTABLE_ANALYTICS_RECORD_ID=...
+AIRTABLE_MANAGEMENT_URL=...
 AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID=...
 ```
+
+Use program-prefixed Airtable variables for program-specific bases or credentials, for example `FOLK_AIRTABLE_API_TOKEN`, `FOLK_AIRTABLE_BASE_ID`, `GITA_LIFE_AIRTABLE_API_TOKEN`, and `GITA_LIFE_AIRTABLE_BASE_ID`.
 
 ## Supabase Deployment
 
@@ -57,14 +64,28 @@ pnpm supabase:reset
 
 Tables expected after migrations:
 
+- `public.programs`
+- `public.staff_memberships`
 - `public.staff_profiles`
+- `public.airtable_identities`
+- `public.airtable_sync_state`
+- `public.audit_events`
 - `public.invite_log`
 
 Supabase Auth redirect URLs must include:
 
-- `https://your-domain.example`
-- `https://your-domain.example/auth/confirm`
+- Each deployed app origin, for example `https://folk.example.org` and `https://gita-life.example.org`
+- Each deployed invite callback, for example `https://folk.example.org/auth/confirm` and `https://gita-life.example.org/auth/confirm`
 - Local equivalents for development
+
+For invite emails in a shared Supabase project, prefer a template that uses the per-request redirect target:
+
+```html
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite">Accept invite</a>
+```
+
+Each Vercel app must set its own `NEXT_PUBLIC_SITE_URL` to the matching deployed origin so invite APIs pass the correct `/auth/confirm` callback to Supabase.
+Invite APIs also prefer the current request origin when constructing `redirectTo`; if an email still shows the wrong app domain, update the hosted Supabase invite template to use `{{ .RedirectTo }}` or `{{ .ConfirmationURL }}` instead of `{{ .SiteURL }}`.
 
 ## Airtable Deployment
 
@@ -94,7 +115,7 @@ If any route paths change, update:
 Run before deploy or PR merge:
 
 ```bash
-pnpm exec tsc --noEmit
+pnpm typecheck:workspace
 pnpm lint
 pnpm build
 ```
@@ -103,6 +124,7 @@ Manual checks should cover:
 
 - Staff sign-in and sign-out
 - Invite callback
+- Program-scoped staff membership sync
 - Contact creation
 - Session creation and generated QR URL
 - Attendance marking and duplicate handling
@@ -115,6 +137,7 @@ Manual checks should cover:
 
 - Production secrets must remain owner-controlled.
 - `SUPABASE_SERVICE_ROLE_KEY` grants privileged access and must never reach client code.
+- Wrong `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID` or missing program-prefixed Airtable env can route a deployment to the wrong program data.
 - Airtable schema drift will break runtime operations because field names are referenced directly.
-- `next build` ignores TypeScript errors; use explicit type checking.
+- `next build` ignores TypeScript errors; use explicit workspace type checking.
 - No automated product test suite currently guards regressions.

@@ -1,0 +1,268 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@source "./**/*.{ts,tsx}";
+@source "../../../components/**/*.{ts,tsx}";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Gita Life theme adapted from the HKM Chennai /activities/gita-life page. */
+:root {
+  /* Primary - Deep temple maroon */
+  --royal-blue: #2d0a0a;
+  --royal-blue-light: #451010;
+  --royal-blue-dark: #1d0707;
+
+  /* Accent - Saffron/Orange */
+  --saffron: #ea580c;
+  --saffron-light: #ffb81c;
+  --saffron-dark: #d97706;
+
+  /* Backgrounds */
+  --ivory: #fff9f0;
+  --white: #ffffff;
+
+  /* Text */
+  --charcoal: #2d0a0a;
+  --charcoal-light: #5f3b2e;
+
+  /* Supporting accent */
+  --teal: #0f766e;
+  --teal-light: #14b8a6;
+
+  --program-primary: var(--royal-blue);
+  --program-primary-light: var(--royal-blue-light);
+  --program-primary-dark: var(--royal-blue-dark);
+  --program-accent: var(--saffron);
+  --program-accent-light: var(--saffron-light);
+  --program-accent-dark: var(--saffron-dark);
+  --program-ivory: var(--ivory);
+  --program-text: var(--charcoal);
+  --program-header-bg: #ffffff;
+  --program-header-text: var(--program-primary);
+  --program-header-muted-text: var(--charcoal-light);
+  --program-header-border: rgb(234 216 201 / 0.9);
+  --program-header-logo-bg: transparent;
+  --program-header-logo-ring: transparent;
+  --program-header-logo-width: 8.75rem;
+  --program-header-logo-height: 3.25rem;
+  --program-header-logo-width-sm: 11.5rem;
+  --program-header-logo-height-sm: 4rem;
+  --program-header-logo-width-md: 13rem;
+  --program-header-logo-height-md: 4rem;
+  --program-header-logo-width-lg: 14rem;
+  --program-header-logo-height-lg: 4.25rem;
+  --program-header-nav-bg: rgb(45 10 10 / 0.04);
+  --program-header-nav-ring: rgb(234 216 201 / 0.95);
+  --program-header-nav-text: rgb(95 59 46 / 0.88);
+  --program-header-nav-hover-bg: rgb(234 88 12 / 0.1);
+  --program-header-nav-hover-text: var(--program-primary);
+  --program-header-nav-active-bg: var(--program-primary);
+  --program-header-nav-active-text: #ffffff;
+  --program-header-nav-pending-bg: #fff3df;
+  --program-header-nav-pending-text: var(--program-primary);
+  --program-header-nav-pending-ring: var(--program-accent);
+  --program-header-nav-pending-spinner: var(--program-accent);
+  --program-header-action-bg: rgb(45 10 10 / 0.08);
+  --program-header-action-hover-bg: rgb(234 88 12 / 0.14);
+  --program-header-action-text: var(--program-primary);
+  --program-header-login-bg: rgb(45 10 10 / 0.08);
+  --program-header-login-hover-bg: rgb(234 88 12 / 0.14);
+  --program-header-login-text: var(--program-primary);
+  --program-header-focus-ring: var(--program-primary);
+
+  --background: #fff9f0;
+  --foreground: #2d0a0a;
+  --card: #fffdf9;
+  --card-foreground: #2d0a0a;
+  --popover: #fffdf9;
+  --popover-foreground: #2d0a0a;
+  --primary: #2d0a0a;
+  --primary-foreground: #fffdf9;
+  --secondary: #ffb81c;
+  --secondary-foreground: #2d0a0a;
+  --muted: #fff3df;
+  --muted-foreground: #6b4c3f;
+  --accent: #ea580c;
+  --accent-foreground: #ffffff;
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(1 0 0);
+  --border: #ead8c9;
+  --input: #e7d3c2;
+  --ring: #ea580c;
+  --chart-1: #ea580c;
+  --chart-2: #ffb81c;
+  --chart-3: #2d0a0a;
+  --chart-4: #0f766e;
+  --chart-5: #d97706;
+  --radius: 0.75rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #2d0a0a;
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.96 0.01 250);
+  --sidebar-accent-foreground: oklch(0.205 0.02 250);
+  --sidebar-border: oklch(0.9 0.01 250);
+  --sidebar-ring: oklch(0.28 0.12 260);
+}
+
+.dark {
+  --background: oklch(0.145 0.01 250);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.18 0.01 250);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.18 0.01 250);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.4 0.12 260);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.72 0.18 55);
+  --secondary-foreground: oklch(0.15 0.02 55);
+  --muted: oklch(0.25 0.01 250);
+  --muted-foreground: oklch(0.7 0.01 250);
+  --accent: oklch(0.72 0.18 55);
+  --accent-foreground: oklch(0.15 0.02 55);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.3 0.01 250);
+  --input: oklch(0.3 0.01 250);
+  --ring: oklch(0.4 0.12 260);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.18 0.01 250);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.4 0.12 260);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.25 0.01 250);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.3 0.01 250);
+  --sidebar-ring: oklch(0.4 0.12 260);
+}
+
+@theme inline {
+  --font-sans: "Inter", "Geist", "Geist Fallback", system-ui, sans-serif;
+  --font-heading: "Poppins", "Inter", system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Custom brand colors */
+  --color-royal: var(--royal-blue);
+  --color-royal-light: var(--royal-blue-light);
+  --color-saffron: var(--saffron);
+  --color-saffron-light: var(--saffron-light);
+  --color-ivory: var(--ivory);
+  --color-charcoal: var(--charcoal);
+  --color-teal: var(--teal);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background:
+      radial-gradient(circle at top left, rgb(255 184 28 / 0.12), transparent 28rem),
+      linear-gradient(180deg, #fff9f0 0%, #fff5e8 46%, #fffaf3 100%);
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgb(234 88 12 / 0.18);
+    color: var(--program-primary);
+  }
+}
+
+@media (max-width: 767px) {
+  body:has([data-mobile-app-nav]) {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+
+  [data-mobile-app-nav] {
+    overflow: visible;
+  }
+
+  [data-mobile-app-nav]::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 100%;
+    height: 100vh;
+    background: rgb(255 255 255 / 0.95);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    pointer-events: none;
+  }
+}
+
+/* Custom animation for success state */
+@keyframes checkmark {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-checkmark {
+  animation: checkmark 0.5s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out forwards;
+}

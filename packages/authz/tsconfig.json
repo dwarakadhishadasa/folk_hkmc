@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../../*"],
+      "@hkmc/data-contracts": ["../data-contracts/src/index.ts"],
+      "@hkmc/program-config/server": ["../program-config/src/server.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "../../lib/authz.ts"]
+}

@@ -1,31 +1,21 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
+    "baseUrl": ".",
     "target": "ES6",
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@hkmc/data-contracts": ["./packages/data-contracts/src/index.ts"],
+      "@hkmc/program-config": ["./packages/program-config/src/index.ts"],
+      "@hkmc/program-config/server": ["./packages/program-config/src/server.ts"],
+      "@hkmc/authz": ["./packages/authz/src/index.ts"],
+      "@hkmc/airtable": ["./packages/airtable/src/index.ts"],
+      "@hkmc/ui/*": ["./packages/ui/src/*"]
     }
   },
   "include": [

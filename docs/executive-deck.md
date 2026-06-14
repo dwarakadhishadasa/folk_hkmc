@@ -2,19 +2,20 @@
 
 ## 1. Current Product
 
-`folk_hkmc` is the FOLK Chennai web app for public onboarding, attendance, staff outreach, live monitoring, and staff invitations.
+`folk_hkmc` is the HKMC program operations monorepo. It currently ships FOLK Chennai and Gita Life web apps for public onboarding, attendance, staff outreach, live monitoring, and staff invitations.
 
 ## 2. What Changed Since The Old Docs
 
-The April documentation is stale. The code now includes Supabase staff authentication, a local staff profile bridge, implemented contact and registration APIs, session-scoped attendance, staff invite workflows, and GitHub branch-policy automation.
+The older documentation is stale where it describes a single root app. The code now includes program-scoped Next.js app workspaces, Supabase staff authentication, a program membership bridge, implemented contact and registration APIs, session-scoped attendance, staff invite workflows, monorepo guardrails, and GitHub quality/branch-policy automation.
 
 ## 3. Current Architecture
 
-The app is one Next.js web application:
+The product is two Next.js web applications backed by shared code:
 
-- Next.js renders pages and route handlers.
-- Supabase authenticates staff and stores local staff profiles.
-- Airtable stores operational program records.
+- `apps/folk` and `apps/gita-life` render program-branded pages and route handlers.
+- Supabase authenticates staff and stores local program memberships/profiles.
+- Airtable stores operational program records, resolved by program config/env.
+- `packages/*` carries browser-safe data contracts, program config, server export shims, and shared UI.
 - A service worker supports installability and offline queueing for selected form submissions.
 
 ## 4. Main Workflows
@@ -35,14 +36,15 @@ The app is one Next.js web application:
 ## 6. Operational Dependencies
 
 - Supabase must be configured for staff auth and callbacks.
-- Airtable must provide compatible tables and field names.
-- Environment variables are required for both systems.
+- Airtable must provide compatible tables and field names for each program base.
+- Environment variables are required for Supabase, program identity, and generic or program-prefixed Airtable config.
 - HTTPS is needed for PWA/service worker behavior outside local development.
 
 ## 7. Current Risks
 
 - There is no automated product test suite.
 - `next build` ignores TypeScript errors.
+- Program workspaces must stay in parity unless intentional divergence is documented.
 - Airtable schema drift can break runtime behavior.
 - Service-worker queue paths must stay aligned with actual routes.
 - Some legacy files remain in the repo and should not be mistaken for active runtime code.
@@ -52,4 +54,4 @@ The app is one Next.js web application:
 - Treat `docs/index.md` as the primary AI context entry point.
 - Keep `_bmad-output/project-context.md` aligned with route/auth/data changes.
 - Add automated coverage around auth, registration, attendance, and staff invite flows when practical.
-- Confirm production Supabase redirect URLs and Airtable table IDs before deployment changes.
+- Confirm production Supabase redirect URLs, `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, and Airtable table IDs before deployment changes.

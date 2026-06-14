@@ -1,0 +1,17 @@
+{
+  "name": "@hkmc/authz",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@hkmc/data-contracts": "workspace:*",
+    "@hkmc/program-config": "workspace:*"
+  }
+}

@@ -1,0 +1,47 @@
+name: Quality Gates
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gates:
+    name: Guardrails, typecheck, build, lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify monorepo guardrails
+        run: pnpm guardrails
+
+      - name: Typecheck workspace
+        run: pnpm typecheck:workspace
+
+      - name: Build apps
+        run: pnpm build:apps
+
+      - name: Lint
+        run: pnpm lint

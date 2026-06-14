@@ -76,7 +76,7 @@ export function AuthErrorContent({ code, message }: AuthErrorContentProps) {
       <p className="mt-3 text-sm text-[#24324A]/70">{message}</p>
       <Link
         href="/login"
-        className="mt-6 inline-flex rounded-xl bg-[#0F1E54] px-5 py-3 text-sm font-semibold text-white"
+        className="mt-6 inline-flex rounded-xl bg-[var(--program-primary)] px-5 py-3 text-sm font-semibold text-white"
       >
         Back to Login
       </Link>

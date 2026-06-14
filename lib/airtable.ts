@@ -1,6 +1,12 @@
 import "server-only"
 
 import { revalidateTag, unstable_cache } from "next/cache"
+import {
+  getProgramScopedEnv,
+  getServerProgramProfile,
+  resolveProgramId,
+  type ServerProgramProfile,
+} from "@hkmc/program-config/server"
 
 export type StaffRole = "Admin" | "Preacher" | "Volunteer"
 export type StaffStatus = "Active" | "Inactive"
@@ -132,6 +138,7 @@ type TableKey = "contacts" | "attendance" | "sessions" | "users" | "locations"
 interface AirtableConfig {
   apiToken: string
   baseId: string
+  profile: ServerProgramProfile
 }
 
 const tableEnvNames: Record<TableKey, string> = {
@@ -165,26 +172,29 @@ export class AirtableRequestError extends Error {
   }
 }
 
-function requireEnv(name: string): string {
-  const value = process.env[name]
+function requireProgramEnv(profile: ServerProgramProfile, name: string): string {
+  const value = getProgramScopedEnv(profile, name)
 
   if (!value) {
-    throw new AirtableConfigError(`${name} is required`)
+    throw new AirtableConfigError(`${profile.envPrefix}_${name} or ${name} is required`)
   }
 
   return value
 }
 
 function getConfig(): AirtableConfig {
+  const profile = getServerProgramProfile(resolveProgramId())
+
   return {
-    apiToken: requireEnv("AIRTABLE_API_TOKEN"),
-    baseId: requireEnv("AIRTABLE_BASE_ID"),
+    apiToken: requireProgramEnv(profile, "AIRTABLE_API_TOKEN"),
+    baseId: getProgramScopedEnv(profile, "AIRTABLE_BASE_ID") || profile.airtable.baseId,
+    profile,
   }
 }
 
 function tableUrl(table: TableKey): string {
   const config = getConfig()
-  const tableId = requireEnv(tableEnvNames[table])
+  const tableId = getProgramScopedEnv(config.profile, tableEnvNames[table]) || config.profile.airtable.tables[table].id
   return `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(tableId)}`
 }
 
@@ -192,7 +202,18 @@ function recordUrl(table: TableKey, recordId: string): string {
   return `${tableUrl(table)}/${recordId}`
 }
 
-function analyticsRecordId(): string {
+function analyticsRecordId(): string | null {
+  const config = getConfig()
+  const programScopedRecordId = process.env[`${config.profile.envPrefix}_AIRTABLE_ANALYTICS_RECORD_ID`]?.trim()
+
+  if (programScopedRecordId) {
+    return programScopedRecordId
+  }
+
+  if (config.baseId !== config.profile.airtable.baseId) {
+    return null
+  }
+
   return process.env.AIRTABLE_ANALYTICS_RECORD_ID?.trim() || DEFAULT_ANALYTICS_RECORD_ID
 }
 
@@ -512,12 +533,15 @@ export async function createContact(data: {
   const fields: Record<string, unknown> = {
     Name: data.name.trim(),
     Phone: normalizedPhone,
-    Analytics: [analyticsRecordId()],
   }
+  const analyticsId = analyticsRecordId()
   const createdDate = currentAirtableDate()
 
   fields["Initial Contact"] = createdDate
   fields["Last Contacted On"] = createdDate
+  if (analyticsId) {
+    fields.Analytics = [analyticsId]
+  }
 
   if (typeof data.age === "number") {
     fields.Age = data.age
@@ -666,12 +690,15 @@ export async function createSession(data: {
     "Session Date": data.sessionDate,
     Preacher: [data.preacherAirtableUserId],
     Location: [data.locationId],
-    Analytics: [analyticsRecordId()],
     "Public Attendance Enabled": data.publicAttendanceEnabled,
   }
+  const analyticsId = analyticsRecordId()
 
   if (typeof data.durationMinutes === "number") {
     fields["Duration Minutes"] = data.durationMinutes
+  }
+  if (analyticsId) {
+    fields.Analytics = [analyticsId]
   }
   if (data.attendanceOpensAt) {
     fields["Attendance Opens At"] = data.attendanceOpensAt

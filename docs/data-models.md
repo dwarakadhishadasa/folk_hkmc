@@ -5,13 +5,13 @@
 The project has two persistence layers:
 
 - Airtable: operational application records
-- Supabase Postgres/Auth: staff authentication bridge and invite logging
+- Supabase Postgres/Auth: program-scoped staff authorization cache, identities, audit events, and invite logging
 
 There are also browser-side transient shapes for auth state, offline queueing, and form state.
 
 ## Airtable Configuration
 
-`lib/airtable.ts` requires these environment variables:
+`lib/airtable.ts` resolves the active program through `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, then reads program-prefixed Airtable env vars first and generic env vars second. Table IDs fall back to the static mappings in `packages/program-config/src/programs/shared-airtable.ts`.
 
 | Variable | Purpose |
 | --- | --- |
@@ -23,7 +23,15 @@ There are also browser-side transient shapes for auth state, offline queueing, a
 | `AIRTABLE_USERS_TABLE_ID` | Staff users table |
 | `AIRTABLE_LOCATIONS_TABLE_ID` | Locations table |
 | `AIRTABLE_ANALYTICS_RECORD_ID` | Optional analytics link default |
+| `AIRTABLE_MANAGEMENT_URL` | Optional explicit Airtable management URL; must be HTTPS and on `airtable.com` |
 | `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` | Optional `/manage` interface page |
+
+Program-specific overrides use the active profile prefix:
+
+| Program | Prefix examples |
+| --- | --- |
+| FOLK Chennai | `FOLK_AIRTABLE_API_TOKEN`, `FOLK_AIRTABLE_BASE_ID`, `FOLK_AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` |
+| Gita Life | `GITA_LIFE_AIRTABLE_API_TOKEN`, `GITA_LIFE_AIRTABLE_BASE_ID`, `GITA_LIFE_AIRTABLE_CONTACTS_TABLE_ID` |
 
 ## Airtable Records
 
@@ -121,18 +129,60 @@ Fields used:
 
 Defined in `supabase/migrations/*` and typed in `lib/supabase/types.ts`.
 
+### `public.programs`
+
+Known program registry.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | text | Primary key; currently `folk` or `gita-life` |
+| `name` | text | Program display name |
+| `status` | text | `Active` or `Inactive` |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Trigger-maintained |
+
+RLS is enabled.
+
+### `public.staff_memberships`
+
+Primary program-scoped authorization cache. `getStaffContext()` prefers this table and refreshes from Airtable when the membership is stale.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid | Primary key |
+| `program_id` | text | References `programs(id)` |
+| `user_id` | uuid | References `auth.users(id)` |
+| `email` | text | Lowercased staff email |
+| `airtable_user_id` | text | Program Airtable User record ID |
+| `name` | text nullable | Staff display name |
+| `role` | text | `Admin`, `Preacher`, `Volunteer` |
+| `status` | text | `Active`, `Inactive`, `Suspended`, `Revoked` |
+| `location_ids` | text[] | Staff location scope |
+| `assigned_preacher_airtable_user_id` | text nullable | Volunteer routing |
+| `last_synced_at` | timestamptz | Used by stale-sync checks |
+| `revoked_at` | timestamptz nullable | Present for revocation tracking |
+| `sync_source` | text | Defaults to `airtable` |
+| `sync_state` | text | `ok`, `stale`, or `failed`; must be `ok` for access |
+| `sync_error` | text nullable | Last sync failure detail |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Trigger-maintained |
+
+Unique constraints cover `(program_id, user_id)` and lowercased `(program_id, email)`. RLS is enabled; app reads/writes use the service-role client.
+
 ### `public.staff_profiles`
 
-Local authorization cache keyed by Supabase Auth user ID.
+Legacy-compatible authorization cache keyed by Supabase Auth user ID. New syncs still update this table for compatibility, but program-scoped authorization should treat `staff_memberships` as the primary source.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid | Primary key; references `auth.users(id)` |
+| `program_id` | text | Added for program compatibility; defaults to `folk` |
 | `email` | text | Unique |
 | `airtable_user_id` | text | Required Airtable User ID |
 | `name` | text nullable | Staff display name |
 | `role` | text | `Admin`, `Preacher`, `Volunteer` |
 | `status` | text | `Active`, `Inactive` |
+| `membership_status` | text | `Active`, `Inactive`, `Suspended`, `Revoked`; mapped from Airtable status today |
 | `location_ids` | text[] | Staff location scope |
 | `assigned_preacher_airtable_user_id` | text nullable | Volunteer routing |
 | `last_synced_at` | timestamptz | Updated on profile sync |
@@ -141,6 +191,61 @@ Local authorization cache keyed by Supabase Auth user ID.
 
 RLS is enabled. Current server access uses the Supabase service-role client.
 
+### `public.airtable_identities`
+
+Maps program-scoped Airtable users to Supabase users.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid | Primary key |
+| `program_id` | text | References `programs(id)` |
+| `user_id` | uuid | References `auth.users(id)` |
+| `airtable_base_id` | text | Program Airtable base ID |
+| `airtable_user_id` | text | Program Airtable User record ID |
+| `email` | text | Staff email |
+| `last_synced_at` | timestamptz | Last Airtable identity sync |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Trigger-maintained |
+
+Unique constraints cover `(program_id, airtable_user_id)` and `(program_id, user_id)`. RLS is enabled.
+
+### `public.airtable_sync_state`
+
+Program/source sync health table reserved for Airtable sync state.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid | Primary key |
+| `program_id` | text | References `programs(id)` |
+| `source` | text | Sync source name |
+| `status` | text | `ok`, `stale`, or `failed` |
+| `last_synced_at` | timestamptz nullable | Last successful sync |
+| `error_message` | text nullable | Last failure detail |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Trigger-maintained |
+
+RLS is enabled.
+
+### `public.audit_events`
+
+Authorization/audit event log written by `writeAuditEvent()`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | bigint identity | Primary key |
+| `program_id` | text | References `programs(id)` |
+| `actor_supabase_user_id` | uuid nullable | Supabase actor |
+| `actor_airtable_user_id` | text nullable | Airtable actor |
+| `actor_role` | text nullable | Staff role at event time |
+| `action` | text | Event action |
+| `target_id` | text nullable | Optional target |
+| `source` | text | Event source, e.g. `authz` |
+| `sync_state` | text nullable | Membership sync state |
+| `metadata` | jsonb | Additional event metadata |
+| `created_at` | timestamptz | Default `now()` |
+
+RLS is enabled.
+
 ### `public.invite_log`
 
 Invite audit log written by `lib/invite-log.ts`.
@@ -148,6 +253,7 @@ Invite audit log written by `lib/invite-log.ts`.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | bigint identity | Primary key |
+| `program_id` | text nullable | Program for the invite; defaults to `folk` for legacy rows |
 | `invitee_email` | text | Lowercased |
 | `airtable_user_id` | text nullable | Invited Airtable User |
 | `inviter_airtable_user_id` | text nullable | Inviter in Airtable |
@@ -168,13 +274,16 @@ Returned by `/api/auth/me` and used by `AuthProvider`:
 
 ```ts
 interface StaffContext {
+  programId: "folk" | "gita-life"
   supabaseUserId: string
   email: string
   airtableUserId: string
   name: string
   role: "Admin" | "Preacher" | "Volunteer"
+  status: "Active" | "Inactive" | "Suspended" | "Revoked"
   locationIds: string[]
   assignedPreacherAirtableUserId?: string
+  lastSyncedAt: string
 }
 ```
 
@@ -229,5 +338,6 @@ This path is not active because `OfflineSyncProvider` is not mounted.
 - Staff email is trimmed and lowercased.
 - Session attendance requires an open eligible session.
 - Contact creation always links the default analytics record.
-- Staff profile sync rejects inactive or missing Airtable staff users.
+- Staff profile/membership sync rejects inactive or missing Airtable staff users.
+- Staff membership access requires matching program, email, active status, trusted `sync_state`, and fresh `last_synced_at`.
 - Preacher session access is limited by linked Preacher ID or overlapping location scope.

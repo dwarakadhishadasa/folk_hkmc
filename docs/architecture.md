@@ -2,29 +2,31 @@
 
 ## Executive Summary
 
-`folk_hkmc` is a Next.js App Router monolith with a client-heavy UI, server route handlers for mutations and protected reads, Supabase for staff authentication, and Airtable as the operational data backend. The current architecture is best described as:
+`folk_hkmc` is a pnpm/Turborepo monorepo with two program-scoped Next.js App Router apps: `@hkmc/folk` and `@hkmc/gita-life`. Each app has a client-heavy UI and its own route handlers, while shared server logic, program metadata, auth contracts, Airtable helpers, and UI primitives live in root `lib/`, `components/`, and `packages/*`. The current architecture is best described as:
 
 ```text
-Browser / PWA
-  -> Next.js App Router pages and client components
-  -> Next.js route handlers
-  -> Supabase Auth + Supabase Postgres staff bridge
-  -> Airtable REST API operational tables
+Browser / PWA for one program deployment
+  -> apps/{folk,gita-life}/app pages and client components
+  -> apps/{folk,gita-life}/app route handlers
+  -> shared server-only lib/ services and @hkmc/* packages
+  -> Supabase Auth + Supabase Postgres program membership cache
+  -> program-scoped Airtable REST API operational tables
 ```
 
-The application does not have a separate backend service. Server-only modules in `lib/` are the backend boundary.
+The repository does not have a separate backend service. Server-only modules in `lib/` and server-only package exports are the backend boundary.
 
 ## Runtime Layers
 
 | Layer | Files | Responsibilities |
 | --- | --- | --- |
-| App shell | `app/layout.tsx`, `components/providers.tsx` | Fonts, metadata, global providers, Speed Insights, service worker registration |
-| Public pages | `app/page.tsx`, `app/register/page.tsx`, `app/attend/page.tsx` | Program landing, registration, attendance |
-| Staff pages | `app/contact/page.tsx`, `app/sessions/page.tsx`, `app/dashboard/page.tsx`, `app/volunteers/page.tsx`, `app/admin/invite/page.tsx`, `app/manage/page.tsx` | Server-side staff context checks and staff workflows |
+| App shell | `apps/*/app/layout.tsx`, `components/providers.tsx` | Program metadata, fonts, global providers, Speed Insights, service worker registration |
+| Public pages | `apps/*/app/page.tsx`, `apps/*/app/register/page.tsx`, `apps/*/app/attend/page.tsx` | Program landing, registration, attendance |
+| Staff pages | `apps/*/app/contact/page.tsx`, `apps/*/app/sessions/page.tsx`, `apps/*/app/dashboard/page.tsx`, `apps/*/app/volunteers/page.tsx`, `apps/*/app/admin/invite/page.tsx`, `apps/*/app/manage/page.tsx` | Server-side staff context checks and staff workflows |
 | Client state | `lib/auth-context.tsx`, `components/navigation-feedback-provider.tsx` | Auth hydration, OTP flow, navigation feedback |
-| Route handlers | `app/api/**/route.ts`, `app/attendance/route.ts`, `app/auth/**/route.ts` | API contracts, auth callbacks, staff mutations, attendance |
-| Authorization | `lib/authz.ts`, `proxy.ts`, `lib/supabase/*` | Supabase cookies, local profile reads, role checks |
-| Airtable data | `lib/airtable.ts` | Operational records and Airtable REST helpers |
+| Route handlers | `apps/*/app/api/**/route.ts`, `apps/*/app/attendance/route.ts`, `apps/*/app/auth/**/route.ts` | Program-local API contracts, auth callbacks, staff mutations, attendance |
+| Authorization | `lib/authz.ts`, root `proxy.ts`, `apps/*/proxy.ts`, `lib/supabase/*` | Supabase cookies, staff membership reads/sync, role checks |
+| Program config | `packages/program-config`, `lib/current-program.ts` | Public branding, module flags, server Airtable mappings, program-scoped env |
+| Airtable data | `lib/airtable.ts`, `@hkmc/airtable` | Operational records and Airtable REST helpers |
 | PWA/offline | `public/sw.js`, `components/offline-indicator.tsx`, `public/manifest.json` | Asset caching and selected offline POST queueing |
 
 ## Authentication And Authorization
@@ -36,23 +38,26 @@ The application does not have a separate backend service. Server-only modules in
 3. The route ensures a Supabase Auth user exists and syncs its ID back to Airtable.
 4. Browser calls `supabase.auth.signInWithOtp`.
 5. Staff enters email OTP, or follows an invite/callback link.
-6. `POST /api/auth/complete-implicit` or `GET /auth/confirm` syncs Airtable staff data into Supabase `staff_profiles`.
+6. `POST /api/auth/complete-implicit` or `GET /auth/confirm` syncs Airtable staff data into Supabase `staff_profiles`, `staff_memberships`, and `airtable_identities`.
 7. Client stores no custom local session. Supabase cookies represent the session.
 8. `GET /api/auth/me` returns the current `StaffContext`.
 
 ### Staff Context
 
-`getStaffContext()` in `lib/authz.ts` is the protected server boundary. It reads the Supabase user from cookies, loads `staff_profiles` with the service-role client, validates active status and role, and returns:
+`getStaffContext()` in `lib/authz.ts` is the protected server boundary. It reads the Supabase user from cookies, resolves the current program from `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, prefers `staff_memberships`, falls back to compatible `staff_profiles`, refreshes stale membership data from Airtable when allowed, validates active status and role, and returns:
 
 ```ts
 interface StaffContext {
+  programId: "folk" | "gita-life"
   supabaseUserId: string
   email: string
   airtableUserId: string
   name: string
   role: "Admin" | "Preacher" | "Volunteer"
+  status: "Active" | "Inactive" | "Suspended" | "Revoked"
   locationIds: string[]
   assignedPreacherAirtableUserId?: string
+  lastSyncedAt: string
 }
 ```
 
@@ -74,7 +79,7 @@ interface StaffContext {
 
 ### Airtable
 
-Airtable is the main operational data store. `lib/airtable.ts` requires:
+Airtable is the main operational data store. `lib/airtable.ts` resolves the active program profile and accepts either generic variables or program-prefixed overrides:
 
 - `AIRTABLE_API_TOKEN`
 - `AIRTABLE_BASE_ID`
@@ -84,16 +89,22 @@ Airtable is the main operational data store. `lib/airtable.ts` requires:
 - `AIRTABLE_USERS_TABLE_ID`
 - `AIRTABLE_LOCATIONS_TABLE_ID`
 - Optional `AIRTABLE_ANALYTICS_RECORD_ID`
+- Optional `AIRTABLE_MANAGEMENT_URL`
 - Optional `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID`
 
-The app stores Contacts, Attendance, Sessions, Users, and Locations in Airtable. All Airtable calls are server-only and `cache: "no-store"` except cached reference lists using Next `unstable_cache`.
+Program-specific variants use the active profile prefix, for example `FOLK_AIRTABLE_API_TOKEN` or `GITA_LIFE_AIRTABLE_BASE_ID`. Table IDs default to `packages/program-config/src/programs/shared-airtable.ts` if not overridden. The apps store Contacts, Attendance, Sessions, Users, and Locations in Airtable. All Airtable calls are server-only and `cache: "no-store"` except cached reference lists using Next `unstable_cache`.
 
 ### Supabase
 
-Supabase has two local tables:
+Supabase has the staff-auth and audit tables defined by the migrations:
 
-- `staff_profiles`: local authorization cache keyed by Supabase Auth user ID
-- `invite_log`: invite audit log
+- `programs`: known program IDs, currently `folk` and `gita-life`
+- `staff_memberships`: primary program-scoped authorization cache
+- `staff_profiles`: legacy-compatible authorization cache keyed by Supabase Auth user ID
+- `airtable_identities`: mapping between Supabase users and program Airtable users
+- `airtable_sync_state`: sync health/status by program and source
+- `audit_events`: authorization/audit events for denied, stale, and missing membership states
+- `invite_log`: invite audit log, now carrying `program_id`
 
 Supabase migrations live under `supabase/migrations/`. The service-role key is used only server-side.
 
@@ -101,7 +112,7 @@ Supabase migrations live under `supabase/migrations/`. The service-role key is u
 
 ### Public Registration Without Session
 
-`app/register/page.tsx` posts to `POST /api/registration`. The route validates name/mobile, rejects duplicates, creates an Airtable Contact, and returns `201`.
+`apps/*/app/register/page.tsx` posts to `POST /api/registration` in the current program app. The route validates name/mobile, rejects duplicates, creates an Airtable Contact, and returns `201`.
 
 ### Session-Backed Registration
 
@@ -125,7 +136,7 @@ When `/register?session=<id>` is used, `POST /api/registration` validates sessio
 
 ### Session Creation
 
-`POST /api/sessions` requires Admin or Preacher. The route validates location scope, creates an Airtable Session, generates `/attend?session=<id>` using `NEXT_PUBLIC_SITE_URL`, and writes the attendance URL back to Airtable.
+`POST /api/sessions` requires Admin or Preacher. The route validates program membership and location scope, creates an Airtable Session, generates `/attend?session=<id>` using the app's `NEXT_PUBLIC_SITE_URL`, and writes the attendance URL back to Airtable.
 
 ### Staff Invites
 
@@ -152,8 +163,10 @@ The active UI listens for service worker pending-count messages through `compone
 ## Important Constraints
 
 - Keep secrets server-only. Never move Airtable tokens or Supabase service-role keys into client code.
+- Keep `PROGRAM_ID` and `NEXT_PUBLIC_PROGRAM_ID` aligned with the deployed app.
+- Keep program app parity intentionally: duplicated app route files under `apps/folk` and `apps/gita-life` should remain behaviorally aligned unless a requirement says otherwise.
 - Do not restore the old localStorage demo auth model; current auth is Supabase-backed.
 - Preserve the `/attendance` route path. It is intentionally not under `/api`.
 - Preserve 10-digit mobile normalization on both client and server.
 - Any session attendance changes must keep registration, attendance, dashboard polling, Airtable session fields, and service worker queue paths aligned.
-- Run `pnpm exec tsc --noEmit` because Next build ignores TypeScript errors.
+- Run `pnpm guardrails` and `pnpm typecheck:workspace` because Next build ignores TypeScript errors and package boundaries are enforced by local guardrails.

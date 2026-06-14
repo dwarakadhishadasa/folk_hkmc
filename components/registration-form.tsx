@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
+import { currentProgramProfile } from "@/lib/current-program"
 
 interface RegistrationData {
   name: string
@@ -21,6 +22,7 @@ interface RegistrationData {
 }
 
 export function RegistrationForm() {
+  const { branding } = currentProgramProfile
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const { toast } = useToast()
@@ -64,7 +66,25 @@ export function RegistrationForm() {
         body: JSON.stringify(formData),
       })
 
-      if (!response.ok) throw new Error("Failed to register")
+      const data = await response.json().catch(() => ({}))
+
+      if (response.status === 202 && data.queued) {
+        toast({
+          title: "Registration saved offline",
+          description: "It will sync when the app is back online.",
+        })
+        return
+      }
+
+      if (response.status === 409 && data.alreadyRegistered) {
+        toast({
+          title: "Already registered",
+          description: "No duplicate registration was created.",
+        })
+        return
+      }
+
+      if (!response.ok) throw new Error(data.error || "Failed to register")
 
       setIsSuccess(true)
       toast({
@@ -100,7 +120,7 @@ export function RegistrationForm() {
         <CardHeader className="bg-primary text-primary-foreground rounded-t-lg">
           <CardTitle className="text-xl">New Registration</CardTitle>
           <CardDescription className="text-primary-foreground/80">
-            Join the FOLK Chennai - Youth Empowerment Club
+            Join {branding.name}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 pt-8">
@@ -165,8 +185,8 @@ export function RegistrationForm() {
                   <SelectValue placeholder="Select occupation type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="working">Working Professional</SelectItem>
+                  <SelectItem value="Studying">Student</SelectItem>
+                  <SelectItem value="Working">Working Professional</SelectItem>
                 </SelectContent>
               </Select>
             </div>

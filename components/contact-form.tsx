@@ -4,6 +4,8 @@ import type React from "react"
 import { useRef, useState } from "react"
 import { Toaster } from "@/components/ui/toaster"
 import { useToast } from "@/hooks/use-toast"
+import { currentProgramProfile } from "@/lib/current-program"
+import { cn } from "@/lib/utils"
 
 interface ContactData {
   name: string
@@ -46,6 +48,13 @@ async function registerBackgroundSync() {
   )
 }
 
+const panelClass =
+  "overflow-hidden rounded-lg border border-[var(--border)] bg-card shadow-[0_18px_50px_rgba(45,10,10,0.08)]"
+const fieldClass =
+  "w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[var(--program-text)] shadow-sm transition-all placeholder:text-[var(--muted-foreground)]/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-[var(--program-accent)]/15 disabled:bg-muted disabled:text-muted-foreground"
+const labelClass = "block text-sm font-semibold text-[var(--program-text)]"
+const noticeClass = "rounded-lg border px-4 py-3 text-sm leading-6"
+
 export function ContactForm({
   staffRole,
   preachers = [],
@@ -53,6 +62,10 @@ export function ContactForm({
   staffRole: "Admin" | "Preacher" | "Volunteer"
   preachers?: PreacherOption[]
 }) {
+  const { branding } = currentProgramProfile
+  const isGitaLife = currentProgramProfile.id === "gita-life"
+  const locationLabel = isGitaLife ? "Address" : "Location"
+  const locationPlaceholder = isGitaLife ? "Enter address" : "Enter location"
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<ContactData>(initialFormData)
   const [phoneError, setPhoneError] = useState("")
@@ -112,7 +125,7 @@ export function ContactForm({
     }
 
     if (!formData.location.trim()) {
-      setMessage("Enter a location before saving this contact.")
+      setMessage(`Enter an ${isGitaLife ? "address" : "location"} before saving this contact.`)
       return
     }
 
@@ -168,25 +181,25 @@ export function ContactForm({
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="bg-blue-600 text-white p-6">
-          <h2 className="text-xl font-bold">New Contact</h2>
-          <p className="text-blue-100 text-sm mt-1">Add a new contact to the FOLK database</p>
+      <div className={panelClass}>
+        <div className="border-b border-white/10 bg-[var(--program-primary)] px-6 py-5 text-white">
+          <h2 className="font-[family-name:var(--font-poppins)] text-xl font-bold">New Contact</h2>
+          <p className="mt-1 text-sm text-white/75">Add a new contact to the {branding.shortName} database</p>
         </div>
-        <div className="p-6">
-          <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            {staffRole === "Volunteer" && "Volunteer contacts are assigned to your Preacher and the location you enter."}
-            {staffRole === "Preacher" && "Contacts you create are assigned to you and the location you enter."}
+        <div className="p-5 sm:p-6">
+          <div className={cn(noticeClass, "mb-4 border-[var(--program-accent)]/20 bg-muted text-[var(--program-primary)]")}>
+            {staffRole === "Volunteer" && `Volunteer contacts are assigned to your Preacher and the ${locationLabel.toLowerCase()} you enter.`}
+            {staffRole === "Preacher" && `Contacts you create are assigned to you and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
           </div>
           {message && (
-            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className={cn(noticeClass, "mb-4 border-amber-200 bg-amber-50 text-amber-800")} role="status">
               {message}
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="name" className={labelClass}>
                 Full Name *
               </label>
               <input
@@ -198,12 +211,12 @@ export function ContactForm({
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={fieldClass}
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="contactMobile" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="contactMobile" className={labelClass}>
                 Mobile Number *
               </label>
               <input
@@ -216,15 +229,13 @@ export function ContactForm({
                 onChange={handleChange}
                 required
                 maxLength={10}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  phoneError ? "border-red-500" : "border-gray-300"
-                }`}
+                className={cn(fieldClass, phoneError && "border-red-500 focus:border-red-500 focus:ring-red-500/15")}
               />
               {phoneError && <p className="text-sm text-red-500">{phoneError}</p>}
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="dateOfBirth" className={labelClass}>
                 Date of Birth
               </label>
               <input
@@ -233,12 +244,12 @@ export function ContactForm({
                 type="date"
                 value={formData.dateOfBirth}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={fieldClass}
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="occupation" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="occupation" className={labelClass}>
                 Occupation
               </label>
               <select
@@ -246,18 +257,18 @@ export function ContactForm({
                 name="occupation"
                 value={formData.occupation}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={fieldClass}
               >
                 <option value="">Select occupation type</option>
-                <option value="Studying">Student</option>
                 <option value="Working">Working Professional</option>
+                {isGitaLife ? <option value="Housewife">Housewife</option> : <option value="Studying">Student</option>}
               </select>
             </div>
 
-            {formData.occupation === "Studying" && (
+            {!isGitaLife && formData.occupation === "Studying" && (
               <>
                 <div className="space-y-2">
-                  <label htmlFor="year" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="year" className={labelClass}>
                     Year
                   </label>
                   <select
@@ -265,7 +276,7 @@ export function ContactForm({
                     name="year"
                     value={formData.year}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={fieldClass}
                   >
                     <option value="">Select year</option>
                     <option value="1st year">1st Year</option>
@@ -277,7 +288,7 @@ export function ContactForm({
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="college" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="college" className={labelClass}>
                     College
                   </label>
                   <input
@@ -287,7 +298,7 @@ export function ContactForm({
                     placeholder="Enter college name"
                     value={formData.college}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={fieldClass}
                   />
                 </div>
               </>
@@ -295,7 +306,7 @@ export function ContactForm({
 
             {formData.occupation === "Working" && (
               <div className="space-y-2">
-                <label htmlFor="company" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="company" className={labelClass}>
                   Company
                 </label>
                 <input
@@ -305,14 +316,14 @@ export function ContactForm({
                   placeholder="Enter company name"
                   value={formData.company}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={fieldClass}
                 />
               </div>
             )}
 
             {staffRole === "Admin" && (
               <div className="space-y-2">
-                <label htmlFor="assignedPreacherAirtableUserId" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="assignedPreacherAirtableUserId" className={labelClass}>
                   Assigned Preacher *
                 </label>
                 <select
@@ -321,7 +332,7 @@ export function ContactForm({
                   value={formData.assignedPreacherAirtableUserId}
                   onChange={handleChange}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={fieldClass}
                 >
                   <option value="">Select Preacher</option>
                   {preachers.map((preacher) => (
@@ -334,40 +345,42 @@ export function ContactForm({
             )}
 
             <div className="space-y-2">
-              <label htmlFor="location" className="block text-sm font-medium text-gray-700">
-                Location *
+              <label htmlFor="location" className={labelClass}>
+                {locationLabel} *
               </label>
               <input
                 id="location"
                 name="location"
                 type="text"
-                placeholder="Enter location"
+                placeholder={locationPlaceholder}
                 value={formData.location}
                 onChange={handleChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={fieldClass}
               />
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="comments" className="block text-sm font-medium text-gray-700">
-                Comments
-              </label>
-              <textarea
-                id="comments"
-                name="comments"
-                placeholder="Add any additional comments"
-                value={formData.comments}
-                onChange={handleChange}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            {!isGitaLife && (
+              <div className="space-y-2">
+                <label htmlFor="comments" className={labelClass}>
+                  Comments
+                </label>
+                <textarea
+                  id="comments"
+                  name="comments"
+                  placeholder="Add any additional comments"
+                  value={formData.comments}
+                  onChange={handleChange}
+                  rows={3}
+                  className={fieldClass}
+                />
+              </div>
+            )}
 
             <button
               type="submit"
               disabled={isSubmitting || phoneError !== "" || !formData.location.trim()}
-              className="w-full py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-white shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
             >
               {isSubmitting ? "Saving..." : "Save"}
             </button>

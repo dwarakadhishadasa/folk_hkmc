@@ -7,7 +7,7 @@ This addendum preserves technical decisions and implementation guidance that inf
 Verified in this workspace on 2026-06-11:
 
 - Next.js 16.0.7 App Router, React 19.2.0, TypeScript 5, and Tailwind CSS 4.1.9.
-- Deployment targets Cloudflare Pages, so new API routes should remain Edge-compatible unless intentionally changed.
+- Deployment targets Vercel Pages, so new API routes should remain Edge-compatible unless intentionally changed.
 - Airtable helper code exists in `lib/airtable.ts`; keep this integration server-only.
 - Current FOLK operational routes include `/attendance`, `/api/registration`, `/api/contact`, `/api/sessions`, auth routes, invite routes, and staff/admin surfaces.
 - No active Gita Life route or `/api/gita-life` endpoint was found in this workspace during finalization; confirm whether Gita Life public-page ownership lives in this repo or another HKM site before implementation.

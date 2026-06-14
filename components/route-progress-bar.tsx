@@ -83,7 +83,7 @@ export function RouteProgressBar({ className }: { className?: string }) {
     >
       <div
         ref={fillRef}
-        className="h-full w-full origin-left scale-x-0 bg-[#F98B1C] shadow-[0_0_12px_rgba(249,139,28,0.65)]"
+        className="h-full w-full origin-left scale-x-0 bg-[var(--program-accent)] shadow-[0_0_12px_rgba(0,0,0,0.2)]"
       />
     </div>
   )

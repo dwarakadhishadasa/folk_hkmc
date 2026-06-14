@@ -1,26 +1,25 @@
 # folk_hkmc Documentation Index
 
-**Type:** monolith
+**Type:** pnpm/Turborepo monorepo
 **Primary Language:** TypeScript
-**Architecture:** Next.js App Router web application with Supabase staff authentication, Airtable operational data, and PWA offline queueing
-**Last Updated:** 2026-06-11
-
+**Architecture:** Program-scoped Next.js App Router apps with Supabase staff authentication, Airtable operational data, and PWA offline queueing
+**Last Updated:** 2026-06-13
 ## Current State Check
 
-The previous generated docs were last updated on 2026-04-23 and no longer reflected the codebase. The current code now includes Supabase authentication, a local Supabase staff profile bridge, implemented registration/contact/session/admin APIs, role-scoped staff pages, an ESLint setup, and additional operational scripts.
+The older generated docs described a single root app and no longer reflected the current codebase. The current code now includes program-scoped Next.js app workspaces, Supabase authentication, a program-scoped staff membership bridge, implemented registration/contact/session/admin APIs in each app, role-scoped staff pages, monorepo guardrails, quality gates, and additional operational scripts.
 
 ## Project Overview
 
-`folk_hkmc` is the FOLK Chennai web application for public registration, session-specific attendance, staff contact capture, live attendance monitoring, and staff invitation workflows. It is a single Next.js 16 App Router application. Supabase handles staff authentication and local authorization profile reads, while Airtable remains the operational system of record for contacts, attendance, sessions, staff users, and locations.
+`folk_hkmc` contains separate FOLK and Gita Life Next.js 16 App Router apps under `apps/`. They share Supabase staff authentication, Airtable-backed operational workflows, and common packages while keeping program-specific app shells and environment files.
 
 ## Quick Reference
 
-- **Entry point:** `app/layout.tsx`
+- **Entry points:** `apps/folk/app/layout.tsx`, `apps/gita-life/app/layout.tsx`
 - **Public pages:** `/`, `/register`, `/attend`
 - **Staff pages:** `/contact`, `/sessions`, `/dashboard`, `/volunteers`, `/admin/invite`, `/manage`
-- **Auth:** Supabase email OTP/invite flow with server cookies and `staff_profiles`
+- **Auth:** Supabase email OTP/invite flow with server cookies and program-scoped `staff_memberships`
 - **Operational store:** Airtable REST API via `lib/airtable.ts`
-- **Local auth bridge:** Supabase tables `staff_profiles` and `invite_log`
+- **Local auth bridge:** Supabase tables `programs`, `staff_memberships`, `staff_profiles`, `airtable_identities`, `audit_events`, and `invite_log`
 - **Offline/PWA:** `public/sw.js`, `public/manifest.json`, `components/offline-indicator.tsx`
 - **Package manager:** `pnpm`
 
@@ -46,16 +45,17 @@ The previous generated docs were last updated on 2026-04-23 and no longer reflec
 ```bash
 pnpm install
 pnpm supabase:start
+pnpm supabase:push
 pnpm supabase:env
 pnpm dev
 ```
 
-For production-like behavior, provide Airtable table IDs and Supabase credentials from `.env.example`. Do not commit real Airtable tokens or Supabase service-role keys.
+For production-like behavior, provide Supabase credentials, `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, and generic or program-prefixed Airtable configuration from `.env.example`. Do not commit real Airtable tokens or Supabase service-role keys.
 
 ## Common Checks
 
 ```bash
-pnpm exec tsc --noEmit
+pnpm typecheck:workspace
 pnpm lint
 pnpm build
 ```
@@ -74,8 +74,8 @@ Read these first before planning or implementation:
 
 Important current caveats:
 
-- `next.config.mjs` still ignores TypeScript build errors, so run `pnpm exec tsc --noEmit` explicitly.
+- The app configs import shared root `next.config.mjs`, which still ignores TypeScript build errors, so run `pnpm typecheck:workspace` explicitly.
 - `components/registration-form.tsx`, `components/offline-sync-provider.tsx`, `lib/offline-sync.ts`, and `lib/store.ts` are present but not part of the active mounted runtime path.
-- Staff access is not localStorage-based anymore; Supabase cookies and `staff_profiles` are the source for staff session state.
+- Staff access is not localStorage-based anymore; Supabase cookies and `staff_memberships` are the primary source for program staff authorization.
 
-Generated as part of a BMAD `document-project` full rescan on 2026-06-11.
+Updated through a BMAD `document-project` documentation freshness pass on 2026-06-13.

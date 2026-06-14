@@ -1,6 +1,6 @@
 "use client"
 
-import type { MouseEvent, ReactNode } from "react"
+import type { CSSProperties, MouseEvent, ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -17,6 +17,7 @@ import { PWAInstallPrompt } from "@/components/pwa-install-prompt"
 import { RouteProgressBar } from "@/components/route-progress-bar"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/auth-context"
+import { currentProgramProfile } from "@/lib/current-program"
 import { useNavigationFeedback } from "@/components/navigation-feedback-provider"
 import { cn } from "@/lib/utils"
 
@@ -100,14 +101,17 @@ function DesktopNavItem({
       active={active}
       pending={pending}
       className={cn(
-        "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-white/80 transition-[background-color,box-shadow,color,transform] duration-150",
-        "hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
-        active && !navigationPending && "bg-white text-[#0F1E54] shadow-sm hover:bg-white hover:text-[#0F1E54]",
-        pending && "bg-white/15 text-white shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-white/15",
+        "inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-[var(--header-nav-text)] transition-[background-color,box-shadow,color,transform] duration-150",
+        "hover:-translate-y-0.5 hover:bg-[var(--header-nav-hover-bg)] hover:text-[var(--header-nav-hover-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)]",
+        active &&
+          !navigationPending &&
+          "bg-[var(--header-nav-active-bg)] text-[var(--header-nav-active-text)] shadow-sm shadow-black/10 hover:bg-[var(--header-nav-active-bg)] hover:text-[var(--header-nav-active-text)]",
+        pending &&
+          "bg-[var(--header-nav-pending-bg)] text-[var(--header-nav-pending-text)] shadow-sm ring-1 ring-[var(--header-nav-pending-ring)] hover:bg-[var(--header-nav-pending-bg)]",
       )}
     >
       {pending ? (
-        <Spinner className="h-4 w-4 shrink-0 text-[#F98B1C]" aria-hidden="true" />
+        <Spinner className="h-4 w-4 shrink-0 text-[var(--header-nav-pending-spinner)]" aria-hidden="true" />
       ) : (
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       )}
@@ -135,17 +139,17 @@ function MobileNavItem({
       active={active}
       pending={pending}
       className={cn(
-        "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-semibold leading-none transition-[background-color,box-shadow,color,transform] duration-150",
-        "text-[#24324A]/70 hover:bg-[#0F1E54]/5 hover:text-[#0F1E54] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C]",
+        "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold leading-none transition-[background-color,box-shadow,color,transform] duration-150",
+        "text-[var(--program-text)]/70 hover:bg-black/5 hover:text-[var(--program-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
         active &&
           !navigationPending &&
-          "bg-[#0F1E54] text-white shadow-md shadow-[#0F1E54]/20 hover:bg-[#0F1E54] hover:text-white",
+          "bg-[var(--program-primary)] text-white shadow-md shadow-black/15 hover:bg-[var(--program-primary)] hover:text-white",
         pending &&
-          "bg-[#F98B1C]/15 text-[#0F1E54] shadow-sm ring-1 ring-[#F98B1C]/70 hover:bg-[#F98B1C]/15",
+          "bg-[#FFF3DF] text-[var(--program-primary)] shadow-sm ring-1 ring-[var(--program-accent)] hover:bg-[#FFF3DF]",
       )}
     >
       {pending ? (
-        <Spinner className="h-5 w-5 shrink-0 text-[#F98B1C]" aria-hidden="true" />
+        <Spinner className="h-5 w-5 shrink-0 text-[var(--program-accent)]" aria-hidden="true" />
       ) : (
         <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
       )}
@@ -154,10 +158,54 @@ function MobileNavItem({
   )
 }
 
+const headerThemeVars = {
+  "--header-bg": "var(--program-header-bg, var(--program-primary))",
+  "--header-text": "var(--program-header-text, #ffffff)",
+  "--header-muted-text": "var(--program-header-muted-text, rgb(255 255 255 / 0.7))",
+  "--header-border": "var(--program-header-border, rgb(255 255 255 / 0.1))",
+  "--header-logo-bg": "var(--program-header-logo-bg, #ffffff)",
+  "--header-logo-ring": "var(--program-header-logo-ring, rgb(255 255 255 / 0.2))",
+  "--header-logo-width": "var(--program-header-logo-width, 7rem)",
+  "--header-logo-height": "var(--program-header-logo-height, 2.5rem)",
+  "--header-logo-width-sm": "var(--program-header-logo-width-sm, 9rem)",
+  "--header-logo-height-sm": "var(--program-header-logo-height-sm, 3rem)",
+  "--header-logo-width-md": "var(--program-header-logo-width-md, 10rem)",
+  "--header-logo-height-md": "var(--program-header-logo-height-md, 3.5rem)",
+  "--header-logo-width-lg": "var(--program-header-logo-width-lg, var(--header-logo-width-md))",
+  "--header-logo-height-lg": "var(--program-header-logo-height-lg, var(--header-logo-height-md))",
+  "--header-nav-bg": "var(--program-header-nav-bg, rgb(255 255 255 / 0.1))",
+  "--header-nav-ring": "var(--program-header-nav-ring, rgb(255 255 255 / 0.1))",
+  "--header-nav-text": "var(--program-header-nav-text, rgb(255 255 255 / 0.8))",
+  "--header-nav-hover-bg": "var(--program-header-nav-hover-bg, rgb(255 255 255 / 0.1))",
+  "--header-nav-hover-text": "var(--program-header-nav-hover-text, #ffffff)",
+  "--header-nav-active-bg": "var(--program-header-nav-active-bg, #ffffff)",
+  "--header-nav-active-text": "var(--program-header-nav-active-text, var(--program-primary))",
+  "--header-nav-pending-bg": "var(--program-header-nav-pending-bg, rgb(255 255 255 / 0.15))",
+  "--header-nav-pending-text": "var(--program-header-nav-pending-text, #ffffff)",
+  "--header-nav-pending-ring": "var(--program-header-nav-pending-ring, var(--program-accent))",
+  "--header-nav-pending-spinner": "var(--program-header-nav-pending-spinner, var(--program-accent))",
+  "--header-action-bg": "var(--program-header-action-bg, rgb(255 255 255 / 0.1))",
+  "--header-action-hover-bg": "var(--program-header-action-hover-bg, rgb(255 255 255 / 0.2))",
+  "--header-action-text": "var(--program-header-action-text, #ffffff)",
+  "--header-login-bg": "var(--program-header-login-bg, var(--program-accent))",
+  "--header-login-hover-bg": "var(--program-header-login-hover-bg, var(--program-accent-dark))",
+  "--header-login-text": "var(--program-header-login-text, #ffffff)",
+  "--header-focus-ring": "var(--program-header-focus-ring, var(--program-accent))",
+} as CSSProperties
+
 export function Header() {
   const { isLoggedIn, logout, isAdmin, isPreacher, username, role, isHydrated } = useAuth()
   const pathname = usePathname()
   const { isNavigating, pendingPath } = useNavigationFeedback()
+  const { branding } = currentProgramProfile
+  const hasHeaderLogoOverride = Boolean(branding.headerLogoSrc)
+  const headerLogoSrc = branding.headerLogoSrc ?? branding.logoSrc
+  const headerLogoAlt = branding.headerLogoAlt ?? branding.logoAlt
+  const logoShellClassName = cn(
+    "relative h-[var(--header-logo-height)] w-[var(--header-logo-width)] max-w-[calc(100vw-10.5rem)] flex-shrink-0 sm:h-[var(--header-logo-height-sm)] sm:w-[var(--header-logo-width-sm)] md:h-[var(--header-logo-height-md)] md:w-[var(--header-logo-width-md)] lg:h-[var(--header-logo-height-lg)] lg:w-[var(--header-logo-width-lg)]",
+    !hasHeaderLogoOverride &&
+      "rounded-xl bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)]",
+  )
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
@@ -174,11 +222,21 @@ export function Header() {
 
   if (!isHydrated) {
     return (
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F1E54] text-white shadow-lg">
+      <header
+        className="sticky top-0 z-50 border-b border-[var(--header-border)] bg-[var(--header-bg)] text-[var(--header-text)] shadow-lg shadow-black/10"
+        style={headerThemeVars}
+      >
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="relative h-10 w-28 rounded-lg bg-white p-1 sm:h-12 sm:w-36 md:h-14 md:w-40">
-              <Image src="/images/folk-logo.jpg" alt="FOLK Chennai Logo" fill className="object-contain" priority />
+            <div className={logoShellClassName}>
+              <Image
+                src={headerLogoSrc}
+                alt={headerLogoAlt}
+                fill
+                sizes="(min-width: 1024px) 14rem, (min-width: 768px) 13rem, (min-width: 640px) 11.5rem, 8.75rem"
+                className="object-contain"
+                priority
+              />
             </div>
           </div>
         </div>
@@ -188,17 +246,31 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0F1E54] text-white shadow-lg">
+      <header
+        className="sticky top-0 z-50 border-b border-[var(--header-border)] bg-[var(--header-bg)] text-[var(--header-text)] shadow-lg shadow-black/10"
+        style={headerThemeVars}
+      >
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <Link
               href="/"
-              className="relative h-10 w-28 flex-shrink-0 rounded-lg bg-white p-1 ring-1 ring-white/20 sm:h-12 sm:w-36 md:h-14 md:w-40"
+              aria-label={`${branding.shortName} home`}
+              className={cn(
+                logoShellClassName,
+                "transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)]",
+              )}
             >
-              <Image src="/images/folk-logo.jpg" alt="FOLK Chennai Logo" fill className="object-contain" priority />
+              <Image
+                src={headerLogoSrc}
+                alt=""
+                fill
+                sizes="(min-width: 1024px) 14rem, (min-width: 768px) 13rem, (min-width: 640px) 11.5rem, 8.75rem"
+                className="object-contain"
+                priority
+              />
             </Link>
             {navItems.length > 0 && (
-              <nav className="hidden items-center gap-1 rounded-lg bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
+              <nav className="hidden items-center gap-1 rounded-full bg-[var(--header-nav-bg)] p-1 ring-1 ring-[var(--header-nav-ring)] backdrop-blur md:flex">
                 {navItems.map((item) => {
                   const pending = pendingPath ? isActivePath(pendingPath, item.href) : false
 
@@ -217,12 +289,12 @@ export function Header() {
             <div className="flex items-center gap-2 sm:gap-3">
               {isLoggedIn ? (
                 <>
-                  <span className="hidden text-xs capitalize text-white/70 lg:inline">
+                  <span className="hidden text-xs capitalize text-[var(--header-muted-text)] lg:inline">
                     {username} ({role})
                   </span>
                   <button
                     onClick={logout}
-                    className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F98B1C] sm:text-sm"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--header-action-bg)] px-3 text-xs font-semibold text-[var(--header-action-text)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-action-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:text-sm"
                     title="Logout"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -232,10 +304,10 @@ export function Header() {
               ) : (
                 <Link
                   href="/login"
-                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#F98B1C] px-3 text-xs font-semibold text-[#0F1E54] transition-colors hover:bg-[#fab54d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-4 sm:text-sm"
+                  className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full bg-[var(--header-login-bg)] px-3 text-xs font-semibold text-[var(--header-login-text)] shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-login-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] min-[360px]:px-4 sm:text-sm"
                 >
                   <LogIn className="h-4 w-4" aria-hidden="true" />
-                  Login
+                  <span className="hidden min-[360px]:inline">Staff Login</span>
                 </Link>
               )}
             </div>
@@ -244,7 +316,7 @@ export function Header() {
         {navItems.length > 0 && (
           <nav
             data-mobile-app-nav
-            className="fixed inset-x-0 bottom-0 z-50 border-t border-[#0F1E54]/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(15,30,84,0.12)] backdrop-blur md:hidden"
+            className="fixed inset-x-0 bottom-0 z-50 border-t border-black/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_rgba(45,10,10,0.12)] backdrop-blur md:hidden"
           >
             <div className="mx-auto flex max-w-md items-center gap-1">
               {navItems.map((item) => {

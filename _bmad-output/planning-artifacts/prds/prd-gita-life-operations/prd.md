@@ -416,7 +416,7 @@ Authorized Admins and Preachers shall be able to open the configured Airtable ma
 - **Observability:** Sync jobs, auth decisions, Airtable failures, queued writes, and role changes must be logged with Program, actor, Role, action, source record where relevant, sync state, and timestamp.
 - **Cross-app consistency:** Shared schemas, role semantics, audit events, and API contracts must remain consistent across both Program Apps.
 - **Configurability:** Program-specific modules, labels, fields, and dashboard widgets must be configurable without requiring duplicated business logic or unsafe one-off schema forks.
-- **Cloudflare compatibility:** New API routes in either app should remain Edge-compatible unless a Node-only dependency is intentionally introduced, documented, and verified.
+- **Vercel compatibility:** New API routes in either app should remain Edge-compatible unless a Node-only dependency is intentionally introduced, documented, and verified.
 
 ## 7. Constraints and Guardrails
 
