@@ -6,6 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CalendarDays,
+  LayoutDashboard,
   LogIn,
   LogOut,
   Send,
@@ -101,11 +102,11 @@ function DesktopNavItem({
       active={active}
       pending={pending}
       className={cn(
-        "inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-white/80 transition-[background-color,box-shadow,color,transform] duration-150",
-        "hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
+        "inline-flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white/80 transition-[background-color,box-shadow,color,transform] duration-150",
+        "hover:-translate-y-0.5 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
         active &&
           !navigationPending &&
-          "bg-white text-[var(--program-primary)] shadow-sm hover:bg-white hover:text-[var(--program-primary)]",
+          "bg-white text-[var(--program-primary)] shadow-sm shadow-black/10 hover:bg-white hover:text-[var(--program-primary)]",
         pending && "bg-white/15 text-white shadow-sm ring-1 ring-[var(--program-accent)] hover:bg-white/15",
       )}
     >
@@ -138,8 +139,8 @@ function MobileNavItem({
       active={active}
       pending={pending}
       className={cn(
-        "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-semibold leading-none transition-[background-color,box-shadow,color,transform] duration-150",
-        "text-[#24324A]/70 hover:bg-black/5 hover:text-[var(--program-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
+        "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold leading-none transition-[background-color,box-shadow,color,transform] duration-150",
+        "text-[var(--program-text)]/70 hover:bg-black/5 hover:text-[var(--program-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
         active &&
           !navigationPending &&
           "bg-[var(--program-primary)] text-white shadow-md shadow-black/15 hover:bg-[var(--program-primary)] hover:text-white",
@@ -165,6 +166,7 @@ export function Header() {
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
+        ...(isPreacher ? [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
         { href: "/contact", label: "Contact", icon: UserRoundPlus },
         ...(isPreacher
           ? [
@@ -178,10 +180,10 @@ export function Header() {
 
   if (!isHydrated) {
     return (
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--program-primary)] text-white shadow-lg">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--program-primary)] text-white shadow-lg shadow-black/10">
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="relative h-10 w-28 rounded-lg bg-white p-1 sm:h-12 sm:w-36 md:h-14 md:w-40">
+            <div className="relative h-10 w-28 rounded-xl bg-white p-1 shadow-sm sm:h-12 sm:w-36 md:h-14 md:w-40">
               <Image src={branding.logoSrc} alt={branding.logoAlt} fill className="object-contain" priority />
             </div>
           </div>
@@ -192,17 +194,17 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--program-primary)] text-white shadow-lg">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--program-primary)] text-white shadow-lg shadow-black/10">
         <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <Link
               href="/"
-              className="relative h-10 w-28 flex-shrink-0 rounded-lg bg-white p-1 ring-1 ring-white/20 sm:h-12 sm:w-36 md:h-14 md:w-40"
+              className="relative h-10 w-28 flex-shrink-0 rounded-xl bg-white p-1 shadow-sm ring-1 ring-white/20 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] sm:h-12 sm:w-36 md:h-14 md:w-40"
             >
               <Image src={branding.logoSrc} alt={branding.logoAlt} fill className="object-contain" priority />
             </Link>
             {navItems.length > 0 && (
-              <nav className="hidden items-center gap-1 rounded-lg bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
+              <nav className="hidden items-center gap-1 rounded-full bg-white/10 p-1 ring-1 ring-white/10 backdrop-blur md:flex">
                 {navItems.map((item) => {
                   const pending = pendingPath ? isActivePath(pendingPath, item.href) : false
 
@@ -226,7 +228,7 @@ export function Header() {
                   </span>
                   <button
                     onClick={logout}
-                    className="inline-flex h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] sm:text-sm"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-white/10 px-3 text-xs font-semibold transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] sm:text-sm"
                     title="Logout"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
@@ -236,7 +238,7 @@ export function Header() {
               ) : (
                 <Link
                   href="/login"
-                  className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--program-accent)] px-3 text-xs font-semibold text-white transition-colors hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:px-4 sm:text-sm"
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--program-accent)] px-4 text-xs font-semibold text-white shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:text-sm"
                 >
                   <LogIn className="h-4 w-4" aria-hidden="true" />
                   Login
@@ -248,7 +250,7 @@ export function Header() {
         {navItems.length > 0 && (
           <nav
             data-mobile-app-nav
-            className="fixed inset-x-0 bottom-0 z-50 border-t border-black/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_30px_rgba(0,0,0,0.12)] backdrop-blur md:hidden"
+            className="fixed inset-x-0 bottom-0 z-50 border-t border-black/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_rgba(45,10,10,0.12)] backdrop-blur md:hidden"
           >
             <div className="mx-auto flex max-w-md items-center gap-1">
               {navItems.map((item) => {

@@ -12,6 +12,7 @@ import {
   Send,
   Sparkles,
 } from "lucide-react"
+import { Header } from "@/components/header"
 
 const infoCards = [
   {
@@ -52,7 +53,9 @@ const discussionTopics = [
 
 export default function GitaLifeHome() {
   return (
-    <main className="min-h-screen bg-[#FFF9F0] text-[#2D0A0A]">
+    <div className="min-h-screen bg-[#FFF9F0] text-[#2D0A0A]">
+      <Header />
+      <main>
       <section className="relative overflow-hidden bg-[#2D0A0A] text-white">
         <div
           className="absolute inset-0 bg-cover bg-center opacity-[0.07]"
@@ -61,7 +64,7 @@ export default function GitaLifeHome() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#2D0A0A] via-[#3B0D0D] to-[#2D0A0A]" aria-hidden="true" />
 
-        <div className="relative mx-auto grid min-h-[84vh] max-w-6xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:py-16">
+        <div className="relative mx-auto grid min-h-[calc(100svh-4.5rem)] max-w-6xl gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:py-14">
           <div>
             <div className="mb-8">
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#FFB81C]">Dakshina Dwaraka Dham</p>
@@ -106,7 +109,7 @@ export default function GitaLifeHome() {
           </div>
 
           <div className="relative">
-            <div className="overflow-hidden rounded-2xl border border-[#FFB81C]/30 bg-white/5 shadow-2xl">
+            <div className="overflow-hidden rounded-lg border border-[#FFB81C]/30 bg-white/5 shadow-2xl shadow-black/25">
               <Image
                 src="/assets/about-hkm-krishna-arjuna.jpg"
                 alt="Krishna and Arjuna"
@@ -129,7 +132,7 @@ export default function GitaLifeHome() {
         {infoCards.map((item) => {
           const Icon = item.icon
           return (
-            <article key={item.title} className="relative rounded-xl border border-[#EA580C]/10 bg-white p-5 shadow-lg">
+            <article key={item.title} className="relative rounded-lg border border-[#EA580C]/10 bg-white/95 p-5 shadow-lg shadow-[#2D0A0A]/5">
               <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-[#FFF3DF] text-[#EA580C]">
                 <Icon className="h-5 w-5" aria-hidden="true" />
               </div>
@@ -157,7 +160,7 @@ export default function GitaLifeHome() {
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {discussionTopics.map((topic) => (
-              <article key={topic.title} className="rounded-xl border border-[#EA580C]/10 bg-white p-5 shadow-sm">
+              <article key={topic.title} className="rounded-lg border border-[#EA580C]/10 bg-white/95 p-5 shadow-sm">
                 <div className="mb-3 h-2 w-2 rounded-full bg-[#EA580C]" />
                 <h3 className="text-lg font-bold text-[#2D0A0A]">{topic.title}</h3>
                 <p className="mt-2 text-sm leading-6 text-[#5F3B2E]/75">{topic.description}</p>
@@ -166,7 +169,7 @@ export default function GitaLifeHome() {
           </div>
         </div>
 
-        <aside className="self-start rounded-2xl border border-[#EA580C]/15 bg-white p-6 shadow-lg">
+        <aside className="self-start rounded-lg border border-[#EA580C]/15 bg-white/95 p-6 shadow-lg shadow-[#2D0A0A]/5">
           <div className="flex gap-5">
             <Image
               src="/assets/srila-prabhupada.png"
@@ -213,6 +216,7 @@ export default function GitaLifeHome() {
           <Sparkles className="h-4 w-4 text-[#EA580C]" aria-hidden="true" />
         </div>
       </section>
-    </main>
+      </main>
+    </div>
   )
 }

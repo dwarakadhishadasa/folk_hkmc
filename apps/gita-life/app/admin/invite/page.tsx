@@ -15,20 +15,20 @@ export default async function AdminInvitePage() {
 
     return (
       <StaffAuthShell staff={staff}>
-      <div className="min-h-screen bg-[#FFF9F0]">
-        <Header />
-        <main className="container mx-auto max-w-xl px-4 py-8">
-          <InviteUserForm
-            mode="admin"
-            preachers={preachers.map((preacher) => ({ id: preacher.id, name: preacher.name }))}
-            locations={locations.map((location) => ({
-              id: location.id,
-              name: location.name,
-              status: location.status,
-            }))}
-          />
-        </main>
-      </div>
+        <div className="min-h-screen bg-[#FFF9F0]">
+          <Header />
+          <main className="container mx-auto max-w-xl px-4 py-6 sm:py-8">
+            <InviteUserForm
+              mode="admin"
+              preachers={preachers.map((preacher) => ({ id: preacher.id, name: preacher.name }))}
+              locations={locations.map((location) => ({
+                id: location.id,
+                name: location.name,
+                status: location.status,
+              }))}
+            />
+          </main>
+        </div>
       </StaffAuthShell>
     )
   } catch (error) {

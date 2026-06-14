@@ -14,18 +14,18 @@ export default async function ContactPage() {
 
     return (
       <StaffAuthShell staff={staff}>
-      <div className="min-h-screen bg-muted/30">
-        <Header />
-        <main className="container mx-auto max-w-2xl px-4 py-8">
-          <ContactForm
-            staffRole={staff.role}
-            preachers={preachers.map((preacher) => ({
-              id: preacher.id,
-              name: preacher.name,
-            }))}
-          />
-        </main>
-      </div>
+        <div className="min-h-screen bg-[#FFF9F0]">
+          <Header />
+          <main className="container mx-auto max-w-2xl px-4 py-6 sm:py-8">
+            <ContactForm
+              staffRole={staff.role}
+              preachers={preachers.map((preacher) => ({
+                id: preacher.id,
+                name: preacher.name,
+              }))}
+            />
+          </main>
+        </div>
       </StaffAuthShell>
     )
   } catch (error) {

@@ -33,12 +33,14 @@ Some active UI is implemented directly in pages rather than reusable components:
 
 | File | UI |
 | --- | --- |
-| `app/page.tsx` | Landing page hero, topic cards, testimonials, footer |
-| `app/register/page.tsx` | Active public registration form and session-backed registration logic |
-| `app/login/login-page-client.tsx` | Email OTP login and verification form |
-| `app/manage/page.tsx` | Airtable interface redirect fallback UI |
-| `app/auth/hash-callback/page.tsx` | Minimal callback loading UI |
-| `app/auth/error/page.tsx` | Auth error page shell |
+| `apps/folk/app/page.tsx` | FOLK landing page hero, topic cards, testimonials, footer |
+| `apps/gita-life/app/page.tsx` | Gita Life landing page and program-specific branding |
+| `apps/*/app/register/page.tsx` | Active public registration form and session-backed registration logic |
+| `apps/*/app/login/login-page-client.tsx` | Email OTP login and verification form |
+| `apps/*/app/manage/page.tsx` | Program Airtable interface redirect fallback UI |
+| `apps/*/app/auth/hash-callback/page.tsx` | Minimal callback loading UI |
+| `apps/*/app/auth/error/page.tsx` | Auth error page shell |
+| `apps/gita-life/app/manifest.ts` | Gita Life web app manifest route |
 
 ## UI Primitive Library
 
@@ -53,9 +55,9 @@ Not all primitives are used by active product flows, but they are available and 
 
 ## Styling Patterns
 
-- Active global CSS is `app/globals.css`.
+- Active global CSS is per app: `apps/folk/app/globals.css` and `apps/gita-life/app/globals.css`.
 - Fonts are `Inter` and `Poppins` from `next/font/google`.
-- Brand colors are royal blue `#0F1E54`, saffron `#F98B1C`, ivory `#FFF9F0`, and charcoal `#24324A`.
+- FOLK branding uses royal blue `#0F1E54`, saffron `#F98B1C`, ivory `#FFF9F0`, and charcoal `#24324A`; Gita Life uses its program profile colors from `@hkmc/program-config`.
 - Many feature components use direct Tailwind utility classes instead of only the `components/ui` primitives.
 - GSAP is registered centrally in `lib/gsap.ts` and used for route/session loading motion.
 
@@ -63,11 +65,11 @@ Not all primitives are used by active product flows, but they are available and 
 
 | User flow | Components/pages |
 | --- | --- |
-| Public registration | `app/register/page.tsx` |
-| Public attendance | `app/attend/page.tsx`, `AttendanceForm` |
-| Staff login | `app/login/login-page-client.tsx`, `AuthHashCallback`, `AuthProvider` |
-| Staff contact creation | `app/contact/page.tsx`, `StaffAuthShell`, `ContactForm` |
-| Session creation | `app/sessions/page.tsx`, `SessionsManager` |
+| Public registration | `apps/*/app/register/page.tsx` |
+| Public attendance | `apps/*/app/attend/page.tsx`, `AttendanceForm` |
+| Staff login | `apps/*/app/login/login-page-client.tsx`, `AuthHashCallback`, `AuthProvider` |
+| Staff contact creation | `apps/*/app/contact/page.tsx`, `StaffAuthShell`, `ContactForm` |
+| Session creation | `apps/*/app/sessions/page.tsx`, `SessionsManager` |
 | Live attendance | `LiveAttendanceDashboard` |
 | Staff invite | `InviteUserForm` |
 | PWA/offline | `ServiceWorkerRegister`, `OfflineIndicator`, `PWAInstallPrompt` |
@@ -76,10 +78,9 @@ Not all primitives are used by active product flows, but they are available and 
 
 | File | Status |
 | --- | --- |
-| `components/registration-form.tsx` | Alternate registration component; active UI is `app/register/page.tsx` |
+| `components/registration-form.tsx` | Alternate registration component; active UI is `apps/*/app/register/page.tsx` |
 | `components/offline-sync-provider.tsx` | Not mounted in `Providers` |
 | `lib/offline-sync.ts` | Only used by unmounted offline provider |
 | `lib/store.ts` | Legacy in-memory store, not used by current route handlers |
-| `styles/globals.css` | Separate global stylesheet not imported by `app/layout.tsx` |
 
 Before deleting these, search for references and check planning artifacts; they may be intentionally retained for migration context.

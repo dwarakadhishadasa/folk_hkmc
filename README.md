@@ -1,6 +1,6 @@
 # folk_hkmc
 
-FOLK HKMC web application.
+HKMC program operations monorepo for the FOLK Chennai and Gita Life web applications.
 
 ## Collaborator Workflow
 

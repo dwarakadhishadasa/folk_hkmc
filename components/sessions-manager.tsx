@@ -71,6 +71,9 @@ const SESSION_LOADING_ROWS = [
   { titleWidth: "w-56 sm:w-80", metaWidth: "w-36 sm:w-52", pillWidth: "w-20" },
   { titleWidth: "w-48 sm:w-72", metaWidth: "w-24 sm:w-44", pillWidth: "w-14" },
 ]
+const sessionFieldClass =
+  "w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[var(--program-text)] shadow-sm transition-all placeholder:text-[var(--muted-foreground)]/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-[var(--program-accent)]/15 disabled:bg-muted disabled:text-muted-foreground"
+const sessionLabelClass = "space-y-1.5 text-sm font-semibold text-[var(--program-text)]"
 
 function LoadingBar({ className }: { className: string }) {
   return (
@@ -129,7 +132,7 @@ function SessionsLoadingState() {
       ref={containerRef}
       aria-busy="true"
       aria-live="polite"
-      className="mx-auto max-w-5xl rounded-2xl bg-white p-6 shadow-lg"
+      className="mx-auto max-w-5xl rounded-lg border border-[var(--border)] bg-card p-5 shadow-[0_18px_50px_rgba(45,10,10,0.08)] sm:p-6"
     >
       <span className="sr-only" role="status">
         Loading sessions...
@@ -139,7 +142,7 @@ function SessionsLoadingState() {
           <div
             key={index}
             data-session-loader-row
-            className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-xl border border-black/10 bg-[#FFF9F0]/70 px-4 py-3 opacity-0"
+            className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-lg border border-[var(--border)] bg-muted/70 px-4 py-3 opacity-0"
           >
             <span
               data-session-loader-dot
@@ -275,46 +278,48 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
   }
 
   return (
-    <section className="mx-auto max-w-5xl rounded-2xl bg-white p-6 shadow-lg">
+    <section className="mx-auto max-w-5xl rounded-lg border border-[var(--border)] bg-card p-5 shadow-[0_18px_50px_rgba(45,10,10,0.08)] sm:p-6">
       <div>
-        <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[#24324A]">Start Session</h1>
-        <p className="mt-1 text-sm text-[#24324A]/70">
+        <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[var(--program-text)]">
+          Start Session
+        </h1>
+        <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
           Start an attendance window for one location.
         </p>
       </div>
 
       {message && (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
           {message}
         </div>
       )}
 
       {locations.length === 0 && (
-        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
           No locations are available for this staff account.
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-3">
-        <label className="space-y-1 text-sm font-medium text-[#24324A]">
+        <label className={sessionLabelClass}>
           Session Name
           <input
             value={form.name}
             onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
             required
             placeholder="Enter session name"
-            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3"
+            className={sessionFieldClass}
           />
         </label>
 
-        <label className="space-y-1 text-sm font-medium text-[#24324A]">
+        <label className={sessionLabelClass}>
           Location
           <select
             value={form.locationId}
             onChange={(event) => setForm((current) => ({ ...current, locationId: event.target.value }))}
             required
             disabled={locations.length === 0}
-            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 disabled:bg-gray-100 disabled:text-gray-500"
+            className={sessionFieldClass}
           >
             {locations.map((location) => (
               <option key={location.id} value={location.id}>
@@ -324,7 +329,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
           </select>
         </label>
 
-        <label className="space-y-1 text-sm font-medium text-[#24324A]">
+        <label className={sessionLabelClass}>
           Duration (minutes)
           <input
             type="number"
@@ -335,14 +340,14 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
             value={form.durationMinutes}
             onChange={(event) => setForm((current) => ({ ...current, durationMinutes: event.target.value }))}
             required
-            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3"
+            className={sessionFieldClass}
           />
         </label>
 
         <button
           type="submit"
           disabled={isSubmitting || locations.length === 0}
-          className="rounded-xl bg-[var(--program-accent)] px-5 py-3 font-semibold text-white disabled:bg-gray-300 md:col-span-3"
+          className="inline-flex h-12 items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-white shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0 md:col-span-3"
         >
           {isSubmitting ? "Starting..." : "Start Session"}
         </button>

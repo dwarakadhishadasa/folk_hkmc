@@ -19,12 +19,12 @@ export default async function SessionsPage() {
 
     return (
       <StaffAuthShell staff={staff}>
-      <div className="min-h-screen bg-[#FFF9F0]">
-        <Header />
-        <main className="container mx-auto px-4 py-8">
-          <SessionsManager locations={locations} />
-        </main>
-      </div>
+        <div className="min-h-screen bg-[#FFF9F0]">
+          <Header />
+          <main className="container mx-auto px-4 py-6 sm:py-8">
+            <SessionsManager locations={locations} />
+          </main>
+        </div>
       </StaffAuthShell>
     )
   } catch (error) {

@@ -202,9 +202,19 @@ function recordUrl(table: TableKey, recordId: string): string {
   return `${tableUrl(table)}/${recordId}`
 }
 
-function analyticsRecordId(): string {
-  const profile = getServerProgramProfile(resolveProgramId())
-  return getProgramScopedEnv(profile, "AIRTABLE_ANALYTICS_RECORD_ID")?.trim() || DEFAULT_ANALYTICS_RECORD_ID
+function analyticsRecordId(): string | null {
+  const config = getConfig()
+  const programScopedRecordId = process.env[`${config.profile.envPrefix}_AIRTABLE_ANALYTICS_RECORD_ID`]?.trim()
+
+  if (programScopedRecordId) {
+    return programScopedRecordId
+  }
+
+  if (config.baseId !== config.profile.airtable.baseId) {
+    return null
+  }
+
+  return process.env.AIRTABLE_ANALYTICS_RECORD_ID?.trim() || DEFAULT_ANALYTICS_RECORD_ID
 }
 
 function escapeFormulaString(value: string): string {
@@ -523,12 +533,15 @@ export async function createContact(data: {
   const fields: Record<string, unknown> = {
     Name: data.name.trim(),
     Phone: normalizedPhone,
-    Analytics: [analyticsRecordId()],
   }
+  const analyticsId = analyticsRecordId()
   const createdDate = currentAirtableDate()
 
   fields["Initial Contact"] = createdDate
   fields["Last Contacted On"] = createdDate
+  if (analyticsId) {
+    fields.Analytics = [analyticsId]
+  }
 
   if (typeof data.age === "number") {
     fields.Age = data.age
@@ -677,12 +690,15 @@ export async function createSession(data: {
     "Session Date": data.sessionDate,
     Preacher: [data.preacherAirtableUserId],
     Location: [data.locationId],
-    Analytics: [analyticsRecordId()],
     "Public Attendance Enabled": data.publicAttendanceEnabled,
   }
+  const analyticsId = analyticsRecordId()
 
   if (typeof data.durationMinutes === "number") {
     fields["Duration Minutes"] = data.durationMinutes
+  }
+  if (analyticsId) {
+    fields.Analytics = [analyticsId]
   }
   if (data.attendanceOpensAt) {
     fields["Attendance Opens At"] = data.attendanceOpensAt

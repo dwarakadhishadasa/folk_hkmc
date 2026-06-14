@@ -30,7 +30,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - pnpm `10.33.0` workspace with Turborepo `^2.5.6`; apps live in `apps/*`, shared packages live in `packages/*`
 - Tailwind CSS `^4.1.9` via `@tailwindcss/postcss`, plus `tw-animate-css` and `tailwindcss-animate`
 - Radix UI primitives plus shadcn-style wrappers under `components/ui/*`
-- Supabase auth and local Postgres bridge via `@supabase/ssr`, `@supabase/supabase-js`, `lib/supabase/*`, and `supabase/migrations/*`
+- Supabase auth and local Postgres bridge via `@supabase/ssr`, `@supabase/supabase-js`, `lib/supabase/*`, `lib/authz.ts`, and `supabase/migrations/*`
 - Airtable REST API integration from server-only code in `lib/airtable.ts`
 - PWA/offline support through `public/manifest.json`, `public/sw.js`, IndexedDB request queueing, and `components/offline-indicator.tsx`
 - Animation/UX helpers include GSAP, Vercel Speed Insights, and `qrcode.react`
@@ -64,21 +64,23 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Do not replace the current Supabase staff auth model with the old localStorage/demo-user model. Durable auth state comes from Supabase cookies; React auth state is only a hydrated view of `/api/auth/me`.
 - `proxy.ts` refreshes Supabase sessions for protected staff pages and protected API paths. Update its matcher if new staff-only routes are added.
 - The live attendance endpoint is `/attendance`, not `/api/attendance`. Frontend attendance submission, dashboard polling, and service-worker queueing depend on that path.
-- Preserve the current branding system in each app's `app/globals.css`: royal blue/saffron palette, `Poppins` headings, `Inter` body text, rounded cards, and warm ivory backgrounds.
+- Preserve each app's branding system in `apps/*/app/globals.css`: FOLK uses royal blue/saffron with warm ivory surfaces, while Gita Life uses its program profile colors; both use `Poppins` headings, `Inter` body text, and rounded cards.
 
 ### Auth & Authorization Rules
 
 - `lib/authz.ts` is the server authorization boundary. Use `getStaffContext()` and `requireRole()` for staff-only server logic.
 - `@hkmc/authz` is a server-only package entrypoint. Do not runtime-import it from client components; move browser-safe role/status DTOs to `@hkmc/data-contracts` instead.
 - Staff roles are exactly `Admin`, `Preacher`, and `Volunteer`.
-- `staff_profiles` is a Supabase Postgres authorization cache keyed by Supabase Auth user ID. It is synced from Airtable staff users during sign-in/callback flows.
+- `staff_memberships` is the primary Supabase Postgres authorization cache and is scoped by `program_id` + Supabase user ID; `staff_profiles` remains a compatibility cache.
+- Staff authorization must resolve the current program from `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`; app workspace scripts set these for FOLK and Gita Life.
+- Membership access requires active status, trusted `sync_state`, and fresh `last_synced_at`; stale memberships refresh from Airtable through `syncStaffProfileByEmail()`.
 - Airtable Users remain the source for staff email, role, status, locations, Supabase user ID, and assigned Preacher.
 - Volunteer staff should only land on and use `/contact`; Preacher/Admin users can access sessions/dashboard/invite flows according to route guards.
 - Keep Supabase service-role access server-only. Never import `createSupabaseAdminClient()` into client components.
 
 ### API & Route Rules
 
-- Implemented route handlers include `/api/auth/me`, `/api/auth/signin`, `/api/auth/complete-implicit`, `/api/registration`, `/api/contact`, `/api/sessions`, `/api/admin/invite-user`, `/api/admin/locations`, `/api/volunteers/invite`, `/attendance`, `/auth/confirm`, and `/auth/signout`.
+- Implemented route handlers exist in both `apps/folk/app` and `apps/gita-life/app` for `/api/auth/me`, `/api/auth/signin`, `/api/auth/complete-implicit`, `/api/registration`, `/api/contact`, `/api/sessions`, `/api/admin/invite-user`, `/api/admin/locations`, `/api/volunteers/invite`, `/attendance`, `/auth/confirm`, and `/auth/signout`.
 - Public registration without `sessionId` creates a Contact and rejects duplicates. Registration with `sessionId` creates/reuses the Contact and also marks attendance for that session.
 - Attendance requires a session-specific link and validates `Public Attendance Enabled`, open/close window, duplicate attendance, and known contact.
 - Session creation depends on `NEXT_PUBLIC_SITE_URL` to generate `/attend?session=...` links.
@@ -87,13 +89,13 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ### Data & Integration Rules
 
-- `lib/airtable.ts` requires `AIRTABLE_API_TOKEN`, `AIRTABLE_BASE_ID`, and table ID env vars for contacts, attendance, sessions, users, and locations.
+- `lib/airtable.ts` resolves the active program and accepts program-prefixed Airtable env overrides such as `FOLK_AIRTABLE_API_TOKEN` and `GITA_LIFE_AIRTABLE_BASE_ID`; generic `AIRTABLE_*` variables remain fallbacks.
 - Airtable calls must remain server-only. Do not move Airtable tokens, Airtable REST calls, `@hkmc/airtable`, or `lib/airtable.ts` into client components.
 - Treat `@hkmc/program-config/server`, `lib/supabase/admin.ts`, `lib/supabase/server.ts`, and `lib/invite-log.ts` as server-only boundaries.
 - Mobile numbers are normalized to the last 10 digits by `normalizeMobile()` and by client input handlers. Preserve this on both input and server boundaries.
 - Airtable Session records drive live attendance. Dashboard incremental refresh sends known attendance record IDs and expects stable Airtable record IDs.
 - `listCachedLocations()` and `listCachedActivePreachers()` use Next `unstable_cache` with a 20-minute TTL. Revalidate tags when mutating cached reference data.
-- Supabase migrations currently define `staff_profiles` and `invite_log`; update `lib/supabase/types.ts` when schema changes.
+- Supabase migrations currently define `programs`, `staff_memberships`, `staff_profiles`, `airtable_identities`, `airtable_sync_state`, `audit_events`, and `invite_log`; update `lib/supabase/types.ts` when schema changes.
 
 ### Offline/PWA Rules
 
@@ -123,13 +125,14 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Use `pnpm` conventions because the repo includes `pnpm-lock.yaml` and package scripts for `dev`, `build`, `start`, `lint`, and Supabase helpers.
 - Use `pnpm quality:ci` for the full local quality gate: guardrails, recursive workspace typecheck, app builds, then lint.
 - Use `pnpm supabase:start`, `pnpm supabase:env`, and `pnpm dev` or `pnpm dev:gita-life` for local Supabase-backed development.
+- Keep `PROGRAM_ID` and `NEXT_PUBLIC_PROGRAM_ID` aligned with the app workspace; `@hkmc/folk` sets `folk` and `@hkmc/gita-life` sets `gita-life`.
 - Branch workflow: normal work happens on `feature/*` or `fix/*` branches, targeting `dev`; `main` is owner-controlled production.
 - Treat `_bmad-output/`, `design-artifacts/`, and `docs/` as supporting artifacts and references; the actual product code lives under `apps/`, `components/`, `hooks/`, `lib/`, `packages/`, `public/`, `scripts/`, `supabase/`, and `styles/`.
 
 ### Critical Don't-Miss Rules
 
 - The old warning that `/api/registration` and `/api/contact` are missing is obsolete; both routes exist.
-- The old claim that authentication is entirely local/client-side is obsolete; current staff auth is Supabase-backed with a server-side staff profile bridge.
+- The old claim that authentication is entirely local/client-side is obsolete; current staff auth is Supabase-backed with a server-side program membership bridge.
 - Do not import server-only modules (`lib/airtable.ts`, `lib/authz.ts`, `lib/supabase/admin.ts`, `lib/invite-log.ts`) into client components.
 - Do not import server-only packages (`@hkmc/airtable`, `@hkmc/authz`, `@hkmc/program-config/server`) into client components or transitive client dependencies.
 - Do not bypass `pnpm typecheck:workspace` because `next.config.mjs` has `typescript.ignoreBuildErrors = true`; typecheck is a deployment gate, not an optional local nicety.

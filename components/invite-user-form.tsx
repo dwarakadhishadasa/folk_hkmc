@@ -4,6 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { Plus } from "lucide-react"
 import type { StaffRole } from "@/lib/authz"
+import { cn } from "@/lib/utils"
 
 interface LocationOption {
   id: string
@@ -40,6 +41,11 @@ function updateLocationSelection(locationIds: string[], locationId: string, sele
 
   return locationIds.filter((currentLocationId) => currentLocationId !== locationId)
 }
+
+const fieldClass =
+  "w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[var(--program-text)] shadow-sm transition-all placeholder:text-[var(--muted-foreground)]/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-[var(--program-accent)]/15 disabled:bg-muted disabled:text-muted-foreground"
+const labelClass = "block space-y-1.5 text-sm font-semibold text-[var(--program-text)]"
+const noticeClass = "rounded-lg border px-4 py-3 text-sm leading-6"
 
 export function InviteUserForm({
   mode,
@@ -176,51 +182,51 @@ export function InviteUserForm({
   }
 
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-xl">
-      <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[#24324A]">
+    <div className="rounded-lg border border-[var(--border)] bg-card p-5 shadow-[0_18px_50px_rgba(45,10,10,0.08)] sm:p-6">
+      <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[var(--program-text)]">
         {mode === "volunteer" ? "Invite Volunteer" : "Invite Staff User"}
       </h1>
-      <p className="mt-1 text-sm text-[#24324A]/70">
+      <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
         {mode === "volunteer"
           ? "Volunteers you invite are assigned to your Preacher account."
           : "Admins can invite Admin, Preacher, and Volunteer users."}
       </p>
 
       {message && (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className={cn(noticeClass, "mt-4 border-amber-200 bg-amber-50 text-amber-800")} role="status">
           {message}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <label className="block space-y-1 text-sm font-medium text-[#24324A]">
+        <label className={labelClass}>
           Name
           <input
             value={form.name}
             onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
             required
-            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3"
+            className={fieldClass}
           />
         </label>
 
-        <label className="block space-y-1 text-sm font-medium text-[#24324A]">
+        <label className={labelClass}>
           Email
           <input
             type="email"
             value={form.email}
             onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
             required
-            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3"
+            className={fieldClass}
           />
         </label>
 
         {mode === "admin" && (
-          <label className="block space-y-1 text-sm font-medium text-[#24324A]">
+          <label className={labelClass}>
             Role
             <select
               value={form.role}
               onChange={handleRoleChange}
-              className="w-full rounded-xl border-2 border-gray-200 px-4 py-3"
+              className={fieldClass}
             >
               <option value="Admin">Admin</option>
               <option value="Preacher">Preacher</option>
@@ -230,7 +236,7 @@ export function InviteUserForm({
         )}
 
         {role === "Volunteer" && mode === "admin" && (
-          <label className="block space-y-1 text-sm font-medium text-[#24324A]">
+          <label className={labelClass}>
             Assigned Preacher
             <select
               value={form.assignedPreacherAirtableUserId}
@@ -238,7 +244,7 @@ export function InviteUserForm({
                 setForm((current) => ({ ...current, assignedPreacherAirtableUserId: event.target.value }))
               }
               required
-              className="w-full rounded-xl border-2 border-gray-200 px-4 py-3"
+              className={fieldClass}
             >
               <option value="">Select Preacher</option>
               {preachers.map((preacher) => (
@@ -251,10 +257,10 @@ export function InviteUserForm({
         )}
 
         {mode === "admin" && role !== "Volunteer" && (
-          <fieldset className="space-y-3 rounded-2xl border border-black/10 bg-[#FFF9F0]/60 p-4">
-            <legend className="text-sm font-semibold text-[#24324A]">Location access</legend>
+          <fieldset className="space-y-3 rounded-lg border border-[var(--border)] bg-muted/70 p-4">
+            <legend className="text-sm font-semibold text-[var(--program-text)]">Location access</legend>
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <p className="text-xs text-[#24324A]/65">
+              <p className="text-xs leading-5 text-[var(--muted-foreground)]">
                 Select the locations this staff user can access.
               </p>
               <span
@@ -266,7 +272,7 @@ export function InviteUserForm({
             </div>
 
             {availableLocations.length > 0 ? (
-              <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-black/10 bg-white p-2">
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-[var(--border)] bg-white p-2">
                 {availableLocations.map((location) => {
                   const checkboxId = `invite-location-${location.id}`
                   const checked = form.locationIds.includes(location.id)
@@ -275,11 +281,12 @@ export function InviteUserForm({
                     <label
                       key={location.id}
                       htmlFor={checkboxId}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition-colors",
                         checked
-                          ? "border-[var(--program-accent)] bg-[#FFF3DF] text-[#24324A]"
-                          : "border-transparent text-[#24324A] hover:border-black/10 hover:bg-black/5"
-                      }`}
+                          ? "border-[var(--program-accent)] bg-muted text-[var(--program-text)]"
+                          : "border-transparent text-[var(--program-text)] hover:border-black/10 hover:bg-black/5",
+                      )}
                     >
                       <input
                         id={checkboxId}
@@ -291,7 +298,7 @@ export function InviteUserForm({
                       <span className="min-w-0 flex-1">
                         <span className="block font-medium">{location.name}</span>
                         {location.status && location.status !== "Active" && (
-                          <span className="block text-xs text-[#24324A]/60">{location.status}</span>
+                          <span className="block text-xs text-[var(--muted-foreground)]">{location.status}</span>
                         )}
                       </span>
                     </label>
@@ -299,27 +306,27 @@ export function InviteUserForm({
                 })}
               </div>
             ) : (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <div className={cn(noticeClass, "border-amber-200 bg-amber-50 text-amber-800")}>
                 No locations are available yet. Add one below to assign it.
               </div>
             )}
 
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <label className="block space-y-1 text-sm font-medium text-[#24324A]">
+              <label className={labelClass}>
                 Add new location
                 <input
                   value={newLocationName}
                   onChange={(event) => setNewLocationName(event.target.value)}
                   onKeyDown={handleNewLocationKeyDown}
                   placeholder="e.g. Anna Nagar"
-                  className="w-full rounded-xl border-2 border-gray-200 px-4 py-3"
+                  className={fieldClass}
                 />
               </label>
               <button
                 type="button"
                 onClick={handleAddLocation}
                 disabled={isAddingLocation || isSubmitting}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border-2 border-[var(--program-accent)] px-4 text-sm font-semibold text-[var(--program-primary)] transition-colors hover:bg-[#FFF3DF] disabled:border-gray-200 disabled:text-gray-400 sm:self-end"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--program-primary)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] disabled:border-gray-200 disabled:text-gray-400 disabled:hover:translate-y-0 sm:self-end"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 {isAddingLocation ? "Adding..." : "Add"}
@@ -331,7 +338,7 @@ export function InviteUserForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full rounded-xl bg-[var(--program-accent)] px-5 py-3 font-semibold text-white disabled:bg-gray-300"
+          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-white shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
         >
           {isSubmitting ? "Sending..." : "Send Invite"}
         </button>

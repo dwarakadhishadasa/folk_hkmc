@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { AlertTriangle, KeyRound } from "lucide-react"
 import { Header } from "@/components/header"
+import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/auth-context"
 
 let lastAuthCallbackHandoff = ""
@@ -88,8 +89,11 @@ export function LoginPageClient() {
 
   if (!isHydrated || authCallbackCode || authCallbackTokenHash) {
     return (
-      <div className="min-h-screen bg-[#FFF9F0] flex items-center justify-center">
-        <div className="text-center text-[#2D0A0A]">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center bg-[#FFF9F0]">
+        <div className="flex items-center gap-3 rounded-full border border-[#EA580C]/15 bg-white/90 px-5 py-3 text-sm font-semibold text-[#2D0A0A] shadow-lg shadow-[#2D0A0A]/5">
+          <Spinner className="h-4 w-4 text-[#EA580C]" aria-hidden="true" />
+          Loading...
+        </div>
       </div>
     )
   }
@@ -136,21 +140,21 @@ export function LoginPageClient() {
   return (
     <div className="min-h-screen bg-[#FFF9F0]">
       <Header />
-      <main className="container mx-auto px-4 py-8 sm:py-12 max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-[#2D0A0A] px-6 py-8 text-white text-center">
-            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <main className="container mx-auto max-w-md px-4 py-8 sm:py-12">
+        <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-card shadow-[0_18px_50px_rgba(45,10,10,0.08)]">
+          <div className="bg-[#2D0A0A] px-6 py-8 text-center text-white">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
               <KeyRound className="h-8 w-8 text-[#FFB81C]" aria-hidden="true" />
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-poppins)]">Welcome Back</h2>
             <p className="text-white/70 mt-2 text-sm">Use your invited staff email to enter the portal</p>
           </div>
 
-          <div className="p-6 sm:p-8">
+          <div className="p-5 sm:p-8">
             {!isCodeStep && (
               <form onSubmit={handleSubmit} className="space-y-5">
                 {error && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+                  <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
                     <p className="text-sm text-red-700">{error}</p>
                   </div>
@@ -167,14 +171,14 @@ export function LoginPageClient() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#EA580C]/20 focus:border-[#EA580C] transition-all"
+                    className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full py-4 bg-[#EA580C] hover:bg-[#D97706] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-[#EA580C]/25 disabled:shadow-none"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#EA580C] px-5 text-sm font-semibold text-white shadow-lg shadow-[#EA580C]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[#D97706] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D0A0A] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
                 >
                   {isLoading ? "Sending code..." : "Send Code"}
                 </button>
@@ -184,7 +188,7 @@ export function LoginPageClient() {
             {isCodeStep && (
               <form onSubmit={handleVerifyCode} className="space-y-5">
                 {error && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+                  <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
                     <p className="text-sm text-red-700">{error}</p>
                   </div>
@@ -205,14 +209,14 @@ export function LoginPageClient() {
                       setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, MAX_EMAIL_OTP_LENGTH))
                     }
                     required
-                    className="w-full px-4 py-3 text-center text-2xl tracking-[0.3em] border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#EA580C]/20 focus:border-[#EA580C] transition-all"
+                    className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-center text-2xl tracking-[0.3em] text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isVerifying || verificationCode.length < MIN_EMAIL_OTP_LENGTH}
-                  className="w-full py-4 bg-[#2D0A0A] hover:bg-[#451010] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#2D0A0A] px-5 text-sm font-semibold text-white shadow-lg shadow-[#2D0A0A]/15 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[#451010] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EA580C] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
                 >
                   {isVerifying ? "Verifying..." : "Verify Code"}
                 </button>

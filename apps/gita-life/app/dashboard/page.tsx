@@ -69,12 +69,12 @@ export default async function DashboardPage() {
 
     return (
       <StaffAuthShell staff={staff}>
-      <div className="min-h-screen bg-[#FFF9F0]">
-        <Header />
-        <main className="container mx-auto px-4 py-6">
-          <LiveAttendanceDashboard activeSession={activeSession} />
-        </main>
-      </div>
+        <div className="min-h-screen bg-[#FFF9F0]">
+          <Header />
+          <main className="container mx-auto px-4 py-6 sm:py-8">
+            <LiveAttendanceDashboard activeSession={activeSession} />
+          </main>
+        </div>
       </StaffAuthShell>
     )
   } catch (error) {
@@ -86,12 +86,12 @@ export default async function DashboardPage() {
       <div className="min-h-screen bg-[#FFF9F0]">
         <Header />
         <main className="container mx-auto max-w-md px-4 py-8">
-          <div className="rounded-2xl bg-white p-6 text-center shadow-xl">
-            <h2 className="mb-2 text-xl font-bold text-[#24324A]">Access Restricted</h2>
-            <p className="mb-6 text-[#24324A]/70">Only Admin and Preacher staff can access the dashboard.</p>
+          <div className="rounded-lg border border-[var(--border)] bg-card p-6 text-center shadow-[0_18px_50px_rgba(45,10,10,0.08)]">
+            <h2 className="mb-2 text-xl font-bold text-[var(--program-text)]">Access Restricted</h2>
+            <p className="mb-6 text-[var(--muted-foreground)]">Only Admin and Preacher staff can access the dashboard.</p>
             <Link
               href="/contact"
-              className="inline-block rounded-xl bg-[var(--program-primary)] px-6 py-3 font-medium text-white transition-colors hover:bg-[var(--program-primary-light)]"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-[var(--program-primary)] px-6 text-sm font-semibold text-white transition-colors hover:bg-[var(--program-primary-light)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
             >
               Go to Contact Form
             </Link>

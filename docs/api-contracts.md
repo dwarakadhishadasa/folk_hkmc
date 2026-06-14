@@ -2,15 +2,17 @@
 
 ## Overview
 
-This project uses Next.js route handlers. Most APIs return JSON. Auth-protected APIs use Supabase session cookies and `getStaffContext()` from `lib/authz.ts`.
+This project uses Next.js route handlers in each program app under `apps/folk/app` and `apps/gita-life/app`. The route paths below are relative to whichever program deployment is running. Most APIs return JSON. Auth-protected APIs use Supabase session cookies and program-scoped `getStaffContext()` from `lib/authz.ts`.
 
 Important route convention: attendance is implemented at `/attendance`, not `/api/attendance`.
+
+Program identity comes from `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, set by the app package scripts. Staff responses include `programId`, membership `status`, and `lastSyncedAt` in addition to role/location data.
 
 ## Auth Routes
 
 ### `GET /api/auth/me`
 
-Returns the current staff context.
+Returns the current program staff context.
 
 Auth: Supabase session cookie.
 
@@ -24,7 +26,7 @@ Headers include no-store cache controls and `Vary: Cookie`.
 
 ### `POST /api/auth/signin`
 
-Prepares an email OTP sign-in for an active Airtable staff user.
+Prepares an email OTP sign-in for an active Airtable staff user in the current program context.
 
 Request:
 
@@ -35,7 +37,7 @@ Request:
 Behavior:
 
 - Validates email format.
-- Finds active Airtable User by email.
+- Finds active Airtable User by email through the current program's Airtable config.
 - Ensures Supabase Auth user exists.
 - Syncs Supabase user ID to Airtable if needed.
 - The browser then calls Supabase `signInWithOtp`.
@@ -49,7 +51,7 @@ Responses:
 
 ### `POST /api/auth/complete-implicit`
 
-Completes staff profile sync after a Supabase browser/session callback.
+Completes staff profile and program membership sync after a Supabase browser/session callback.
 
 Auth: Supabase session cookie.
 
@@ -60,7 +62,7 @@ Responses:
 
 ### `GET /auth/confirm`
 
-Supabase email callback route. Accepts either `code` or `token_hash`/`type`. On success it syncs the staff profile and redirects based on role:
+Supabase email callback route. Accepts either `code` or `token_hash`/`type`. On success it syncs the staff profile/membership for the current program and redirects based on role:
 
 - Volunteer: `/contact`
 - Preacher: `/` unless a safe `next` path is allowed

@@ -11,13 +11,15 @@ The repo includes `@vercel/speed-insights`, so Vercel is a natural deployment ta
 | Service | Purpose |
 | --- | --- |
 | Supabase Auth | Staff OTP/invite authentication |
-| Supabase Postgres | `staff_profiles` and `invite_log` |
+| Supabase Postgres | Programs, staff memberships/profiles, Airtable identities, audit events, invite log |
 | Airtable | Operational Contacts, Attendance, Sessions, Users, Locations |
 | HTTPS hosting | Required for PWA/service worker outside localhost |
 
 ## Required Environment Variables
 
 ```bash
+PROGRAM_ID=folk
+NEXT_PUBLIC_PROGRAM_ID=folk
 NEXT_PUBLIC_SITE_URL=https://your-domain.example
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
@@ -37,9 +39,14 @@ Optional/fallback variables:
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_URL=...
 SUPABASE_PUBLISHABLE_KEY=...
+STAFF_SYNC_STALE_AFTER_MINUTES=15
+STAFF_PROFILE_STALE_AFTER_MINUTES=15
 AIRTABLE_ANALYTICS_RECORD_ID=...
+AIRTABLE_MANAGEMENT_URL=...
 AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID=...
 ```
+
+Use program-prefixed Airtable variables for program-specific bases or credentials, for example `FOLK_AIRTABLE_API_TOKEN`, `FOLK_AIRTABLE_BASE_ID`, `GITA_LIFE_AIRTABLE_API_TOKEN`, and `GITA_LIFE_AIRTABLE_BASE_ID`.
 
 ## Supabase Deployment
 
@@ -57,7 +64,12 @@ pnpm supabase:reset
 
 Tables expected after migrations:
 
+- `public.programs`
+- `public.staff_memberships`
 - `public.staff_profiles`
+- `public.airtable_identities`
+- `public.airtable_sync_state`
+- `public.audit_events`
 - `public.invite_log`
 
 Supabase Auth redirect URLs must include:
@@ -103,6 +115,7 @@ Manual checks should cover:
 
 - Staff sign-in and sign-out
 - Invite callback
+- Program-scoped staff membership sync
 - Contact creation
 - Session creation and generated QR URL
 - Attendance marking and duplicate handling
@@ -115,6 +128,7 @@ Manual checks should cover:
 
 - Production secrets must remain owner-controlled.
 - `SUPABASE_SERVICE_ROLE_KEY` grants privileged access and must never reach client code.
+- Wrong `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID` or missing program-prefixed Airtable env can route a deployment to the wrong program data.
 - Airtable schema drift will break runtime operations because field names are referenced directly.
 - `next build` ignores TypeScript errors; use explicit workspace type checking.
 - No automated product test suite currently guards regressions.

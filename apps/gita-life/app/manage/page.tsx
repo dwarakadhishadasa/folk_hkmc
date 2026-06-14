@@ -43,18 +43,18 @@ export default async function ManagePage() {
 
   return (
     <StaffAuthShell staff={staff}>
-    <div className="min-h-screen bg-[#FFF9F0]">
-      <Header />
-      <main className="container mx-auto max-w-md px-4 py-8">
-        <div className="rounded-2xl bg-white p-6 text-center shadow-xl">
-          <h1 className="mb-2 text-xl font-bold text-[#24324A]">Manage Link Unavailable</h1>
-          <p className="text-[#24324A]/70">
-            AIRTABLE_BASE_ID and AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID are required to open the Airtable management
-            interface for this Program.
-          </p>
-        </div>
-      </main>
-    </div>
+      <div className="min-h-screen bg-[#FFF9F0]">
+        <Header />
+        <main className="container mx-auto max-w-md px-4 py-6 sm:py-8">
+          <div className="rounded-lg border border-[var(--border)] bg-card p-6 text-center shadow-[0_18px_50px_rgba(45,10,10,0.08)]">
+            <h1 className="mb-2 text-xl font-bold text-[var(--program-text)]">Manage Link Unavailable</h1>
+            <p className="text-[var(--muted-foreground)]">
+              AIRTABLE_BASE_ID and AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID are required to open the Airtable management
+              interface for this Program.
+            </p>
+          </div>
+        </main>
+      </div>
     </StaffAuthShell>
   )
 }
