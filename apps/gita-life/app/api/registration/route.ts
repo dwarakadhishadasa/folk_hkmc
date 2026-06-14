@@ -15,9 +15,10 @@ export const dynamic = "force-dynamic"
 interface RegistrationPayload {
   name?: string
   mobile?: string
-  age?: string | number
+  dateOfBirth?: string
   occupation?: string
-  year?: string
+  company?: string
+  address?: string
   location?: string
   sessionId?: string
 }
@@ -25,9 +26,51 @@ interface RegistrationPayload {
 type RegistrationOutcome = "contact_created" | "contact_exists"
 type AttendanceOutcome = "attendance_marked" | "attendance_already_marked"
 
-function parseAge(value: unknown): number | undefined {
-  const age = typeof value === "number" ? value : Number.parseInt(String(value || ""), 10)
-  return Number.isFinite(age) && age > 0 ? age : undefined
+function safeTrim(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function isWorkingProfessional(value: unknown): boolean {
+  const occupation = safeTrim(value)
+  return occupation === "Working" || occupation === "Working Professional"
+}
+
+function parseDateOfBirth(value: unknown): { dateOfBirth?: string; error?: string } {
+  if (value === undefined || value === null) {
+    return {}
+  }
+  if (typeof value !== "string") {
+    return { error: "Date of Birth must use YYYY-MM-DD format." }
+  }
+
+  const dateOfBirth = safeTrim(value)
+  if (!dateOfBirth) {
+    return {}
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+    return { error: "Date of Birth must use YYYY-MM-DD format." }
+  }
+
+  const [year, month, day] = dateOfBirth.split("-").map(Number)
+  const parsed = new Date(`${dateOfBirth}T00:00:00.000Z`)
+  const isValidDate =
+    parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+
+  const currentYear = new Date().getUTCFullYear()
+  if (isValidDate && (parsed > new Date() || year < currentYear - 120)) {
+    return { error: "Date of Birth must be a reasonable past date." }
+  }
+
+  return isValidDate ? { dateOfBirth } : { error: "Date of Birth must be a valid date." }
+}
+
+function resolveAddress(payload: RegistrationPayload): string | undefined {
+  return safeTrim(payload.address) || safeTrim(payload.location)
 }
 
 function completedResponse(params: {
@@ -60,13 +103,18 @@ export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as RegistrationPayload
     const mobile = normalizeMobile(payload.mobile)
-    const name = payload.name?.trim()
+    const name = safeTrim(payload.name)
 
     if (!name || !mobile) {
       return Response.json({ error: "Name and a valid 10-digit mobile number are required." }, { status: 400 })
     }
 
-    const sessionId = payload.sessionId?.trim()
+    const parsedDateOfBirth = parseDateOfBirth(payload.dateOfBirth)
+    if (parsedDateOfBirth.error) {
+      return Response.json({ error: parsedDateOfBirth.error }, { status: 400 })
+    }
+
+    const sessionId = safeTrim(payload.sessionId)
     let session: SessionRecord | null = null
 
     if (sessionId) {
@@ -109,11 +157,11 @@ export async function POST(request: Request) {
       (await createContact({
         name,
         phone: mobile,
-        age: parseAge(payload.age),
-        year: payload.occupation === "Working" ? "Unknown" : payload.year || undefined,
+        dateOfBirth: parsedDateOfBirth.dateOfBirth,
+        company: isWorkingProfessional(payload.occupation) ? safeTrim(payload.company) : undefined,
         source: session ? "Attendance Registration" : "Public Registration",
         locationId,
-        location: locationId ? undefined : payload.location,
+        location: locationId ? undefined : resolveAddress(payload),
         assignedPreacherAirtableUserId,
       }))
 

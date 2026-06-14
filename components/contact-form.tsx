@@ -38,6 +38,10 @@ const initialFormData: ContactData = {
   assignedPreacherAirtableUserId: "",
 }
 
+function isWorkingProfessional(value: string) {
+  return value === "Working" || value === "Working Professional"
+}
+
 async function registerBackgroundSync() {
   if (!("serviceWorker" in navigator)) return
   if (typeof ServiceWorkerRegistration === "undefined" || !("sync" in ServiceWorkerRegistration.prototype)) return
@@ -63,6 +67,9 @@ export function ContactForm({
   preachers?: PreacherOption[]
 }) {
   const { branding } = currentProgramProfile
+  const isGitaLife = currentProgramProfile.id === "gita-life"
+  const locationLabel = isGitaLife ? "Address" : "Location"
+  const locationPlaceholder = isGitaLife ? "Enter address" : "Enter location"
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState<ContactData>(initialFormData)
   const [phoneError, setPhoneError] = useState("")
@@ -90,7 +97,7 @@ export function ContactForm({
         occupation: value,
         year: value === "Studying" ? prev.year : "Unknown",
         college: value === "Studying" ? prev.college : "",
-        company: value === "Working" ? prev.company : "",
+        company: isWorkingProfessional(value) ? prev.company : "",
       }))
       return
     }
@@ -122,7 +129,7 @@ export function ContactForm({
     }
 
     if (!formData.location.trim()) {
-      setMessage("Enter a location before saving this contact.")
+      setMessage(isGitaLife ? "Enter an address before saving this contact." : "Enter a location before saving this contact.")
       return
     }
 
@@ -185,8 +192,8 @@ export function ContactForm({
         </div>
         <div className="p-5 sm:p-6">
           <div className={cn(noticeClass, "mb-4 border-[var(--program-accent)]/20 bg-muted text-[var(--program-primary)]")}>
-            {staffRole === "Volunteer" && "Volunteer contacts are assigned to your Preacher and the location you enter."}
-            {staffRole === "Preacher" && "Contacts you create are assigned to you and the location you enter."}
+            {staffRole === "Volunteer" && `Volunteer contacts are assigned to your Preacher and the ${locationLabel.toLowerCase()} you enter.`}
+            {staffRole === "Preacher" && `Contacts you create are assigned to you and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
           </div>
           {message && (
@@ -257,12 +264,12 @@ export function ContactForm({
                 className={fieldClass}
               >
                 <option value="">Select occupation type</option>
-                <option value="Studying">Student</option>
-                <option value="Working">Working Professional</option>
+                <option value={isGitaLife ? "Working Professional" : "Working"}>Working Professional</option>
+                {isGitaLife ? <option value="Housewife">Housewife</option> : <option value="Studying">Student</option>}
               </select>
             </div>
 
-            {formData.occupation === "Studying" && (
+            {!isGitaLife && formData.occupation === "Studying" && (
               <>
                 <div className="space-y-2">
                   <label htmlFor="year" className={labelClass}>
@@ -301,7 +308,7 @@ export function ContactForm({
               </>
             )}
 
-            {formData.occupation === "Working" && (
+            {isWorkingProfessional(formData.occupation) && (
               <div className="space-y-2">
                 <label htmlFor="company" className={labelClass}>
                   Company
@@ -343,13 +350,13 @@ export function ContactForm({
 
             <div className="space-y-2">
               <label htmlFor="location" className={labelClass}>
-                Location *
+                {locationLabel} *
               </label>
               <input
                 id="location"
                 name="location"
                 type="text"
-                placeholder="Enter location"
+                placeholder={locationPlaceholder}
                 value={formData.location}
                 onChange={handleChange}
                 required
@@ -357,20 +364,22 @@ export function ContactForm({
               />
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="comments" className={labelClass}>
-                Comments
-              </label>
-              <textarea
-                id="comments"
-                name="comments"
-                placeholder="Add any additional comments"
-                value={formData.comments}
-                onChange={handleChange}
-                rows={3}
-                className={fieldClass}
-              />
-            </div>
+            {!isGitaLife && (
+              <div className="space-y-2">
+                <label htmlFor="comments" className={labelClass}>
+                  Comments
+                </label>
+                <textarea
+                  id="comments"
+                  name="comments"
+                  placeholder="Add any additional comments"
+                  value={formData.comments}
+                  onChange={handleChange}
+                  rows={3}
+                  className={fieldClass}
+                />
+              </div>
+            )}
 
             <button
               type="submit"

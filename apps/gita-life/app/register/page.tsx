@@ -9,10 +9,14 @@ import { Header } from "@/components/header"
 interface FormData {
   name: string
   mobile: string
-  age: string
+  dateOfBirth: string
   occupation: string
-  year: string
-  location: string
+  company: string
+  address: string
+}
+
+function isWorkingProfessional(value: string) {
+  return value === "Working" || value === "Working Professional"
 }
 
 function RegisterForm() {
@@ -27,10 +31,10 @@ function RegisterForm() {
   const [formData, setFormData] = useState<FormData>({
     name: "",
     mobile: "",
-    age: "",
+    dateOfBirth: "",
     occupation: "",
-    year: "",
-    location: "",
+    company: "",
+    address: "",
   })
 
   useEffect(() => {
@@ -46,7 +50,7 @@ function RegisterForm() {
 
   const isMobileValid = formData.mobile.length === 10
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
@@ -56,7 +60,7 @@ function RegisterForm() {
     setFormData((prev) => ({
       ...prev,
       occupation: value,
-      year: value === "Working" ? "Unknown" : prev.year,
+      company: isWorkingProfessional(value) ? prev.company : "",
     }))
   }
 
@@ -203,20 +207,15 @@ function RegisterForm() {
           </div>
 
           <div>
-            <label htmlFor="age" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
-              Age <span className="text-red-500">*</span>
+            <label htmlFor="dateOfBirth" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+              Date of Birth
             </label>
             <input
-              id="age"
-              name="age"
-              type="number"
-              inputMode="numeric"
-              placeholder="Enter your age"
-              value={formData.age}
+              id="dateOfBirth"
+              name="dateOfBirth"
+              type="date"
+              value={formData.dateOfBirth}
               onChange={handleChange}
-              required
-              min={1}
-              max={120}
               className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
             />
           </div>
@@ -234,45 +233,39 @@ function RegisterForm() {
               className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
             >
               <option value="">Select occupation</option>
-              <option value="Studying">Student</option>
-              <option value="Working">Working Professional</option>
+              <option value="Working Professional">Working Professional</option>
+              <option value="Housewife">Housewife</option>
             </select>
           </div>
 
-          {formData.occupation === "Studying" && (
+          {isWorkingProfessional(formData.occupation) && (
             <div>
-              <label htmlFor="year" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
-                Year <span className="text-red-500">*</span>
+              <label htmlFor="company" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+                Company
               </label>
-              <select
-                id="year"
-                name="year"
-                value={formData.year}
-                onChange={(e) => setFormData((prev) => ({ ...prev, year: e.target.value }))}
-                required
+              <input
+                id="company"
+                name="company"
+                type="text"
+                placeholder="Enter company name"
+                value={formData.company}
+                onChange={handleChange}
                 className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
-              >
-                <option value="">Select year</option>
-                <option value="1st year">1st Year</option>
-                <option value="2nd year">2nd Year</option>
-                <option value="3rd year">3rd Year</option>
-                <option value="4th year">4th Year</option>
-                <option value="Passed Out">Passed Out</option>
-              </select>
+              />
             </div>
           )}
 
           {!sessionId && (
             <div>
-              <label htmlFor="location" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
-                Location
+              <label htmlFor="address" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+                Address
               </label>
               <input
-                id="location"
-                name="location"
+                id="address"
+                name="address"
                 type="text"
-                placeholder="Enter your location"
-                value={formData.location}
+                placeholder="Enter your address"
+                value={formData.address}
                 onChange={handleChange}
                 className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
               />
