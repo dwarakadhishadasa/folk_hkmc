@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "PROGRAM_ID=gita-life NEXT_PUBLIC_PROGRAM_ID=gita-life next dev",
-    "build": "PROGRAM_ID=gita-life NEXT_PUBLIC_PROGRAM_ID=gita-life next build",
+    "build": "node ../../scripts/remove-broken-env-symlinks.mjs . && PROGRAM_ID=gita-life NEXT_PUBLIC_PROGRAM_ID=gita-life next build",
     "start": "PROGRAM_ID=gita-life NEXT_PUBLIC_PROGRAM_ID=gita-life next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json"
