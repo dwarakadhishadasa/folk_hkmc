@@ -1,0 +1,72 @@
+name: Vercel Preview Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy ${{ matrix.app }} preview
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: folk
+            project_id: prj_7PJ9LJdWsXe7lUpLTvg6svaaa6V2
+          - app: gita-life
+            project_id: prj_HEapC71lBCRZg0rv7DICEKpVs18h
+    env:
+      CI: true
+      VERCEL_ORG_ID: team_VyUTSoRnf2uz8IBsMVyZhOS4
+      VERCEL_PROJECT_ID: ${{ matrix.project_id }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify Vercel token
+        shell: bash
+        run: |
+          if [[ -z "${VERCEL_TOKEN}" ]]; then
+            echo "::error::Missing GitHub Actions secret: VERCEL_TOKEN"
+            exit 1
+          fi
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@54.14.0
+
+      - name: Pull Vercel preview settings
+        run: vercel pull --yes --environment=preview --git-branch=main --project "$VERCEL_PROJECT_ID" --token "$VERCEL_TOKEN"
+
+      - name: Build Vercel preview output
+        run: vercel build --target=preview --project "$VERCEL_PROJECT_ID" --token "$VERCEL_TOKEN"
+
+      - name: Deploy Vercel preview output
+        id: deploy
+        shell: bash
+        run: |
+          preview_url="$(vercel deploy --prebuilt --target=preview --project "$VERCEL_PROJECT_ID" --archive=tgz --token "$VERCEL_TOKEN")"
+          echo "preview_url=${preview_url}" >> "$GITHUB_OUTPUT"
+          printf '### %s preview\n\n%s\n' "${{ matrix.app }}" "${preview_url}" >> "$GITHUB_STEP_SUMMARY"
