@@ -120,6 +120,34 @@ pnpm lint
 pnpm build
 ```
 
+## Vercel Deploy Shortcuts
+
+Use the repo-local shortcuts from the monorepo root:
+
+```bash
+pnpm deploy:folk:preview
+pnpm deploy:gita-life:preview
+pnpm deploy:preview
+
+pnpm deploy:folk:prod
+pnpm deploy:gita-life:prod
+pnpm deploy:prod
+```
+
+The `deploy:preview` and `deploy:prod` shortcuts deploy both program apps sequentially.
+
+The shortcuts validate required Vercel environment variable names, then deploy with a remote Vercel build. Production
+and preview secrets may be sensitive/encrypted; do not rely on `.vercel/.env.*.local` containing secret values after
+`vercel pull`.
+
+For each Vercel project and environment, set non-empty values for:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_SITE_URL`
+- `AIRTABLE_API_TOKEN` or the program-prefixed token, for example `GITA_LIFE_AIRTABLE_API_TOKEN`
+
 Manual checks should cover:
 
 - Staff sign-in and sign-out

@@ -7,7 +7,17 @@ function cleanEnv(value: string | undefined): string | undefined {
   return trimmed.replace(/^["']|["']$/g, "")
 }
 
+function isVercelDeployment(): boolean {
+  return cleanEnv(process.env.VERCEL) === "1" || Boolean(cleanEnv(process.env.VERCEL_ENV))
+}
+
+function isLoopbackUrl(url: URL): boolean {
+  return ["127.0.0.1", "localhost", "::1"].includes(url.hostname)
+}
+
 function firstValidUrl(candidates: Array<[string, string | undefined]>): string {
+  const skippedLoopbackNames: string[] = []
+
   for (const [, rawValue] of candidates) {
     const value = cleanEnv(rawValue)
     if (!value) {
@@ -15,13 +25,23 @@ function firstValidUrl(candidates: Array<[string, string | undefined]>): string 
     }
 
     try {
-      return new URL(value).toString().replace(/\/$/, "")
+      const url = new URL(value)
+      if (isVercelDeployment() && isLoopbackUrl(url)) {
+        skippedLoopbackNames.push(value)
+        continue
+      }
+
+      return url.toString().replace(/\/$/, "")
     } catch {
       continue
     }
   }
 
   const names = candidates.map(([name]) => name).join(" or ")
+  if (skippedLoopbackNames.length > 0) {
+    throw new Error(`${names} must not point to local Supabase when deployed on Vercel`)
+  }
+
   throw new Error(`${names} must contain a valid Supabase URL`)
 }
 
