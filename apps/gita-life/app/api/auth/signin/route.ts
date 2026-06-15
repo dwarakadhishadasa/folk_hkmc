@@ -1,4 +1,5 @@
 import { findStaffUserByEmail, syncStaffSupabaseUserId } from "@/lib/airtable"
+import { syncStaffProfileByEmail } from "@/lib/authz"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type { User } from "@supabase/supabase-js"
 
@@ -39,13 +40,17 @@ async function findSupabaseUserByEmail(
   }
 }
 
-async function ensureSupabaseAuthUser(email: string, staffUserId: string, linkedSupabaseUserId?: string): Promise<void> {
+async function ensureSupabaseAuthUser(
+  email: string,
+  staffUserId: string,
+  linkedSupabaseUserId?: string,
+): Promise<string> {
   const supabaseAdmin = createSupabaseAdminClient()
 
   if (linkedSupabaseUserId) {
     const { data, error } = await supabaseAdmin.auth.admin.getUserById(linkedSupabaseUserId)
     if (!error && data.user?.email?.trim().toLowerCase() === email) {
-      return
+      return data.user.id
     }
 
     if (error && !isMissingAuthUserError(error)) {
@@ -58,7 +63,7 @@ async function ensureSupabaseAuthUser(email: string, staffUserId: string, linked
     if (existingUser.id !== linkedSupabaseUserId) {
       await syncStaffSupabaseUserId(staffUserId, existingUser.id)
     }
-    return
+    return existingUser.id
   }
 
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -76,6 +81,7 @@ async function ensureSupabaseAuthUser(email: string, staffUserId: string, linked
   }
 
   await syncStaffSupabaseUserId(staffUserId, user.id)
+  return user.id
 }
 
 export async function POST(request: Request) {
@@ -92,7 +98,8 @@ export async function POST(request: Request) {
       return Response.json({ error: "This email is not linked to an active staff account." }, { status: 403 })
     }
 
-    await ensureSupabaseAuthUser(email, staff.id, staff.supabaseUserId)
+    const supabaseUserId = await ensureSupabaseAuthUser(email, staff.id, staff.supabaseUserId)
+    await syncStaffProfileByEmail({ supabaseUserId, email })
 
     return Response.json({ ready: true, email })
   } catch (error) {

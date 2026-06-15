@@ -5,6 +5,12 @@ const files = {
   folk: "packages/program-config/src/programs/folk.ts",
   gitaLife: "packages/program-config/src/programs/gita-life.ts",
   sharedAirtable: "packages/program-config/src/programs/shared-airtable.ts",
+  programConfigServer: "packages/program-config/src/server.ts",
+  airtableLib: "lib/airtable.ts",
+  folkNextConfig: "apps/folk/next.config.mjs",
+  gitaLifeNextConfig: "apps/gita-life/next.config.mjs",
+  folkSignin: "apps/folk/app/api/auth/signin/route.ts",
+  gitaLifeSignin: "apps/gita-life/app/api/auth/signin/route.ts",
   migration: "supabase/migrations/20260613010000_add_program_scoped_staff_memberships.sql",
   decisions: "_bmad-output/planning-artifacts/prds/prd-gita-life-operations/implementation-decision-gates.md",
 }
@@ -17,6 +23,32 @@ assert.match(contents.folk, /id:\s*"folk"/)
 assert.match(contents.folk, /baseId:\s*"appqea9DRLOXqErXb"/)
 assert.match(contents.gitaLife, /id:\s*"gita-life"/)
 assert.match(contents.gitaLife, /baseId:\s*"appzbssqNK53yqjZH"/)
+assert.match(contents.folkNextConfig, /PROGRAM_ID:\s*"folk"/)
+assert.match(contents.folkNextConfig, /NEXT_PUBLIC_PROGRAM_ID:\s*"folk"/)
+assert.match(contents.gitaLifeNextConfig, /PROGRAM_ID:\s*"gita-life"/)
+assert.match(contents.gitaLifeNextConfig, /NEXT_PUBLIC_PROGRAM_ID:\s*"gita-life"/)
+
+for (const [name, content] of [
+  ["folk signin", contents.folkSignin],
+  ["gita-life signin", contents.gitaLifeSignin],
+]) {
+  assert.ok(content.includes("syncStaffProfileByEmail"), `${name} does not bootstrap Supabase staff cache`)
+  assert.match(content, /ensureSupabaseAuthUser\([^)]*\):\s*Promise<string>/s, `${name} does not return the Supabase user id`)
+  assert.match(
+    content,
+    /const supabaseUserId = await ensureSupabaseAuthUser\([^)]*\)\s+await syncStaffProfileByEmail\(\{ supabaseUserId, email \}\)/s,
+    `${name} does not sync staff membership before returning ready`,
+  )
+}
+
+assert.ok(
+  contents.airtableLib.includes("programScopedAirtableIdEnv") && contents.airtableLib.includes('profile.id === "folk"'),
+  "Airtable ID resolution must isolate non-Folk programs from generic AIRTABLE_* IDs",
+)
+assert.ok(
+  contents.programConfigServer.includes("getProgramScopedIdEnv") && contents.programConfigServer.includes('profile.id === "folk"'),
+  "Program management URL resolution must isolate non-Folk programs from generic AIRTABLE_* IDs",
+)
 
 for (const tableId of [
   "tbltzdtCmCHf6gJKD",

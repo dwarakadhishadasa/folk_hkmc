@@ -182,19 +182,28 @@ function requireProgramEnv(profile: ServerProgramProfile, name: string): string 
   return value
 }
 
+function programScopedAirtableIdEnv(profile: ServerProgramProfile, name: string): string | undefined {
+  const prefixedValue = process.env[`${profile.envPrefix}_${name}`]?.trim()
+  if (prefixedValue) {
+    return prefixedValue
+  }
+
+  return profile.id === "folk" ? process.env[name]?.trim() || undefined : undefined
+}
+
 function getConfig(): AirtableConfig {
   const profile = getServerProgramProfile(resolveProgramId())
 
   return {
     apiToken: requireProgramEnv(profile, "AIRTABLE_API_TOKEN"),
-    baseId: getProgramScopedEnv(profile, "AIRTABLE_BASE_ID") || profile.airtable.baseId,
+    baseId: programScopedAirtableIdEnv(profile, "AIRTABLE_BASE_ID") || profile.airtable.baseId,
     profile,
   }
 }
 
 function tableUrl(table: TableKey): string {
   const config = getConfig()
-  const tableId = getProgramScopedEnv(config.profile, tableEnvNames[table]) || config.profile.airtable.tables[table].id
+  const tableId = programScopedAirtableIdEnv(config.profile, tableEnvNames[table]) || config.profile.airtable.tables[table].id
   return `https://api.airtable.com/v0/${config.baseId}/${encodeURIComponent(tableId)}`
 }
 
@@ -208,6 +217,10 @@ function analyticsRecordId(): string | null {
 
   if (programScopedRecordId) {
     return programScopedRecordId
+  }
+
+  if (config.profile.id !== "folk") {
+    return null
   }
 
   if (config.baseId !== config.profile.airtable.baseId) {

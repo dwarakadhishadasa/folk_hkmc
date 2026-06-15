@@ -89,7 +89,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ### Data & Integration Rules
 
-- `lib/airtable.ts` resolves the active program and accepts program-prefixed Airtable env overrides such as `FOLK_AIRTABLE_API_TOKEN` and `GITA_LIFE_AIRTABLE_BASE_ID`; generic `AIRTABLE_*` variables remain fallbacks.
+- `lib/airtable.ts` resolves the active program and accepts program-prefixed Airtable env overrides such as `FOLK_AIRTABLE_API_TOKEN` and `GITA_LIFE_AIRTABLE_BASE_ID`; generic Airtable tokens remain fallbacks, but non-Folk base/table/management IDs use program-prefixed values or static program profile IDs to avoid cross-program data bleed.
 - Airtable calls must remain server-only. Do not move Airtable tokens, Airtable REST calls, `@hkmc/airtable`, or `lib/airtable.ts` into client components.
 - Treat `@hkmc/program-config/server`, `lib/supabase/admin.ts`, `lib/supabase/server.ts`, and `lib/invite-log.ts` as server-only boundaries.
 - Mobile numbers are normalized to the last 10 digits by `normalizeMobile()` and by client input handlers. Preserve this on both input and server boundaries.

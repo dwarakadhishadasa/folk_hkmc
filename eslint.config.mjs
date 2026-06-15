@@ -19,6 +19,7 @@ const eslintConfig = defineConfig([
   },
   globalIgnores([
     ".next/**",
+    ".vercel/**",
     "apps/*/.next/**",
     ".agents/**",
     "_bmad/**",

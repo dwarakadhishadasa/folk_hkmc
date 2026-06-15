@@ -32,9 +32,18 @@ export function getProgramScopedEnv(profile: Pick<ServerProgramProfile, "envPref
   return process.env[`${profile.envPrefix}_${name}`] || process.env[name]
 }
 
+function getProgramScopedIdEnv(profile: ServerProgramProfile, name: string): string | undefined {
+  const prefixedValue = process.env[`${profile.envPrefix}_${name}`]?.trim()
+  if (prefixedValue) {
+    return prefixedValue
+  }
+
+  return profile.id === "folk" ? process.env[name]?.trim() || undefined : undefined
+}
+
 export function getProgramAirtableManagementUrl(programId: ProgramId = resolveProgramId()): string | null {
   const profile = getServerProgramProfile(programId)
-  const explicitUrl = getProgramScopedEnv(profile, "AIRTABLE_MANAGEMENT_URL")?.trim()
+  const explicitUrl = getProgramScopedIdEnv(profile, "AIRTABLE_MANAGEMENT_URL")
 
   if (explicitUrl) {
     try {
@@ -45,9 +54,9 @@ export function getProgramAirtableManagementUrl(programId: ProgramId = resolvePr
     }
   }
 
-  const baseId = getProgramScopedEnv(profile, "AIRTABLE_BASE_ID")?.trim() || profile.airtable.baseId
+  const baseId = getProgramScopedIdEnv(profile, "AIRTABLE_BASE_ID") || profile.airtable.baseId
   const pageId =
-    getProgramScopedEnv(profile, "AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID")?.trim() ||
+    getProgramScopedIdEnv(profile, "AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID") ||
     profile.airtable.interfaces.adminPortal.pages.dashboard.id
 
   if (!baseId || !pageId) {
