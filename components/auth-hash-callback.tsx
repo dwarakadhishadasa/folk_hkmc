@@ -16,11 +16,7 @@ function landingPathForRole(role?: StaffContext["role"]): string {
     return "/contact"
   }
 
-  if (role === "Preacher") {
-    return "/"
-  }
-
-  return "/dashboard"
+  return "/"
 }
 
 function safeLandingPath(value: string | null, role: StaffContext["role"]): string {
