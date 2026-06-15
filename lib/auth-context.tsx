@@ -26,6 +26,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const STAFF_SYNC_RETRY_DELAYS_MS = [0, 150, 400]
 const MIN_EMAIL_OTP_LENGTH = 6
 
+interface AuthSigninResponse {
+  email?: string
+  error?: string
+  authEmailBranding?: {
+    auth_email_brand_name: string
+  }
+}
+
 async function loadStaff(): Promise<StaffContext | null> {
   const response = await fetch("/api/auth/me", {
     cache: "no-store",
@@ -113,16 +121,18 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
       body: JSON.stringify({ email }),
     })
 
-    const data = (await response.json().catch(() => ({}))) as { email?: string; error?: string }
+    const data = (await response.json().catch(() => ({}))) as AuthSigninResponse
     if (!response.ok) {
       throw new Error(data.error || "Unable to send sign-in code.")
     }
 
     const normalizedEmail = data.email || email.trim().toLowerCase()
+    const authEmailBranding = data.authEmailBranding
     const supabase = createSupabaseBrowserClient()
     const { error } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
+        ...(authEmailBranding ? { data: authEmailBranding } : {}),
         shouldCreateUser: false,
       },
     })

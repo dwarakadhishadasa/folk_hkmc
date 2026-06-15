@@ -1,6 +1,11 @@
-<h2>You have been invited</h2>
+<h2>
+  You have been invited to {{ if .Data.auth_email_brand_name }}{{ .Data.auth_email_brand_name }}{{ else }}FOLK{{ end }}
+</h2>
 
-<p>Use this link to accept your staff invite.</p>
+<p>
+  Use this link to accept your {{ if .Data.auth_email_brand_name }}{{ .Data.auth_email_brand_name }}{{ else }}FOLK{{ end }}
+  staff invite.
+</p>
 
 <p>
   <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite">Accept invite</a>

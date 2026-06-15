@@ -81,11 +81,21 @@ Supabase Auth redirect URLs must include:
 For invite emails in a shared Supabase project, prefer a template that uses the per-request redirect target:
 
 ```html
+<h2>You have been invited to {{ if .Data.auth_email_brand_name }}{{ .Data.auth_email_brand_name }}{{ else }}FOLK{{ end }}</h2>
 <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite">Accept invite</a>
 ```
 
 Each Vercel app must set its own `NEXT_PUBLIC_SITE_URL` to the matching deployed origin so invite APIs pass the correct `/auth/confirm` callback to Supabase.
 Invite APIs also prefer the current request origin when constructing `redirectTo`; if an email still shows the wrong app domain, update the hosted Supabase invite template to use `{{ .RedirectTo }}` or `{{ .ConfirmationURL }}` instead of `{{ .SiteURL }}`.
+
+For passwordless staff sign-in emails, the hosted Supabase Magic Link/OTP template must use the program brand metadata written by the app before each email is sent:
+
+```html
+<p>Your {{ if .Data.auth_email_brand_name }}{{ .Data.auth_email_brand_name }}{{ else }}FOLK{{ end }} sign-in code is:</p>
+<p>{{ .Token }}</p>
+```
+
+The same `{{ if .Data.auth_email_brand_name }}{{ .Data.auth_email_brand_name }}{{ else }}FOLK{{ end }}` expression should replace hardcoded program names in both Magic Link/OTP and Invite templates. Fresh invites receive this metadata through `inviteUserByEmail`; existing-user invite fallbacks and staff sign-in OTPs update the existing Supabase Auth user's metadata before sending the email.
 
 ## Airtable Deployment
 

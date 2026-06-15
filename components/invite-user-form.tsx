@@ -172,7 +172,7 @@ export function InviteUserForm({
         throw new Error(data.error || "Invite failed.")
       }
 
-      setMessage(data.delivery === "sign-in-link" ? "This user already exists. A sign-in link was sent." : "Invite sent.")
+      setMessage(data.delivery === "sign-in-link" ? "This user already exists. A sign-in email was sent." : "Invite sent.")
       setForm(emptyInviteForm())
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invite failed.")

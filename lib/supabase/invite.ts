@@ -3,6 +3,7 @@ import "server-only"
 import { createClient } from "@supabase/supabase-js"
 import { getAuthConfirmRedirectUrl } from "@/lib/site-url"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getAuthEmailBrandingMetadata, updateAuthEmailBrandingForEmail } from "@/lib/supabase/auth-email-branding"
 import { getSupabasePublicUrl, getSupabaseServerPublicKey } from "@/lib/supabase/env"
 
 export type StaffInviteDelivery = "invite" | "sign-in-link"
@@ -15,6 +16,10 @@ interface StaffInviteResult {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : ""
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error("Unexpected Supabase auth email setup error.")
 }
 
 function isExistingAuthUserError(error: unknown): boolean {
@@ -52,7 +57,9 @@ function createSupabasePasswordlessClient() {
 export async function sendStaffInviteEmail(email: string, request?: Request): Promise<StaffInviteResult> {
   const redirectTo = getAuthConfirmRedirectUrl(request)
   const supabaseAdmin = createSupabaseAdminClient()
+  const authEmailBranding = getAuthEmailBrandingMetadata()
   const inviteResult = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+    data: authEmailBranding,
     redirectTo,
   })
 
@@ -68,10 +75,22 @@ export async function sendStaffInviteEmail(email: string, request?: Request): Pr
     }
   }
 
+  let fallbackAuthEmailBranding = authEmailBranding
+  try {
+    fallbackAuthEmailBranding = await updateAuthEmailBrandingForEmail(email, supabaseAdmin)
+  } catch (error) {
+    return {
+      delivery: "sign-in-link",
+      error: toError(error),
+      safeErrorMessage: safeSupabaseInviteError(error, redirectTo),
+    }
+  }
+
   const supabase = createSupabasePasswordlessClient()
   const signInResult = await supabase.auth.signInWithOtp({
     email,
     options: {
+      data: fallbackAuthEmailBranding,
       emailRedirectTo: redirectTo,
       shouldCreateUser: false,
     },

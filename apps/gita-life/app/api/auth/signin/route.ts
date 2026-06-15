@@ -1,6 +1,7 @@
 import { findStaffUserByEmail, syncStaffSupabaseUserId } from "@/lib/airtable"
 import { syncStaffProfileByEmail } from "@/lib/authz"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { updateAuthEmailBrandingForUserId } from "@/lib/supabase/auth-email-branding"
 import type { User } from "@supabase/supabase-js"
 
 export const dynamic = "force-dynamic"
@@ -100,8 +101,9 @@ export async function POST(request: Request) {
 
     const supabaseUserId = await ensureSupabaseAuthUser(email, staff.id, staff.supabaseUserId)
     await syncStaffProfileByEmail({ supabaseUserId, email })
+    const authEmailBranding = await updateAuthEmailBrandingForUserId(supabaseUserId)
 
-    return Response.json({ ready: true, email })
+    return Response.json({ ready: true, email, authEmailBranding })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to send sign-in code."
     return Response.json({ error: message }, { status: 500 })
