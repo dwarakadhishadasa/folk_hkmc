@@ -15,11 +15,7 @@ function landingPathForRole(role: ReturnType<typeof useAuth>["role"]): string {
     return "/contact"
   }
 
-  if (role === "Preacher") {
-    return "/"
-  }
-
-  return "/dashboard"
+  return "/"
 }
 
 function hasHashSessionTokens(): boolean {

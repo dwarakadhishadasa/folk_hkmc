@@ -17,11 +17,7 @@ function safeNextPath(value: string | null, role: string): string {
     return "/contact"
   }
 
-  if (role === "Preacher") {
-    return "/"
-  }
-
-  return "/dashboard"
+  return "/"
 }
 
 function isSupportedEmailOtpType(value: string | null): value is EmailOtpType {

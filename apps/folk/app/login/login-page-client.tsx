@@ -15,11 +15,7 @@ function landingPathForRole(role: string | null | undefined): string {
     return "/contact"
   }
 
-  if (role === "Preacher") {
-    return "/"
-  }
-
-  return "/dashboard"
+  return "/"
 }
 
 function safeRedirectPath(value: string | null, role: string | null | undefined): string {
