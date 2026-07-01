@@ -31,6 +31,7 @@ const backgroundColors = [
 ]
 
 const MAX_TIMEOUT_DELAY_MS = 2_147_483_647
+const MAX_KNOWN_ATTENDANCE_IDS = 1000
 
 function getBackgroundColor(index: number): string {
   return backgroundColors[index % backgroundColors.length]
@@ -85,7 +86,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
       attendanceUrl.searchParams.set("session", activeSessionId)
       attendanceUrl.searchParams.set("t", String(Date.now()))
 
-      const knownAttendanceIds = attendanceIdsRef.current.slice(-100)
+      const knownAttendanceIds = attendanceIdsRef.current.slice(-MAX_KNOWN_ATTENDANCE_IDS)
       if (knownAttendanceIds.length > 0) {
         attendanceUrl.searchParams.set("knownAttendanceIds", knownAttendanceIds.join(","))
       }
