@@ -1,6 +1,19 @@
 import type { ServerProgramProfile } from "../types"
 import { adminPortalInterface, operationalTables } from "./shared-airtable"
 
+const writable = "writable" as const
+
+const folkTables = {
+  ...operationalTables,
+  contacts: {
+    ...operationalTables.contacts,
+    fields: {
+      ...operationalTables.contacts.fields,
+      address: { id: "fldaNPo4ptlc0Pbwh", label: "Address", type: "singleLineText", access: writable },
+    },
+  },
+}
+
 export const folkProgramProfile = {
   id: "folk",
   envPrefix: "FOLK",
@@ -25,7 +38,7 @@ export const folkProgramProfile = {
   airtable: {
     baseId: "appqea9DRLOXqErXb",
     baseName: "FOLK Chennai",
-    tables: operationalTables,
+    tables: folkTables,
     interfaces: {
       adminPortal: adminPortalInterface,
     },
