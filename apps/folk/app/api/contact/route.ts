@@ -28,6 +28,7 @@ interface ContactPayload {
 
 interface ResolvedPreacher {
   id: string
+  locationIds: string[]
 }
 
 function parseDateOfBirth(value: unknown): { dateOfBirth?: string; error?: string } {
@@ -53,7 +54,7 @@ function activePreacherResult(preacher: StaffUser | null): { preacher?: Resolved
     return { error: "Assigned Preacher must be an active Preacher user." }
   }
 
-  return { preacher: { id: preacher.id } }
+  return { preacher: { id: preacher.id, locationIds: preacher.locationIds } }
 }
 
 async function resolveAssignedPreacher(
@@ -68,7 +69,7 @@ async function resolveAssignedPreacher(
   }
 
   if (staff.role === "Preacher") {
-    return { preacher: { id: staff.airtableUserId } }
+    return { preacher: { id: staff.airtableUserId, locationIds: staff.locationIds } }
   }
 
   const explicitPreacherId = payload.assignedPreacherAirtableUserId?.trim()
@@ -109,6 +110,14 @@ export async function POST(request: Request) {
     const locationId = payload.locationId?.trim()
     if (!locationId) {
       return Response.json({ error: "Select a location before saving this contact." }, { status: 422 })
+    }
+
+    if (!assignment.preacher.locationIds.length) {
+      return Response.json({ error: "The assigned Preacher has no configured locations." }, { status: 422 })
+    }
+
+    if (!assignment.preacher.locationIds.includes(locationId)) {
+      return Response.json({ error: "Select a location configured for the assigned Preacher." }, { status: 422 })
     }
 
     const location = await findLocationById(locationId)

@@ -18,6 +18,7 @@ interface RegistrationPayload {
   age?: string | number
   occupation?: string
   year?: string
+  address?: string
   location?: string
   sessionId?: string
 }
@@ -28,6 +29,10 @@ type AttendanceOutcome = "attendance_marked" | "attendance_already_marked"
 function parseAge(value: unknown): number | undefined {
   const age = typeof value === "number" ? value : Number.parseInt(String(value || ""), 10)
   return Number.isFinite(age) && age > 0 ? age : undefined
+}
+
+function resolveAddress(payload: RegistrationPayload): string | undefined {
+  return payload.address?.trim() || payload.location?.trim() || undefined
 }
 
 function completedResponse(params: {
@@ -113,7 +118,7 @@ export async function POST(request: Request) {
         year: payload.occupation === "Working" ? "Unknown" : payload.year || undefined,
         source: session ? "Attendance Registration" : "Public Registration",
         locationId,
-        location: locationId ? undefined : payload.location,
+        address: locationId ? undefined : resolveAddress(payload),
         assignedPreacherAirtableUserId,
       }))
 

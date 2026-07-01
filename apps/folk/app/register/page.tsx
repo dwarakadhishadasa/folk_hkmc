@@ -11,7 +11,7 @@ interface FormData {
   age: string
   occupation: string
   year: string
-  location: string
+  address: string
 }
 
 function RegisterForm() {
@@ -27,7 +27,7 @@ function RegisterForm() {
     age: "",
     occupation: "",
     year: "",
-    location: "",
+    address: "",
   })
 
   useEffect(() => {
@@ -253,15 +253,15 @@ function RegisterForm() {
 
           {!sessionId && (
             <div>
-              <label htmlFor="location" className="block text-sm font-medium text-[#24324A] mb-1.5">
-                Location
+              <label htmlFor="address" className="block text-sm font-medium text-[#24324A] mb-1.5">
+                Address
               </label>
               <input
-                id="location"
-                name="location"
+                id="address"
+                name="address"
                 type="text"
-                placeholder="Enter your location"
-                value={formData.location}
+                placeholder="Enter your address"
+                value={formData.address}
                 onChange={handleChange}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
               />

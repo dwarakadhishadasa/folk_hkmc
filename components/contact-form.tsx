@@ -25,6 +25,7 @@ interface ContactData {
 interface PreacherOption {
   id: string
   name: string
+  locationIds?: string[]
 }
 
 interface LocationOption {
@@ -84,6 +85,11 @@ export function ContactForm({
   const [message, setMessage] = useState("")
   const nameInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
+  const selectedPreacher = preachers.find((preacher) => preacher.id === formData.assignedPreacherAirtableUserId)
+  const availableLocations =
+    !isGitaLife && staffRole === "Admin" && formData.assignedPreacherAirtableUserId
+      ? locations.filter((location) => selectedPreacher?.locationIds?.includes(location.id))
+      : locations
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -96,6 +102,15 @@ export function ContactForm({
       } else {
         setPhoneError("")
       }
+      return
+    }
+
+    if (name === "assignedPreacherAirtableUserId") {
+      setFormData((prev) => ({
+        ...prev,
+        assignedPreacherAirtableUserId: value,
+        locationId: "",
+      }))
       return
     }
 
@@ -205,7 +220,7 @@ export function ContactForm({
             {staffRole === "Volunteer" && `Volunteer contacts are assigned to your Preacher and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Preacher" && `Contacts you create are assigned to you and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
-            {!isGitaLife && locations.length === 0 && " No active locations are available for contact creation."}
+            {!isGitaLife && availableLocations.length === 0 && " No active locations are available for contact creation."}
           </div>
           {message && (
             <div className={cn(noticeClass, "mb-4 border-amber-200 bg-amber-50 text-amber-800")} role="status">
@@ -400,11 +415,13 @@ export function ContactForm({
                   value={formData.locationId}
                   onChange={handleChange}
                   required
-                  disabled={locations.length === 0}
+                  disabled={availableLocations.length === 0 || (staffRole === "Admin" && !formData.assignedPreacherAirtableUserId)}
                   className={fieldClass}
                 >
-                  <option value="">Select location</option>
-                  {locations.map((location) => (
+                  <option value="">
+                    {staffRole === "Admin" && !formData.assignedPreacherAirtableUserId ? "Select Preacher first" : "Select location"}
+                  </option>
+                  {availableLocations.map((location) => (
                     <option key={location.id} value={location.id}>
                       {location.name}
                     </option>
