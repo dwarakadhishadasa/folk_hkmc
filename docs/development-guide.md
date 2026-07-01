@@ -75,7 +75,7 @@ pnpm supabase:env
 `pnpm supabase:env` runs `scripts/use-local-supabase-env.sh`, reads local Supabase credentials from `supabase status -o env`, and rewrites only the local Supabase block in `apps/folk/.env.local` and `apps/gita-life/.env.local`.
 It writes app-specific callback origins: FOLK uses `http://localhost:3000`, and Gita Life uses `http://localhost:3001`.
 `pnpm supabase:push` applies pending migrations to the running local Supabase database. Run it after pulling schema changes; otherwise auth may succeed in Supabase but fail when the app syncs staff authorization tables.
-Local Supabase auth email templates live under `supabase/templates/`. The Magic Link/OTP and Invite templates render `{{ .Data.auth_email_brand_name }}` so FOLK emails say FOLK and Gita Life emails say Gita Life; restart local Supabase after changing template files or `supabase/config.toml`.
+Local Supabase auth email templates live under `supabase/templates/`. The Magic Link/OTP and Invite templates render `{{ .Data.auth_email_brand_name }}` so FOLK emails say FOLK and Gita Life emails say Gita Life. Invite links prefer `{{ .Data.auth_email_invite_action_url }}` with `{{ .RedirectTo }}` fallback so a shared Supabase Site URL cannot send Gita Life invitees to the FOLK app; do not use `{{ .SiteURL }}` for shared FOLK/Gita Life invite links. Restart local Supabase after changing template files or `supabase/config.toml`.
 
 Useful commands:
 

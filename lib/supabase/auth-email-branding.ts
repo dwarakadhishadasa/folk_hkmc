@@ -8,6 +8,11 @@ type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 export interface AuthEmailBrandingMetadata {
   auth_email_brand_name: string
+  auth_email_invite_action_url?: string
+}
+
+interface AuthEmailBrandingOptions {
+  inviteActionUrl?: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,7 +54,10 @@ async function updateUserMetadata(
   user: User,
   metadata: AuthEmailBrandingMetadata,
 ): Promise<void> {
-  if (isRecord(user.user_metadata) && user.user_metadata.auth_email_brand_name === metadata.auth_email_brand_name) {
+  const currentMetadata = isRecord(user.user_metadata) ? user.user_metadata : {}
+  const isCurrent = Object.entries(metadata).every(([key, value]) => currentMetadata[key] === value)
+
+  if (isCurrent) {
     return
   }
 
@@ -62,17 +70,25 @@ async function updateUserMetadata(
   }
 }
 
-export function getAuthEmailBrandingMetadata(): AuthEmailBrandingMetadata {
-  return {
+export function getAuthEmailBrandingMetadata(options: AuthEmailBrandingOptions = {}): AuthEmailBrandingMetadata {
+  const metadata: AuthEmailBrandingMetadata = {
     auth_email_brand_name: getServerProgramProfile().branding.shortName,
   }
+
+  const inviteActionUrl = options.inviteActionUrl?.trim()
+  if (inviteActionUrl) {
+    metadata.auth_email_invite_action_url = inviteActionUrl
+  }
+
+  return metadata
 }
 
 export async function updateAuthEmailBrandingForUserId(
   supabaseUserId: string,
   supabaseAdmin: SupabaseAdminClient = createSupabaseAdminClient(),
+  options: AuthEmailBrandingOptions = {},
 ): Promise<AuthEmailBrandingMetadata> {
-  const metadata = getAuthEmailBrandingMetadata()
+  const metadata = getAuthEmailBrandingMetadata(options)
   const { data, error } = await supabaseAdmin.auth.admin.getUserById(supabaseUserId)
 
   if (error) {
@@ -90,8 +106,9 @@ export async function updateAuthEmailBrandingForUserId(
 export async function updateAuthEmailBrandingForEmail(
   email: string,
   supabaseAdmin: SupabaseAdminClient = createSupabaseAdminClient(),
+  options: AuthEmailBrandingOptions = {},
 ): Promise<AuthEmailBrandingMetadata> {
-  const metadata = getAuthEmailBrandingMetadata()
+  const metadata = getAuthEmailBrandingMetadata(options)
   const user = await findSupabaseUserByEmail(supabaseAdmin, email)
 
   if (!user) {

@@ -57,7 +57,7 @@ function createSupabasePasswordlessClient() {
 export async function sendStaffInviteEmail(email: string, request?: Request): Promise<StaffInviteResult> {
   const redirectTo = getAuthConfirmRedirectUrl(request)
   const supabaseAdmin = createSupabaseAdminClient()
-  const authEmailBranding = getAuthEmailBrandingMetadata()
+  const authEmailBranding = getAuthEmailBrandingMetadata({ inviteActionUrl: redirectTo })
   const inviteResult = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
     data: authEmailBranding,
     redirectTo,
@@ -77,7 +77,9 @@ export async function sendStaffInviteEmail(email: string, request?: Request): Pr
 
   let fallbackAuthEmailBranding = authEmailBranding
   try {
-    fallbackAuthEmailBranding = await updateAuthEmailBrandingForEmail(email, supabaseAdmin)
+    fallbackAuthEmailBranding = await updateAuthEmailBrandingForEmail(email, supabaseAdmin, {
+      inviteActionUrl: redirectTo,
+    })
   } catch (error) {
     return {
       delivery: "sign-in-link",
