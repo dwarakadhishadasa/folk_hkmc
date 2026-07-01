@@ -39,7 +39,7 @@ export interface ContactFields {
 
 export interface AttendanceFields {
   Phone?: string | number
-  Name?: string
+  Name?: string | string[]
   "Attendance Date"?: string
   Contact?: string[]
   Session?: string[]
@@ -135,6 +135,13 @@ export interface AttendanceRecord {
   id: string
   fields: AttendanceFields
   createdTime?: string
+}
+
+export interface AttendanceDashboardRecord {
+  id: string
+  mobile: string
+  userName: string
+  createdAt: string
 }
 
 type TableKey = "contacts" | "attendance" | "sessions" | "users" | "locations"
@@ -244,6 +251,37 @@ function normalizeLinkedIds(value: unknown): string[] {
 
 function normalizeString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function isAirtableRecordId(value: string): boolean {
+  return /^rec[a-zA-Z0-9]{4,32}$/.test(value)
+}
+
+function normalizeDisplayString(value: unknown, options: { rejectRecordIds?: boolean } = {}): string | undefined {
+  if (typeof value === "string" || typeof value === "number") {
+    const normalized = String(value).trim()
+    if (options.rejectRecordIds && isAirtableRecordId(normalized)) {
+      return undefined
+    }
+
+    return normalized || undefined
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const normalized = normalizeDisplayString(item, options)
+      if (normalized) {
+        return normalized
+      }
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>
+    return normalizeDisplayString(record.name, options) || normalizeDisplayString(record.email, options)
+  }
+
+  return undefined
 }
 
 function currentAirtableDate(): string {
@@ -529,6 +567,11 @@ export async function findContactByPhone(phone: string): Promise<ContactRecord |
   return records[0] ? mapContact(records[0]) : null
 }
 
+export async function getContactsByRecordIds(recordIds: string[]): Promise<ContactRecord[]> {
+  const records = await listRecordsByIds<ContactFields>("contacts", recordIds)
+  return records.map(mapContact)
+}
+
 export async function createContact(data: {
   name: string
   phone: string
@@ -787,4 +830,39 @@ export async function getAttendanceBySessionRecord(session: Pick<SessionRecord, 
   }
 
   return getAttendanceByRecordIds(session.attendanceRecordIds)
+}
+
+export async function getAttendanceDashboardRecords(
+  records: AttendanceRecord[],
+  fallbackDate: string,
+  options: { hydrateContacts?: boolean } = {},
+): Promise<AttendanceDashboardRecord[]> {
+  if (records.length === 0) {
+    return []
+  }
+
+  const contactsById = new Map<string, ContactRecord>()
+  if (options.hydrateContacts) {
+    const contactIds = [
+      ...new Set(records.flatMap((record) => normalizeLinkedIds(record.fields.Contact))),
+    ]
+    for (const contact of await getContactsByRecordIds(contactIds)) {
+      contactsById.set(contact.id, contact)
+    }
+  }
+
+  return records.map((record) => {
+    const contact = normalizeLinkedIds(record.fields.Contact)
+      .map((contactId) => contactsById.get(contactId))
+      .find((mappedContact): mappedContact is ContactRecord => Boolean(mappedContact))
+    const mobile = normalizeMobile(record.fields.Phone) || contact?.phone || normalizeDisplayString(record.fields.Phone) || ""
+    const userName = contact?.name || normalizeDisplayString(record.fields.Name, { rejectRecordIds: true }) || "Unknown"
+
+    return {
+      id: record.id,
+      mobile,
+      userName,
+      createdAt: record.createdTime || record.fields["Attendance Date"] || fallbackDate,
+    }
+  })
 }

@@ -6,12 +6,15 @@ import {
   findContactByPhone,
   findSessionById,
   getAttendanceByDate,
+  getAttendanceDashboardRecords,
   getAttendanceByRecordIds,
   getAttendanceBySessionRecord,
   normalizeMobile,
 } from "@/lib/airtable"
 
 export const dynamic = "force-dynamic"
+
+const MAX_KNOWN_ATTENDANCE_IDS = 1000
 
 interface AttendancePayload {
   mobile?: string
@@ -28,7 +31,7 @@ function parseKnownAttendanceIds(value: string | null): Set<string> | null {
     .map((id) => id.trim())
     .filter(Boolean)
 
-  if (ids.length === 0 || ids.length > 100 || ids.some((id) => !/^rec[a-zA-Z0-9]{4,32}$/.test(id))) {
+  if (ids.length === 0 || ids.length > MAX_KNOWN_ATTENDANCE_IDS || ids.some((id) => !/^rec[a-zA-Z0-9]{4,32}$/.test(id))) {
     return null
   }
 
@@ -147,12 +150,9 @@ export async function GET(request: Request) {
       airtableRecords = await getAttendanceByDate(date)
     }
 
-    const attendanceList = (airtableRecords || []).map((record) => ({
-      id: record.id,
-      mobile: String(record.fields.Phone || ""),
-      userName: record.fields.Name || "Unknown",
-      createdAt: record.createdTime || record.fields["Attendance Date"] || date,
-    }))
+    const attendanceList = await getAttendanceDashboardRecords(airtableRecords || [], date, {
+      hydrateContacts: Boolean(sessionId),
+    })
 
     return Response.json(attendanceList, {
       headers: {
