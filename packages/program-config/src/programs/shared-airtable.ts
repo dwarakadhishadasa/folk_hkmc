@@ -31,6 +31,8 @@ export const operationalTables: TableSet = {
       analytics: { id: "fldSzNUmuGmbE1i9U", label: "Analytics", type: "multipleRecordLinks", access: writable },
       college: { id: "fldtbZToYqsJx3O1m", label: "College", type: "singleLineText", access: writable },
       company: { id: "fldZGRXtDgGGHdlk9", label: "Company", type: "singleLineText", access: writable },
+      address: { id: "fldvXxsgxnybw6nPA", label: "Address", type: "singleLineText", access: writable },
+      designation: { id: "fldVkz3c5p6GuFBrg", label: "Designation", type: "singleLineText", access: writable },
       totalAttendanceCount: {
         id: "fldxdZSq7gfqfgueW",
         label: "TotalAttendanceCount",

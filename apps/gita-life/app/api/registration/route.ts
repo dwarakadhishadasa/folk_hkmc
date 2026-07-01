@@ -18,6 +18,7 @@ interface RegistrationPayload {
   dateOfBirth?: string
   occupation?: string
   company?: string
+  designation?: string
   address?: string
   location?: string
   sessionId?: string
@@ -46,6 +47,10 @@ function parseDateOfBirth(value: unknown): { dateOfBirth?: string; error?: strin
 
 function resolveAddress(payload: RegistrationPayload): string | undefined {
   return payload.address?.trim() || payload.location?.trim() || undefined
+}
+
+function isWorkingProfessional(value: string | undefined): boolean {
+  return value === "Working" || value === "Working Professional"
 }
 
 function completedResponse(params: {
@@ -133,10 +138,11 @@ export async function POST(request: Request) {
         name,
         phone: mobile,
         dateOfBirth: parsedDateOfBirth.dateOfBirth,
-        company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
+        company: isWorkingProfessional(payload.occupation) ? payload.company?.trim() || undefined : undefined,
+        designation: isWorkingProfessional(payload.occupation) ? payload.designation?.trim() || undefined : undefined,
         source: session ? "Attendance Registration" : "Public Registration",
         locationId,
-        location: locationId ? undefined : resolveAddress(payload),
+        address: locationId ? undefined : resolveAddress(payload),
         assignedPreacherAirtableUserId,
       }))
 

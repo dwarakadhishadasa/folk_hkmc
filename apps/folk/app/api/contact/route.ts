@@ -1,5 +1,12 @@
 import { authzErrorResponse, getStaffContext } from "@/lib/authz"
-import { createContact, findContactByPhone, findStaffUserById, normalizeMobile, type StaffUser } from "@/lib/airtable"
+import {
+  createContact,
+  findContactByPhone,
+  findLocationById,
+  findStaffUserById,
+  normalizeMobile,
+  type StaffUser,
+} from "@/lib/airtable"
 
 export const dynamic = "force-dynamic"
 
@@ -72,15 +79,6 @@ async function resolveAssignedPreacher(
   return activePreacherResult(await findStaffUserById(explicitPreacherId))
 }
 
-function resolveLocation(payload: ContactPayload): string {
-  const location = payload.location?.trim()
-  if (location) {
-    return location
-  }
-
-  return payload.locationId?.trim() || ""
-}
-
 export async function POST(request: Request) {
   try {
     const staff = await getStaffContext()
@@ -108,9 +106,14 @@ export async function POST(request: Request) {
       return Response.json({ error: assignment.error }, { status: 422 })
     }
 
-    const location = resolveLocation(payload)
+    const locationId = payload.locationId?.trim()
+    if (!locationId) {
+      return Response.json({ error: "Select a location before saving this contact." }, { status: 422 })
+    }
+
+    const location = await findLocationById(locationId)
     if (!location) {
-      return Response.json({ error: "Enter a location before saving this contact." }, { status: 422 })
+      return Response.json({ error: "Selected location does not exist." }, { status: 400 })
     }
 
     const parsedDateOfBirth = parseDateOfBirth(payload.dateOfBirth)
@@ -127,7 +130,7 @@ export async function POST(request: Request) {
       college: payload.occupation === "Studying" ? payload.college?.trim() || undefined : undefined,
       company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
       source: payload.source || "Pass distribution",
-      location,
+      locationId,
       comments: payload.comments?.trim() || undefined,
       collectedByAirtableUserId: collectorId,
       assignedPreacherAirtableUserId: assignment.preacher.id,
