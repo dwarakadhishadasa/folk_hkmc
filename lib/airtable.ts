@@ -777,7 +777,7 @@ export async function createSession(data: {
     fields["Attendance Closes At"] = data.attendanceClosesAt
   }
 
-don  return mapSession(await createRecord<SessionFields>("sessions", fields))
+  return mapSession(await createRecord<SessionFields>("sessions", fields))
 }
 
 export async function updateSessionAttendanceUrl(sessionId: string, attendanceUrl: string): Promise<SessionRecord> {
