@@ -12,6 +12,7 @@ interface FormData {
   dateOfBirth: string
   occupation: string
   company: string
+  designation: string
   address: string
 }
 
@@ -34,6 +35,7 @@ function RegisterForm() {
     dateOfBirth: "",
     occupation: "",
     company: "",
+    designation: "",
     address: "",
   })
 
@@ -61,6 +63,7 @@ function RegisterForm() {
       ...prev,
       occupation: value,
       company: isWorkingProfessional(value) ? prev.company : "",
+      designation: isWorkingProfessional(value) ? prev.designation : "",
     }))
   }
 
@@ -239,20 +242,37 @@ function RegisterForm() {
           </div>
 
           {isWorkingProfessional(formData.occupation) && (
-            <div>
-              <label htmlFor="company" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
-                Company
-              </label>
-              <input
-                id="company"
-                name="company"
-                type="text"
-                placeholder="Enter company name"
-                value={formData.company}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
-              />
-            </div>
+            <>
+              <div>
+                <label htmlFor="company" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+                  Company
+                </label>
+                <input
+                  id="company"
+                  name="company"
+                  type="text"
+                  placeholder="Enter company name"
+                  value={formData.company}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="designation" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+                  Designation
+                </label>
+                <input
+                  id="designation"
+                  name="designation"
+                  type="text"
+                  placeholder="Enter designation"
+                  value={formData.designation}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+                />
+              </div>
+            </>
           )}
 
           {!sessionId && (

@@ -3,14 +3,17 @@ import { Header } from "@/components/header"
 import { ContactForm } from "@/components/contact-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
-import { listCachedActivePreachers } from "@/lib/airtable"
+import { listCachedActivePreachers, listLocations } from "@/lib/airtable"
 
 export const dynamic = "force-dynamic"
 
 export default async function ContactPage() {
   try {
     const staff = await getStaffContext()
-    const preachers = staff.role === "Admin" ? await listCachedActivePreachers() : []
+    const [preachers, locations] = await Promise.all([
+      staff.role === "Admin" ? listCachedActivePreachers() : Promise.resolve([]),
+      listLocations(),
+    ])
 
     return (
       <StaffAuthShell staff={staff}>
@@ -23,6 +26,13 @@ export default async function ContactPage() {
               id: preacher.id,
               name: preacher.name,
             }))}
+            locations={locations
+              .filter((location) => location.status !== "Inactive")
+              .map((location) => ({
+                id: location.id,
+                name: location.name,
+                status: location.status,
+              }))}
           />
         </main>
       </div>

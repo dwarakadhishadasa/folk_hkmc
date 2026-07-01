@@ -25,10 +25,12 @@ export interface ContactFields {
   Year?: string
   College?: string
   Company?: string
+  Designation?: string
   Source?: string
   Notes?: string
   "Initial Contact"?: string
   "Last Contacted On"?: string
+  Address?: string
   Location?: string | string[]
   "Assigned Preacher"?: string[]
   "Collected By"?: string[]
@@ -103,9 +105,11 @@ export interface ContactRecord {
   year?: string
   college?: string
   company?: string
+  designation?: string
   notes?: string
   initialContact?: string
   lastContactedOn?: string
+  address?: string
   location?: string | string[]
   assignedPreacherIds: string[]
   collectedByIds: string[]
@@ -499,9 +503,11 @@ export function mapContact(record: AirtableRecord<ContactFields>): ContactRecord
     year: normalizeString(record.fields.Year),
     college: normalizeString(record.fields.College),
     company: normalizeString(record.fields.Company),
+    designation: normalizeString(record.fields.Designation),
     notes: normalizeString(record.fields.Notes),
     initialContact: normalizeString(record.fields["Initial Contact"]),
     lastContactedOn: normalizeString(record.fields["Last Contacted On"]),
+    address: normalizeString(record.fields.Address),
     location: record.fields.Location,
     assignedPreacherIds: normalizeLinkedIds(record.fields["Assigned Preacher"]),
     collectedByIds: normalizeLinkedIds(record.fields["Collected By"]),
@@ -531,8 +537,10 @@ export async function createContact(data: {
   year?: string
   college?: string
   company?: string
+  designation?: string
   source?: string
   comments?: string
+  address?: string
   locationId?: string
   location?: string
   collectedByAirtableUserId?: string
@@ -571,11 +579,17 @@ export async function createContact(data: {
   if (data.company) {
     fields.Company = data.company
   }
+  if (data.designation) {
+    fields.Designation = data.designation
+  }
   if (data.source) {
     fields.Source = data.source
   }
   if (data.comments) {
     fields.Notes = data.comments
+  }
+  if (data.address) {
+    fields.Address = data.address
   }
   if (data.locationId) {
     fields.Location = [data.locationId]

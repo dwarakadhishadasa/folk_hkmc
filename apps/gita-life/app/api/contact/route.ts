@@ -9,6 +9,7 @@ interface ContactPayload {
   dateOfBirth?: string
   occupation?: string
   company?: string
+  designation?: string
   source?: string
   address?: string
   locationId?: string
@@ -69,13 +70,12 @@ async function resolveAssignedPreacher(
   return activePreacherResult(await findStaffUserById(explicitPreacherId))
 }
 
-function resolveLocation(payload: ContactPayload): string {
-  const location = payload.address?.trim() || payload.location?.trim()
-  if (location) {
-    return location
-  }
+function isWorkingProfessional(value: string | undefined): boolean {
+  return value === "Working" || value === "Working Professional"
+}
 
-  return payload.locationId?.trim() || ""
+function resolveAddress(payload: ContactPayload): string {
+  return payload.address?.trim() || payload.location?.trim() || ""
 }
 
 export async function POST(request: Request) {
@@ -105,8 +105,8 @@ export async function POST(request: Request) {
       return Response.json({ error: assignment.error }, { status: 422 })
     }
 
-    const location = resolveLocation(payload)
-    if (!location) {
+    const address = resolveAddress(payload)
+    if (!address) {
       return Response.json({ error: "Enter an address before saving this contact." }, { status: 422 })
     }
 
@@ -120,9 +120,10 @@ export async function POST(request: Request) {
       name,
       phone: mobile,
       dateOfBirth: parsedDateOfBirth.dateOfBirth,
-      company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
+      company: isWorkingProfessional(payload.occupation) ? payload.company?.trim() || undefined : undefined,
+      designation: isWorkingProfessional(payload.occupation) ? payload.designation?.trim() || undefined : undefined,
       source: payload.source || "Pass distribution",
-      location,
+      address,
       collectedByAirtableUserId: collectorId,
       assignedPreacherAirtableUserId: assignment.preacher.id,
     })

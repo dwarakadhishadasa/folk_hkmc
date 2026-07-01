@@ -15,7 +15,9 @@ interface ContactData {
   year: string
   college: string
   company: string
-  location: string
+  designation: string
+  locationId: string
+  address: string
   comments: string
   assignedPreacherAirtableUserId: string
 }
@@ -23,6 +25,12 @@ interface ContactData {
 interface PreacherOption {
   id: string
   name: string
+}
+
+interface LocationOption {
+  id: string
+  name: string
+  status?: string
 }
 
 const initialFormData: ContactData = {
@@ -33,7 +41,9 @@ const initialFormData: ContactData = {
   year: "Unknown",
   college: "",
   company: "",
-  location: "",
+  designation: "",
+  locationId: "",
+  address: "",
   comments: "",
   assignedPreacherAirtableUserId: "",
 }
@@ -58,9 +68,11 @@ const noticeClass = "rounded-lg border px-4 py-3 text-sm leading-6"
 export function ContactForm({
   staffRole,
   preachers = [],
+  locations = [],
 }: {
   staffRole: "Admin" | "Preacher" | "Volunteer"
   preachers?: PreacherOption[]
+  locations?: LocationOption[]
 }) {
   const { branding } = currentProgramProfile
   const isGitaLife = currentProgramProfile.id === "gita-life"
@@ -94,6 +106,7 @@ export function ContactForm({
         year: value === "Studying" ? prev.year : "Unknown",
         college: value === "Studying" ? prev.college : "",
         company: value === "Working" ? prev.company : "",
+        designation: value === "Working" ? prev.designation : "",
       }))
       return
     }
@@ -104,7 +117,8 @@ export function ContactForm({
   const resetFormAfterSave = () => {
     setFormData((prev) => ({
       ...initialFormData,
-      location: prev.location,
+      locationId: prev.locationId,
+      address: prev.address,
       assignedPreacherAirtableUserId: staffRole === "Admin" ? prev.assignedPreacherAirtableUserId : "",
     }))
     setPhoneError("")
@@ -124,8 +138,8 @@ export function ContactForm({
       return
     }
 
-    if (!formData.location.trim()) {
-      setMessage(`Enter an ${isGitaLife ? "address" : "location"} before saving this contact.`)
+    if (isGitaLife ? !formData.address.trim() : !formData.locationId) {
+      setMessage(`${isGitaLife ? "Enter an address" : "Select a location"} before saving this contact.`)
       return
     }
 
@@ -191,6 +205,7 @@ export function ContactForm({
             {staffRole === "Volunteer" && `Volunteer contacts are assigned to your Preacher and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Preacher" && `Contacts you create are assigned to you and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
+            {!isGitaLife && locations.length === 0 && " No active locations are available for contact creation."}
           </div>
           {message && (
             <div className={cn(noticeClass, "mb-4 border-amber-200 bg-amber-50 text-amber-800")} role="status">
@@ -305,20 +320,39 @@ export function ContactForm({
             )}
 
             {formData.occupation === "Working" && (
-              <div className="space-y-2">
-                <label htmlFor="company" className={labelClass}>
-                  Company
-                </label>
-                <input
-                  id="company"
-                  name="company"
-                  type="text"
-                  placeholder="Enter company name"
-                  value={formData.company}
-                  onChange={handleChange}
-                  className={fieldClass}
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <label htmlFor="company" className={labelClass}>
+                    Company
+                  </label>
+                  <input
+                    id="company"
+                    name="company"
+                    type="text"
+                    placeholder="Enter company name"
+                    value={formData.company}
+                    onChange={handleChange}
+                    className={fieldClass}
+                  />
+                </div>
+
+                {isGitaLife && (
+                  <div className="space-y-2">
+                    <label htmlFor="designation" className={labelClass}>
+                      Designation
+                    </label>
+                    <input
+                      id="designation"
+                      name="designation"
+                      type="text"
+                      placeholder="Enter designation"
+                      value={formData.designation}
+                      onChange={handleChange}
+                      className={fieldClass}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {staffRole === "Admin" && (
@@ -345,19 +379,38 @@ export function ContactForm({
             )}
 
             <div className="space-y-2">
-              <label htmlFor="location" className={labelClass}>
+              <label htmlFor={isGitaLife ? "address" : "locationId"} className={labelClass}>
                 {locationLabel} *
               </label>
-              <input
-                id="location"
-                name="location"
-                type="text"
-                placeholder={locationPlaceholder}
-                value={formData.location}
-                onChange={handleChange}
-                required
-                className={fieldClass}
-              />
+              {isGitaLife ? (
+                <input
+                  id="address"
+                  name="address"
+                  type="text"
+                  placeholder={locationPlaceholder}
+                  value={formData.address}
+                  onChange={handleChange}
+                  required
+                  className={fieldClass}
+                />
+              ) : (
+                <select
+                  id="locationId"
+                  name="locationId"
+                  value={formData.locationId}
+                  onChange={handleChange}
+                  required
+                  disabled={locations.length === 0}
+                  className={fieldClass}
+                >
+                  <option value="">Select location</option>
+                  {locations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {!isGitaLife && (
@@ -379,7 +432,7 @@ export function ContactForm({
 
             <button
               type="submit"
-              disabled={isSubmitting || phoneError !== "" || !formData.location.trim()}
+              disabled={isSubmitting || phoneError !== "" || (isGitaLife ? !formData.address.trim() : !formData.locationId)}
               className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-white shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
             >
               {isSubmitting ? "Saving..." : "Save"}
