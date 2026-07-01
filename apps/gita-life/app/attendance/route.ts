@@ -7,7 +7,6 @@ import {
   findSessionById,
   getAttendanceByDate,
   getAttendanceDashboardRecords,
-  getAttendanceByRecordIds,
   getAttendanceBySessionRecord,
   normalizeMobile,
 } from "@/lib/airtable"
@@ -140,12 +139,7 @@ export async function GET(request: Request) {
         return Response.json({ error: "This session is outside your allowed scope." }, { status: 403 })
       }
 
-      if (knownAttendanceIds) {
-        const newAttendanceRecordIds = session.attendanceRecordIds.filter((recordId) => !knownAttendanceIds.has(recordId))
-        airtableRecords = await getAttendanceByRecordIds(newAttendanceRecordIds)
-      } else {
-        airtableRecords = await getAttendanceBySessionRecord(session)
-      }
+      airtableRecords = await getAttendanceBySessionRecord(session, { knownAttendanceIds })
     } else {
       airtableRecords = await getAttendanceByDate(date)
     }

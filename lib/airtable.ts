@@ -777,7 +777,7 @@ export async function createSession(data: {
     fields["Attendance Closes At"] = data.attendanceClosesAt
   }
 
-  return mapSession(await createRecord<SessionFields>("sessions", fields))
+don  return mapSession(await createRecord<SessionFields>("sessions", fields))
 }
 
 export async function updateSessionAttendanceUrl(sessionId: string, attendanceUrl: string): Promise<SessionRecord> {
@@ -824,12 +824,53 @@ export async function getAttendanceByRecordIds(recordIds: string[]): Promise<Att
   return listRecordsByIds<AttendanceFields>("attendance", recordIds)
 }
 
-export async function getAttendanceBySessionRecord(session: Pick<SessionRecord, "attendanceRecordIds">): Promise<AttendanceRecord[]> {
-  if (!session.attendanceRecordIds.length) {
-    return []
+function filterKnownAttendanceRecords(
+  records: AttendanceRecord[],
+  knownAttendanceIds?: ReadonlySet<string> | null,
+): AttendanceRecord[] {
+  if (!knownAttendanceIds) {
+    return records
   }
 
-  return getAttendanceByRecordIds(session.attendanceRecordIds)
+  return records.filter((record) => !knownAttendanceIds.has(record.id))
+}
+
+function dedupeAttendanceRecords(records: AttendanceRecord[]): AttendanceRecord[] {
+  const seen = new Set<string>()
+  return records.filter((record) => {
+    if (seen.has(record.id)) {
+      return false
+    }
+
+    seen.add(record.id)
+    return true
+  })
+}
+
+async function getAttendanceByLinkedSession(
+  sessionId: string,
+  options: { date?: string; knownAttendanceIds?: ReadonlySet<string> | null } = {},
+): Promise<AttendanceRecord[]> {
+  const records = await getAttendanceByDate(options.date || currentAirtableDate())
+  return filterKnownAttendanceRecords(
+    records.filter((record) => linkedIdsInclude(record.fields.Session, sessionId)),
+    options.knownAttendanceIds,
+  )
+}
+
+export async function getAttendanceBySessionRecord(
+  session: Pick<SessionRecord, "id" | "attendanceRecordIds">,
+  options: { date?: string; knownAttendanceIds?: ReadonlySet<string> | null } = {},
+): Promise<AttendanceRecord[]> {
+  const recordIds = options.knownAttendanceIds
+    ? session.attendanceRecordIds.filter((recordId) => !options.knownAttendanceIds?.has(recordId))
+    : session.attendanceRecordIds
+  const [linkedRecords, inverseRecords] = await Promise.all([
+    getAttendanceByLinkedSession(session.id, options),
+    getAttendanceByRecordIds(recordIds),
+  ])
+
+  return dedupeAttendanceRecords([...inverseRecords, ...linkedRecords])
 }
 
 export async function getAttendanceDashboardRecords(
