@@ -15,9 +15,10 @@ export const dynamic = "force-dynamic"
 interface RegistrationPayload {
   name?: string
   mobile?: string
-  age?: string | number
+  dateOfBirth?: string
   occupation?: string
-  year?: string
+  college?: string
+  company?: string
   address?: string
   location?: string
   sessionId?: string
@@ -26,9 +27,22 @@ interface RegistrationPayload {
 type RegistrationOutcome = "contact_created" | "contact_exists"
 type AttendanceOutcome = "attendance_marked" | "attendance_already_marked"
 
-function parseAge(value: unknown): number | undefined {
-  const age = typeof value === "number" ? value : Number.parseInt(String(value || ""), 10)
-  return Number.isFinite(age) && age > 0 ? age : undefined
+function parseDateOfBirth(value: unknown): { dateOfBirth?: string; error?: string } {
+  if (typeof value !== "string" || !value.trim()) {
+    return {}
+  }
+
+  const dateOfBirth = value.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+    return { error: "Date of Birth must use YYYY-MM-DD format." }
+  }
+
+  const [year, month, day] = dateOfBirth.split("-").map(Number)
+  const parsed = new Date(`${dateOfBirth}T00:00:00.000Z`)
+  const isValidDate =
+    parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+
+  return isValidDate ? { dateOfBirth } : { error: "Date of Birth must be a valid date." }
 }
 
 function resolveAddress(payload: RegistrationPayload): string | undefined {
@@ -69,6 +83,11 @@ export async function POST(request: Request) {
 
     if (!name || !mobile) {
       return Response.json({ error: "Name and a valid 10-digit mobile number are required." }, { status: 400 })
+    }
+
+    const parsedDateOfBirth = parseDateOfBirth(payload.dateOfBirth)
+    if (parsedDateOfBirth.error) {
+      return Response.json({ error: parsedDateOfBirth.error }, { status: 400 })
     }
 
     const sessionId = payload.sessionId?.trim()
@@ -114,8 +133,10 @@ export async function POST(request: Request) {
       (await createContact({
         name,
         phone: mobile,
-        age: parseAge(payload.age),
-        year: payload.occupation === "Working" ? "Unknown" : payload.year || undefined,
+        dateOfBirth: parsedDateOfBirth.dateOfBirth,
+        year: payload.occupation === "Working" ? "Unknown" : undefined,
+        college: payload.occupation === "Studying" ? payload.college?.trim() || undefined : undefined,
+        company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
         source: session ? "Attendance Registration" : "Public Registration",
         locationId,
         address: locationId ? undefined : resolveAddress(payload),

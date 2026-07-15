@@ -12,7 +12,6 @@ interface ContactData {
   mobile: string
   dateOfBirth: string
   occupation: string
-  year: string
   college: string
   company: string
   designation: string
@@ -39,7 +38,6 @@ const initialFormData: ContactData = {
   mobile: "",
   dateOfBirth: "",
   occupation: "",
-  year: "Unknown",
   college: "",
   company: "",
   designation: "",
@@ -118,7 +116,6 @@ export function ContactForm({
       setFormData((prev) => ({
         ...prev,
         occupation: value,
-        year: value === "Studying" ? prev.year : "Unknown",
         college: value === "Studying" ? prev.college : "",
         company: value === "Working" ? prev.company : "",
         designation: value === "Working" ? prev.designation : "",
@@ -296,42 +293,20 @@ export function ContactForm({
             </div>
 
             {!isGitaLife && formData.occupation === "Studying" && (
-              <>
-                <div className="space-y-2">
-                  <label htmlFor="year" className={labelClass}>
-                    Year
-                  </label>
-                  <select
-                    id="year"
-                    name="year"
-                    value={formData.year}
-                    onChange={handleChange}
-                    className={fieldClass}
-                  >
-                    <option value="">Select year</option>
-                    <option value="1st year">1st Year</option>
-                    <option value="2nd year">2nd Year</option>
-                    <option value="3rd year">3rd Year</option>
-                    <option value="4th year">4th Year</option>
-                    <option value="Passed Out">Passed Out</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="college" className={labelClass}>
-                    College
-                  </label>
-                  <input
-                    id="college"
-                    name="college"
-                    type="text"
-                    placeholder="Enter college name"
-                    value={formData.college}
-                    onChange={handleChange}
-                    className={fieldClass}
-                  />
-                </div>
-              </>
+              <div className="space-y-2">
+                <label htmlFor="college" className={labelClass}>
+                  College
+                </label>
+                <input
+                  id="college"
+                  name="college"
+                  type="text"
+                  placeholder="Enter college name"
+                  value={formData.college}
+                  onChange={handleChange}
+                  className={fieldClass}
+                />
+              </div>
             )}
 
             {formData.occupation === "Working" && (
