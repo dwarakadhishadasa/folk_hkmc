@@ -16,7 +16,6 @@ interface ContactPayload {
   age?: string | number
   dateOfBirth?: string
   occupation?: string
-  year?: string
   college?: string
   company?: string
   source?: string
@@ -135,7 +134,7 @@ export async function POST(request: Request) {
       name,
       phone: mobile,
       dateOfBirth: parsedDateOfBirth.dateOfBirth,
-      year: payload.occupation === "Working" ? "Unknown" : payload.year || undefined,
+      year: payload.occupation === "Working" ? "Unknown" : undefined,
       college: payload.occupation === "Studying" ? payload.college?.trim() || undefined : undefined,
       company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
       source: payload.source || "Pass distribution",

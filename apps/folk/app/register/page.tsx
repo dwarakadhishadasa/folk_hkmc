@@ -8,9 +8,10 @@ import { Header } from "@/components/header"
 interface FormData {
   name: string
   mobile: string
-  age: string
+  dateOfBirth: string
   occupation: string
-  year: string
+  college: string
+  company: string
   address: string
 }
 
@@ -24,9 +25,10 @@ function RegisterForm() {
   const [formData, setFormData] = useState<FormData>({
     name: "",
     mobile: "",
-    age: "",
+    dateOfBirth: "",
     occupation: "",
-    year: "",
+    college: "",
+    company: "",
     address: "",
   })
 
@@ -53,7 +55,8 @@ function RegisterForm() {
     setFormData((prev) => ({
       ...prev,
       occupation: value,
-      year: value === "Working" ? "Unknown" : prev.year,
+      college: value === "Studying" ? prev.college : "",
+      company: value === "Working" ? prev.company : "",
     }))
   }
 
@@ -192,20 +195,16 @@ function RegisterForm() {
           </div>
 
           <div>
-            <label htmlFor="age" className="block text-sm font-medium text-[#24324A] mb-1.5">
-              Age <span className="text-red-500">*</span>
+            <label htmlFor="dateOfBirth" className="block text-sm font-medium text-[#24324A] mb-1.5">
+              Date of Birth <span className="text-red-500">*</span>
             </label>
             <input
-              id="age"
-              name="age"
-              type="number"
-              inputMode="numeric"
-              placeholder="Enter your age"
-              value={formData.age}
+              id="dateOfBirth"
+              name="dateOfBirth"
+              type="date"
+              value={formData.dateOfBirth}
               onChange={handleChange}
               required
-              min={1}
-              max={120}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
             />
           </div>
@@ -230,24 +229,35 @@ function RegisterForm() {
 
           {formData.occupation === "Studying" && (
             <div>
-              <label htmlFor="year" className="block text-sm font-medium text-[#24324A] mb-1.5">
-                Year <span className="text-red-500">*</span>
+              <label htmlFor="college" className="block text-sm font-medium text-[#24324A] mb-1.5">
+                College
               </label>
-              <select
-                id="year"
-                name="year"
-                value={formData.year}
-                onChange={(e) => setFormData((prev) => ({ ...prev, year: e.target.value }))}
-                required
+              <input
+                id="college"
+                name="college"
+                type="text"
+                placeholder="Enter college name"
+                value={formData.college}
+                onChange={handleChange}
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all bg-white"
-              >
-                <option value="">Select year</option>
-                <option value="1st year">1st Year</option>
-                <option value="2nd year">2nd Year</option>
-                <option value="3rd year">3rd Year</option>
-                <option value="4th year">4th Year</option>
-                <option value="Passed Out">Passed Out</option>
-              </select>
+              />
+            </div>
+          )}
+
+          {formData.occupation === "Working" && (
+            <div>
+              <label htmlFor="company" className="block text-sm font-medium text-[#24324A] mb-1.5">
+                Company
+              </label>
+              <input
+                id="company"
+                name="company"
+                type="text"
+                placeholder="Enter company name"
+                value={formData.company}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all bg-white"
+              />
             </div>
           )}
 
