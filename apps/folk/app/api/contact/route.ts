@@ -79,6 +79,10 @@ async function resolveAssignedPreacher(
   return activePreacherResult(await findStaffUserById(explicitPreacherId))
 }
 
+function isWorkingProfessional(value: string | undefined): boolean {
+  return value === "Working" || value === "Working Professional"
+}
+
 export async function POST(request: Request) {
   try {
     const staff = await getStaffContext()
@@ -134,9 +138,8 @@ export async function POST(request: Request) {
       name,
       phone: mobile,
       dateOfBirth: parsedDateOfBirth.dateOfBirth,
-      year: payload.occupation === "Working" ? "Unknown" : undefined,
       college: payload.occupation === "Studying" ? payload.college?.trim() || undefined : undefined,
-      company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
+      company: isWorkingProfessional(payload.occupation) ? payload.company?.trim() || undefined : undefined,
       source: payload.source || "Pass distribution",
       locationId,
       comments: payload.comments?.trim() || undefined,

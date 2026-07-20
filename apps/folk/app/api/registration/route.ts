@@ -49,6 +49,10 @@ function resolveAddress(payload: RegistrationPayload): string | undefined {
   return payload.address?.trim() || payload.location?.trim() || undefined
 }
 
+function isWorkingProfessional(value: string | undefined): boolean {
+  return value === "Working" || value === "Working Professional"
+}
+
 function completedResponse(params: {
   status: number
   contact: ContactRecord
@@ -134,9 +138,8 @@ export async function POST(request: Request) {
         name,
         phone: mobile,
         dateOfBirth: parsedDateOfBirth.dateOfBirth,
-        year: payload.occupation === "Working" ? "Unknown" : undefined,
         college: payload.occupation === "Studying" ? payload.college?.trim() || undefined : undefined,
-        company: payload.occupation === "Working" ? payload.company?.trim() || undefined : undefined,
+        company: isWorkingProfessional(payload.occupation) ? payload.company?.trim() || undefined : undefined,
         source: session ? "Attendance Registration" : "Public Registration",
         locationId,
         address: locationId ? undefined : resolveAddress(payload),
