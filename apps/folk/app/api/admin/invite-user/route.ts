@@ -5,7 +5,7 @@ import { sendStaffInviteEmail } from "@/lib/supabase/invite"
 
 export const dynamic = "force-dynamic"
 
-const roles: StaffRole[] = ["Admin", "Preacher", "Volunteer"]
+const roles: StaffRole[] = ["Admin", "Preacher", "Volunteer", "Assistant"]
 
 interface AdminInvitePayload {
   name?: string
@@ -32,16 +32,19 @@ export async function POST(request: Request) {
     const email = payload.email?.trim().toLowerCase()
     const name = payload.name?.trim()
     const role = payload.role
-    const locationIds = role === "Volunteer" ? [] : normalizeLocationIds(payload.locationIds)
+    const locationIds = role === "Volunteer" || role === "Assistant" ? [] : normalizeLocationIds(payload.locationIds)
 
     if (!email || !name || !role || !roles.includes(role)) {
       return Response.json({ error: "Name, email, and a valid role are required." }, { status: 400 })
     }
 
-    if (role === "Volunteer") {
+    if (role === "Volunteer" || role === "Assistant") {
       const preacherId = payload.assignedPreacherAirtableUserId?.trim()
       if (!preacherId) {
-        return Response.json({ error: "Assigned Preacher is required for Volunteer invites." }, { status: 400 })
+        return Response.json(
+          { error: "Assigned Preacher is required for Volunteer or Assistant invites." },
+          { status: 400 },
+        )
       }
 
       const preacher = await findStaffUserById(preacherId)
@@ -62,7 +65,8 @@ export async function POST(request: Request) {
       name,
       role,
       invitedByAirtableUserId: staff.airtableUserId,
-      assignedPreacherAirtableUserId: role === "Volunteer" ? payload.assignedPreacherAirtableUserId : undefined,
+      assignedPreacherAirtableUserId:
+        role === "Volunteer" || role === "Assistant" ? payload.assignedPreacherAirtableUserId : undefined,
       locationIds,
     })
 

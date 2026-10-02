@@ -69,7 +69,7 @@ export function ContactForm({
   preachers = [],
   locations = [],
 }: {
-  staffRole: "Admin" | "Preacher" | "Volunteer"
+  staffRole: "Admin" | "Preacher" | "Volunteer" | "Assistant"
   preachers?: PreacherOption[]
   locations?: LocationOption[]
 }) {
@@ -215,6 +215,7 @@ export function ContactForm({
         <div className="p-5 sm:p-6">
           <div className={cn(noticeClass, "mb-4 border-[var(--program-accent)]/20 bg-muted text-[var(--program-primary)]")}>
             {staffRole === "Volunteer" && `Volunteer contacts are assigned to your Preacher and the ${locationLabel.toLowerCase()} you enter.`}
+            {staffRole === "Assistant" && `Assistant contacts are assigned to your Preacher and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Preacher" && `Contacts you create are assigned to you and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Admin" && "Choose the active Preacher who should own this contact."}
             {!isGitaLife && availableLocations.length === 0 && " No active locations are available for contact creation."}

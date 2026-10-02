@@ -11,7 +11,7 @@ interface AuthErrorContentProps {
 }
 
 function landingPathForRole(role: ReturnType<typeof useAuth>["role"]): string {
-  if (role === "Volunteer") {
+  if (role === "Volunteer" || role === "Assistant") {
     return "/contact"
   }
 

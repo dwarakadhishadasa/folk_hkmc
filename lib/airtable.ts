@@ -8,7 +8,7 @@ import {
   type ServerProgramProfile,
 } from "@hkmc/program-config/server"
 
-export type StaffRole = "Admin" | "Preacher" | "Volunteer"
+export type StaffRole = "Admin" | "Preacher" | "Volunteer" | "Assistant"
 export type StaffStatus = "Active" | "Inactive"
 
 export interface AirtableRecord<TFields extends object = Record<string, unknown>> {
@@ -427,7 +427,7 @@ function mapStaffUser(record: AirtableRecord<UserFields>): StaffUser | null {
   const role = record.fields.Role
   const status = record.fields.Status
 
-  if (!email || !role || !["Admin", "Preacher", "Volunteer"].includes(role)) {
+  if (!email || !role || !["Admin", "Preacher", "Volunteer", "Assistant"].includes(role)) {
     return null
   }
 

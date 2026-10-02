@@ -14,7 +14,7 @@ const MIN_EMAIL_OTP_LENGTH = 6
 const MAX_EMAIL_OTP_LENGTH = 10
 
 function landingPathForRole(role: string | null | undefined): string {
-  if (role === "Volunteer") {
+  if (role === "Volunteer" || role === "Assistant") {
     return "/contact"
   }
 
@@ -23,7 +23,7 @@ function landingPathForRole(role: string | null | undefined): string {
 
 function safeRedirectPath(value: string | null, role: string | null | undefined): string {
   if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
-    if (role === "Volunteer" && value !== "/contact") {
+    if ((role === "Volunteer" || role === "Assistant") && value !== "/contact") {
       return "/contact"
     }
 
