@@ -54,18 +54,7 @@ export async function GET() {
     requireRole(staff, ["Admin", "Preacher", "Assistant"])
 
     const sessions = await listSessions()
-    const scoped =
-      staff.role === "Admin"
-        ? sessions
-        : sessions.filter(
-            (session) =>
-              session.preacherIds.includes(staff.airtableUserId) ||
-              (staff.role !== "Assistant" &&
-                session.locationIds.some((locationId) => staff.locationIds.includes(locationId))) ||
-              (staff.role === "Assistant" &&
-                Boolean(staff.assignedPreacherAirtableUserId) &&
-                session.preacherIds.includes(staff.assignedPreacherAirtableUserId || "")),
-          )
+    const scoped = sessions.filter((session) => session.createdBy.includes(staff.airtableUserId))
 
     return Response.json({
       sessions: scoped.map((session) => ({
@@ -144,6 +133,7 @@ export async function POST(request: Request) {
       publicAttendanceEnabled: true,
       attendanceOpensAt: startsAt.toISOString(),
       attendanceClosesAt: closesAt.toISOString(),
+      createdBy: staff.airtableUserId,
     })
 
     const attendanceUrl = new URL("/attend", siteUrl)

@@ -41,14 +41,7 @@ export default async function DashboardPage() {
     try {
       const [sessions, locations] = await Promise.all([listSessions(), listLocations()])
       const locationById = new Map(locations.map((location) => [location.id, location.name]))
-      const scopedSessions =
-        staff.role === "Admin"
-          ? sessions
-          : sessions.filter(
-              (session) =>
-                session.preacherIds.includes(staff.airtableUserId) ||
-                session.locationIds.some((locationId) => staff.locationIds.includes(locationId)),
-            )
+      const scopedSessions = sessions.filter((session) => session.createdBy.includes(staff.airtableUserId))
       const now = Date.now()
       const currentSession = scopedSessions
         .filter((session) => isActiveSession(session, now))
