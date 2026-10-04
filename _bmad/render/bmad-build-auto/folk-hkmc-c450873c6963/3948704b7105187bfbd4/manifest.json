@@ -1,0 +1,72 @@
+{
+  "generation_hash": "3948704b7105187bfbd4",
+  "inputs": {
+    "project_root": "/home/dwarakadhisha-dasa/projects/hkmc/folk_hkmc",
+    "renderer_sha256": "8496d0d8b449d64c21b42a9aab3b13fc8a813a430c0695ffd84ad75bb1da7942",
+    "resolved_values": {
+      "config.core.communication_language": "English",
+      "config.core.document_output_language": "English",
+      "config.modules.bmm.implementation_artifacts": "/home/dwarakadhisha-dasa/projects/hkmc/folk_hkmc/_bmad-output/implementation-artifacts",
+      "config.modules.bmm.planning_artifacts": "/home/dwarakadhisha-dasa/projects/hkmc/folk_hkmc/_bmad-output/planning-artifacts",
+      "config.modules.bmm.user_skill_level": "intermediate",
+      "customization.workflow.activation_steps_append": [],
+      "customization.workflow.activation_steps_prepend": [],
+      "customization.workflow.implementation_handoff": "Launch a subagent with no prior conversation context, with this prompt:\n\n> Read {spec_file} fully and implement it — the spec is the sole source of truth. Load every file listed in its frontmatter `context:` before you start.\n>\n> When done, report what you changed, how you verified it, and anything left incomplete or risky.\n",
+      "customization.workflow.on_complete": "",
+      "customization.workflow.persistent_facts": [],
+      "customization.workflow.review_layers": [
+        {
+          "id": "blind-hunter",
+          "instruction": "Launch a context-free subagent with this prompt:\n\nConduct a review of CONTENT.\nLook for what's missing, not only what's wrong.\nCompute your finding floor N from the diff file's size: N = min(floor(sqrt(kB) + 1), 10), where kB is the file's size in kilobytes. State the arithmetic in one line, then find at least N issues to fix or improve.\nOutput a Markdown list of findings only — no severity, priority, or ranking.\nIf the content is empty, stop and say so.\nIf you have zero findings, re-check and keep thinking; do not stop with an empty list.\n\nCONTENT: the unified diff at `{diff_file}`. Read that file — it is the content under review.\n\nDo not invoke any skill, and do not spawn subagents of your own — you are the reviewer. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.\n\n",
+          "name": "Blind Hunter"
+        },
+        {
+          "id": "edge-case-hunter",
+          "instruction": "Launch a context-free subagent with this prompt:\n\nRead `{skill-root}/review-prompts/edge-case-hunter.md` completely and follow it as your review instructions.\n\nclaims_file (leave unread until your instructions call for it): {claims_file}\n\nReview content: the unified diff at `{diff_file}`. Read that file — it is the content under review.\n\nDo not invoke any skill, and do not spawn subagents of your own — you are the reviewer. If the instruction file is unreadable, report that exact failure and stop. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.\n\n",
+          "name": "Edge Case Hunter"
+        },
+        {
+          "id": "verification-gap",
+          "instruction": "Launch a context-free subagent with this prompt:\n\nRead `{skill-root}/review-prompts/verification-gap.md` completely and follow it as your review instructions.\n\nReview content: the unified diff at `{diff_file}`. Read that file — it is the content under review.\n\nDo not invoke any skill, and do not spawn subagents of your own — you are the reviewer. If the instruction file is unreadable, report that exact failure and stop. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.\n\n",
+          "name": "Verification Gap Reviewer"
+        },
+        {
+          "id": "intent-alignment",
+          "instruction": "Launch a subagent with this prompt:\n\nYou are an intent-alignment auditor. You have no other context about how this change was produced. Here is the verbatim intent this work started from:\n\n{verbatim_intent}\n\nThe diff is the unified diff at `{diff_file}`. Read that file — it is the change under review.\n\nYour task is strictly descriptive — do not prescribe additional work. Report: (1) the defensible readings of the intent, enumerated; (2) which reading this diff implements; (3) where the readings and the diff diverge — specifically, which surface the intent's expectations live at versus which surface the diff's changes and its tests exercise.\n\nDo not invoke any skill, and do not spawn subagents of your own — you are the reviewer. Return your findings as text in your final message; do not route them through any findings-reporting tool the host may offer.\n\n",
+          "name": "Intent Alignment Auditor"
+        }
+      ]
+    },
+    "source_sha256": {
+      "compile-epic-context.md": "64d13b41974cfa0dfc1de64b6fbd8365e9b99f91c7c98f0ee1a9fbd018f324ca",
+      "references/claims-check.md": "50ea17cb89a78ef815286dde2dabfd09f1dc9841d07a10857f88b39ab7b9bd2a",
+      "references/deletion-check.md": "0f1f124e4e957147e89164a272b10bedc694ad0d9ad2618c8610ac74ee9cb0da",
+      "review-prompts/edge-case-hunter.md": "8fc046af1cbf4ecc928207cec75e29c3c260adb86cc7da77537ade3b3a3b9448",
+      "review-prompts/verification-gap.md": "45ab0b8c4c56c5c055c97a293a8591a67e256d0b1a2058ce1f093cd866be8d03",
+      "spec-template.md": "59a046df2773ec05af0688823d17238bfde2bb54c0c3b3eff6acec4856f1eb7a",
+      "step-01-clarify-and-route.md": "50674ecef3b4b7a26b993685c9a79ccd87b00b2255d51b6b9c13ed32aa6d1ffa",
+      "step-02-plan.md": "a08e303c10f88dbfce88c55044757ec5059afe338793eb414e1ddb0b7c324625",
+      "step-03-implement.md": "0dc9c9634eca148baaec03e7d154840a14101f92492b7ab469625bf13b4e2ab5",
+      "step-04-review.md": "c5530c50c89f197720275b83466b382f896fa27a0bba30d4b75c6af162148cdf",
+      "workflow.md": "611f429206029a903ec9433ccdfd9b186fbafc6dc95da0a21fbcdf5965ad25ea"
+    }
+  },
+  "outputs": {
+    "compile-epic-context.md": "64d13b41974cfa0dfc1de64b6fbd8365e9b99f91c7c98f0ee1a9fbd018f324ca",
+    "references/claims-check.md": "50ea17cb89a78ef815286dde2dabfd09f1dc9841d07a10857f88b39ab7b9bd2a",
+    "references/deletion-check.md": "0f1f124e4e957147e89164a272b10bedc694ad0d9ad2618c8610ac74ee9cb0da",
+    "review-prompts/edge-case-hunter.md": "8fc046af1cbf4ecc928207cec75e29c3c260adb86cc7da77537ade3b3a3b9448",
+    "review-prompts/verification-gap.md": "45ab0b8c4c56c5c055c97a293a8591a67e256d0b1a2058ce1f093cd866be8d03",
+    "spec-template.md": "59a046df2773ec05af0688823d17238bfde2bb54c0c3b3eff6acec4856f1eb7a",
+    "step-01-clarify-and-route.md": "bc7cbe49435633eef94cff74fc5bea28574475e82fe55d42399afe5951cfb0da",
+    "step-02-plan.md": "db589eeecc69c38f4b610f3fa59ba1ffa70e59f99b77750388ef813f255189db",
+    "step-03-implement.md": "363aff7a52b6b5afedc02e01027ce6ba829cc0fa62ea22d3399ef6fd80cbc778",
+    "step-04-review.md": "d5bdd9d1b5456114713f8b0296be69ea27999464c25118e8679f414feb8e9233",
+    "workflow.md": "901cd82b8293db38321eacd1bcb4662f4bc927b9c7ae0f2ba074d4454e9f1153"
+  },
+  "project_root": "/home/dwarakadhisha-dasa/projects/hkmc/folk_hkmc",
+  "project_slug": "folk-hkmc",
+  "root_hash": "c450873c6963",
+  "schema_version": 1,
+  "skill": "bmad-build-auto"
+}
