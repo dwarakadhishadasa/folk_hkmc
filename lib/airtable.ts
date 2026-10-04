@@ -8,7 +8,7 @@ import {
   type ServerProgramProfile,
 } from "@hkmc/program-config/server"
 
-export type StaffRole = "Admin" | "Preacher" | "Volunteer"
+export type StaffRole = "Admin" | "Preacher" | "Volunteer" | "Assistant"
 export type StaffStatus = "Active" | "Inactive"
 
 export interface AirtableRecord<TFields extends object = Record<string, unknown>> {
@@ -58,6 +58,7 @@ export interface SessionFields {
   "Attendance Closes At"?: string
   "Duration Minutes"?: number
   "Attendance URL"?: string
+  "Created By"?: string[]
 }
 
 export interface UserFields {
@@ -129,6 +130,7 @@ export interface SessionRecord {
   attendanceClosesAt?: string
   durationMinutes?: number
   attendanceUrl?: string
+  createdBy: string[]
 }
 
 export interface AttendanceRecord {
@@ -427,7 +429,7 @@ function mapStaffUser(record: AirtableRecord<UserFields>): StaffUser | null {
   const role = record.fields.Role
   const status = record.fields.Status
 
-  if (!email || !role || !["Admin", "Preacher", "Volunteer"].includes(role)) {
+  if (!email || !role || !["Admin", "Preacher", "Volunteer", "Assistant"].includes(role)) {
     return null
   }
 
@@ -676,6 +678,7 @@ export function mapSession(record: AirtableRecord<SessionFields>): SessionRecord
     attendanceClosesAt: normalizeString(record.fields["Attendance Closes At"]),
     durationMinutes: typeof record.fields["Duration Minutes"] === "number" ? record.fields["Duration Minutes"] : undefined,
     attendanceUrl: normalizeString(record.fields["Attendance URL"]),
+    createdBy: normalizeLinkedIds(record.fields["Created By"]),
   }
 }
 
@@ -754,6 +757,7 @@ export async function createSession(data: {
   publicAttendanceEnabled: boolean
   attendanceOpensAt?: string
   attendanceClosesAt?: string
+  createdBy: string
 }): Promise<SessionRecord> {
   const fields: Record<string, unknown> = {
     Name: data.name.trim(),
@@ -761,6 +765,7 @@ export async function createSession(data: {
     Preacher: [data.preacherAirtableUserId],
     Location: [data.locationId],
     "Public Attendance Enabled": data.publicAttendanceEnabled,
+    "Created By": [data.createdBy],
   }
   const analyticsId = analyticsRecordId()
 

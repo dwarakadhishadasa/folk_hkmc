@@ -51,9 +51,9 @@ async function resolveAssignedPreacher(
   payload: ContactPayload,
   staff: Awaited<ReturnType<typeof getStaffContext>>,
 ): Promise<{ preacher?: ResolvedPreacher; error?: string }> {
-  if (staff.role === "Volunteer") {
+  if (staff.role === "Volunteer" || staff.role === "Assistant") {
     if (!staff.assignedPreacherAirtableUserId) {
-      return { error: "Volunteer contact routing is not configured. Ask an Admin to assign your Preacher." }
+      return { error: `${staff.role} contact routing is not configured. Ask an Admin to assign your Preacher.` }
     }
     return activePreacherResult(await findStaffUserById(staff.assignedPreacherAirtableUserId))
   }
@@ -115,7 +115,8 @@ export async function POST(request: Request) {
       return Response.json({ error: parsedDateOfBirth.error }, { status: 400 })
     }
 
-    const collectorId = staff.role === "Volunteer" ? staff.airtableUserId : assignment.preacher.id
+    const collectorId =
+      staff.role === "Volunteer" || staff.role === "Assistant" ? staff.airtableUserId : assignment.preacher.id
     const contact = await createContact({
       name,
       phone: mobile,

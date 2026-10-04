@@ -7,13 +7,13 @@ export const dynamic = "force-dynamic"
 
 function safeNextPath(value: string | null, role: string): string {
   if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
-    if (role === "Volunteer" && value !== "/contact") {
+    if ((role === "Volunteer" || role === "Assistant") && value !== "/contact") {
       return "/contact"
     }
     return value
   }
 
-  if (role === "Volunteer") {
+  if (role === "Volunteer" || role === "Assistant") {
     return "/contact"
   }
 

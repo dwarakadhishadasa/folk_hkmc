@@ -15,13 +15,13 @@ export default async function ContactPage() {
       listLocations(),
     ])
     const assignedPreacher =
-      staff.role === "Volunteer" && staff.assignedPreacherAirtableUserId
+      (staff.role === "Volunteer" || staff.role === "Assistant") && staff.assignedPreacherAirtableUserId
         ? await findStaffUserById(staff.assignedPreacherAirtableUserId)
         : null
     const scopedLocationIds =
       staff.role === "Admin"
         ? null
-        : staff.role === "Volunteer"
+        : staff.role === "Volunteer" || staff.role === "Assistant"
           ? assignedPreacher?.locationIds || []
           : staff.locationIds
     const activeLocations = locations.filter(

@@ -22,6 +22,8 @@ const eslintConfig = defineConfig([
     ".vercel/**",
     "apps/*/.next/**",
     ".agents/**",
+    ".claude/**",
+    ".qwen/**",
     "_bmad/**",
     "_bmad-output/**",
     "out/**",

@@ -194,7 +194,7 @@ const headerThemeVars = {
 } as CSSProperties
 
 export function Header() {
-  const { isLoggedIn, logout, isAdmin, isPreacher, username, role, isHydrated } = useAuth()
+  const { isLoggedIn, logout, isAdmin, isPreacher, isAssistant, username, role, isHydrated } = useAuth()
   const pathname = usePathname()
   const { isNavigating, pendingPath } = useNavigationFeedback()
   const { branding } = currentProgramProfile
@@ -210,13 +210,15 @@ export function Header() {
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
         { href: "/contact", label: "Contact", icon: UserRoundPlus },
-        ...(isPreacher
-          ? [
-              { href: "/sessions", label: "Sessions", icon: CalendarDays },
-              { href: isAdmin ? "/admin/invite" : "/volunteers", label: "Invite", icon: Send },
-              { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
-            ]
-          : []),
+        ...(isAssistant
+          ? [{ href: "/sessions", label: "Sessions", icon: CalendarDays }]
+          : isPreacher
+            ? [
+                { href: "/sessions", label: "Sessions", icon: CalendarDays },
+                { href: isAdmin ? "/admin/invite" : "/volunteers", label: "Invite", icon: Send },
+                { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
+              ]
+            : []),
       ]
     : []
 

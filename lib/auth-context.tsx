@@ -19,6 +19,7 @@ interface AuthContextType {
   isAdmin: boolean
   isPreacher: boolean
   isVolunteer: boolean
+  isAssistant: boolean
   isHydrated: boolean
 }
 
@@ -196,6 +197,7 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
       isAdmin: role === "Admin",
       isPreacher: role === "Admin" || role === "Preacher",
       isVolunteer: role === "Volunteer",
+      isAssistant: role === "Assistant",
       isHydrated,
     }
   }, [isHydrated, login, logout, refresh, staff, verifyLoginCode])

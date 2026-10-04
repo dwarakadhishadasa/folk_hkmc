@@ -34,6 +34,10 @@ function normalizeLocationName(value: string): string {
   return value.trim().replace(/\s+/g, " ")
 }
 
+function isPreacherScopedRole(role: StaffRole): boolean {
+  return role === "Volunteer" || role === "Assistant"
+}
+
 function updateLocationSelection(locationIds: string[], locationId: string, selected: boolean): string[] {
   if (selected) {
     return [...new Set([...locationIds, locationId])]
@@ -63,7 +67,8 @@ export function InviteUserForm({
   const [isAddingLocation, setIsAddingLocation] = useState(false)
   const [message, setMessage] = useState("")
 
-  const role = mode === "volunteer" ? "Volunteer" : form.role
+  const role = form.role
+  const isPreacherScoped = isPreacherScopedRole(role)
   const selectedLocationCount = form.locationIds.length
 
   const setLocationSelected = (locationId: string, selected: boolean) => {
@@ -79,9 +84,10 @@ export function InviteUserForm({
     setForm((current) => ({
       ...current,
       role: nextRole,
-      assignedPreacherAirtableUserId:
-        nextRole === "Volunteer" ? current.assignedPreacherAirtableUserId : "",
-      locationIds: nextRole === "Volunteer" ? [] : current.locationIds,
+      assignedPreacherAirtableUserId: isPreacherScopedRole(nextRole)
+        ? current.assignedPreacherAirtableUserId
+        : "",
+      locationIds: isPreacherScopedRole(nextRole) ? [] : current.locationIds,
     }))
   }
 
@@ -156,7 +162,7 @@ export function InviteUserForm({
 
     try {
       const endpoint = mode === "volunteer" ? "/api/volunteers/invite" : "/api/admin/invite-user"
-      const locationIds = mode === "admin" && role !== "Volunteer" ? form.locationIds : []
+      const locationIds = mode === "admin" && !isPreacherScoped ? form.locationIds : []
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -166,13 +172,17 @@ export function InviteUserForm({
           locationIds,
         }),
       })
-      const data = (await response.json()) as { delivery?: "invite" | "sign-in-link"; error?: string }
+      const data = (await response.json()) as { delivery?: "invite" | "sign-in-link"; upgraded?: boolean; error?: string }
 
       if (!response.ok) {
         throw new Error(data.error || "Invite failed.")
       }
 
-      setMessage(data.delivery === "sign-in-link" ? "This user already exists. A sign-in email was sent." : "Invite sent.")
+      if (data.upgraded) {
+        setMessage("Existing Volunteer upgraded to Assistant. A sign-in email was sent.")
+      } else {
+        setMessage(data.delivery === "sign-in-link" ? "This user already exists. A sign-in email was sent." : "Invite sent.")
+      }
       setForm(emptyInviteForm())
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Invite failed.")
@@ -184,12 +194,12 @@ export function InviteUserForm({
   return (
     <div className="rounded-lg border border-[var(--border)] bg-card p-5 shadow-[0_18px_50px_rgba(45,10,10,0.08)] sm:p-6">
       <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[var(--program-text)]">
-        {mode === "volunteer" ? "Invite Volunteer" : "Invite Staff User"}
+        {mode === "volunteer" ? "Invite Volunteer or Assistant" : "Invite Staff User"}
       </h1>
       <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
         {mode === "volunteer"
-          ? "Volunteers you invite are assigned to your Preacher account."
-          : "Admins can invite Admin, Preacher, and Volunteer users."}
+          ? "People you invite are assigned to your Preacher account. Use Assistant when they should also create sessions and take attendance on your behalf."
+          : "Admins can invite Admin, Preacher, Volunteer, and Assistant users."}
       </p>
 
       {message && (
@@ -231,11 +241,26 @@ export function InviteUserForm({
               <option value="Admin">Admin</option>
               <option value="Preacher">Preacher</option>
               <option value="Volunteer">Volunteer</option>
+              <option value="Assistant">Assistant</option>
             </select>
           </label>
         )}
 
-        {role === "Volunteer" && mode === "admin" && (
+        {mode === "volunteer" && (
+          <label className={labelClass}>
+            Role
+            <select
+              value={form.role}
+              onChange={handleRoleChange}
+              className={fieldClass}
+            >
+              <option value="Volunteer">Volunteer</option>
+              <option value="Assistant">Assistant</option>
+            </select>
+          </label>
+        )}
+
+        {isPreacherScoped && mode === "admin" && (
           <label className={labelClass}>
             Assigned Preacher
             <select
@@ -256,7 +281,7 @@ export function InviteUserForm({
           </label>
         )}
 
-        {mode === "admin" && role !== "Volunteer" && (
+        {mode === "admin" && !isPreacherScoped && (
           <fieldset className="space-y-3 rounded-lg border border-[var(--border)] bg-muted/70 p-4">
             <legend className="text-sm font-semibold text-[var(--program-text)]">Location access</legend>
             <div className="flex flex-wrap items-start justify-between gap-2">
