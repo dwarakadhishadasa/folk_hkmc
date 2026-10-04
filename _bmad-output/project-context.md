@@ -124,7 +124,8 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 - Use `pnpm` conventions because the repo includes `pnpm-lock.yaml` and package scripts for `dev`, `build`, `start`, `lint`, and Supabase helpers.
 - Use `pnpm quality:ci` for the full local quality gate: guardrails, recursive workspace typecheck, app builds, then lint.
-- Use `pnpm supabase:start`, `pnpm supabase:env`, and `pnpm dev` or `pnpm dev:gita-life` for local Supabase-backed development.
+- Use `pnpm supabase:start`, `pnpm mailpit:start`, `pnpm supabase:env`, and `pnpm dev` or `pnpm dev:gita-life` for local Supabase-backed development. `pnpm dev:local` runs the whole chain.
+- Local Supabase auth email is routed to the standalone Mailpit container (`supabase/config.toml` `[auth.email.smtp]` -> `mailpit:1025`); read delivered mail at http://localhost:8025. `scripts/ensure-local-mailpit.sh` starts Mailpit and attaches it to the `supabase_network_folk_hkmc` Docker network.
 - Keep `PROGRAM_ID` and `NEXT_PUBLIC_PROGRAM_ID` aligned with the app workspace; `@hkmc/folk` sets `folk` and `@hkmc/gita-life` sets `gita-life`.
 - Branch workflow: normal work happens on `feature/*` or `fix/*` branches, targeting `dev`; `main` is owner-controlled production.
 - Treat `_bmad-output/`, `design-artifacts/`, and `docs/` as supporting artifacts and references; the actual product code lives under `apps/`, `components/`, `hooks/`, `lib/`, `packages/`, `public/`, `scripts/`, `supabase/`, and `styles/`.

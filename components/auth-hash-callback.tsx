@@ -12,7 +12,7 @@ type StaffSyncResult =
   | { status: "unauthorized" }
 
 function landingPathForRole(role?: StaffContext["role"]): string {
-  if (role === "Volunteer") {
+  if (role === "Volunteer" || role === "Assistant") {
     return "/contact"
   }
 
@@ -21,7 +21,7 @@ function landingPathForRole(role?: StaffContext["role"]): string {
 
 function safeLandingPath(value: string | null, role: StaffContext["role"]): string {
   if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
-    if (role === "Volunteer" && value !== "/contact") {
+    if ((role === "Volunteer" || role === "Assistant") && value !== "/contact") {
       return "/contact"
     }
 

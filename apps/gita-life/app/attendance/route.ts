@@ -115,7 +115,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, ["Admin", "Preacher", "Assistant"])
 
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get("session")?.trim()
@@ -130,10 +130,17 @@ export async function GET(request: Request) {
         return Response.json({ error: "Invalid attendance session." }, { status: 404 })
       }
 
+      const isAssistantMatch =
+        staff.role === "Assistant" &&
+        Boolean(staff.assignedPreacherAirtableUserId) &&
+        session.preacherIds.includes(staff.assignedPreacherAirtableUserId || "")
+
       const canReadSession =
         staff.role === "Admin" ||
         session.preacherIds.includes(staff.airtableUserId) ||
-        session.locationIds.some((locationId) => staff.locationIds.includes(locationId))
+        (staff.role !== "Assistant" &&
+          session.locationIds.some((locationId) => staff.locationIds.includes(locationId))) ||
+        isAssistantMatch
 
       if (!canReadSession) {
         return Response.json({ error: "This session is outside your allowed scope." }, { status: 403 })

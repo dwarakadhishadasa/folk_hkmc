@@ -96,8 +96,9 @@ openai_api_key = "env(OPENAI_API_KEY)"
 
 # Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
 # are monitored, and you can view the emails that would have been sent from the web interface.
+# Disabled in favour of the standalone Mailpit container configured under [auth.email.smtp].
 [inbucket]
-enabled = true
+enabled = false
 # Port to use for the email testing server web interface.
 port = 54324
 # Uncomment to expose additional ports for testing user applications that send emails.
@@ -187,6 +188,19 @@ minimum_password_length = 6
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
+
+# Route all local auth emails (magic links, invites, confirmations) to the standalone
+# Mailpit container instead of the built-in Inbucket catcher. Mailpit is reachable on
+# the shared Supabase Docker network by its container name (see scripts/ensure-local-mailpit.sh).
+[auth.email.smtp]
+enabled = true
+host = "mailpit"
+port = 1025
+# Mailpit accepts any credentials, but the Supabase CLI requires these to be non-empty.
+user = "mailpit"
+pass = "mailpit"
+admin_email = "dev@hkmc.local"
+sender_name = "FOLK HKMC Dev"
 
 # Configure passkey sign-ins.
 # [auth.passkey]

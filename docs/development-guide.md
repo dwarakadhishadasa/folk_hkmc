@@ -88,6 +88,19 @@ pnpm supabase:stop
 
 `supabase/seed.sql` is intentionally a stable empty seed hook today.
 
+### Local auth email (Mailpit)
+
+Local Supabase auth delivers every auth email (magic links, OTP codes, invites) to a standalone Mailpit container instead of the built-in Inbucket catcher. `supabase/config.toml` sets `[auth.email.smtp]` to `mailpit:1025`, and `scripts/ensure-local-mailpit.sh` starts the container and attaches it to the `supabase_network_folk_hkmc` Docker network so the auth service can reach it by container name.
+
+```bash
+pnpm mailpit:start   # run after `pnpm supabase:start`
+```
+
+- SMTP: `localhost:1025`
+- Web UI: http://localhost:8025
+
+`pnpm dev:local` runs `pnpm mailpit:start` automatically. If you start Supabase manually, run `pnpm mailpit:start` before testing sign-in or invite flows.
+
 ## Run The App
 
 ```bash
@@ -106,7 +119,7 @@ Or start local Supabase, update env, and run Next:
 pnpm dev:local
 ```
 
-`pnpm dev:local` starts the local Supabase stack, writes app-local Supabase env values, and starts the FOLK app.
+`pnpm dev:local` starts the local Supabase stack, starts and connects Mailpit, applies migrations, writes app-local Supabase env values, and starts the FOLK app.
 For a local Gita Life invite-flow smoke test, run `pnpm supabase:env` and then `pnpm dev:gita-life` so invite emails use the Gita Life callback origin.
 
 The app workspace scripts set `PROGRAM_ID` and `NEXT_PUBLIC_PROGRAM_ID`:

@@ -1,7 +1,7 @@
 export const PROGRAM_IDS = ["folk", "gita-life"] as const
 export type ProgramId = (typeof PROGRAM_IDS)[number]
 
-export const STAFF_ROLES = ["Admin", "Preacher", "Volunteer"] as const
+export const STAFF_ROLES = ["Admin", "Preacher", "Volunteer", "Assistant"] as const
 export type StaffRole = (typeof STAFF_ROLES)[number]
 
 export const STAFF_MEMBERSHIP_STATUSES = ["Active", "Inactive", "Suspended", "Revoked"] as const

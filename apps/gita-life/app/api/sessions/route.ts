@@ -2,6 +2,7 @@ import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
 import {
   createSession,
   findLocationById,
+  findStaffUserById,
   listSessions,
   updateSessionAttendanceUrl,
 } from "@/lib/airtable"
@@ -50,17 +51,10 @@ function parseDurationMinutes(value: unknown): { durationMinutes?: number; error
 export async function GET() {
   try {
     const staff = await getStaffContext({ refresh: true })
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, ["Admin", "Preacher", "Assistant"])
 
     const sessions = await listSessions()
-    const scoped =
-      staff.role === "Admin"
-        ? sessions
-        : sessions.filter(
-            (session) =>
-              session.preacherIds.includes(staff.airtableUserId) ||
-              session.locationIds.some((locationId) => staff.locationIds.includes(locationId)),
-          )
+    const scoped = sessions.filter((session) => session.createdBy.includes(staff.airtableUserId))
 
     return Response.json({
       sessions: scoped.map((session) => ({
@@ -83,7 +77,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const staff = await getStaffContext({ refresh: true })
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, ["Admin", "Preacher", "Assistant"])
 
     const payload = (await request.json()) as SessionPayload
     const name = payload.name?.trim()
@@ -98,13 +92,33 @@ export async function POST(request: Request) {
       return Response.json({ error: duration.error }, { status: 400 })
     }
 
-    if (staff.role === "Preacher" && !staff.locationIds.includes(locationId)) {
-      return Response.json({ error: "This location is outside your allowed scope." }, { status: 403 })
-    }
-
     const location = await findLocationById(locationId)
     if (!location) {
       return Response.json({ error: "Selected location does not exist." }, { status: 400 })
+    }
+
+    let owningPreacherId = staff.airtableUserId
+    let owningPreacherLocationIds: string[] = staff.locationIds
+
+    if (staff.role === "Assistant") {
+      if (!staff.assignedPreacherAirtableUserId) {
+        return Response.json(
+          { error: "Assistant sessions require an assigned Preacher." },
+          { status: 400 },
+        )
+      }
+
+      const assignedPreacher = await findStaffUserById(staff.assignedPreacherAirtableUserId)
+      if (!assignedPreacher || assignedPreacher.role !== "Preacher" || assignedPreacher.status !== "Active") {
+        return Response.json({ error: "Assigned Preacher is not an active Preacher." }, { status: 403 })
+      }
+
+      owningPreacherId = assignedPreacher.id
+      owningPreacherLocationIds = assignedPreacher.locationIds
+    }
+
+    if (!owningPreacherLocationIds.includes(locationId)) {
+      return Response.json({ error: "This location is outside your allowed scope." }, { status: 403 })
     }
 
     const siteUrl = requireSiteUrl()
@@ -114,11 +128,12 @@ export async function POST(request: Request) {
       name,
       sessionDate: startsAt.toISOString(),
       locationId,
-      preacherAirtableUserId: staff.airtableUserId,
+      preacherAirtableUserId: owningPreacherId,
       durationMinutes: duration.durationMinutes,
       publicAttendanceEnabled: true,
       attendanceOpensAt: startsAt.toISOString(),
       attendanceClosesAt: closesAt.toISOString(),
+      createdBy: staff.airtableUserId,
     })
 
     const attendanceUrl = new URL("/attend", siteUrl)
