@@ -1,0 +1,196 @@
+# Story breakdown for SPEC-airtable-to-supabase.
+# Execution order is list order. spec_checkpoint=true on every story (user decision, 2026-10-05):
+# a human reviews each story spec between planning and implementation.
+# All dispatch notes carry the Supabase connection contract so agents work autonomously.
+
+- id: "1"
+  title: Schema migration — staff tables and contact field gaps
+  description: >-
+    Adds the Supabase-native staff table (replacing the Airtable Users source and the
+    staff_memberships/staff_profiles/airtable_identities bridge), the missing contact columns
+    (source, photo_path, rounds, books_read, is_favorite), computed attendance-count views,
+    and a contact-photos storage bucket. Implements CAP-1, CAP-2 and the CAP-9 schema per
+    SPEC.md and data-model-mapping.md.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read _bmad-output/specs/spec-airtable-to-supabase/SPEC.md plus companions
+    data-model-mapping.md and rls-policy-matrix.md before writing anything.
+    Work: create one new migration in supabase/migrations/ (do NOT edit
+    20261004000000_create_core_tables.sql); staff table keyed by auth.users.id with
+    program_id, email, name, role (Admin/Preacher/Volunteer/Assistant), status, location_ids,
+    assigned_preacher_id, invited_by, timestamps; contact columns source TEXT, photo_path TEXT,
+    rounds TEXT, books_read TEXT[], is_favorite BOOLEAN DEFAULT false; a view (or views)
+    exposing per-contact total_attendance_count and past_60_day_attendance_count from
+    attendance; a contact-photos Supabase Storage bucket. After the migration, regenerate
+    lib/supabase/types.ts (supabase gen types). Keep audit_events untouched. ADD the staff
+    table alongside the existing bridge tables — do NOT drop
+    staff_memberships/staff_profiles/airtable_identities in this story; they stay until the
+    cleanup story so local authz keeps working mid-migration.
+    Supabase connection: never read env vars directly — server queries use
+    createSupabaseServerClient() from lib/supabase/server.ts, service-role writes use
+    createSupabaseAdminClient() from lib/supabase/admin.ts, browser code uses
+    lib/supabase/client.ts; env resolution lives in lib/supabase/env.ts
+    (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY or
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, SUPABASE_SERVICE_ROLE_KEY). Develop against the
+    local stack: supabase start, verify with supabase db reset. Do not touch RLS policies —
+    that is story 2.
+
+- id: "2"
+  title: Scoped RLS policies on contacts, attendance, sessions, locations
+  description: >-
+    Replaces the placeholder authenticated-read-all policies with the per-role,
+    program-scoped policies defined in rls-policy-matrix.md, backed by SECURITY DEFINER
+    helper functions. Implements CAP-3.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read SPEC.md and rls-policy-matrix.md first — the matrix is the exact contract, do not
+    invent new scoping. Work: new migration adding SECURITY DEFINER helpers
+    (caller_program(), caller_role(), caller_effective_location_ids() resolving through
+    assigned_preacher_id for Volunteer/Assistant) over the staff table from story 1; then
+    replace policies on contacts, locations, sessions, attendance: SELECT per the matrix
+    (sessions scoped by created_by; contacts by assigned_preacher_id; attendance via the
+    parent session's preacher; locations Admin-all or id = ANY(effective_location_ids));
+    no authenticated INSERT/UPDATE/DELETE — writes stay service-role only. Ship verification
+    SQL (supabase/snippets/ or a test script) that proves per role per table that
+    out-of-scope rows are unreadable with a user JWT. Every policy is also constrained by
+    program_id. Connection contract: same as story 1 — lib/supabase accessors only,
+    local stack via supabase start / supabase db reset.
+
+- id: "3"
+  title: Supabase data-access module mirroring lib/airtable.ts
+  description: >-
+    Creates a Supabase-backed data module exporting the same function names and return
+    shapes as lib/airtable.ts so route diffs in story 5 are import-only. Foundation for
+    CAP-4.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read SPEC.md, data-model-mapping.md, and lib/airtable.ts first. Work: new module
+    (lib/supabase/data.ts) exporting Supabase implementations of: findStaffUserByEmail,
+    findStaffUserById, listActivePreachers (+ unstable_cache variant), upsertStaffUser,
+    findContactByPhone, getContactsByRecordIds, createContact, findSessionById, listSessions,
+    findLocationById, findLocationByName, listLocations (+ cached variant), createLocation,
+    revalidate cache helper, createSession, updateSessionAttendanceUrl,
+    findAttendanceByContactAndSession, createAttendanceRecord, getAttendanceByDate,
+    getAttendanceBySession, getAttendanceBySessionRecord, getAttendanceDashboardRecords,
+    normalizeMobile. Preserve Asia/Kolkata date semantics and phone normalization exactly.
+    Duplicate attendance detection moves to the UNIQUE(contact_id, session_id) index — map
+    Postgres 23505 to the same duplicate signal callers get today. IDs are now UUIDs; return
+    shapes keep the same field names. Connection contract: lib/supabase accessors only
+    (admin client for writes, server client for user-context reads), never env vars directly;
+    local stack via supabase start. Depends on stories 1–2 being migrated locally.
+
+- id: "4"
+  title: Authz rework — staff context resolves from Supabase
+  description: >-
+    Rewires lib/authz.ts so getStaffContext reads the Supabase staff table and the
+    Airtable sync path (findStaffUserByEmail / syncStaffSupabaseUserId round-trips) is
+    deleted; audit_events logging is kept. Implements CAP-2.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read SPEC.md and lib/authz.ts first. Work: getStaffContext authenticates via Supabase
+    Auth (unchanged), then loads the staff row by (user_id, program_id) from the new staff
+    table; drop the staleness/refresh-to-Airtable machinery and the
+    staff_memberships/staff_profiles/airtable_identities reads; keep AuthzError codes and
+    writeAuditEvent behavior; StaffContext.airtableUserId becomes the staff table UUID —
+    rename downstream semantics accordingly (callers updated in story 5). Sessions and
+    dashboard scoping keep working: created_by / preacher scoping now compares against the
+    staff UUID. Connection contract: lib/supabase accessors only; local stack via
+    supabase start. Depends on stories 1 and 3.
+
+- id: "5"
+  title: Route and page swap to Supabase in both apps
+  description: >-
+    Moves every route and page in apps/folk and apps/gita-life from lib/airtable to the new
+    data module, updates rec*-ID validation to UUIDs, and preserves the /attendance and
+    offline-queue contracts byte-for-byte. Implements CAP-4, CAP-5, CAP-6.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read SPEC.md, docs/api-contracts.md, and the companions first. Work: in BOTH apps/folk
+    and apps/gita-life, swap imports to lib/supabase/data.ts in api routes (registration,
+    contact, sessions, attendance, admin/locations, volunteers/invite, admin/invite-user,
+    auth/signin) and pages (dashboard, manage, sessions, contact, admin/invite, volunteers).
+    Update apps/*/app/attendance/route.ts parseKnownAttendanceIds (and any other rec* regex)
+    to accept UUIDs. Hard preservation contracts: /attendance POST payload {mobile,
+    sessionId} and responses (400 invalid, 404 notRegistered, 409 duplicate, 201 created)
+    unchanged; GET dashboard role scoping (Admin all / Preacher own sessions / location /
+    Assistant via assigned preacher) unchanged; /api/registration and /api/attendance keep
+    accepting offline-queue replays and 409 counts as synced; proxy.ts and its matcher are
+    untouched. Connection contract: lib/supabase accessors only. Depends on stories 3–4.
+
+- id: "6"
+  title: In-app /manage portal replacing the Airtable Interface
+  description: >-
+    Builds the Supabase-backed management portal at /manage per manage-interface.md:
+    dashboard stats and charts, contacts table, location-grouped sessions, per-contact
+    attendance history, and favorites/contact editing with photo upload. Implements CAP-9.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read SPEC.md, manage-interface.md, and rls-policy-matrix.md first — manage-interface.md
+    is the screen-by-screen contract. Work: /manage stops redirecting to Airtable and renders
+    the portal in the app's existing design language (see components/ patterns, e.g.
+    live-attendance-dashboard.tsx); roles Admin + Preacher only; Admin sees program-wide
+    aggregates with an admin/preacher mode toggle for their own data (app-layer filter, RLS
+    unchanged), Preacher sees only their own data. Charts: dashboard stats (total contacts,
+    contacts per quarter line, past-60-day attendance pie, sessions/attendance bars by
+    preacher stacked by location with month/year filters) — use the project's chart approach
+    and load the dataviz skill if chart code is written. Contact detail editing persists via
+    server routes (service role); photo upload goes to the contact-photos bucket from story 1.
+    Connection contract: lib/supabase accessors only. Depends on stories 1, 3, 4.
+
+- id: "7"
+  title: Airtable removal and dependency cleanup
+  description: >-
+    Deletes lib/airtable.ts, packages/airtable, shared-airtable.ts, the @hkmc/airtable
+    workspace deps, and all AIRTABLE_* env config, then proves the repo builds clean.
+    Implements CAP-7.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Work: delete lib/airtable.ts, packages/airtable, packages/program-config shared-airtable
+    config and the AIRTABLE table-ID resolution; remove "@hkmc/airtable" from
+    apps/folk/package.json and apps/gita-life/package.json; strip AIRTABLE_* env vars (both
+    FOLK_ and GITA_LIFE_ prefixes) from env files, deployment config, and docs. Verify:
+    grep -ri airtable over runtime code returns nothing outside docs/_bmad-output; pnpm
+    build, lint, and typecheck pass with no AIRTABLE_* vars set. Do not delete
+    supabase/migrations or docs/spec files. Connection contract: lib/supabase accessors only.
+    Depends on stories 5–6 (nothing may still import Airtable).
+
+- id: "8"
+  title: Provision new Supabase project and verify preview deployment
+  description: >-
+    Creates the new hosted Supabase project, pushes migrations and auth config, points this
+    branch's preview deployment at it, and runs the CAP-3/5/6 verification suite plus a PWA
+    smoke test. Implements playbook Phase 4.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read SPEC.md and migration-playbook.md Phase 4 first. Work: create the new Supabase
+    project (supabase CLI), link it, push all migrations from supabase/migrations/;
+    configure auth site URL + redirect URLs and email templates from supabase/templates/;
+    seed test staff/contacts/sessions; set the new project's env vars
+    (NEXT_PUBLIC_SUPABASE_URL, publishable/anon key, SUPABASE_SERVICE_ROLE_KEY) on the
+    preview environment scoped to branch feature/migrate-airtable-to-supabase — production
+    env stays on the old project (cparpinmalqsimninyfw), which must remain untouched. Then
+    run verification on the preview: RLS per role per table (CAP-3), /attendance contract
+    codes (CAP-5), offline queue replay incl. 409-as-synced (CAP-6), PWA install smoke test.
+    Old Supabase project and Airtable base appqea9DRLOXqErXb are read-only archives — never
+    write to or delete them. Depends on story 7.
+
+- id: "9"
+  title: Cutover — backfill, auth migration, delta sync, env flip
+  description: >-
+    Executes playbook Phase 5: one-time Airtable export/transform/load with a rec*→UUID
+    mapping table, auth.users migration preserving UUIDs, delta sync from the old project,
+    and the production env flip to the new project. Implements CAP-8's cutover half.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read migration-playbook.md Phase 5 first and follow it exactly. Work: brief write freeze;
+    export Airtable tables (contacts, attendance, sessions, locations, users/staff) to CSV;
+    transform with a persisted rec*→UUID mapping table; resolve free-text locations; fetch
+    Airtable attachment photos into the contact-photos bucket; load via service role into the
+    NEW project; verify counts per table per program. Migrate auth.users from the old project
+    preserving UUIDs (auth schema dump/restore) and verify every staff member can sign in.
+    Delta-sync rows created in the old project during the testing window (audit_events and
+    any other new rows). Flip production env vars to the new project; deploy; smoke-test
+    /attendance, offline replay, dashboard scoping, sign-in on prod. The old project and
+    Airtable base stay read-only and preserved — no deletes. Big-bang: no dual-write. If any
+    step lacks credentials or access, stop and report rather than improvising. Depends on
+    story 8 passing all verification.
