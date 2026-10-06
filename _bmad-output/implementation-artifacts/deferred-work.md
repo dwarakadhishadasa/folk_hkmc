@@ -104,6 +104,7 @@ source_spec: `5-route-and-page-swap-to-supabase-in-both-apps.md`
 severity: low
 reason: `lib/supabase/data.ts:429` now writes `location_ids` only for a non-empty array, `apps/*/app/api/admin/ invite-user/route.ts:35` forces `[]` for Volunteer/Assistant and `normalizeLocationIds` (`:15-23`) returns `[]` when no box is checked, and `components/invite-user-form.tsx` submits `[]` in that case. This mirrors `lib/airtable.ts:508` exactly and is what the intent's re-invite acceptance criterion requires, so it is a faithful restoration rather than a regression — but it means revoking a Preacher's last location is no longer possible through any shipped surface, and story 6's location-management UI will need a distinct clearing path.
 status: open
+seen-again: 2026-10-06 (story 7-3 data-module harvest saw the same location_ids truthy-guard defect before 7-5 moved it to :429; filed as DW-22, which also covers the assignedPreacherAirtableUserId null-to-unassign half DW-12 does not)
 
 ### DW-13: `app/dashboard/page.tsx` filters sessions by `createdBy.includes(staff.userId)` with no Admin escape hatch, so an Admin sees no live-session widget for sessions other staff created.
 origin: spec-deferred 8b2ffa8d45c9
@@ -111,4 +112,84 @@ location: apps/folk/app/dashboard/page.tsx:44
 source_spec: `5-route-and-page-swap-to-supabase-in-both-apps.md`
 severity: medium
 reason: `apps/*/app/dashboard/page.tsx:44` and `apps/*/app/api/sessions/route.ts:57` both filter on `session.createdBy.includes(staff.userId)` with no role check, while the RLS policy at `supabase/migrations/20261006010000_scoped_rls_policies.sql:190` grants Admin program-wide SELECT — an app-layer narrowing of the database grant. The diff changed only the field name on that line (the filter is byte-identical at `87425115c4ce2ddd93615331c882eb653ce33826`), and the intent's frozen "Admin all / Preacher own sessions" contract is the `GET /attendance` feed, which is intact at `apps/*/app/attendance/route.ts:141` (`staff.role === "Admin" || ...`).
+status: open
+
+### DW-14: upsertStaffUser only scans first page (200) of auth.admin.listUsers and does not paginate when matching by email; an auth roster beyond 200 will silently miss and create a duplicate auth user.
+origin: spec-deferred 95cbca6785e2
+location: lib/supabase/data.ts:452
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:452 — `perPage: 200`. Single-program system is far below 200 staff at this stage; story 4 owns the authz rework that will centralize auth-user provisioning.
+status: open
+
+### DW-15: TOCTOU race in upsertStaffUser — findStaffUserByEmail and the subsequent update are not transactional; concurrent invites for the same email can race and one caller receives an opaque 23505.
+origin: spec-deferred 5e86579b77d0
+location: lib/supabase/data.ts:413-444
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:413 (findStaffUserByEmail) and the update at data.ts:434 are not wrapped in a transaction.
+status: open
+
+### DW-16: getContactsByRecordIds and getAttendanceByRecordIds do not chunk large `recordIds` arrays for PostgREST URL/IN-clause limits.
+origin: spec-deferred 8e554fa65b32
+location: lib/supabase/data.ts:564,1056
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:557-564 (contacts) and data.ts:1055-1056 (attendance) pass the full uniqueIds array to `.in(...)`; large arrays hit the PostgREST URL-length ceiling.
+status: open
+
+### DW-17: Hand-rolled `UsersRow`/`ContactRow`/`SessionsRow`/`LocationsRow`/`AttendanceRow` types cast via `as` instead of using the generated `Database['public']['Tables'][...]['Row']`; the local types can
+origin: spec-deferred 6f40d8d48c64
+location: lib/supabase/data.ts:170-231
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:170-231 declares local row types and then casts Supabase responses to them at the call sites.
+status: open
+
+### DW-18: Contracts documented in the spec's acceptance criteria (normalizeMobile, 23505→409, 404→null on single-row GETs, Asia/Kolkata day window, currentAirtableDate, cache keys/TTL) are not observed by any
+origin: spec-deferred 91c31bfe87ce
+location: scripts/verify-supabase-data-module.mjs (missing)
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: medium
+reason: No `*.test.ts`/`*.spec.ts` files anywhere in source; no vitest/jest/node:test in any package.json; `scripts/verify-rls.mjs` uses raw `@supabase/supabase-js` and does not exercise the data module. Story 5 is the load-bearing test surface (its import swap will exercise every public symbol); a `scripts/verify-supabase-data-module.mjs` belongs to story 5, not this story.
+status: open
+
+### DW-19: mapContact, mapSession always populate `analyticsIds: []` and SessionRecord.attendanceRecordIds is always `[]`; the public types still declare these fields, so a caller that iterated them
+origin: spec-deferred 2013a2ac5147
+location: lib/supabase/data.ts:524,676,677
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:524 (analyticsIds on ContactRecord), data.ts:676-677 (analyticsIds + attendanceRecordIds on SessionRecord). Intentional per Design Notes "internal row mappers suffice"; story 5 callers should not depend on these.
+status: open
+
+### DW-20: StaffUser.supabaseUserId now returns the public.users UUID (where Airtable returned `undefined` for legacy rows). Story 4 will rename the field on StaffContext; the data module's return shape stays
+origin: spec-deferred cded85ff68db
+location: lib/supabase/data.ts:328
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:328 sets `supabaseUserId: row.id`. Intentional per Design Notes; story 4 owns the field rename.
+status: open
+
+### DW-21: ContactRecord.location value space is `string[]` of location UUIDs (was `string | string[] | undefined` of Airtable record IDs). Intentional narrowing per data-model-mapping.md; story 5 will handle
+origin: spec-deferred deb6743091df
+location: lib/supabase/data.ts:521
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:521 returns `Array.isArray(row.location_ids) ? row.location_ids : []`.
+status: open
+
+### DW-22: upsertStaffUser update branch truthy-guards `data.locationIds` and `data.assignedPreacherAirtableUserId`, so a caller passing `locationIds: []` to wipe or `null` to unassign is silently ignored.
+origin: spec-deferred c3cd610e1552
+location: lib/supabase/data.ts:421,424
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:421 (truthy guard on assignedPreacherAirtableUserId), data.ts:424 (`if (Array.isArray(data.locationIds))`).
+status: open
+
+### DW-23: auth.admin.listUsers error is not surfaced — `.error` is not checked at data.ts:452; admin API errors propagate via `throw` at a higher level rather than being caught and re-thrown as
+origin: spec-deferred 3337336cbb11
+location: lib/supabase/data.ts:452
+source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
+severity: low
+reason: data.ts:452 — `const listResult = await supabaseAdmin.auth.admin.listUsers(...)` does not check `listResult.error`. Pre-existing issue; would require restructuring the auth-user provisioning path.
 status: open
