@@ -41,3 +41,4 @@ packages/*/.turbo/
 .bmad-loop/policy.toml
 _bmad/render/
 .claude/settings.json
+.github/copilot/settings.json

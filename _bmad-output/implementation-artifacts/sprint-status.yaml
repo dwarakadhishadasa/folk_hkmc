@@ -96,7 +96,7 @@ development_status:
   7-1-schema-migration-users-table-and-contact-field-gaps: done
   7-2-scoped-rls-policies-on-contacts-attendance-sessions-location: done
   7-3-supabase-data-access-module-mirroring-lib-airtable-ts: done
-  7-4-authz-rework-staff-context-resolves-from-supabase: backlog
+  7-4-authz-rework-staff-context-resolves-from-supabase: done
   7-5-route-and-page-swap-to-supabase-in-both-apps: backlog
   7-6-in-app-manage-portal-replacing-the-airtable-interface: backlog
   7-7-airtable-removal-and-dependency-cleanup: backlog
