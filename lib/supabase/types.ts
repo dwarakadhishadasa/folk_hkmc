@@ -688,7 +688,14 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      caller_assigned_preacher_id: { Args: never; Returns: string }
+      caller_can_read_attendance_session: {
+        Args: { p_session_id: string }
+        Returns: boolean
+      }
+      caller_effective_location_ids: { Args: never; Returns: string[] }
+      caller_program_id: { Args: never; Returns: string }
+      caller_role: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
