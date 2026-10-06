@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: '06-12-2026 21:29'
-last_updated: 10-06-2026 14:33
+last_updated: 10-06-2026 21:30
 project: folk_hkmc
 project_key: NOKEY
 tracking_system: file-system
@@ -97,7 +97,7 @@ development_status:
   7-2-scoped-rls-policies-on-contacts-attendance-sessions-location: done
   7-3-supabase-data-access-module-mirroring-lib-airtable-ts: done
   7-4-authz-rework-staff-context-resolves-from-supabase: done
-  7-5-route-and-page-swap-to-supabase-in-both-apps: backlog
+  7-5-route-and-page-swap-to-supabase-in-both-apps: done
   7-6-in-app-manage-portal-replacing-the-airtable-interface: backlog
   7-7-airtable-removal-and-dependency-cleanup: backlog
   7-8-configure-and-verify-the-hosted-supabase-project-and-preview: backlog
