@@ -1,0 +1,24 @@
+{
+  "actions": [
+    "Open network access to the hosted Supabase project etwunirahuucodcxydgs from this repository's tooling environment.",
+    "Run `node scripts/verify-rls.mjs` and confirm it still reports 75 of 75 passing, proving no story-2 RLS policy regressed.",
+    "Deploy the branch preview and sign in as a seeded Admin, then confirm the `/manage` portal renders all five tabs with program-wide totals.",
+    "Switch the Admin scope toggle to 'Own scope' and confirm the contact count and every list shrink to the Admin's own contacts, then switch back and confirm the program-wide totals return.",
+    "Sign in as a seeded Preacher and confirm the Contacts tab shows only contacts assigned to that Preacher, with no other preacher's contact identities anywhere in the portal.",
+    "Open the Attendance tab as that Preacher and confirm records exist for sessions the Preacher leads even when an Admin created the session.",
+    "Edit a contact's Notes and College from the Favorites tab and confirm only those two columns changed and that an `audit_events` row was written with `action: 'manage.contact.update'`.",
+    "Attempt the same edit as a Preacher against a contact assigned to another preacher and confirm it is rejected with `403` and `code: 'forbidden'`, and that the row is unchanged.",
+    "Upload a JPEG, a PNG and a WebP contact photo from the Favorites tab and confirm each succeeds and renders from a short-lived signed URL.",
+    "Confirm the `contact-photos` bucket is still private and that no public object URL for a contact photo is reachable without authentication.",
+    "Attempt a photo upload of a non-image MIME type, of a file larger than 5 MB, and of a file whose bytes do not match its declared image type, and confirm each returns `400` with nothing written to the bucket.",
+    "Confirm that requesting a signed photo URL for a contact with no photo returns `404`.",
+    "Use the favorite toggle on a Contacts row and confirm the contact then appears in the Favorites tab and its detail form becomes editable.",
+    "Load `/manage` as an unauthenticated visitor and confirm the redirect to `/login?redirect=/manage`, then as a Volunteer and confirm the portal never renders.",
+    "Trigger a data-layer failure and confirm `/manage` returns a server error rather than redirecting to the staff-authorization-failed page.",
+    "Load `/manage` on the seeded folk program and record the RSC payload size and the first-paint time, then report whether the deferred payload-size item needs per-tab server fetches."
+  ],
+  "parked_at": "2026-10-06T23:45:57+05:30",
+  "run_id": "20261006-212205-bb24",
+  "spec_file": "_bmad-output/specs/spec-airtable-to-supabase/stories/6-in-app-manage-portal-replacing-the-airtable-interface.md",
+  "story_key": "7-6-in-app-manage-portal-replacing-the-airtable-interface"
+}
