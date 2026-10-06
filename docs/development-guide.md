@@ -4,8 +4,8 @@
 
 - Node.js 20+ recommended
 - `pnpm`
-- Docker Desktop or Docker Engine for local Supabase
-- Airtable API token and table IDs for end-to-end product flows
+- Access to the hosted Supabase project (there is no local Supabase stack)
+- Supabase credentials for end-to-end product flows
 
 ## Install
 
@@ -24,13 +24,6 @@ NEXT_PUBLIC_SITE_URL=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-AIRTABLE_API_TOKEN=
-AIRTABLE_BASE_ID=
-AIRTABLE_CONTACTS_TABLE_ID=
-AIRTABLE_ATTENDANCE_TABLE_ID=
-AIRTABLE_SESSIONS_TABLE_ID=
-AIRTABLE_USERS_TABLE_ID=
-AIRTABLE_LOCATIONS_TABLE_ID=
 ```
 
 Optional:
@@ -39,30 +32,11 @@ Optional:
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_URL=
 SUPABASE_PUBLISHABLE_KEY=
-STAFF_SYNC_STALE_AFTER_MINUTES=
-STAFF_PROFILE_STALE_AFTER_MINUTES=
-AIRTABLE_ANALYTICS_RECORD_ID=
-AIRTABLE_MANAGEMENT_URL=
-AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID=
 ```
 
-Program-scoped Airtable overrides are supported and preferred when FOLK and Gita Life use different bases or credentials:
+Program separation is by the `program_id` column in Postgres, not by per-program credentials, so both `folk` and `gita-life` share the same Supabase project and the same service-role key.
 
-```bash
-FOLK_AIRTABLE_API_TOKEN=
-FOLK_AIRTABLE_BASE_ID=
-FOLK_AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID=
-GITA_LIFE_AIRTABLE_API_TOKEN=
-GITA_LIFE_AIRTABLE_BASE_ID=
-GITA_LIFE_AIRTABLE_CONTACTS_TABLE_ID=
-GITA_LIFE_AIRTABLE_ATTENDANCE_TABLE_ID=
-GITA_LIFE_AIRTABLE_SESSIONS_TABLE_ID=
-GITA_LIFE_AIRTABLE_USERS_TABLE_ID=
-GITA_LIFE_AIRTABLE_LOCATIONS_TABLE_ID=
-GITA_LIFE_AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID=
-```
-
-Never commit real `.env`, `.env.local`, Airtable tokens, Supabase service-role keys, or Vercel secrets.
+Never commit real `.env`, `.env.local`, Supabase service-role keys, or Vercel secrets.
 
 ## Local Supabase
 
@@ -153,13 +127,13 @@ Notes:
 ## Important Development Rules
 
 - Keep server secrets in server-only modules.
-- Keep `@hkmc/airtable`, `@hkmc/authz`, `@hkmc/program-config/server`, `lib/airtable.ts`, `lib/authz.ts`, `lib/invite-log.ts`, and `lib/supabase/*` out of client component runtime graphs.
+- Keep `@hkmc/authz`, `@hkmc/program-config/server`, `lib/authz.ts`, `lib/invite-log.ts`, and `lib/supabase/*` out of client component runtime graphs.
 - Use `lib/authz.ts` for staff server authorization.
 - Keep `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID` aligned with the app workspace and preserve FOLK/Gita Life route parity unless requirements intentionally diverge.
 - Use `StaffAuthShell` when a server page has already validated staff and needs to seed client auth state.
 - Preserve `/attendance` as the attendance API route.
 - Keep public registration, attendance, service worker queue paths, and dashboard polling in sync.
-- Use Airtable record IDs for linked records.
+- Use UUIDs for record references; all record IDs are `public.*` primary keys.
 - Preserve mobile normalization to the last 10 digits.
 - Run `pnpm guardrails`, `pnpm typecheck:workspace`, and manual checks because no product test suite exists.
 
@@ -167,7 +141,7 @@ Notes:
 
 Use the flows relevant to your change:
 
-- Login with an active Airtable staff email.
+- Login with the email of an `Active` `public.users` row in the program.
 - Complete OTP or invite callback.
 - Confirm `/api/auth/me` returns staff after sign-in.
 - Verify Volunteer redirects/permissions go only to `/contact`.
@@ -187,9 +161,8 @@ Use the flows relevant to your change:
 | --- | --- |
 | `Supabase URL must contain a valid Supabase URL` | Missing Supabase env vars |
 | `SUPABASE_SERVICE_ROLE_KEY is required` | Server/admin auth route missing service-role key |
-| `AIRTABLE_* is required` | Airtable token/base/table IDs not configured |
 | Attendance links fail to generate | `NEXT_PUBLIC_SITE_URL` missing |
-| Staff can sign in but gets authorization error | Airtable User missing/inactive, stale `staff_memberships` row, unsupported `PROGRAM_ID`, or sync failure |
+| Staff can sign in but gets authorization error | `public.users` row missing/inactive for the program, unsupported `PROGRAM_ID`, or a `status` other than `Active` |
 | Preacher cannot create session for location | Location not in staff profile `location_ids` |
 
 ## Current Test Status

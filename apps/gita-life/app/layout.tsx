@@ -15,7 +15,7 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "Gita Life Portal",
   description:
-    "Gita Life portal for Bhagavad Gita registrations, session attendance, staff follow-up, and Airtable handoff.",
+    "Gita Life portal for Bhagavad Gita registrations, session attendance, and staff follow-up.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

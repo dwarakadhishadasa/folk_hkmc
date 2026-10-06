@@ -4,9 +4,6 @@ import { strict as assert } from "node:assert"
 const files = {
   folk: "packages/program-config/src/programs/folk.ts",
   gitaLife: "packages/program-config/src/programs/gita-life.ts",
-  sharedAirtable: "packages/program-config/src/programs/shared-airtable.ts",
-  programConfigServer: "packages/program-config/src/server.ts",
-  airtableLib: "lib/airtable.ts",
   folkNextConfig: "apps/folk/next.config.mjs",
   gitaLifeNextConfig: "apps/gita-life/next.config.mjs",
   folkSignin: "apps/folk/app/api/auth/signin/route.ts",
@@ -20,9 +17,7 @@ const contents = Object.fromEntries(
 )
 
 assert.match(contents.folk, /id:\s*"folk"/)
-assert.match(contents.folk, /baseId:\s*"appqea9DRLOXqErXb"/)
 assert.match(contents.gitaLife, /id:\s*"gita-life"/)
-assert.match(contents.gitaLife, /baseId:\s*"appzbssqNK53yqjZH"/)
 assert.match(contents.folkNextConfig, /PROGRAM_ID:\s*"folk"/)
 assert.match(contents.folkNextConfig, /NEXT_PUBLIC_PROGRAM_ID:\s*"folk"/)
 assert.match(contents.gitaLifeNextConfig, /PROGRAM_ID:\s*"gita-life"/)
@@ -41,15 +36,6 @@ for (const [name, content] of [
   )
 }
 
-assert.ok(
-  contents.airtableLib.includes("programScopedAirtableIdEnv") && contents.airtableLib.includes('profile.id === "folk"'),
-  "Airtable ID resolution must isolate non-Folk programs from generic AIRTABLE_* IDs",
-)
-assert.ok(
-  contents.programConfigServer.includes("getProgramScopedIdEnv") && contents.programConfigServer.includes('profile.id === "folk"'),
-  "Program management URL resolution must isolate non-Folk programs from generic AIRTABLE_* IDs",
-)
-
 for (const tableId of [
   "tbltzdtCmCHf6gJKD",
   "tblxfB2W2l6OXc2IX",
@@ -57,7 +43,6 @@ for (const tableId of [
   "tbl2aiD2NfvrBMnfI",
   "tbl5IOOcS2RUkXzyG",
 ]) {
-  assert.ok(contents.sharedAirtable.includes(tableId), `Missing table mapping ${tableId}`)
   assert.ok(contents.decisions.includes(tableId), `Missing decision artifact table ${tableId}`)
 }
 

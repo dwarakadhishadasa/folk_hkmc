@@ -16,7 +16,7 @@ interface InviteFormState {
   name: string
   email: string
   role: StaffRole
-  assignedPreacherAirtableUserId: string
+  assignedPreacherUserId: string
   locationIds: string[]
 }
 
@@ -25,7 +25,7 @@ function emptyInviteForm(): InviteFormState {
     name: "",
     email: "",
     role: "Volunteer",
-    assignedPreacherAirtableUserId: "",
+    assignedPreacherUserId: "",
     locationIds: [],
   }
 }
@@ -84,8 +84,8 @@ export function InviteUserForm({
     setForm((current) => ({
       ...current,
       role: nextRole,
-      assignedPreacherAirtableUserId: isPreacherScopedRole(nextRole)
-        ? current.assignedPreacherAirtableUserId
+      assignedPreacherUserId: isPreacherScopedRole(nextRole)
+        ? current.assignedPreacherUserId
         : "",
       locationIds: isPreacherScopedRole(nextRole) ? [] : current.locationIds,
     }))
@@ -264,9 +264,9 @@ export function InviteUserForm({
           <label className={labelClass}>
             Assigned Preacher
             <select
-              value={form.assignedPreacherAirtableUserId}
+              value={form.assignedPreacherUserId}
               onChange={(event) =>
-                setForm((current) => ({ ...current, assignedPreacherAirtableUserId: event.target.value }))
+                setForm((current) => ({ ...current, assignedPreacherUserId: event.target.value }))
               }
               required
               className={fieldClass}

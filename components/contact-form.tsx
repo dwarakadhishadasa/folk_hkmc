@@ -18,7 +18,7 @@ interface ContactData {
   locationId: string
   address: string
   comments: string
-  assignedPreacherAirtableUserId: string
+  assignedPreacherUserId: string
 }
 
 interface PreacherOption {
@@ -44,7 +44,7 @@ const initialFormData: ContactData = {
   locationId: "",
   address: "",
   comments: "",
-  assignedPreacherAirtableUserId: "",
+  assignedPreacherUserId: "",
 }
 
 async function registerBackgroundSync() {
@@ -83,9 +83,9 @@ export function ContactForm({
   const [message, setMessage] = useState("")
   const nameInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
-  const selectedPreacher = preachers.find((preacher) => preacher.id === formData.assignedPreacherAirtableUserId)
+  const selectedPreacher = preachers.find((preacher) => preacher.id === formData.assignedPreacherUserId)
   const availableLocations =
-    !isGitaLife && staffRole === "Admin" && formData.assignedPreacherAirtableUserId
+    !isGitaLife && staffRole === "Admin" && formData.assignedPreacherUserId
       ? locations.filter((location) => selectedPreacher?.locationIds?.includes(location.id))
       : locations
 
@@ -103,10 +103,10 @@ export function ContactForm({
       return
     }
 
-    if (name === "assignedPreacherAirtableUserId") {
+    if (name === "assignedPreacherUserId") {
       setFormData((prev) => ({
         ...prev,
-        assignedPreacherAirtableUserId: value,
+        assignedPreacherUserId: value,
         locationId: "",
       }))
       return
@@ -131,7 +131,7 @@ export function ContactForm({
       ...initialFormData,
       locationId: prev.locationId,
       address: prev.address,
-      assignedPreacherAirtableUserId: staffRole === "Admin" ? prev.assignedPreacherAirtableUserId : "",
+      assignedPreacherUserId: staffRole === "Admin" ? prev.assignedPreacherUserId : "",
     }))
     setPhoneError("")
     requestAnimationFrame(() => nameInputRef.current?.focus())
@@ -145,7 +145,7 @@ export function ContactForm({
       return
     }
 
-    if (staffRole === "Admin" && !formData.assignedPreacherAirtableUserId) {
+    if (staffRole === "Admin" && !formData.assignedPreacherUserId) {
       setMessage("Choose an assigned Preacher before saving this contact.")
       return
     }
@@ -348,13 +348,13 @@ export function ContactForm({
 
             {staffRole === "Admin" && (
               <div className="space-y-2">
-                <label htmlFor="assignedPreacherAirtableUserId" className={labelClass}>
+                <label htmlFor="assignedPreacherUserId" className={labelClass}>
                   Assigned Preacher *
                 </label>
                 <select
-                  id="assignedPreacherAirtableUserId"
-                  name="assignedPreacherAirtableUserId"
-                  value={formData.assignedPreacherAirtableUserId}
+                  id="assignedPreacherUserId"
+                  name="assignedPreacherUserId"
+                  value={formData.assignedPreacherUserId}
                   onChange={handleChange}
                   required
                   className={fieldClass}
@@ -391,11 +391,11 @@ export function ContactForm({
                   value={formData.locationId}
                   onChange={handleChange}
                   required
-                  disabled={availableLocations.length === 0 || (staffRole === "Admin" && !formData.assignedPreacherAirtableUserId)}
+                  disabled={availableLocations.length === 0 || (staffRole === "Admin" && !formData.assignedPreacherUserId)}
                   className={fieldClass}
                 >
                   <option value="">
-                    {staffRole === "Admin" && !formData.assignedPreacherAirtableUserId ? "Select Preacher first" : "Select location"}
+                    {staffRole === "Admin" && !formData.assignedPreacherUserId ? "Select Preacher first" : "Select location"}
                   </option>
                   {availableLocations.map((location) => (
                     <option key={location.id} value={location.id}>

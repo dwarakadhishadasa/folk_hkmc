@@ -52,7 +52,7 @@ Add manual verification notes for affected flows, especially:
 
 - Staff auth
 - Attendance
-- Airtable reads/writes
+- Supabase reads/writes and RLS scoping
 - Offline/PWA behavior
 - Role-based redirects and access
 
@@ -64,7 +64,7 @@ Repository-level Copilot/agent instructions live in `.github/copilot-instruction
 - Keep secrets server-only.
 - Treat Turborepo as the task runner, not the package-boundary enforcer; run `pnpm guardrails` after workspace/package/import changes.
 - Never rely on `next build` alone for type safety because build-time type errors are ignored by Next config.
-- Keep `@hkmc/airtable`, `@hkmc/authz`, `@hkmc/program-config/server`, and server `lib/*` services out of client component runtime graphs.
+- Keep `@hkmc/authz`, `@hkmc/program-config/server`, and server `lib/*` services out of client component runtime graphs.
 - Do not modify `apps/*/app/api/admin/invite-user/route.ts` for GitHub collaborator access; that route invites application staff, not repository collaborators.
 - Use existing Next.js App Router and `pnpm` patterns.
-- Preserve staff auth, Airtable integration, route paths, and service-worker coupling unless the task explicitly changes them.
+- Preserve staff auth, Supabase data access, route paths, and service-worker coupling unless the task explicitly changes them.

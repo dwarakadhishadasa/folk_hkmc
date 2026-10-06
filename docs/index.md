@@ -2,7 +2,7 @@
 
 **Type:** pnpm/Turborepo monorepo
 **Primary Language:** TypeScript
-**Architecture:** Program-scoped Next.js App Router apps with Supabase staff authentication, Airtable operational data, and PWA offline queueing
+**Architecture:** Program-scoped Next.js App Router apps with Supabase staff authentication, Supabase Postgres operational data, and PWA offline queueing
 **Last Updated:** 2026-06-13
 ## Current State Check
 
@@ -10,16 +10,16 @@ The older generated docs described a single root app and no longer reflected the
 
 ## Project Overview
 
-`folk_hkmc` contains separate FOLK and Gita Life Next.js 16 App Router apps under `apps/`. They share Supabase staff authentication, Airtable-backed operational workflows, and common packages while keeping program-specific app shells and environment files.
+`folk_hkmc` contains separate FOLK and Gita Life Next.js 16 App Router apps under `apps/`. They share Supabase staff authentication, Supabase-backed operational workflows, and common packages while keeping program-specific app shells and environment files.
 
 ## Quick Reference
 
 - **Entry points:** `apps/folk/app/layout.tsx`, `apps/gita-life/app/layout.tsx`
 - **Public pages:** `/`, `/register`, `/attend`
 - **Staff pages:** `/contact`, `/sessions`, `/dashboard`, `/volunteers`, `/admin/invite`, `/manage`
-- **Auth:** Supabase email OTP/invite flow with server cookies and program-scoped `staff_memberships`
-- **Operational store:** Airtable REST API via `lib/airtable.ts`
-- **Local auth bridge:** Supabase tables `programs`, `staff_memberships`, `staff_profiles`, `airtable_identities`, `audit_events`, and `invite_log`
+- **Auth:** Supabase email OTP/invite flow with server cookies and program-scoped `public.users`
+- **Operational store:** Supabase Postgres via `lib/supabase/data.ts`
+- **Core tables:** `users`, `contacts`, `attendance`, `sessions`, `locations`, `programs`, `audit_events`, and `invite_log`
 - **Offline/PWA:** `public/sw.js`, `public/manifest.json`, `components/offline-indicator.tsx`
 - **Package manager:** `pnpm`
 
@@ -31,10 +31,10 @@ The older generated docs described a single root app and no longer reflected the
 - [Source Tree Analysis](./source-tree-analysis.md) - Annotated repository structure and critical files
 - [Component Inventory](./component-inventory.md) - Active UI surfaces, infrastructure components, and legacy leftovers
 - [Development Guide](./development-guide.md) - Local setup, commands, environment, and verification notes
-- [Deployment Guide](./deployment-guide.md) - Deployment prerequisites, secrets, Supabase, Airtable, and PWA concerns
+- [Deployment Guide](./deployment-guide.md) - Deployment prerequisites, secrets, Supabase, and PWA concerns
 - [Contribution Guide](./contribution-guide.md) - Branch, PR, owner-review, and local verification workflow
 - [API Contracts](./api-contracts.md) - Implemented route handlers, auth requirements, payloads, and responses
-- [Data Models](./data-models.md) - Airtable records, Supabase tables, auth context, and offline queue shapes
+- [Data Models](./data-models.md) - Supabase records and tables, RLS scoping, auth context, and offline queue shapes
 
 ## Existing Reference Documentation
 
@@ -50,7 +50,7 @@ pnpm supabase:env
 pnpm dev
 ```
 
-For production-like behavior, provide Supabase credentials, `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, and generic or program-prefixed Airtable configuration from `.env.example`. Do not commit real Airtable tokens or Supabase service-role keys.
+For production-like behavior, provide Supabase credentials and `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID` from `.env.example`. Do not commit Supabase service-role keys.
 
 ## Common Checks
 
@@ -68,7 +68,7 @@ Read these first before planning or implementation:
 
 - `architecture.md` for system constraints and auth/data flow
 - `api-contracts.md` before wiring or changing requests
-- `data-models.md` before changing Airtable or Supabase fields
+- `data-models.md` before changing Supabase fields or RLS scoping
 - `component-inventory.md` before adding or replacing UI
 - `development-guide.md` before running local checks
 

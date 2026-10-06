@@ -1,19 +1,4 @@
 import type { ServerProgramProfile } from "../types"
-import { adminPortalInterface, operationalTables } from "./shared-airtable"
-
-const writable = "writable" as const
-
-const gitaLifeTables = {
-  ...operationalTables,
-  contacts: {
-    ...operationalTables.contacts,
-    fields: {
-      ...operationalTables.contacts.fields,
-      address: { id: "fldvXxsgxnybw6nPA", label: "Address", type: "singleLineText", access: writable },
-      designation: { id: "fldVkz3c5p6GuFBrg", label: "Designation", type: "singleLineText", access: writable },
-    },
-  },
-}
 
 export const gitaLifeProgramProfile = {
   id: "gita-life",
@@ -36,14 +21,5 @@ export const gitaLifeProgramProfile = {
     staffContacts: true,
     sessions: true,
     staffInvites: true,
-    airtableManage: true,
-  },
-  airtable: {
-    baseId: "appzbssqNK53yqjZH",
-    baseName: "Gita Life",
-    tables: gitaLifeTables,
-    interfaces: {
-      adminPortal: adminPortalInterface,
-    },
   },
 } satisfies ServerProgramProfile

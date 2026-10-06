@@ -17,8 +17,8 @@ Project documentation lives in [`./docs`](./docs). The full documentation landin
 - **[API Contracts](./docs/api-contracts.md)** - Implemented and expected route contracts
 - **[Architecture](./docs/architecture.md)** - Runtime flows and system constraints
 - **[Component Inventory](./docs/component-inventory.md)** - Product and infrastructure component map
-- **[Data Models](./docs/data-models.md)** - Airtable and local record shapes
-- **[Deployment Guide](./docs/deployment-guide.md)** - Supabase, Airtable, runtime env, and release checks
+- **[Data Models](./docs/data-models.md)** - Supabase record shapes, tables, and RLS scoping
+- **[Deployment Guide](./docs/deployment-guide.md)** - Supabase, runtime env, and release checks
 - **[Development Guide](./docs/development-guide.md)** - Setup, commands, and quality gates
 - **[Contribution Guide](./docs/contribution-guide.md)** - Branch, PR, owner-review, and verification workflow
 - **[Project Overview](./docs/project-overview.md)** - Executive summary and technology picture

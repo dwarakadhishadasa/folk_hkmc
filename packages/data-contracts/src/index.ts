@@ -7,19 +7,6 @@ export type StaffRole = (typeof STAFF_ROLES)[number]
 export const STAFF_MEMBERSHIP_STATUSES = ["Active", "Inactive", "Suspended", "Revoked"] as const
 export type StaffMembershipStatus = (typeof STAFF_MEMBERSHIP_STATUSES)[number]
 
-export interface StaffMembershipContext {
-  programId: ProgramId
-  supabaseUserId: string
-  email: string
-  airtableUserId: string
-  name: string
-  role: StaffRole
-  status: StaffMembershipStatus
-  locationIds: string[]
-  assignedPreacherAirtableUserId?: string
-  lastSyncedAt: string
-}
-
 export interface ApiErrorResponse {
   error: string
   code?: string

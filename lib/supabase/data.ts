@@ -8,7 +8,7 @@ import { PostgrestError } from "@supabase/supabase-js"
 export type StaffRole = "Admin" | "Preacher" | "Volunteer" | "Assistant"
 export type StaffStatus = "Active" | "Inactive"
 
-export interface AirtableRecord<TFields extends object = Record<string, unknown>> {
+export interface DataRow<TFields extends object = Record<string, unknown>> {
   id: string
   fields: TFields
   createdTime?: string
@@ -90,8 +90,8 @@ export interface StaffUser {
   locationIds: string[]
   portalAccount?: string
   supabaseUserId?: string
-  invitedByAirtableUserId?: string
-  assignedPreacherAirtableUserId?: string
+  invitedByUserId?: string
+  assignedPreacherUserId?: string
 }
 
 export interface ContactRecord {
@@ -149,19 +149,19 @@ const SUPABASE_REFERENCE_CACHE_TTL_SECONDS = 20 * 60
 const SUPABASE_LOCATIONS_CACHE_TAG = "supabase-locations"
 const SUPABASE_ACTIVE_PREACHERS_CACHE_TAG = "supabase-active-preachers"
 
-export class AirtableConfigError extends Error {
+export class SupabaseDataConfigError extends Error {
   constructor(message: string) {
     super(message)
-    this.name = "AirtableConfigError"
+    this.name = "SupabaseDataConfigError"
   }
 }
 
-export class AirtableRequestError extends Error {
+export class SupabaseDataRequestError extends Error {
   status: number
 
   constructor(message: string, status: number) {
     super(message)
-    this.name = "AirtableRequestError"
+    this.name = "SupabaseDataRequestError"
     this.status = status
   }
 }
@@ -266,7 +266,7 @@ function normalizeDisplayString(value: unknown, options: { rejectRecordIds?: boo
   return undefined
 }
 
-function currentAirtableDate(): string {
+function currentProgramDate(): string {
   const parts = new Intl.DateTimeFormat("en", {
     timeZone: SUPABASE_DATE_TIME_ZONE,
     year: "numeric",
@@ -294,7 +294,7 @@ function toIsoString(value: string | null | undefined): string | undefined {
 function programScopedFilter(): string {
   const programId = resolveProgramId()
   if (!programId) {
-    throw new AirtableConfigError("program id is required")
+    throw new SupabaseDataConfigError("program id is required")
   }
   return programId
 }
@@ -328,8 +328,8 @@ function mapStaffUser(row: UsersRow): StaffUser | null {
     role: role as StaffRoleLiteral,
     status,
     locationIds: Array.isArray(row.location_ids) ? row.location_ids : [],
-    invitedByAirtableUserId: row.invited_by ?? undefined,
-    assignedPreacherAirtableUserId: row.assigned_preacher_id ?? undefined,
+    invitedByUserId: row.invited_by ?? undefined,
+    assignedPreacherUserId: row.assigned_preacher_id ?? undefined,
     supabaseUserId: row.id,
   }
 }
@@ -406,8 +406,8 @@ export async function upsertStaffUser(data: {
   name: string
   role: StaffRole
   status?: StaffStatus
-  invitedByAirtableUserId: string
-  assignedPreacherAirtableUserId?: string
+  invitedByUserId: string
+  assignedPreacherUserId?: string
   locationIds?: string[]
   supabaseUserId?: string
 }): Promise<StaffUser> {
@@ -421,10 +421,10 @@ export async function upsertStaffUser(data: {
       name: data.name,
       role: data.role,
       status,
-      invited_by: data.invitedByAirtableUserId,
+      invited_by: data.invitedByUserId,
     }
-    if (data.assignedPreacherAirtableUserId) {
-      updatePayload.assigned_preacher_id = data.assignedPreacherAirtableUserId
+    if (data.assignedPreacherUserId) {
+      updatePayload.assigned_preacher_id = data.assignedPreacherUserId
     }
     if (data.locationIds?.length) {
       updatePayload.location_ids = data.locationIds
@@ -445,7 +445,7 @@ export async function upsertStaffUser(data: {
 
     const mapped = mapStaffUser(updated as UsersRow)
     if (!mapped) {
-      throw new AirtableRequestError("Supabase Users row is missing required staff fields", 422)
+      throw new SupabaseDataRequestError("Supabase Users row is missing required staff fields", 422)
     }
 
     if (existing.role !== data.role || existing.status !== status) {
@@ -471,7 +471,7 @@ export async function upsertStaffUser(data: {
         email_confirm: true,
       })
       if (createResult.error || !createResult.data?.user) {
-        throw new AirtableRequestError(
+        throw new SupabaseDataRequestError(
           `Failed to provision auth user for ${normalizedEmail}: ${createResult.error?.message ?? "unknown error"}`,
           500,
         )
@@ -487,11 +487,11 @@ export async function upsertStaffUser(data: {
     name: data.name,
     role: data.role,
     status,
-    invited_by: data.invitedByAirtableUserId,
+    invited_by: data.invitedByUserId,
     location_ids: Array.isArray(data.locationIds) ? data.locationIds : [],
   }
-  if (data.assignedPreacherAirtableUserId) {
-    insertPayload.assigned_preacher_id = data.assignedPreacherAirtableUserId
+  if (data.assignedPreacherUserId) {
+    insertPayload.assigned_preacher_id = data.assignedPreacherUserId
   }
 
   const { data: inserted, error } = await supabaseAdmin
@@ -506,7 +506,7 @@ export async function upsertStaffUser(data: {
 
   const mapped = mapStaffUser(inserted as UsersRow)
   if (!mapped) {
-    throw new AirtableRequestError("Supabase Users row is missing required staff fields", 422)
+    throw new SupabaseDataRequestError("Supabase Users row is missing required staff fields", 422)
   }
   return mapped
 }
@@ -603,15 +603,15 @@ export async function createContact(data: {
   address?: string
   locationId?: string
   location?: string
-  collectedByAirtableUserId?: string
-  assignedPreacherAirtableUserId?: string
+  collectedByUserId?: string
+  assignedPreacherUserId?: string
 }): Promise<ContactRecord> {
   const normalizedPhone = normalizeMobile(data.phone)
   if (!normalizedPhone) {
-    throw new AirtableRequestError("Invalid phone number", 422)
+    throw new SupabaseDataRequestError("Invalid phone number", 422)
   }
 
-  const createdDate = currentAirtableDate()
+  const createdDate = currentProgramDate()
 
   const insertPayload: Record<string, unknown> = {
     program_id: programScopedFilter(),
@@ -653,10 +653,10 @@ export async function createContact(data: {
   } else if (data.location) {
     insertPayload.location_ids = [data.location]
   }
-  if (data.assignedPreacherAirtableUserId) {
-    insertPayload.assigned_preacher_id = data.assignedPreacherAirtableUserId
+  if (data.assignedPreacherUserId) {
+    insertPayload.assigned_preacher_id = data.assignedPreacherUserId
   }
-  const collectorId = data.collectedByAirtableUserId || data.assignedPreacherAirtableUserId
+  const collectorId = data.collectedByUserId || data.assignedPreacherUserId
   if (collectorId) {
     insertPayload.collected_by_id = collectorId
   }
@@ -672,7 +672,7 @@ export async function createContact(data: {
 
   if (error) {
     if (error.code === "23505") {
-      throw new AirtableRequestError("duplicate key value violates unique constraint", 409)
+      throw new SupabaseDataRequestError("duplicate key value violates unique constraint", 409)
     }
     throw error
   }
@@ -737,7 +737,7 @@ export async function listSessions(): Promise<SessionRecord[]> {
 
 export async function findLocationById(
   recordId: string,
-): Promise<AirtableRecord<LocationFields> | null> {
+): Promise<DataRow<LocationFields> | null> {
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin
     .from("locations")
@@ -869,7 +869,7 @@ export function revalidateSupabaseReferenceCache(
 export async function createSession(data: {
   name: string
   sessionDate: string
-  preacherAirtableUserId: string
+  preacherUserId: string
   locationId: string
   durationMinutes?: number
   publicAttendanceEnabled: boolean
@@ -881,7 +881,7 @@ export async function createSession(data: {
     program_id: programScopedFilter(),
     name: data.name.trim(),
     session_date: data.sessionDate,
-    preacher_id: data.preacherAirtableUserId,
+    preacher_id: data.preacherUserId,
     location_id: data.locationId,
     public_attendance_enabled: data.publicAttendanceEnabled,
     created_by: data.createdBy,
@@ -930,13 +930,13 @@ export async function updateSessionAttendanceUrl(
 
   if (error) {
     if (error.code === "PGRST116") {
-      throw new AirtableRequestError("session not found", 404)
+      throw new SupabaseDataRequestError("session not found", 404)
     }
     throw error
   }
 
   if (!updated) {
-    throw new AirtableRequestError("session not found", 404)
+    throw new SupabaseDataRequestError("session not found", 404)
   }
 
   return mapSession(updated as SessionsRow)
@@ -1000,7 +1000,7 @@ export async function createAttendanceRecord(data: {
 
   if (error) {
     if (error.code === "23505") {
-      throw new AirtableRequestError("duplicate key value violates unique constraint", 409)
+      throw new SupabaseDataRequestError("duplicate key value violates unique constraint", 409)
     }
     throw error
   }

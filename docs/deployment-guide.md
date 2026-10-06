@@ -11,8 +11,8 @@ The repo includes `@vercel/speed-insights`, so Vercel is a natural deployment ta
 | Service | Purpose |
 | --- | --- |
 | Supabase Auth | Staff OTP/invite authentication |
-| Supabase Postgres | Programs, staff memberships/profiles, Airtable identities, audit events, invite log |
-| Airtable | Operational Contacts, Attendance, Sessions, Users, Locations |
+| Supabase Postgres | All operational records: users, contacts, attendance, sessions, locations; plus programs, audit events, invite log |
+| Supabase Storage | Private `contact-photos` bucket for contact photos, read via server-minted signed URLs |
 | HTTPS hosting | Required for PWA/service worker outside localhost |
 
 ## Required Environment Variables
@@ -24,13 +24,6 @@ NEXT_PUBLIC_SITE_URL=https://your-domain.example
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
-AIRTABLE_API_TOKEN=...
-AIRTABLE_BASE_ID=...
-AIRTABLE_CONTACTS_TABLE_ID=...
-AIRTABLE_ATTENDANCE_TABLE_ID=...
-AIRTABLE_SESSIONS_TABLE_ID=...
-AIRTABLE_USERS_TABLE_ID=...
-AIRTABLE_LOCATIONS_TABLE_ID=...
 ```
 
 Optional/fallback variables:
@@ -41,12 +34,9 @@ SUPABASE_URL=...
 SUPABASE_PUBLISHABLE_KEY=...
 STAFF_SYNC_STALE_AFTER_MINUTES=15
 STAFF_PROFILE_STALE_AFTER_MINUTES=15
-AIRTABLE_ANALYTICS_RECORD_ID=...
-AIRTABLE_MANAGEMENT_URL=...
-AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID=...
 ```
 
-Use program-prefixed Airtable variables for program-specific bases or credentials, for example `FOLK_AIRTABLE_API_TOKEN`, `FOLK_AIRTABLE_BASE_ID`, `GITA_LIFE_AIRTABLE_API_TOKEN`, and `GITA_LIFE_AIRTABLE_BASE_ID`.
+Both programs share one Supabase project and are separated by the `program_id` column, so no per-program variables are needed. No Airtable variable is read by any route or page.
 
 ## Supabase Deployment
 
@@ -62,15 +52,19 @@ For local reset:
 pnpm supabase:reset
 ```
 
-Tables expected after migrations:
+Tables and views expected after migrations:
 
+- `public.users`
+- `public.contacts`
+- `public.attendance`
+- `public.sessions`
+- `public.locations`
 - `public.programs`
-- `public.staff_memberships`
-- `public.staff_profiles`
-- `public.airtable_identities`
-- `public.airtable_sync_state`
 - `public.audit_events`
 - `public.invite_log`
+- `public.contact_attendance_counts` (view)
+
+`public.staff_memberships`, `public.staff_profiles`, `public.airtable_identities`, and `public.airtable_sync_state` are historical bridge tables with no runtime readers; they are still created by the already-applied migrations and are pending removal by a later schema-cleanup story.
 
 Supabase Auth redirect URLs must include:
 
@@ -97,17 +91,11 @@ For passwordless staff sign-in emails, the hosted Supabase Magic Link/OTP templa
 
 The same `{{ if .Data.auth_email_brand_name }}{{ .Data.auth_email_brand_name }}{{ else }}FOLK{{ end }}` expression should replace hardcoded program names in both Magic Link/OTP and Invite templates. Fresh invites receive this metadata through `inviteUserByEmail`; existing-user invite fallbacks and staff sign-in OTPs update the existing Supabase Auth user's metadata before sending the email. Fresh invites and existing-user invite fallbacks also carry `auth_email_invite_action_url` so the visible invite link stays scoped to the app that sent it.
 
-## Airtable Deployment
+## Staff Deployment
 
-The deployment Airtable base must have compatible tables/fields for:
+`public.users` is the source of staff role/status truth for Admin, Preacher, Volunteer, and Assistant. A staff member must have an `Active` row with an email in the program's scope before they can sign in; `role` and `status` are `TEXT` columns with `CHECK` constraints, and `id` references `auth.users(id)` so no separate identity sync is needed.
 
-- Contacts
-- Attendance
-- Sessions
-- Users
-- Locations
-
-Airtable Users are the source of staff role/status truth. A staff user must be `Active` and have an email before they can sign in.
+Seeded or invited rows are scoped by `program_id`, so one person must have one row per program in which they work.
 
 ## PWA And Offline
 
@@ -156,13 +144,12 @@ For each Vercel project and environment, set non-empty values for:
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_SITE_URL`
-- `AIRTABLE_API_TOKEN` or the program-prefixed token, for example `GITA_LIFE_AIRTABLE_API_TOKEN`
 
 Manual checks should cover:
 
 - Staff sign-in and sign-out
 - Invite callback
-- Program-scoped staff membership sync
+- Program-scoped staff context resolution from `public.users`
 - Contact creation
 - Session creation and generated QR URL
 - Attendance marking and duplicate handling
@@ -175,7 +162,7 @@ Manual checks should cover:
 
 - Production secrets must remain owner-controlled.
 - `SUPABASE_SERVICE_ROLE_KEY` grants privileged access and must never reach client code.
-- Wrong `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID` or missing program-prefixed Airtable env can route a deployment to the wrong program data.
-- Airtable schema drift will break runtime operations because field names are referenced directly.
+- Wrong `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID` can route a deployment to the wrong program scope, since program separation is a `program_id` filter rather than a separate project.
+- Schema drift in `public.*` breaks runtime operations because column names are referenced directly in `lib/supabase/data.ts` and the RLS policies.
 - `next build` ignores TypeScript errors; use explicit workspace type checking.
 - No automated product test suite currently guards regressions.

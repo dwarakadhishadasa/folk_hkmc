@@ -116,10 +116,6 @@ function assertRemoteRuntimeEnv(app, environment) {
     missing.push("SUPABASE_SERVICE_ROLE_KEY")
   }
 
-  if (!hasAnyKey(keys, [`${app.envPrefix}_AIRTABLE_API_TOKEN`, "AIRTABLE_API_TOKEN"])) {
-    missing.push(`${app.envPrefix}_AIRTABLE_API_TOKEN or AIRTABLE_API_TOKEN`)
-  }
-
   if (!keys.has("NEXT_PUBLIC_SITE_URL")) {
     missing.push("NEXT_PUBLIC_SITE_URL")
   }

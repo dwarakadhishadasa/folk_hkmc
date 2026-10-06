@@ -66,7 +66,7 @@ interface StaffContextOptions {
 export async function writeAuditEvent(data: {
   programId: ProgramId
   actorSupabaseUserId?: string
-  actorAirtableUserId?: string
+  actorUserId?: string
   actorRole?: string
   action: string
   targetId?: string
@@ -79,7 +79,7 @@ export async function writeAuditEvent(data: {
     await supabaseAdmin.from("audit_events").insert({
       program_id: data.programId,
       actor_supabase_user_id: data.actorSupabaseUserId,
-      actor_airtable_user_id: data.actorAirtableUserId,
+      actor_airtable_user_id: data.actorUserId,
       actor_role: data.actorRole,
       action: data.action,
       target_id: data.targetId,

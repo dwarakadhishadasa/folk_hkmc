@@ -2,7 +2,7 @@
 
 ## Summary
 
-`folk_hkmc` is a program-scoped HKMC operations monorepo. It currently ships two Next.js applications, FOLK Chennai and Gita Life, with shared staff-auth, Airtable, UI, and program-configuration packages. Each app supports three public flows and several staff-only workflows:
+`folk_hkmc` is a program-scoped HKMC operations monorepo. It currently ships two Next.js applications, FOLK Chennai and Gita Life, with shared staff-auth, UI, and program-configuration packages. Each app supports three public flows and several staff-only workflows:
 
 - Program-branded public landing page
 - Public registration, including registration from an attendance session link
@@ -10,19 +10,19 @@
 - Staff contact capture
 - Staff session creation and QR-based live attendance monitoring
 - Staff invitation flows for Admin, Preacher, and Volunteer users
-- Airtable interface redirect for operational management
+- An in-app `/manage` portal for operational management
 
-Each program app is a standalone Next.js App Router deployment under `apps/*`. Supabase provides staff authentication plus a program-scoped authorization cache. Airtable remains the operational data store for program records, with program-specific env overrides and shared table mappings.
+Each program app is a standalone Next.js App Router deployment under `apps/*`. Supabase provides both staff authentication and the operational data store: `public.users` is the staff source of truth and `contacts`, `attendance`, `sessions`, and `locations` hold program records, separated by a `program_id` column.
 
 ## Current-State Delta From Previous Docs
 
 The prior documentation from 2026-04-23 is stale. Current code includes:
 
 - Program-scoped app workspaces under `apps/folk` and `apps/gita-life`
-- Shared packages under `packages/*` for data contracts, program config, server auth exports, Airtable exports, and UI primitives
+- Shared packages under `packages/*` for data contracts, program config, server auth exports, and UI primitives
 - Supabase auth clients under `lib/supabase/*`
 - Supabase migrations under `supabase/migrations/*`
-- `staff_profiles`, `staff_memberships`, `programs`, `airtable_identities`, `airtable_sync_state`, `audit_events`, and `invite_log` local tables
+- `users`, `contacts`, `attendance`, `sessions`, `locations`, `programs`, `audit_events`, and `invite_log` tables, plus the `contact_attendance_counts` rollup view
 - Root `proxy.ts` plus app-local `apps/*/proxy.ts` files for Supabase cookie refresh on protected paths
 - Implemented `/api/registration`, `/api/contact`, `/api/sessions`, `/api/admin/*`, `/api/volunteers/invite`, `/api/auth/*`, and `/attendance` routes in each program app
 - Server-seeded staff auth shells through `StaffAuthShell`
@@ -38,9 +38,9 @@ The prior documentation from 2026-04-23 is stale. Current code includes:
 | Repository shape | pnpm/Turborepo monorepo with two program app workspaces |
 | Primary framework | Next.js 16 App Router |
 | Runtime split | Server route handlers plus client-heavy React UI |
-| Auth architecture | Supabase email OTP/invite session cookies plus local `staff_memberships` authorization cache |
-| Operational data | Airtable REST API, resolved through program-scoped config |
-| Local relational data | Supabase Postgres for programs, staff memberships, legacy staff profiles, Airtable identities, audit events, and invite log |
+| Auth architecture | Supabase email OTP/invite session cookies plus `public.users` staff-context resolution |
+| Operational data | Supabase Postgres, accessed server-side through `lib/supabase/data.ts` |
+| Local relational data | Supabase Postgres for users, contacts, attendance, sessions, locations, programs, audit events, and invite log, with RLS-scoped authenticated reads |
 | Offline support | Service worker queue for selected POST requests |
 | Tests | No automated product test suite; guardrails, workspace typecheck, builds, and linting are configured |
 
@@ -50,7 +50,7 @@ The prior documentation from 2026-04-23 is stale. Current code includes:
 | --- | --- |
 | Public visitor | Landing page, registration, attendance link |
 | Volunteer | `/contact` only; contacts route to assigned Preacher |
-| Preacher | Contact capture, sessions, live dashboard, volunteer invite, Airtable manage redirect |
+| Preacher | Contact capture, sessions, live dashboard, volunteer invite, `/manage` portal |
 | Admin | All staff actions, including staff invite and location creation |
 
 ## Product Capabilities
@@ -73,7 +73,7 @@ The landing page at `/` is program-branded by the active app. `/register` captur
 
 ### Staff Invites
 
-Admins can invite Admin, Preacher, or Volunteer users from `/admin/invite`. Admin/Preacher users can invite Volunteers from `/volunteers`. Invites upsert Airtable Users, send Supabase invite email, and write an `invite_log` row.
+Admins can invite Admin, Preacher, Volunteer, or Assistant users from `/admin/invite`. Admin/Preacher users can invite Volunteers from `/volunteers`. Invites upsert `public.users`, send Supabase invite email, and write an `invite_log` row.
 
 ## High-Level Dependencies
 
@@ -82,8 +82,8 @@ Admins can invite Admin, Preacher, or Volunteer users from `/admin/invite`. Admi
 | Framework | Next.js `16.0.7` |
 | UI | React `19.2.0`, Tailwind CSS `4.1.9`, Radix/shadcn-style primitives |
 | Auth | `@supabase/ssr`, `@supabase/supabase-js` |
-| Workspace packages | `@hkmc/data-contracts`, `@hkmc/program-config`, `@hkmc/authz`, `@hkmc/airtable`, `@hkmc/ui` |
-| Operational API | Airtable REST API through program-scoped env/profile resolution |
+| Workspace packages | `@hkmc/data-contracts`, `@hkmc/program-config`, `@hkmc/authz`, `@hkmc/ui` |
+| Operational API | Supabase PostgREST and Storage through the server-only Supabase clients in `lib/supabase/*` |
 | Forms | Native React forms plus installed `react-hook-form`/`zod` support |
 | Animation | GSAP, `tw-animate-css` |
 | QR | `qrcode.react` |
@@ -93,7 +93,7 @@ Admins can invite Admin, Preacher, or Volunteer users from `/admin/invite`. Admi
 
 - `next build` ignores TypeScript errors, so type checking must be run separately.
 - Program workspaces must stay in parity for shared flows unless a program intentionally diverges.
-- Supabase service-role access is required server-side for admin/auth bridge operations.
-- Airtable schema/table IDs are environment-driven and can be overridden per program.
+- Supabase service-role access is required server-side for staff-context resolution and all writes; RLS governs authenticated reads only.
+- Database-enforced RLS policies must stay in step with the role scoping contract in `rls-policy-matrix.md`.
 - The service worker has both active and legacy queue paths; keep request paths synchronized if routes change.
 - Several legacy helpers/components remain in the repo but are not active runtime paths.

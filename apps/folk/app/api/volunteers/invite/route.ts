@@ -11,7 +11,7 @@ interface InvitePayload {
   name?: string
   email?: string
   role?: string
-  assignedPreacherAirtableUserId?: string
+  assignedPreacherUserId?: string
 }
 
 function normalizeInviteRole(value: string | undefined): InvitableRole | null {
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     }
 
     const assignedPreacherId =
-      staff.role === "Preacher" ? staff.userId : payload.assignedPreacherAirtableUserId?.trim()
+      staff.role === "Preacher" ? staff.userId : payload.assignedPreacherUserId?.trim()
 
     if (!assignedPreacherId) {
       return Response.json(
@@ -83,8 +83,8 @@ export async function POST(request: Request) {
       existing &&
       existing.role === "Assistant" &&
       existing.status === "Active" &&
-      existing.assignedPreacherAirtableUserId &&
-      existing.assignedPreacherAirtableUserId !== assignedPreacherId
+      existing.assignedPreacherUserId &&
+      existing.assignedPreacherUserId !== assignedPreacherId
     ) {
       return Response.json(
         { error: "Existing Assistants cannot be moved to a different Preacher through this invite surface." },
@@ -110,8 +110,8 @@ export async function POST(request: Request) {
       email,
       name,
       role: inviteRole,
-      invitedByAirtableUserId: staff.userId,
-      assignedPreacherAirtableUserId: assignedPreacherId,
+      invitedByUserId: staff.userId,
+      assignedPreacherUserId: assignedPreacherId,
     })
 
     // `delivery` is whatever `sendStaffInviteEmail` produced, never a local claim about the invitee.
@@ -124,8 +124,8 @@ export async function POST(request: Request) {
     await writeInviteLog({
       programId: staff.programId,
       inviteeEmail: email,
-      airtableUserId: user.id,
-      inviterAirtableUserId: staff.userId,
+      userId: user.id,
+      inviterUserId: staff.userId,
       inviterSupabaseUserId: staff.supabaseUserId,
       inviteeRole: inviteRole,
       status: inviteResult.error ? "failed" : "sent",

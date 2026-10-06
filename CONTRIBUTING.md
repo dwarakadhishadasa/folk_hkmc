@@ -33,7 +33,7 @@ pnpm build
 pnpm lint
 ```
 
-This project currently has no full automated test suite. Add manual verification notes for affected user flows, especially staff auth, attendance, Airtable-backed reads/writes, and offline/PWA behavior.
+This project currently has no full automated test suite. Add manual verification notes for affected user flows, especially staff auth, attendance, Supabase-backed reads/writes, and offline/PWA behavior.
 
 ## GitHub Copilot MCP
 
@@ -58,4 +58,4 @@ Committed files can guide collaborators and fail bad PR branches, but full enfor
 - Keep production environment secrets and deployment controls owner-only.
 - Confirm `dev` exists remotely and remove `preview` only after `dev` points to the same commit.
 
-Never commit Airtable tokens, Supabase service-role keys, Vercel production credentials, GitHub tokens, or other secrets.
+Never commit Supabase service-role keys, Vercel production credentials, GitHub tokens, or other secrets.

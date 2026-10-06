@@ -128,7 +128,7 @@ export async function POST(request: Request) {
       name,
       sessionDate: startsAt.toISOString(),
       locationId,
-      preacherAirtableUserId: owningPreacherId,
+      preacherUserId: owningPreacherId,
       durationMinutes: duration.durationMinutes,
       publicAttendanceEnabled: true,
       attendanceOpensAt: startsAt.toISOString(),

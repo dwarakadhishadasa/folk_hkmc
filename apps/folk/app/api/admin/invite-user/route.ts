@@ -11,7 +11,7 @@ interface AdminInvitePayload {
   name?: string
   email?: string
   role?: StaffRole
-  assignedPreacherAirtableUserId?: string
+  assignedPreacherUserId?: string
   locationIds?: string[]
 }
 
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     }
 
     if (role === "Volunteer" || role === "Assistant") {
-      const preacherId = payload.assignedPreacherAirtableUserId?.trim()
+      const preacherId = payload.assignedPreacherUserId?.trim()
       if (!preacherId) {
         return Response.json(
           { error: "Assigned Preacher is required for Volunteer or Assistant invites." },
@@ -64,9 +64,9 @@ export async function POST(request: Request) {
       email,
       name,
       role,
-      invitedByAirtableUserId: staff.userId,
-      assignedPreacherAirtableUserId:
-        role === "Volunteer" || role === "Assistant" ? payload.assignedPreacherAirtableUserId : undefined,
+      invitedByUserId: staff.userId,
+      assignedPreacherUserId:
+        role === "Volunteer" || role === "Assistant" ? payload.assignedPreacherUserId : undefined,
       locationIds,
     })
 
@@ -80,8 +80,8 @@ export async function POST(request: Request) {
     await writeInviteLog({
       programId: staff.programId,
       inviteeEmail: email,
-      airtableUserId: user.id,
-      inviterAirtableUserId: staff.userId,
+      userId: user.id,
+      inviterUserId: staff.userId,
       inviterSupabaseUserId: staff.supabaseUserId,
       inviteeRole: role,
       status: inviteResult.error ? "failed" : "sent",

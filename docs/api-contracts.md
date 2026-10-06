@@ -4,9 +4,13 @@
 
 This project uses Next.js route handlers in each program app under `apps/folk/app` and `apps/gita-life/app`. The route paths below are relative to whichever program deployment is running. Most APIs return JSON. Auth-protected APIs use Supabase session cookies and program-scoped `getStaffContext()` from `lib/authz.ts`.
 
+Every route reads and writes Supabase Postgres. There is no Airtable backend, no Airtable environment configuration, and no external admin redirect.
+
 Important route convention: attendance is implemented at `/attendance`, not `/api/attendance`.
 
 Program identity comes from `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, set by the app package scripts. Staff responses include `programId`, membership `status`, and `lastSyncedAt` in addition to role/location data.
+
+**Identifier shape:** every record ID in a request or response is a UUID (for example `9f1c2f0e-6a1a-4a9a-9a2e-1b7c8d3f5a10`). The former `rec…` Airtable record IDs no longer appear anywhere in these contracts. Staff-referencing request fields are named after the `public.users` columns they write.
 
 ## Auth Routes
 
@@ -22,11 +26,13 @@ Responses:
 - `200 { staff: null }` when unauthenticated
 - `403/500 { error, code? }` for authorization/profile errors
 
+`StaffContext` carries `userId` (`public.users.id`) and `assignedPreacherUserId` (`public.users.assigned_preacher_id`) — both UUIDs.
+
 Headers include no-store cache controls and `Vary: Cookie`.
 
 ### `POST /api/auth/signin`
 
-Prepares an email OTP sign-in for an active Airtable staff user in the current program context.
+Prepares an email OTP sign-in for an active `public.users` row in the current program context.
 
 Request:
 
@@ -37,9 +43,9 @@ Request:
 Behavior:
 
 - Validates email format.
-- Finds active Airtable User by email through the current program's Airtable config.
-- Ensures Supabase Auth user exists.
-- Syncs Supabase user ID to Airtable if needed.
+- Finds an active staff row by email in `public.users` for the current program (`findStaffUserByEmail`).
+- Ensures a Supabase Auth user exists (`ensureSupabaseAuthUser`).
+- Loads the staff context from `public.users` (`syncStaffProfileByEmail`).
 - The browser then calls Supabase `signInWithOtp`.
 
 Responses:
@@ -51,7 +57,7 @@ Responses:
 
 ### `POST /api/auth/complete-implicit`
 
-Completes staff profile and program membership sync after a Supabase browser/session callback.
+Resolves the staff context after a Supabase browser/session callback.
 
 Auth: Supabase session cookie.
 
@@ -62,7 +68,7 @@ Responses:
 
 ### `GET /auth/confirm`
 
-Supabase email callback route. Accepts either `code` or `token_hash`/`type`. On success it syncs the staff profile/membership for the current program and redirects based on role:
+Supabase email callback route. Accepts either `code` or `token_hash`/`type`. On success it resolves the staff context for the current program and redirects based on role:
 
 - Volunteer: `/contact`
 - Preacher: `/` unless a safe `next` path is allowed
@@ -90,7 +96,7 @@ Request:
   "occupation": "Studying",
   "year": "2nd year",
   "location": "Anna Nagar",
-  "sessionId": "recXXXXXXXXXXXX"
+  "sessionId": "3b0d1e64-2a6c-4f18-9c8a-77d0c5b9e412"
 }
 ```
 
@@ -116,13 +122,13 @@ Responses with `sessionId`:
   "sessionBacked": true,
   "registrationOutcome": "contact_created",
   "attendanceOutcome": "attendance_marked",
-  "contact": { "id": "rec...", "name": "Arjun", "phone": "9876543210" },
-  "attendance": { "id": "rec...", "createdAt": "2026-06-11T..." },
-  "sessionId": "rec..."
+  "contact": { "id": "9f1c2f0e-6a1a-4a9a-9a2e-1b7c8d3f5a10", "name": "Arjun", "phone": "9876543210" },
+  "attendance": { "id": "5c2e9a11-8f4d-4b70-8d1c-2a6b0e9f3c77", "createdAt": "2026-06-11T..." },
+  "sessionId": "3b0d1e64-2a6c-4f18-9c8a-77d0c5b9e412"
 }
 ```
 
-`attendanceOutcome` may be `attendance_already_marked`.
+`attendanceOutcome` may be `attendance_already_marked`. A duplicate attendance row is caught by the `(contact_id, session_id)` unique index and surfaces as a completed response, not an error.
 
 ### `POST /attendance`
 
@@ -131,7 +137,7 @@ Marks attendance for an existing Contact in a session.
 Request:
 
 ```json
-{ "mobile": "9876543210", "sessionId": "recXXXXXXXXXXXX" }
+{ "mobile": "9876543210", "sessionId": "3b0d1e64-2a6c-4f18-9c8a-77d0c5b9e412" }
 ```
 
 Responses:
@@ -152,7 +158,7 @@ Auth: Admin or Preacher.
 Query:
 
 - `session=<sessionId>`: read session-linked attendance.
-- `knownAttendanceIds=recA,recB`: optional incremental fetch, max 100 record IDs.
+- `knownAttendanceIds=<uuid>,<uuid>`: optional incremental fetch, max 100 UUIDs.
 - `date=YYYY-MM-DD`: used only when no session is supplied.
 
 Responses:
@@ -183,15 +189,17 @@ Request:
   "source": "Pass distribution",
   "location": "Anna Nagar",
   "comments": "Met near campus",
-  "assignedPreacherAirtableUserId": "rec..."
+  "assignedPreacherUserId": "9f1c2f0e-6a1a-4a9a-9a2e-1b7c8d3f5a10"
 }
 ```
 
 Role behavior:
 
-- Volunteer: assigned Preacher comes from staff profile.
+- Volunteer: assigned Preacher comes from the staff row's `assigned_preacher_id`.
 - Preacher: assigned Preacher is the current staff user.
-- Admin: must provide `assignedPreacherAirtableUserId`.
+- Admin: must provide `assignedPreacherUserId`.
+
+The value is a `public.users` UUID. The route trims it and resolves the preacher with `findStaffUserById()`, then writes `contacts.assigned_preacher_id`. The Admin client form (`components/contact-form.tsx`) uses `assignedPreacherUserId` as its form-state key and as the `htmlFor`/`id`/`name` triple, and gates location selection on it ("Select Preacher first"), so client and server spelling always match.
 
 Responses:
 
@@ -215,21 +223,21 @@ Response:
 {
   "sessions": [
     {
-      "id": "rec...",
+      "id": "3b0d1e64-2a6c-4f18-9c8a-77d0c5b9e412",
       "name": "Sunday FOLK",
       "sessionDate": "2026-06-11T15:30:00.000Z",
-      "locationIds": ["rec..."],
-      "preacherIds": ["rec..."],
+      "locationIds": ["8a1f0c33-4d2b-4e91-b7a5-0c6d9e2f1a84"],
+      "preacherIds": ["9f1c2f0e-6a1a-4a9a-9a2e-1b7c8d3f5a10"],
       "publicAttendanceEnabled": true,
       "attendanceOpensAt": "2026-06-11T15:30:00.000Z",
       "attendanceClosesAt": "2026-06-11T15:45:00.000Z",
-      "attendanceUrl": "https://.../attend?session=rec..."
+      "attendanceUrl": "https://.../attend?session=3b0d1e64-2a6c-4f18-9c8a-77d0c5b9e412"
     }
   ]
 }
 ```
 
-Preachers see sessions where they are linked as Preacher or where the session location overlaps their staff profile locations.
+Preachers see sessions where they are the creator, where `preacher_id` is them, or where the session location overlaps their `location_ids`.
 
 ### `POST /api/sessions`
 
@@ -242,7 +250,7 @@ Request:
 ```json
 {
   "name": "Sunday FOLK",
-  "locationId": "rec...",
+  "locationId": "8a1f0c33-4d2b-4e91-b7a5-0c6d9e2f1a84",
   "durationMinutes": 15
 }
 ```
@@ -252,18 +260,20 @@ Validation:
 - `NEXT_PUBLIC_SITE_URL` must be set.
 - Duration must be an integer from 1 to 1440.
 - Preachers can create sessions only for scoped locations.
-- Location must exist in Airtable.
+- The location must exist in `public.locations`; a non-UUID value is rejected.
 
 Responses:
 
 - `201 { session }`
 - `400/403/500 { error, code? }`
 
+The generated attendance URL is `/attend?session=<uuid>` and is written back to `sessions.attendance_url`.
+
 ## Admin APIs
 
 ### `POST /api/admin/invite-user`
 
-Invites Admin, Preacher, or Volunteer users.
+Invites Admin, Preacher, Volunteer, or Assistant users.
 
 Auth: Admin.
 
@@ -274,17 +284,19 @@ Request:
   "name": "Madhav",
   "email": "madhav@example.com",
   "role": "Preacher",
-  "locationIds": ["rec..."],
-  "assignedPreacherAirtableUserId": "rec..."
+  "locationIds": ["8a1f0c33-4d2b-4e91-b7a5-0c6d9e2f1a84"],
+  "assignedPreacherUserId": "9f1c2f0e-6a1a-4a9a-9a2e-1b7c8d3f5a10"
 }
 ```
 
 Rules:
 
-- Role must be `Admin`, `Preacher`, or `Volunteer`.
-- Volunteer invites require an active assigned Preacher.
-- Non-Volunteer roles may receive location access.
-- Route upserts Airtable User, sends a Supabase invite or existing-user sign-in link, and writes `invite_log`.
+- Role must be `Admin`, `Preacher`, `Volunteer`, or `Assistant`.
+- Volunteer and Assistant invites require an active assigned Preacher.
+- Non-Volunteer/Assistant roles may receive location access.
+- The route upserts the `public.users` row, sending a Supabase invite or existing-user sign-in link, and writes `invite_log`.
+
+`upsertStaffUser()` maps the `assignedPreacherUserId` and inviter identifiers onto `public.users.assigned_preacher_id` and `invited_by`.
 
 Responses:
 
@@ -295,7 +307,7 @@ Responses:
 
 ### `POST /api/admin/locations`
 
-Creates an Airtable Location or returns an existing one.
+Creates a `public.locations` row or returns an existing one.
 
 Auth: Admin.
 
@@ -316,7 +328,7 @@ Responses:
 
 ### `POST /api/volunteers/invite`
 
-Invites a Volunteer. Admins may choose assigned Preacher; Preachers assign the volunteer to themselves.
+Invites a Volunteer. Admins may choose the assigned Preacher; Preachers assign the volunteer to themselves.
 
 Auth: Admin or Preacher.
 
@@ -327,7 +339,7 @@ Request:
   "name": "Nitai",
   "email": "nitai@example.com",
   "role": "Volunteer",
-  "assignedPreacherAirtableUserId": "rec..."
+  "assignedPreacherUserId": "9f1c2f0e-6a1a-4a9a-9a2e-1b7c8d3f5a10"
 }
 ```
 
@@ -351,4 +363,4 @@ When `public/sw.js` cannot reach the network for queueable POST paths, it stores
 
 with status `202`.
 
-For `/api/contact`, the message is `Contact queued for sync when online`.
+For `/api/contact`, the message is `Contact queued for sync when online`. On replay the request goes to the original URL, and a `409` from the route is treated as already synced.

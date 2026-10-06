@@ -13,7 +13,6 @@
       "@hkmc/program-config": ["../../packages/program-config/src/index.ts"],
       "@hkmc/program-config/server": ["../../packages/program-config/src/server.ts"],
       "@hkmc/authz": ["../../packages/authz/src/index.ts"],
-      "@hkmc/airtable": ["../../packages/airtable/src/index.ts"],
       "@hkmc/ui/*": ["../../packages/ui/src/*"]
     }
   },

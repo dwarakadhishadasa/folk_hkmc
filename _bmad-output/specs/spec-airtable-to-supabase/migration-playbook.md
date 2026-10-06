@@ -30,9 +30,9 @@ Ordered procedure for the Airtable → Supabase migration, captured so it can be
 
 ## Phase 3 — Cleanup
 
-14. Delete `lib/airtable.ts`, `packages/airtable`, `shared-airtable.ts`; remove `@hkmc/airtable` from both apps' `package.json`.
-15. Remove `AIRTABLE_*` env vars (both prefixes) from env files, deployment config, and docs.
-16. `grep -ri airtable` over runtime code returns nothing; build, lint, typecheck pass with no Airtable env set.
+14. ✅ Delete `lib/airtable.ts`, `packages/airtable`, `shared-airtable.ts`; remove `@hkmc/airtable` from both apps' `package.json`.
+15. ✅ Remove `AIRTABLE_*` env vars (both prefixes) from env files, deployment config, and docs.
+16. ✅ `grep -ri airtable` over runtime code returns nothing; build, lint, typecheck pass with no Airtable env set. (Schema-side Airtable-named columns and the four bridge tables remain — they need a migration plus regenerated `lib/supabase/types.ts`, handed to the story that owns hosted-project access; see story 7.7 Design Notes.)
 
 ## Phase 4 — Verify on the new project
 
@@ -41,7 +41,7 @@ Ordered procedure for the Airtable → Supabase migration, captured so it can be
 19. Run the CAP-3 RLS verification: per role, per table, confirm out-of-scope rows are unreadable with a user JWT.
 20. Run the CAP-5/CAP-6 contract checks: attendance POST/GET shapes, offline queue replay, duplicate-409 handling.
 21. Smoke-test PWA install + offline flow on a device/emulator against the preview deployment.
-22. Update `docs/data-models.md`, `docs/architecture.md`, `docs/api-contracts.md` to the Supabase-only reality. **Owned by story 7** (decided 2026-10-06) — listed here for phase completeness.
+22. ✅ Update `docs/data-models.md`, `docs/architecture.md`, `docs/api-contracts.md` to the Supabase-only reality. **Owned by story 7** (decided 2026-10-06).
 
 ## Phase 5 — Cutover (when testing passes)
 

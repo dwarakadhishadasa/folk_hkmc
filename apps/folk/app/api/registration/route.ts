@@ -124,11 +124,11 @@ export async function POST(request: Request) {
       )
     }
 
-    let assignedPreacherAirtableUserId: string | undefined
+    let assignedPreacherUserId: string | undefined
     let locationId: string | undefined
 
     if (session) {
-      assignedPreacherAirtableUserId = session.preacherIds[0]
+      assignedPreacherUserId = session.preacherIds[0]
       locationId = session.locationIds[0]
     }
 
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
         source: session ? "Attendance Registration" : "Public Registration",
         locationId,
         address: locationId ? undefined : resolveAddress(payload),
-        assignedPreacherAirtableUserId,
+        assignedPreacherUserId,
       }))
 
     if (session) {

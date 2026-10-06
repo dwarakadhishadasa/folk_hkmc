@@ -14,7 +14,7 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   title: "FOLK Portal - FOLK Chennai",
-  description: "FOLK Chennai staff portal for registration, contacts, sessions, attendance, invites, and Airtable handoff.",
+  description: "FOLK Chennai staff portal for registration, contacts, sessions, attendance, and invites.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

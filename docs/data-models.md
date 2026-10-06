@@ -2,132 +2,151 @@
 
 ## Overview
 
-The project has two persistence layers:
+Supabase Postgres is the only operational datastore. Every program-scoped entity — contacts, attendance, sessions, locations, and staff users — lives in Postgres, and Supabase Auth owns identity. Every server read and write goes through `lib/supabase/data.ts` (service-role client) or the scoped RLS policies described below.
 
-- Airtable: operational application records
-- Supabase Postgres/Auth: program-scoped staff authorization cache, identities, audit events, and invite logging
+There are no Airtable environment variables, and no Airtable access layer exists in the repo.
 
 There are also browser-side transient shapes for auth state, offline queueing, and form state.
 
-## Airtable Configuration
+## Supabase Configuration
 
-`lib/airtable.ts` resolves the active program through `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, then reads program-prefixed Airtable env vars first and generic env vars second. Table IDs fall back to the static mappings in `packages/program-config/src/programs/shared-airtable.ts`.
+`lib/supabase/admin.ts` and `lib/supabase/server.ts` resolve the project from the environment. The active program is resolved separately by `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID` through `packages/program-config`.
 
 | Variable | Purpose |
 | --- | --- |
-| `AIRTABLE_API_TOKEN` | Airtable REST token |
-| `AIRTABLE_BASE_ID` | Airtable base |
-| `AIRTABLE_CONTACTS_TABLE_ID` | Contacts table |
-| `AIRTABLE_ATTENDANCE_TABLE_ID` | Attendance table |
-| `AIRTABLE_SESSIONS_TABLE_ID` | Sessions table |
-| `AIRTABLE_USERS_TABLE_ID` | Staff users table |
-| `AIRTABLE_LOCATIONS_TABLE_ID` | Locations table |
-| `AIRTABLE_ANALYTICS_RECORD_ID` | Optional analytics link default |
-| `AIRTABLE_MANAGEMENT_URL` | Optional explicit Airtable management URL; must be HTTPS and on `airtable.com` |
-| `AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` | Optional `/manage` interface page |
+| `NEXT_PUBLIC_SUPABASE_URL` | Project URL; `SUPABASE_URL` is accepted as a server-side fallback |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable/anon key for browser and server auth clients |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Legacy anon-key fallback |
+| `SUPABASE_PUBLISHABLE_KEY` | Server-side fallback when the `NEXT_PUBLIC_*` value is absent |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only. Bypasses RLS; used by every server route |
+| `NEXT_PUBLIC_SITE_URL` | Absolute site origin used to build attendance links |
 
-Program-specific overrides use the active profile prefix:
+Program separation is by `program_id` column, not by separate projects or per-program credentials: every table carries `program_id` and both `folk` and `gita-life` live in the same Supabase project.
 
-| Program | Prefix examples |
-| --- | --- |
-| FOLK Chennai | `FOLK_AIRTABLE_API_TOKEN`, `FOLK_AIRTABLE_BASE_ID`, `FOLK_AIRTABLE_INTERFACE_DASHBOARD_PAGE_ID` |
-| Gita Life | `GITA_LIFE_AIRTABLE_API_TOKEN`, `GITA_LIFE_AIRTABLE_BASE_ID`, `GITA_LIFE_AIRTABLE_CONTACTS_TABLE_ID` |
+## Core Records
 
-## Airtable Records
+Record IDs are UUIDs (`gen_random_uuid()`), not external `rec…` strings. The `*Record` interfaces below are the shapes `lib/supabase/data.ts` returns to routes.
 
 ### Contact
 
-Source types: `ContactFields`, `ContactRecord`.
+Source types: `ContactFields`, `ContactRecord`. Table `public.contacts`.
 
-Fields used:
-
-| Airtable field | Type/shape | Notes |
+| Column | Type | Notes |
 | --- | --- | --- |
-| `Name` | string | Required for creation |
-| `Phone` | string/number | Normalized to last 10 digits |
-| `Age` | number | Public registration only |
-| `Date of Birth` | string | Staff contact form; `YYYY-MM-DD` |
-| `Year` | string | Student year or `Unknown` for working |
-| `College` | string | Student contacts |
-| `Company` | string | Working contacts |
-| `Source` | string | e.g. `Public Registration`, `Attendance Registration`, `Pass distribution` |
-| `Notes` | string | Staff comments |
-| `Initial Contact` | date string | Current Asia/Kolkata date on create |
-| `Last Contacted On` | date string | Current Asia/Kolkata date on create |
-| `Location` | string or linked record array | Free text or Location record ID depending flow |
-| `Assigned Preacher` | linked User IDs | Owner/routing |
-| `Collected By` | linked User IDs | Collector or assigned Preacher |
-| `Analytics` | linked Analytics IDs | Defaults to `AIRTABLE_ANALYTICS_RECORD_ID` |
+| `id` | uuid | Primary key |
+| `program_id` | text | Program scope; part of the phone uniqueness key |
+| `name` | text | Required for creation |
+| `phone` | text | Normalized to last 10 digits |
+| `age` | integer | Public registration only |
+| `date_of_birth` | text | Staff contact form; `YYYY-MM-DD` |
+| `year` | text | Student year or `Unknown` for working |
+| `college` | text | Student contacts |
+| `company` | text | Working contacts |
+| `designation` | text | Gita Life contact field |
+| `notes` | text | Staff comments |
+| `source` | text | e.g. `Public Registration`, `Attendance Registration`, `Pass distribution` |
+| `initial_contact` | text | Current Asia/Kolkata program date on create |
+| `last_contacted_on` | text | Current Asia/Kolkata program date on create |
+| `address` | text | Street address |
+| `location_ids` | text[] | Location scope; no join table |
+| `assigned_preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL` |
+| `collected_by_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL` |
+| `photo_path` | text | Storage object path in the private `contact-photos` bucket |
+| `rounds` | text | Rounds completed |
+| `books_read` | text[] | Books distributed/read |
+| `is_favorite` | boolean | Drives the favorites view in `/manage` |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Default `now()` |
+
+Unique index `idx_contacts_phone_program` covers `(phone, program_id)` — one contact per phone per program, enforced by Postgres. Indexed on `program_id` and `phone`.
+
+The former Airtable `Analytics` linked record has no column and no default link.
 
 ### Attendance
 
-Source types: `AttendanceFields`, `AttendanceRecord`.
+Source types: `AttendanceFields`, `AttendanceRecord`. Table `public.attendance`.
 
-Fields used:
-
-| Airtable field | Type/shape | Notes |
+| Column | Type | Notes |
 | --- | --- | --- |
-| `Contact` | linked Contact IDs | Required on create |
-| `Session` | linked Session IDs | Required on create |
-| `Phone` | string | Denormalized mobile |
-| `Name` | string | Denormalized contact name |
-| `Processed?` | boolean | Set to true |
-| `Attendance Date` | string | Read fallback |
+| `id` | uuid | Primary key |
+| `program_id` | text | Program scope |
+| `contact_id` | uuid | FK → `public.contacts(id)`; required |
+| `session_id` | uuid | FK → `public.sessions(id)`; required |
+| `phone` | text | Denormalized mobile |
+| `name` | text | Denormalized contact name |
+| `created_at` | timestamptz | Default `now()` |
 
-Attendance duplicate detection is by Contact within Session.
+Unique index `idx_attendance_contact_session` covers `(contact_id, session_id)` — one attendance row per contact per session. A duplicate insert surfaces as Postgres `23505`, which the route maps to `409`. Indexed on `program_id`, `contact_id`, `session_id`, and `created_at`.
 
 ### Session
 
-Source types: `SessionFields`, `SessionRecord`.
+Source types: `SessionFields`, `SessionRecord`. Table `public.sessions`.
 
-Fields used:
-
-| Airtable field | Type/shape | Notes |
+| Column | Type | Notes |
 | --- | --- | --- |
-| `Name` | string | Session name |
-| `Session Date` | datetime string | Creation/start time |
-| `Preacher` | linked User IDs | Current staff Preacher/Admin creator |
-| `Location` | linked Location IDs | Session scope |
-| `Analytics` | linked Analytics IDs | Default analytics record |
-| `Attendance Records` | linked Attendance IDs | Used for efficient session reads |
-| `Public Attendance Enabled` | boolean | Must be true to accept public attendance |
-| `Attendance Opens At` | datetime string | Window start |
-| `Attendance Closes At` | datetime string | Window end |
-| `Duration Minutes` | number | 1 to 1440 |
-| `Attendance URL` | string | Generated `/attend?session=<id>` URL |
+| `id` | uuid | Primary key |
+| `program_id` | text | Program scope |
+| `name` | text | Session name |
+| `session_date` | text | Creation/start time |
+| `preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL` |
+| `location_id` | uuid | FK → `public.locations(id)`, `ON DELETE RESTRICT` |
+| `public_attendance_enabled` | boolean | Must be true to accept public attendance |
+| `attendance_opens_at` | timestamptz | Window start |
+| `attendance_closes_at` | timestamptz | Window end |
+| `duration_minutes` | integer | 1 to 1440 |
+| `attendance_url` | text | Generated `/attendance?session=<uuid>` URL |
+| `created_by` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL`; drives session RLS scope |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Default `now()` |
 
-### Staff User
-
-Source types: `UserFields`, `StaffUser`.
-
-Fields used:
-
-| Airtable field | Type/shape | Notes |
-| --- | --- | --- |
-| `Name` | string | Staff display name |
-| `Email` | string | Lowercased, used for sign-in |
-| `Role` | `Admin`, `Preacher`, `Volunteer` | Required |
-| `Status` | `Active`, `Inactive` | Only active users can sign in |
-| `Locations` | linked Location IDs | Admin/Preacher scope |
-| `Portal Account` | string | Present but not central to current auth |
-| `Supabase User ID` | string | Synced to Supabase Auth user ID |
-| `Invited By` | linked User IDs | Invite audit in Airtable |
-| `Assigned Preacher` | linked User IDs | Volunteer routing |
+`sessions.location_id` is `ON DELETE RESTRICT` so a location with sessions cannot be deleted silently. The former Airtable `Analytics` link is dropped.
 
 ### Location
 
-Source types: `LocationFields`, `LocationRecord`.
+Source types: `LocationFields`, `LocationRecord`. Table `public.locations`.
 
-Fields used:
-
-| Airtable field | Type/shape | Notes |
+| Column | Type | Notes |
 | --- | --- | --- |
-| `Name` | string | Display and duplicate lookup |
-| `Status` | string | Shown in admin invite form if not active |
+| `id` | uuid | Primary key |
+| `program_id` | text | Program scope |
+| `name` | text | Display and duplicate lookup |
+| `status` | text | Defaults to `Active`; shown in the admin invite form if not active |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Default `now()` |
 
-## Supabase Tables
+### Staff User
 
-Defined in `supabase/migrations/*` and typed in `lib/supabase/types.ts`.
+Source types: `UserFields`, `StaffUser`. Table `public.users` — **the staff source of truth** for all four roles.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | uuid | Primary key; `REFERENCES auth.users(id) ON DELETE CASCADE` |
+| `program_id` | text | Program scope |
+| `email` | text | Trimmed and lowercased; `UNIQUE (program_id, email)` |
+| `name` | text nullable | Staff display name |
+| `role` | text | `CHECK IN ('Admin', 'Preacher', 'Volunteer', 'Assistant')` |
+| `status` | text | `CHECK IN ('Active', 'Inactive', 'Suspended', 'Revoked')`; defaults to `Active` |
+| `location_ids` | uuid[] | Location scope; no join table |
+| `assigned_preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL`; Volunteer/Assistant routing |
+| `invited_by` | uuid | UUID of the inviting staff row |
+| `created_at` | timestamptz | Default `now()` |
+| `updated_at` | timestamptz | Default `now()` |
+
+`role` and `status` are `TEXT` with `CHECK` constraints, not Postgres enums. Because `id` references `auth.users(id)`, the auth account and the staff record share one UUID — there is no separate identity table and no sync step.
+
+RLS is enabled. Authenticated users may read their own row, or every row in their own program when Admin. There are no authenticated write policies; server routes write with the service role.
+
+Indexed on `program_id` and `assigned_preacher_id`.
+
+### `public.contact_attendance_counts`
+
+View (not a table) used by the `/manage` contacts table. Rolls attendance up per contact:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `contact_id` | uuid | `public.contacts.id` |
+| `total_attendance_count` | bigint | All attendance rows for the contact |
+| `past_60_day_attendance_count` | bigint | Rows in the rolling 60-day window, computed against `now() AT TIME ZONE 'Asia/Kolkata'` |
 
 ### `public.programs`
 
@@ -143,89 +162,6 @@ Known program registry.
 
 RLS is enabled.
 
-### `public.staff_memberships`
-
-Primary program-scoped authorization cache. `getStaffContext()` prefers this table and refreshes from Airtable when the membership is stale.
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | uuid | Primary key |
-| `program_id` | text | References `programs(id)` |
-| `user_id` | uuid | References `auth.users(id)` |
-| `email` | text | Lowercased staff email |
-| `airtable_user_id` | text | Program Airtable User record ID |
-| `name` | text nullable | Staff display name |
-| `role` | text | `Admin`, `Preacher`, `Volunteer` |
-| `status` | text | `Active`, `Inactive`, `Suspended`, `Revoked` |
-| `location_ids` | text[] | Staff location scope |
-| `assigned_preacher_airtable_user_id` | text nullable | Volunteer routing |
-| `last_synced_at` | timestamptz | Used by stale-sync checks |
-| `revoked_at` | timestamptz nullable | Present for revocation tracking |
-| `sync_source` | text | Defaults to `airtable` |
-| `sync_state` | text | `ok`, `stale`, or `failed`; must be `ok` for access |
-| `sync_error` | text nullable | Last sync failure detail |
-| `created_at` | timestamptz | Default `now()` |
-| `updated_at` | timestamptz | Trigger-maintained |
-
-Unique constraints cover `(program_id, user_id)` and lowercased `(program_id, email)`. RLS is enabled; app reads/writes use the service-role client.
-
-### `public.staff_profiles`
-
-Legacy-compatible authorization cache keyed by Supabase Auth user ID. New syncs still update this table for compatibility, but program-scoped authorization should treat `staff_memberships` as the primary source.
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | uuid | Primary key; references `auth.users(id)` |
-| `program_id` | text | Added for program compatibility; defaults to `folk` |
-| `email` | text | Unique |
-| `airtable_user_id` | text | Required Airtable User ID |
-| `name` | text nullable | Staff display name |
-| `role` | text | `Admin`, `Preacher`, `Volunteer` |
-| `status` | text | `Active`, `Inactive` |
-| `membership_status` | text | `Active`, `Inactive`, `Suspended`, `Revoked`; mapped from Airtable status today |
-| `location_ids` | text[] | Staff location scope |
-| `assigned_preacher_airtable_user_id` | text nullable | Volunteer routing |
-| `last_synced_at` | timestamptz | Updated on profile sync |
-| `created_at` | timestamptz | Default `now()` |
-| `updated_at` | timestamptz | Trigger-maintained |
-
-RLS is enabled. Current server access uses the Supabase service-role client.
-
-### `public.airtable_identities`
-
-Maps program-scoped Airtable users to Supabase users.
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | uuid | Primary key |
-| `program_id` | text | References `programs(id)` |
-| `user_id` | uuid | References `auth.users(id)` |
-| `airtable_base_id` | text | Program Airtable base ID |
-| `airtable_user_id` | text | Program Airtable User record ID |
-| `email` | text | Staff email |
-| `last_synced_at` | timestamptz | Last Airtable identity sync |
-| `created_at` | timestamptz | Default `now()` |
-| `updated_at` | timestamptz | Trigger-maintained |
-
-Unique constraints cover `(program_id, airtable_user_id)` and `(program_id, user_id)`. RLS is enabled.
-
-### `public.airtable_sync_state`
-
-Program/source sync health table reserved for Airtable sync state.
-
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | uuid | Primary key |
-| `program_id` | text | References `programs(id)` |
-| `source` | text | Sync source name |
-| `status` | text | `ok`, `stale`, or `failed` |
-| `last_synced_at` | timestamptz nullable | Last successful sync |
-| `error_message` | text nullable | Last failure detail |
-| `created_at` | timestamptz | Default `now()` |
-| `updated_at` | timestamptz | Trigger-maintained |
-
-RLS is enabled.
-
 ### `public.audit_events`
 
 Authorization/audit event log written by `writeAuditEvent()`.
@@ -235,7 +171,7 @@ Authorization/audit event log written by `writeAuditEvent()`.
 | `id` | bigint identity | Primary key |
 | `program_id` | text | References `programs(id)` |
 | `actor_supabase_user_id` | uuid nullable | Supabase actor |
-| `actor_airtable_user_id` | text nullable | Airtable actor |
+| `actor_airtable_user_id` | text nullable | Legacy column name from the Airtable era; not written by current code |
 | `actor_role` | text nullable | Staff role at event time |
 | `action` | text | Event action |
 | `target_id` | text nullable | Optional target |
@@ -244,7 +180,7 @@ Authorization/audit event log written by `writeAuditEvent()`.
 | `metadata` | jsonb | Additional event metadata |
 | `created_at` | timestamptz | Default `now()` |
 
-RLS is enabled.
+RLS is enabled. `actor_airtable_user_id` is retained because the migration is already applied; its rename is deferred to the schema-cleanup story that owns hosted-project access.
 
 ### `public.invite_log`
 
@@ -253,10 +189,10 @@ Invite audit log written by `lib/invite-log.ts`.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | bigint identity | Primary key |
-| `program_id` | text nullable | Program for the invite; defaults to `folk` for legacy rows |
+| `program_id` | text nullable | Program for the invite |
 | `invitee_email` | text | Lowercased |
-| `airtable_user_id` | text nullable | Invited Airtable User |
-| `inviter_airtable_user_id` | text nullable | Inviter in Airtable |
+| `airtable_user_id` | text nullable | Legacy column name; now receives the `public.users` UUID |
+| `inviter_airtable_user_id` | text nullable | Legacy column name; now receives the `public.users` UUID |
 | `inviter_supabase_user_id` | uuid nullable | Inviter Supabase user |
 | `invitee_role` | text | Staff role |
 | `status` | text | `pending`, `sent`, `failed`, `accepted` |
@@ -266,26 +202,66 @@ Invite audit log written by `lib/invite-log.ts`.
 | `created_at` | timestamptz | Default `now()` |
 | `updated_at` | timestamptz | Trigger-maintained |
 
+### Legacy Bridge Tables
+
+`public.staff_memberships`, `public.staff_profiles`, `public.airtable_identities`, and `public.airtable_sync_state` were the Airtable→Supabase synchronization bridge. **No runtime code reads or writes them** — `public.users` is authoritative as of the staff-context rework. They remain in the database only because their migrations are already applied on the hosted project; dropping them requires database access and is deferred to the schema-cleanup story.
+
+Do not read these tables from application code. Use `public.users`.
+
+## Row-Level Security
+
+RLS is the scope enforcement layer for authenticated reads. Writes are service-role only, so RLS never governs an insert or update. The scope contract is defined in `_bmad-output/specs/spec-airtable-to-supabase/rls-policy-matrix.md`.
+
+Scope resolves through the caller's `public.users` row keyed by `auth.uid()`, and **only when that row is `status = 'Active'`**. A missing or non-Active row yields `NULL`/empty scope and therefore zero visible rows.
+
+### Helper functions
+
+All are `STABLE`, `SECURITY DEFINER`, pinned to `search_path = public, pg_temp`, and executable only by `authenticated` and `service_role`.
+
+| Function | Returns | Meaning |
+| --- | --- | --- |
+| `public.caller_role()` | text | Caller's role, `NULL` when the caller has no `Active` `users` row |
+| `public.caller_program_id()` | text | Caller's program under the same condition |
+| `public.caller_assigned_preacher_id()` | uuid | Caller's assigned preacher, `NULL` unless both rows are `Active` |
+| `public.caller_effective_location_ids()` | uuid[] | Preacher's own `location_ids`; a Volunteer/Assistant's active assigned preacher's `location_ids`; `{}` otherwise |
+| `public.caller_can_read_attendance_session(session_id)` | boolean | TRUE when the session is in the caller's program and its `preacher_id` is the caller or the caller's active assigned preacher |
+
+### Read policies
+
+| Table | Policy | Visible rows |
+| --- | --- | --- |
+| `public.users` | "Users can read own row or program rows as admin" | Own row always; all rows in own program when Admin |
+| `public.contacts` | "Contacts are scoped by caller role and program" | Program **and** (Admin ∨ Preacher with `assigned_preacher_id = caller` ∨ Assistant with `assigned_preacher_id = caller's active assigned preacher`) |
+| `public.sessions` | "Sessions are scoped by creator and program" | Program **and** (Admin ∨ Preacher/Assistant with `created_by = caller` ∨ Assistant with `created_by = caller's active assigned preacher`) |
+| `public.attendance` | "Attendance is scoped by session preacher and program" | Program **and** (Admin ∨ (Preacher/Assistant ∨ Assistant) where `caller_can_read_attendance_session(session_id)`) |
+| `public.locations` | "Locations are scoped by effective locations and program" | Program **and** (Admin ∨ `id = ANY(caller_effective_location_ids())`) |
+
+A Volunteer with an assigned preacher falls through to zero rows on contacts, sessions, and attendance; their location scope is the assigned preacher's.
+
+`node scripts/verify-rls.mjs` exercises all 75 checks against the hosted project.
+
 ## In-Memory And Client State
 
 ### `StaffContext`
 
-Returned by `/api/auth/me` and used by `AuthProvider`:
+Resolved by `getStaffContext()` in `lib/authz.ts`, returned by `GET /api/auth/me`, and consumed by `AuthProvider`:
 
 ```ts
 interface StaffContext {
   programId: "folk" | "gita-life"
   supabaseUserId: string
   email: string
-  airtableUserId: string
+  userId: string                 // public.users.id (UUID)
   name: string
-  role: "Admin" | "Preacher" | "Volunteer"
+  role: "Admin" | "Preacher" | "Volunteer" | "Assistant"
   status: "Active" | "Inactive" | "Suspended" | "Revoked"
   locationIds: string[]
-  assignedPreacherAirtableUserId?: string
+  assignedPreacherUserId?: string // public.users.assigned_preacher_id (UUID)
   lastSyncedAt: string
 }
 ```
+
+`userId` and `assignedPreacherUserId` are `public.users` UUIDs — the same vocabulary used by the contact and invite request bodies.
 
 ### Auth Provider State
 
@@ -295,7 +271,7 @@ interface StaffContext {
 - `isHydrated`
 - derived role booleans
 
-It does not own durable auth credentials. Supabase cookies and Supabase browser client session state do that.
+It does not own durable auth credentials. Supabase cookies and the Supabase browser client session state do that.
 
 ### Service Worker Queue
 
@@ -311,7 +287,7 @@ It does not own durable auth credentials. Supabase cookies and Supabase browser 
 }
 ```
 
-The store is `pending-requests` in `folk-offline-db`.
+The store is `pending-requests` in `folk-offline-db`. Queued paths are `/api/contact`, `/api/registration`, `/registration`, and `/attendance`; replay targets the original URL, `409` counts as synced, and an offline submission returns a synthetic `202 {queued: true}`.
 
 ### Legacy Local Offline Store
 
@@ -326,7 +302,7 @@ The store is `pending-requests` in `folk-offline-db`.
 }
 ```
 
-This path is not active because `OfflineSyncProvider` is not mounted.
+This path is not active because `OfflineSyncProvider` is not mounted. The service worker above is the live offline queue.
 
 ### Legacy In-Memory Store
 
@@ -337,7 +313,7 @@ This path is not active because `OfflineSyncProvider` is not mounted.
 - Mobile numbers normalize to the last 10 digits.
 - Staff email is trimmed and lowercased.
 - Session attendance requires an open eligible session.
-- Contact creation always links the default analytics record.
-- Staff profile/membership sync rejects inactive or missing Airtable staff users.
-- Staff membership access requires matching program, email, active status, trusted `sync_state`, and fresh `last_synced_at`.
-- Preacher session access is limited by linked Preacher ID or overlapping location scope.
+- One contact per phone per program is enforced by the `idx_contacts_phone_program` unique index, not by application code.
+- One attendance row per contact per session is enforced by the `idx_attendance_contact_session` unique index.
+- Staff access requires an `Active` `public.users` row matching the caller's `auth.uid()` and program; a missing or non-Active row resolves to zero visible rows.
+- Preacher session access is limited by `created_by` or, for attendance, by the parent session's `preacher_id`.

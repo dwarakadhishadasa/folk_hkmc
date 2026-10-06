@@ -11,7 +11,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@hkmc/airtable": "workspace:*",
     "@hkmc/authz": "workspace:*",
     "@hkmc/data-contracts": "workspace:*",
     "@hkmc/program-config": "workspace:*",

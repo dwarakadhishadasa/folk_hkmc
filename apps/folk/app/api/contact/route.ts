@@ -22,7 +22,7 @@ interface ContactPayload {
   locationId?: string
   location?: string
   comments?: string
-  assignedPreacherAirtableUserId?: string
+  assignedPreacherUserId?: string
 }
 
 interface ResolvedPreacher {
@@ -71,7 +71,7 @@ async function resolveAssignedPreacher(
     return { preacher: { id: staff.userId, locationIds: staff.locationIds } }
   }
 
-  const explicitPreacherId = payload.assignedPreacherAirtableUserId?.trim()
+  const explicitPreacherId = payload.assignedPreacherUserId?.trim()
   if (!explicitPreacherId) {
     return { error: "Assigned Preacher is required for Admin contact creation." }
   }
@@ -144,8 +144,8 @@ export async function POST(request: Request) {
       source: payload.source || "Pass distribution",
       locationId,
       comments: payload.comments?.trim() || undefined,
-      collectedByAirtableUserId: collectorId,
-      assignedPreacherAirtableUserId: assignment.preacher.id,
+      collectedByUserId: collectorId,
+      assignedPreacherUserId: assignment.preacher.id,
     })
 
     return Response.json({ contact }, { status: 201 })

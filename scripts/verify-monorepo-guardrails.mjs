@@ -8,10 +8,8 @@ const ignoredDirs = new Set(["node_modules", ".next", ".turbo", "dist", "build",
 const shouldPrintGraph = process.argv.includes("--graph")
 
 const serverOnlySpecifierPrefixes = [
-  "@hkmc/airtable",
   "@hkmc/authz",
   "@hkmc/program-config/server",
-  "@/lib/airtable",
   "@/lib/authz",
   "@/lib/invite-log",
   "@/lib/supabase/admin",
@@ -19,7 +17,6 @@ const serverOnlySpecifierPrefixes = [
 ]
 
 const allowedPackageExternalImports = new Map([
-  ["packages/airtable/src/index.ts", new Set(["lib/airtable.ts"])],
   ["packages/authz/src/index.ts", new Set(["lib/authz.ts"])],
   ["packages/ui/src/button.tsx", new Set(["components/ui/button.tsx"])],
 ])
