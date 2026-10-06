@@ -2,7 +2,8 @@
 title: 'Schema migration — users table and contact field gaps'
 type: 'feature'
 created: '2026-10-06'
-status: 'ready-for-dev'
+status: 'in-progress'
+baseline_revision: c15d112d7ad018ad4eddd5a5feb519ae788dac60
 review_loop_iteration: 0
 followup_review_recommended: false
 context: []
