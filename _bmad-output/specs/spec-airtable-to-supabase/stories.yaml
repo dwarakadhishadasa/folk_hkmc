@@ -1,8 +1,8 @@
 # Story breakdown for SPEC-airtable-to-supabase.
-# Execution order is list order. spec_checkpoint=true on every story (user decision, 2026-10-05,
-# carried forward on the 2026-10-05 re-derive): a human reviews each story spec between planning
-# and implementation. All dispatch notes carry the Supabase connection contract so agents work
-# autonomously.
+# Execution order is list order. spec_checkpoint is OFF (user decision 2026-10-06, reversing the
+# 2026-10-05 default): an agent takes each story end-to-end without a human review between
+# planning and implementation. All dispatch notes carry the Supabase connection contract so
+# agents work autonomously.
 # Environment contract (2026-10-05): NO local Supabase stack. All work targets the hosted project
 # etwunirahuucodcxydgs (ap-south-1) via gitignored .env files; migrations are applied with
 # supabase db push against the linked hosted project. The hosted project is disposable
@@ -24,7 +24,6 @@
     (source, photo_path, rounds, books_read, is_favorite), computed attendance-count views,
     and a contact-photos storage bucket. Implements CAP-1, CAP-2 and the CAP-9 schema per
     SPEC.md and data-model-mapping.md.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Read _bmad-output/specs/spec-airtable-to-supabase/SPEC.md plus companions
     data-model-mapping.md and rls-policy-matrix.md before writing anything.
@@ -71,7 +70,6 @@
     Replaces the placeholder authenticated-read-all policies with the per-role,
     program-scoped policies defined in rls-policy-matrix.md, backed by SECURITY DEFINER
     helper functions. Implements CAP-3.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Read SPEC.md and rls-policy-matrix.md first — the matrix is the exact contract, do not
     invent new scoping. Work: new migration adding SECURITY DEFINER helpers
@@ -99,7 +97,6 @@
     Creates a Supabase-backed data module exporting the same function names and return
     shapes as lib/airtable.ts so route diffs in story 5 are import-only. Foundation for
     CAP-4.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Read SPEC.md, data-model-mapping.md, and lib/airtable.ts first. Work: new module
     (lib/supabase/data.ts) exporting Supabase implementations of: findStaffUserByEmail,
@@ -128,7 +125,6 @@
     Rewires lib/authz.ts so getStaffContext reads the public.users table and the
     Airtable sync path (findStaffUserByEmail / syncStaffSupabaseUserId round-trips) is
     deleted; audit_events logging is kept. Implements CAP-2.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Read SPEC.md and lib/authz.ts first. Work: getStaffContext authenticates via Supabase
     Auth (unchanged), then loads the user row by (user_id, program_id) from the new
@@ -146,7 +142,6 @@
     Moves every route and page in apps/folk and apps/gita-life from lib/airtable to the new
     data module, updates rec*-ID validation to UUIDs, and preserves the /attendance and
     offline-queue contracts byte-for-byte. Implements CAP-4, CAP-5, CAP-6.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Read SPEC.md, docs/api-contracts.md, and the companions first. Work: in BOTH apps/folk
     and apps/gita-life, swap imports to lib/supabase/data.ts in api routes (registration,
@@ -170,7 +165,6 @@
     Builds the Supabase-backed management portal at /manage per manage-interface.md:
     dashboard stats and charts, contacts table, location-grouped sessions, per-contact
     attendance history, and favorites/contact editing with photo upload. Implements CAP-9.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Read SPEC.md, manage-interface.md, and rls-policy-matrix.md first — manage-interface.md
     is the screen-by-screen contract. Work: /manage stops redirecting to Airtable and renders
@@ -193,7 +187,6 @@
     Deletes lib/airtable.ts, packages/airtable, shared-airtable.ts, the @hkmc/airtable
     workspace deps, and all AIRTABLE_* env config, then proves the repo builds clean.
     Implements CAP-7.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Work: delete lib/airtable.ts, packages/airtable, packages/program-config shared-airtable
     config and the AIRTABLE table-ID resolution; remove "@hkmc/airtable" from
@@ -218,7 +211,6 @@
     Pushes migrations and auth config to the already-provisioned, Vercel-linked hosted
     project (etwunirahuucodcxydgs), seeds test data, and runs the CAP-3/5/6 verification
     suite plus a PWA smoke test on the branch preview. Implements playbook Phase 4.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Read SPEC.md and migration-playbook.md Phase 4 first. Project creation and the Vercel
     link are already DONE (user, 2026-10-05) — do not create or link projects. Work: supabase
@@ -254,7 +246,6 @@
     mapping table, auth.users migration preserving UUIDs, delta sync from the old project,
     and go-live by distributing the migration branch deployment's link to users.
     Implements CAP-8's cutover half.
-  spec_checkpoint: true
   invoke_dev_with: >-
     Read migration-playbook.md Phase 5 first and follow it exactly. Old-project access (OQ-8
     fully resolved): OLD_SUPABASE_SERVICE_ROLE_KEY + OLD_POSTGRES_URL* are in
