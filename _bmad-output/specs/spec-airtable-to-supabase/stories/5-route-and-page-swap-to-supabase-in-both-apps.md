@@ -3,7 +3,7 @@ title: 'Route and page swap to Supabase in both apps'
 type: 'feature'
 created: '2026-10-06'
 baseline_revision: 87425115c4ce2ddd93615331c882eb653ce33826
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 1
 followup_review_recommended: false
 context:
@@ -47,6 +47,136 @@ deferred:
       Surfacing point is story 8's fixture seeding.
     location: apps/folk/app/api/auth/signin/route.ts:57-60
     severity: low
+  - summary: >-
+      CAP-4's success condition — no route or page imports `lib/airtable` — has no committed enforcement, and the
+      one script that inspects the changed sign-in route cannot see its own signature change.
+    evidence: >-
+      Verified live by the verification-gap layer, not assumed: reverting `apps/folk/app/attendance/route.ts:12`
+      to `@/lib/airtable` leaves `verify-monorepo-guardrails.mjs` at PASS (its `@/lib/airtable` entry only fires when
+      reached from a `"use client"` root), `verify-program-readiness.mjs` at PASS (it asserts `lib/airtable.ts` still
+      contains its id-resolution code), `pnpm typecheck:workspace` at PASS (the two modules declare the same exports)
+      and `pnpm build:apps` at PASS; only `pnpm lint` reports anything, and all 12 of its errors are pre-existing
+      `.agent/`/`.codebuddy/`/`.neovate/` skill assets. The readiness script's `ensureSupabaseAuthUser\([^)]*\)` regex
+      matches identically before and after the `staffUserId` parameter was dropped, so removing the whole
+      `getUserById` linked-id fast path is likewise invisible. The intent's `Never` list forbids editing either script
+      and forbids adding a test runner, so nothing in this story can close it.
+    location: >-
+      scripts/verify-monorepo-guardrails.mjs:10-19, scripts/verify-program-readiness.mjs:33-41,
+      apps/folk/app/api/auth/signin/route.ts:44
+    severity: medium
+  - summary: >-
+      The one logic change in this diff — `upsertStaffUser`'s non-empty `location_ids` guard — is pinned by no
+      assertion that can execute it.
+    evidence: >-
+      Verified live: restoring `if (Array.isArray(data.locationIds))` at `lib/supabase/data.ts:429` leaves
+      `verify-monorepo-guardrails.mjs`, `verify-program-readiness.mjs` and `pnpm typecheck:workspace` all at PASS,
+      because `lib/airtable.ts:493` and `lib/supabase/data.ts:407` declare the same parameter object and the type
+      checker cannot see the guard's value. The spec's own check (`grep -n "Array.isArray(data.locationIds)"`) is a
+      source-text match that only proves one spelling of the guard survives at the insert path. Closing it
+      behaviourally needs the hosted project; `stories.yaml` story 8 is the story that seeds fixtures and ships
+      executable verification scripts.
+    location: lib/supabase/data.ts:429
+    severity: medium
+  - summary: >-
+      A `public.users` location change is written to Postgres but never invalidates the active-preachers cache, so
+      the change is invisible to the surfaces that read it for up to 20 minutes.
+    evidence: >-
+      `lib/supabase/data.ts:450-453` calls `revalidateSupabaseReferenceCache("active-preachers")` only when
+      `existing.role !== data.role || existing.status !== status`; a location-only update satisfies neither. The
+      cached read is `listCachedActivePreachers` (`lib/supabase/data.ts:395-403`, `revalidate:
+      SUPABASE_REFERENCE_CACHE_TTL_SECONDS = 20 * 60`, `lib/supabase/data.ts:148`), whose `StaffUser.locationIds`
+      feeds `apps/*/app/api/sessions/route.ts:113-118` (an Assistant's `owningPreacherLocationIds`) and the
+      `assignedPreacher` lookups in `apps/*/app/contact/page.tsx` and `apps/*/app/admin/invite/page.tsx`. A staff
+      member's own scoping is unaffected — `lib/authz.ts` reads `public.users` uncached — so the drift is confined
+      to cross-staff reads. Code in `lib/supabase/data.ts` is untouched by this diff and owned by stories 6/7.
+    location: lib/supabase/data.ts:450
+    severity: low
+  - summary: >-
+      `POST /api/admin/invite-user` validates the assigned Preacher with a trimmed id but forwards the untrimmed one,
+      which Postgres rejects and which leaves a just-provisioned `auth.users` row orphaned.
+    evidence: >-
+      `apps/*/app/api/admin/invite-user/route.ts:39` validates `payload.assignedPreacherAirtableUserId?.trim()`
+      through `findStaffUserById`, but `:65-66` forwards `payload.assignedPreacherAirtableUserId` untrimmed into
+      `upsertStaffUser`, which writes it to the `assigned_preacher_id` uuid column (`lib/supabase/data.ts:426-428`
+      update path, `:493-495` insert path) and throws the raw 22P02 (`lib/supabase/data.ts:439-441`, `:500-502`).
+      On the insert path `auth.admin.createUser` has already run at `lib/supabase/data.ts:467-473`, so the failure
+      surfaces as a 500 and leaves that auth user behind with no `public.users` row. Unreachable from the shipped
+      form — `components/invite-user-form.tsx:267` sources the value from a `<select>` over
+      `listCachedActivePreachers()` — and the route line is unchanged by this diff.
+    location: apps/folk/app/api/admin/invite-user/route.ts:39
+    severity: low
+  - summary: >-
+      `invite_log.airtable_user_id` and `audit_events.actor_airtable_user_id` are TEXT columns that now receive
+      `public.users.id` UUIDs alongside the `rec*` ids the Airtable era wrote, with no discriminator.
+    evidence: >-
+      `lib/invite-log.ts` and `writeAuditEvent` (`lib/authz.ts`) keep their `*AirtableUserId` parameter names — a
+      boundary this story's `Never` list deliberately holds — and the values they now receive are UUIDs
+      (`apps/*/app/api/admin/invite-user/route.ts:78-82`, `:89-91`). Neither column carries a CHECK, so Postgres
+      accepts both vocabularies and any future query joining audit history across the cutover has no way to tell
+      which id space a row belongs to. Story 7 owns the rename sweep and playbook step 22's docs update.
+    location: lib/invite-log.ts:10, lib/authz.ts:70
+    severity: low
+  - summary: >-
+      `mapSession` wraps the single `preacher_id`/`location_id` columns in one-element arrays, so a legacy Airtable
+      session that linked several preachers or locations cannot round-trip and its co-preachers lose access.
+    evidence: >-
+      `lib/supabase/data.ts:688-689` returns `preacherIds: row.preacher_id ? [row.preacher_id] : []` and the same
+      for `locationIds`, over `SessionsRow.preacher_id: string | null` / `location_id: string | null`
+      (`lib/supabase/data.ts:206-207`). The Airtable module it replaces read linked-record fields through
+      `normalizeLinkedIds` (`lib/airtable.ts:672-673`), which preserves every linked id. Consequences at
+      `apps/*/app/attendance/route.ts:141-143` (a co-preacher falls through to `403 "This session is outside your
+      allowed scope."`) and `apps/*/app/registration/route.ts:112` (`422 "This attendance session is missing preacher
+      or location routing."`). Unreachable until story 9's backfill loads legacy multi-value rows; the schema is
+      story 1's and `data.ts` is story 7.3's.
+    location: lib/supabase/data.ts:688
+    severity: medium
+  - summary: >-
+      `InviteUserForm` has no re-entrancy guard in `handleSubmit`, so a second Enter during an in-flight first-time
+      invite races the insert and surfaces as a 500.
+    evidence: >-
+      `components/invite-user-form.tsx:158` starts `handleSubmit` without an `if (isSubmitting) return`, and
+      `disabled={isSubmitting}` at `:365` only blocks the button — a form-level submit (Enter in a text input) still
+      fires. Both requests reach `upsertStaffUser`, both find no existing `public.users` row, and the loser hits the
+      `createUser` already-registered path at `lib/supabase/data.ts:467-478`, which throws
+      `AirtableRequestError(..., 500)`. The Airtable module created only a record, so no equivalent failure existed
+      before the swap; both the form and the insert path are unchanged by this diff.
+    location: components/invite-user-form.tsx:158
+    severity: low
+  - summary: >-
+      The service worker's replay loop has no attempt counter and no dead-letter, so a queued POST that can never
+      succeed is re-sent on every reconnect and the pending badge never clears.
+    evidence: >-
+      `public/sw.js:96-119` removes an entry only on `response.ok || response.status === 409`; anything else leaves
+      it in IndexedDB and `notifyPendingCount()` keeps reporting it. This story preserves `sw.js` byte-for-byte by
+      the intent's own `Always` list, and the id vocabulary crossing that boundary (a pre-swap `rec*` body replayed
+      against a UUID-keyed lookup) is already recorded as a pass-1 deferral.
+    location: public/sw.js:96
+    severity: low
+  - summary: >-
+      After the `location_ids` guard change, no code path can ever empty a staff member's locations, because both
+      invite routes submit `[]` whenever nothing is ticked.
+    evidence: >-
+      `lib/supabase/data.ts:429` now writes `location_ids` only for a non-empty array, `apps/*/app/api/admin/
+      invite-user/route.ts:35` forces `[]` for Volunteer/Assistant and `normalizeLocationIds` (`:15-23`) returns
+      `[]` when no box is checked, and `components/invite-user-form.tsx` submits `[]` in that case. This mirrors
+      `lib/airtable.ts:508` exactly and is what the intent's re-invite acceptance criterion requires, so it is a
+      faithful restoration rather than a regression — but it means revoking a Preacher's last location is no longer
+      possible through any shipped surface, and story 6's location-management UI will need a distinct clearing path.
+    location: lib/supabase/data.ts:429
+    severity: low
+  - summary: >-
+      `app/dashboard/page.tsx` filters sessions by `createdBy.includes(staff.userId)` with no Admin escape hatch, so
+      an Admin sees no live-session widget for sessions other staff created.
+    evidence: >-
+      `apps/*/app/dashboard/page.tsx:44` and `apps/*/app/api/sessions/route.ts:57` both filter on
+      `session.createdBy.includes(staff.userId)` with no role check, while the RLS policy at
+      `supabase/migrations/20261006010000_scoped_rls_policies.sql:190` grants Admin program-wide SELECT — an
+      app-layer narrowing of the database grant. The diff changed only the field name on that line (the filter is
+      byte-identical at `87425115c4ce2ddd93615331c882eb653ce33826`), and the intent's frozen
+      "Admin all / Preacher own sessions" contract is the `GET /attendance` feed, which is intact at
+      `apps/*/app/attendance/route.ts:141` (`staff.role === "Admin" || ...`).
+    location: apps/folk/app/dashboard/page.tsx:44
+    severity: medium
 ---
 
 <intent-contract>
@@ -228,6 +358,61 @@ Shared `lib/` transitive couplings (type-only, but they are what makes routes re
 
 **Cascading route:** `bad_spec` exists (two `high` entries), so `patch` and `defer` entries are moot until the code is re-derived. `intent_gap` does not exist. `review_loop_iteration` incremented 0 → 1.
 
+### 2026-10-06 — Review pass (post-`bad_spec` re-derivation)
+
+- verdicts: 48 findings — high 0, medium 15, low 28, false 5, maybe-false 0
+- findings:
+  - `[false]` `[reject]` Blind Hunter #1 — "the `## Verification` section records no results, only `expected:` prose, so the pass-1 `[false]` rejection's claim that every gate was 'executed and recorded' rests on evidence outside the file". Refuted as to the run's state: a review pass does not populate `## Verification`; this pass appended every observed command outcome to that section, so the record exists for anyone reading the artifact. Not a defect in the change.
+  - `[false]` `[reject]` Blind Hunter #2 — "`## Auto Run Result` is referenced but absent". Refuted: the workflow's Finalize step is what writes it, and this pass's Finalize step wrote it; `git status` showing it missing mid-run is the expected pre-finalization state.
+  - `[false]` `[reject]` Blind Hunter #3 — "no pass-2 entry anywhere in the spec; `review_loop_iteration` is still 1". Refuted: this row is the pass-2 entry, and `review_loop_iteration` counts `bad_spec` loopbacks, not passes — it stays at 1 because this pass routed no loopback.
+  - `[low]` `[reject]` Blind Hunter #4 — "the file/swap counts are wrong three ways (Intent 22, Code Map header 22, enumeration 24, diff 26) and `app/manage/page.tsx` is unenumerated as rename-only". The arithmetic checks out, but the diff itself is complete and correct — `manage/page.tsx` changes only its `staff.*` read and is listed in the Code Map's rename set. Fix is to correct this build's spec's own counts, which is not a change finding.
+  - `[low]` `[reject]` Blind Hunter #5 — "the Code Map's gita-life `api/contact/route.ts` line refs are stale because the diff reformats that import". Real, and self-caused by the swap's own reformatting. Every line number in a Code Map is a snapshot; the fix is to re-derive this spec's text, which is not a change finding.
+  - `[low]` `[reject]` Blind Hunter #6 — "the I/O matrix's first-time-invite row ('an account-setup invite is the email the invitee receives') contradicts the amended acceptance criteria and the new code comment". Verified: both say what the reviewer says they say. Two reasons this is not a change finding. First, the row lives inside `<intent-contract>`, which a `bad_spec` loopback must not modify — and pass 1 amended the acceptance criteria precisely because it could not amend the matrix. Second, the *tested* surface (the acceptance criterion, the route's forwarded `delivery`, `components/invite-user-form.tsx:184`) says nothing false: the literal is "A sign-in email was sent.", which drops the "already exists" claim. The residual disagreement is about SMTP delivery, which `stories.yaml` story 8 owns; recorded here rather than acted on.
+  - `[low]` `[reject]` Blind Hunter #7 — "`components/invite-user-form.tsx:184` is edited but no task authorizes it and no criterion asserts the copy". Verified: the spec's CORRECT FIRST-INVITE REPORTING task names only the route. The change itself is required by pass-1 amendment 4 (stop asserting "already exists" for a first-time invitee) and is a message literal, not a wire-payload key. Adding the task is an edit to this build's spec.
+  - `[low]` `[reject]` Blind Hunter #8 — "the dashboard caption edit has no verification command". Verified: neither Acceptance Criteria nor `## Verification` greps for it. This pass ran one (`grep -rn Airtable components`, expecting zero matches for the caption) and recorded the outcome under `## Verification`; adding it permanently to the criteria list is a spec edit.
+  - `[medium]` `[defer]` Blind Hunter #9 — "the `ATTENDANCE_ID_PATTERN` change has no reproducible coverage: the KEEP 12-case harness lives outside the repo, and the matrix has no row for the casing the new `/i` flag introduces". **carried** — same location and claim as this pass-1 log's `[medium] [defer]` row for Verification Gap #5 + Blind Hunter #9 + Intent Alignment #1 (the `rec*`→UUID predicate and the preserved `/attendance` and offline contracts have no committed executable coverage), and the code still reads as that row describes. Pass-1's `[low] [reject]` row for the casing half (Edge Case Hunter #10) covers the second half of this claim unchanged. Verdict and route kept; not re-deferred.
+  - `[low]` `[defer]` Blind Hunter #10 — "the `location_ids` fix removes the only path that could ever clear a staff member's locations, and neither the spec nor the acceptance criteria record it". Verified — see Edge Case Hunter #1, grouped with it; new deferral entry added.
+  - `[medium]` `[defer]` Blind Hunter #11 — "`verify-program-readiness.mjs` cannot detect the `ensureSupabaseAuthUser` signature change: its `[^)]*` regex matches identically before and after". Verified live by the verification-gap layer. Same root cause as Verification Gap #1 — the intent forbids editing either verifier and forbids a new runner — so grouped with it; new deferral entry added.
+  - `[low]` `[reject]` Blind Hunter #12 — "the guardrails gap is assigned to a story that deletes the need: story 7 removes `@/lib/airtable`, so `@/lib/supabase/data` will never be added to `serverOnlySpecifierPrefixes`, and the accepted backstop is recorded nowhere". **carried** — same file and same claim as this pass-1 log's `[low] [reject]` row for Blind Hunter #7 + Verification Gap other #4, and `scripts/verify-monorepo-guardrails.mjs:10-19` still reads as that row describes. Verdict and route kept.
+  - `[low]` `[reject]` Blind Hunter #13 — "two divergent deferral ledgers exist: 2 frontmatter entries against 10+ triage-log `[defer]` rows, with no cross-referencing key". The two are different things by design — `## Review Triage Log` records every per-pass verdict including rejects, and frontmatter `deferred:` is the surviving ledger. Real finding: pass 1 wrote only 2 of its 10 defer rows into the frontmatter. This pass did not re-add them, because the carry-over rule forbids deferring a logged row twice; the shortfall is recorded under `## Auto Run Result`. Consolidating the two sections is an edit to this build's spec.
+  - `[low]` `[patch]` Blind Hunter #14 — "both new markdown files lack a trailing newline". Verified: `epic-7-context.md` and this spec both ended without `\n` in the staged diff. Fixed this pass — a newline appended to each; the staged diff now contains zero `\ No newline at end of file` markers.
+  - `[low]` `[defer]` Edge Case Hunter #1 — "with `if (data.locationIds?.length)` and `invite-user/route.ts:35` forcing `[]`, `location_ids` can never be emptied; a revoked Preacher keeps access at every location forever". Verified line by line. The bad outcome is real as stated, but it is exactly what the intent's re-invite acceptance criterion mandates and exactly what `lib/airtable.ts:508` did, so the diff restored parity rather than causing a regression. Recorded so story 6's location-management UI does not assume a clearing path exists; new deferral entry added.
+  - `[low]` `[defer]` Edge Case Hunter #2 — "a `location_ids`-only update writes the column but skips cache revalidation, so `listCachedActivePreachers` serves stale locations for the 20-minute TTL and the Admin picks a rejected location". Verified: `lib/supabase/data.ts:450-453` revalidates only on a role or status change; TTL is `20 * 60` at `lib/supabase/data.ts:148`. Code in `data.ts` is untouched by this diff and owned by stories 6/7; new deferral entry added.
+  - `[low]` `[reject]` Edge Case Hunter #3 — "an unauthenticated `POST /attendance` carrying a non-UUID `sessionId` yields 500 with raw Postgres text instead of the 404 branch at `:62`". Verified: `findSessionById` rethrows any error other than `PGRST116` (`lib/supabase/data.ts:712-717`), and the route's catch-all turns that into a 500. **carried** — same location and claim as this pass-1 log's `[low] [reject]` row for Edge Case Hunter #3-#8, and the code still reads as that row describes. Verdict and route kept.
+  - `[low]` `[reject]` Edge Case Hunter #4 — "the same 22P02 path at `api/registration/route.ts:101` yields 500 instead of the intended 404 at `:110`". Verified, and it is the same defect as the carried group above, at a site that group did not list. Shares the group's route on the group's own reachability evidence: `sessionId` there comes from the `/attend?session=` link the app itself mints, never from a shape the shipped client cannot produce. Kept as its own row.
+  - `[low]` `[reject]` Edge Case Hunter #5 — "a client-supplied non-UUID `assignedPreacherAirtableUserId` or `locationId` turns the intended 400 into a 500 at `invite-user/route.ts:50,57`". **carried** — same location and claim as this pass-1 log's `[low] [reject]` row for Edge Case Hunter #3-#8. Verdict and route kept.
+  - `[low]` `[defer]` Edge Case Hunter #6 — "a padded id passes trimmed validation at `:39` and is forwarded untrimmed at `:65-66`, so Postgres 22P02 fails the write and leaves the auth user minted at `data.ts:467-473` orphaned". Verified — the validation uses `?.trim()` and the forwarded value does not. Real, but the route line is unchanged by this diff and unreachable from the shipped form (the value comes from a `<select>` over `listCachedActivePreachers()`). New deferral entry added.
+  - `[low]` `[reject]` Edge Case Hunter #7 — "a body-supplied non-UUID `locationId`/assigned-Preacher id turns the intended 400 into a 500 at `sessions/route.ts:95` and `volunteers/invite/route.ts:57`". **carried** — same locations and claim as this pass-1 log's `[low] [reject]` row for Edge Case Hunter #3-#8. Verdict and route kept.
+  - `[low]` `[defer]` Edge Case Hunter #8 — "`invite_log.airtable_user_id` and `audit_events.actor_airtable_user_id` are TEXT columns now receiving UUIDs, mixing rec and UUID vocabularies with no discriminator". Verified: both are unconstrained TEXT and both receive `public.users.id` through the paths this diff re-pointed. The parameter names are held deliberately by the intent's `Never` list; story 7 owns the sweep. New deferral entry added.
+  - `[low]` `[reject]` Edge Case Hunter #9 — "`ATTENDANCE_ID_PATTERN` is case-insensitive but `parseKnownAttendanceIds` returns the Set with original casing, so an uppercase id validates and then never matches Postgres's lowercase `record.id`". **carried** — same location and claim as this pass-1 log's `[low] [reject]` row for Edge Case Hunter #10, and the code still reads as that row describes. Verdict and route kept.
+  - `[medium]` `[defer]` Edge Case Hunter #10 — "when `getUserById` succeeds but the auth user's email differs from `public.users.email`, `createUser` mints an unlinked auth row and the route then surfaces a bare 500". Verified reachable, but only under the same corrupt-data class this pass-1 log's `[medium] [defer]` row for Verification Gap #3 + Edge Case Hunter #1 and #2 recorded: an `auth.users` row whose email has been changed out from under its `public.users` row. **carried** — same location (`signin/route.ts:47-77`) and same outcome. Verdict and route kept.
+  - `[medium]` `[defer]` Edge Case Hunter #11 — "`sessions.created_by` is nullable with `ON DELETE SET NULL`, so `createdBy: []` makes the session invisible to everyone, Admin included". **carried** — same locations and claim as this pass-1 log's `[medium] [defer]` row for Edge Case Hunter #9, and the migrations still read as that row describes. Verdict and route kept; this layer's independent reachability check agrees (no repo call site deletes a `public.users` row; it becomes reachable when story 6's portal can).
+  - `[medium]` `[defer]` Edge Case Hunter #12 — "`mapSession` wraps single nullable `preacher_id`/`location_id` columns in one-element arrays, so a legacy multi-preacher session collapses: co-preachers get 403 and public links get 422". Verified against both modules: `lib/airtable.ts:672-673` read multi-valued linked records through `normalizeLinkedIds`, `lib/supabase/data.ts:688-689` cannot. Pre-existing — the schema is story 1's, `data.ts` is story 7.3's — and unreachable until story 9's backfill loads such rows. New deferral entry added.
+  - `[low]` `[defer]` Edge Case Hunter #13 — "Enter pressed during an in-flight submit races the insert, and the loser throws 500 already-registered where the Airtable path returned 201". Verified: `handleSubmit` (`components/invite-user-form.tsx:158`) has no `isSubmitting` re-check and `disabled={isSubmitting}` (`:365`) only blocks the button, and `lib/supabase/data.ts:467-478` throws 500 on the already-registered create. Pre-existing in both the form and `data.ts`; new deferral entry added.
+  - `[low]` `[defer]` Edge Case Hunter #14 — "`public/sw.js:96-119` has no attempt counter and no dead-letter, so a permanently failing queued body is re-POSTed on every reconnect and the pending badge never clears". Verified. The intent's `Always` list preserves `sw.js` byte-for-byte, so this is out of scope by the intent itself; recorded so it is not lost. New deferral entry added.
+  - `[low]` `[defer]` Edge Case Hunter #15 — "`lib/airtable.ts:530`'s `syncStaffSupabaseUserId` now has zero runtime importers". **carried** — same location and claim as this pass-1 log's `[low] `[defer]` row for Blind Hunter #12 + Edge Case Hunter #11. Verdict and route kept.
+  - `[medium]` `[defer]` Edge Case Hunter #16 — "the removed `existingUser.id !== linkedSupabaseUserId` branch was the only detection of a `public.users`↔`auth.users` id divergence, so divergence, `staff_not_found` and a missing auth row all collapse into one 500". **carried** — same location and claim as this pass-1 log's `[medium] `[defer]` row for Verification Gap #3 + Edge Case Hunter #1 and #2. Verdict and route kept.
+  - `[low]` `[reject]` Edge Case Hunter #17 — "claim violation: `sessions/route.ts:95-98` turns the documented 400 into a 500 on bad input". **carried** — same location and claim as this pass-1 log's `[low] `[reject]` row for Edge Case Hunter #3-#8. Verdict and route kept.
+  - `[low]` `[reject]` Edge Case Hunter #18 — "claim violation: the frozen 404 branch at `attendance/route.ts:55-62` now yields 500 with leaked Postgres text". **carried** — same location and claim as this pass-1 log's `[low] `[reject]` row for Edge Case Hunter #3-#8. Verdict and route kept.
+  - `[medium]` `[defer]` Edge Case Hunter #19 — "claim violation: `dashboard/page.tsx:44` has no Admin escape hatch, so Admin sees only sessions they created, not all sessions". Verified: the filter is `sessions.filter((session) => session.createdBy.includes(staff.userId))` with no role check, byte-identical at the baseline except the field name. Two corrections to the framing: it is pre-existing, not caused by the field rename; and the intent's frozen "Admin all / Preacher own sessions" contract is the `GET /attendance` feed, which is intact at `attendance/route.ts:141` (`staff.role === "Admin" || ...`). The underlying app-layer narrowing of Admin's RLS grant is real; new deferral entry added.
+  - `[medium]` `[defer]` Edge Case Hunter #20 — "claim violation: `mapSession` populating `preacherIds`/`locationIds` is not parity, because a single-column schema silently caps multi-preacher legacy sessions at one". Verified and grouped with Edge Case Hunter #12, which it restates as a claim check; same route, one deferral entry.
+  - `[low]` `[patch]` Edge Case Hunter #21 — "claim violation: `volunteers/invite/route.ts:117` carries no first-time-invitee caveat while the identical call at `admin/invite-user/route.ts:73` does". Verified — the diff added the four-line comment to `apps/*/app/api/admin/invite-user/route.ts` and not to the twins, and both routes call `upsertStaffUser` immediately before `sendStaffInviteEmail`, so both hit the same always-`sign-in-link` outcome. Fixed this pass: the same caveat added above `sendStaffInviteEmail` in `apps/folk/app/api/volunteers/invite/route.ts` and `apps/gita-life/app/api/volunteers/invite/route.ts`.
+  - `[medium]` `[defer]` Edge Case Hunter #22 — "claim violation: the Design Note's 'corrupt seed data only' reachability analysis misses the email-mismatch path that orphans an auth row". Verified and grouped with Edge Case Hunter #10, which it restates as a claim check; **carried** on the same `[medium] `[defer]` row.
+  - `[medium]` `[defer]` Verification Gap #1 — "the import swap's headline acceptance criterion has no committed enforcement; reverting one import passes every CI gate". Pre-verified by the layer (it reverted `apps/folk/app/attendance/route.ts:12` and ran guardrails, readiness, typecheck and build — all PASS, tree restored). Confirmed independently: `scripts/verify-monorepo-guardrails.mjs:14` only fires when the specifier is reached from a `"use client"` root, so a server route importing `@/lib/airtable` is never examined. The filed disposition was `patch`, re-routed to `defer`: the intent's `Never` list forbids editing either verifier and forbids a new test runner, so no in-story patch exists, and `stories.yaml` story 8 owns the executable verification suite. New deferral entry added.
+  - `[medium]` `[defer]` Verification Gap #2 — "`upsertStaffUser`'s `location_ids` guard, the one logic change in this diff, is pinned by nothing that executes". Pre-verified by the layer (it restored `Array.isArray` and all three gates stayed green). Re-routed from the filed `defer` only in the sense that this is a new entry rather than a carried one — pass 1 fixed the guard, not its coverage. New deferral entry added.
+  - `[medium]` `[defer]` Verification Gap #3 — "the `rec*`→UUID predicate is a silent-degradation branch with no executable check". **carried** — same location and claim as this pass-1 log's `[medium] `[defer]` row for Verification Gap #5 + Blind Hunter #9 + Intent Alignment #1. Verdict and route kept.
+  - `[medium]` `[defer]` Verification Gap #4 — "`verify-program-readiness.mjs` is the only check over the changed sign-in route, is purely textual, and is absent from `quality-gates.yml` and from `quality:ci`". **carried** — same location and claim as this pass-1 log's `[medium] `[defer]` row for Blind Hunter #13 + Verification Gap #4, and `.github/workflows/quality-gates.yml:37-47` still runs the same four steps. The layer filed `patch`; the pass-1 route stands, so not patched. Verdict and route kept.
+  - `[medium]` `[defer]` Verification Gap other #1 — "`sessions.created_by` nullable with `ON DELETE SET NULL` makes a session invisible to every role". **carried** — same finding as Edge Case Hunter #11 and this pass-1 log's `[medium] `[defer]` row for Edge Case Hunter #9. Verdict and route kept.
+  - `[false]` `[reject]` Verification Gap other #2 — "`components/invite-user-form.tsx:184`'s `Invite sent.` branch is now unreachable through either invite route". Refuted by the update path: `upsertStaffUser` only calls `auth.admin.createUser` on the insert branch (`lib/supabase/data.ts:456-481`), so re-inviting an existing `public.users` row whose auth user is absent lets `inviteUserByEmail` succeed and return `delivery: "invite"`. The branch is live. What the layer correctly observed is narrower and already recorded — on the insert path `delivery` is always `sign-in-link` — which is the caveat Edge Case Hunter #21's patch now documents at the second call site.
+  - `[medium]` `[defer]` Intent Alignment #1 — "the intent's expectations live at the HTTP response, the Postgres row state and browser copy, while the diff's changes are exercised at a fourth surface — source text — and its only runtime evidence was produced out of repo". Descriptive, but it names the real structural gap and shares its root cause with Verification Gap #1, #2 and #4: no committed behavioral gate reaches those three surfaces. Grouped with Verification Gap #1; one deferral entry.
+  - `[false]` `[reject]` Intent Alignment #2 — "CAP-6 is contradicted by the `components/invite-user-form.tsx` change, which the `Never` list names". Refuted by reading the clause it relies on: the prohibition is on renaming the **wire payload keys** shared with client forms, and the files are named as where those keys live. The diff changed one message literal at `:184` and no payload key, so the `Never` clause is not violated. (The matrix row does require a message change in that file; the two readings resolve in the diff's favour, as the layer itself concluded.)
+  - `[low]` `[reject]` Intent Alignment #3 — "the caption edit is named only in `## Problem`, absent from Approach/Always/Never, so it required a reading to justify". The reading is available and the diff implements it; the change itself is correct and verified (the caption no longer names Airtable — `grep -rn Airtable components` returns only the `assignedPreacherAirtableUserId` wire-payload keys the intent keeps). Adding the caption to Approach is an edit to this build's spec.
+  - `[low]` `[reject]` Intent Alignment #4 — "scope count: `## Problem` says 22 route/page files, the diff touches 26 under `apps/`". Real arithmetic, but the diff follows the `Always`-list enumeration and nothing user-facing is missing or wrong; correcting the prose count is an edit to this build's spec.
+  - `[low]` `[reject]` Intent Alignment #5 — "the shipped literal for the now-universal `sign-in-link` branch is 'A sign-in email was sent.', which does not say 'invite sent', so the matrix row is only half-met". Verified, and the same substance as Blind Hunter #6: the tested criterion is that nothing *claims* the invitee pre-existed, which the literal satisfies. The residual is about SMTP delivery, owned by story 8; recorded, not acted on here.
+  - `[medium]` `[defer]` Intent Alignment #6 — "coverage is inverse to risk: all four covered matrix rows are the ones expressible as file-local assertions, while all seven uncovered rows need HTTP or Postgres". Descriptive, and the same root cause as Verification Gap #1, #2 and #4. Grouped with Verification Gap #1; one deferral entry.
+
+**Cascading route:** no `intent_gap` and no `bad_spec` this pass — every finding resolved to a patch, a defer, or a rejection, and none needs the code re-derived. Both `patch` entries were low, so `patch` and `defer` were processed normally. `review_loop_iteration` stays at 1.
+
 ## Design Notes
 
 - **Why the swap is import-only — and where parity was a lie.** `lib/supabase/data.ts` was built with a deliberately mirrored export surface (story 7.3's stated purpose: "so route diffs in story 5 are import-only"), and a symbol-by-symbol comparison of the two modules' `export` lists confirms every name the routes/pages import exists with the same signature, including the two shape traps: `findLocationById` still returns an `AirtableRecord<LocationFields>` envelope (`data.ts:738`), and `getAttendanceBySessionRecord` takes a narrower `Pick<SessionRecord,"id">` while still honouring `knownAttendanceIds`. **Surface parity is not behavioural parity.** Type-identical bodies is exactly why the two `upsertStaffUser` divergences escaped review pass 1: `pnpm typecheck`, `pnpm build`, `pnpm lint`, `pnpm guardrails` and `verify-program-readiness.mjs` were all green over a change that wipes staff locations and mislabels every new invite. Any further divergence this swap surfaces is reported, not patched, except the one guard line this story owns.
@@ -264,3 +449,75 @@ Shared `lib/` transitive couplings (type-only, but they are what makes routes re
 - `GET /attendance?session=<uuid>&knownAttendanceIds=<uuid>`: rows in the set are absent from the feed; repeat with one non-UUID token and confirm every row returns (set discarded, no error).
 - Create a session, copy its attendance URL, mark attendance on a second device with the network offline, confirm the `202 {queued:true}` response, then reconnect and confirm the row lands in Postgres and clears from the queue.
 - Confirm the server logs and the Postgres tables show no `api.airtable.com` traffic from any route or page during the above.
+
+**Observed — review pass 2, 2026-10-06 (run after both `patch` fixes):**
+
+| Command | Result |
+|---------|--------|
+| `grep -rn --exclude-dir=.next --exclude-dir=node_modules "@/lib/airtable" apps components lib` | 0 matches (exit 1) — as expected |
+| `grep -rn --exclude-dir=.next --exclude-dir=node_modules "@hkmc/airtable" apps components lib` | 0 matches (exit 1) — as expected |
+| `grep -rn ... "staff\.airtableUserId\|staff\.assignedPreacherAirtableUserId" apps components lib` | 0 matches (exit 1) — as expected |
+| `grep -n "airtableUserId\|assignedPreacherAirtableUserId" lib/authz.ts` | 0 matches (exit 1) — as expected |
+| `grep -rn --exclude-dir=.next --exclude-dir=node_modules "recXXXXXXXXXXXX\|\^rec\|rec\[a-zA-Z0-9\]" apps components` | 0 matches (exit 1) — as expected |
+| `grep -rn --exclude-dir=.next --exclude-dir=node_modules "Airtable" components` | 5 matches, all the `assignedPreacherAirtableUserId` wire-payload key the intent's `Never` list keeps; the `live-attendance-dashboard.tsx:266` caption no longer matches |
+| `grep -n "parseKnownAttendanceIds\|MAX_KNOWN_ATTENDANCE_IDS" apps/*/app/attendance/route.ts` | empty-list check, `> MAX_KNOWN_ATTENDANCE_IDS` check and `return null` all present in both apps; only the id-shape predicate differs |
+| `grep -n "Array.isArray(data.locationIds)" lib/supabase/data.ts` | 1 match, `:491` — the insert path. 0 matches in the update branch, which now guards on `data.locationIds?.length` at `:429` |
+| `git diff --name-only 87425115c4ce2ddd93615331c882eb653ce33826 -- 'public/sw.js' '*proxy.ts' 'lib/airtable.ts' 'lib/supabase/types.ts' 'packages/*' 'supabase/*'` | 0 files — none of the frozen paths appear |
+| `git diff --numstat 87425115c4ce2ddd93615331c882eb653ce33826 -- lib/supabase/data.ts` | `1  1` — the guard line only |
+| `node scripts/verify-monorepo-guardrails.mjs` | exit 0 — "Monorepo guardrails passed", with the 4 pre-existing client type-import warnings for `@/lib/authz`, unchanged |
+| `node scripts/verify-program-readiness.mjs` | exit 0 |
+| `pnpm typecheck:workspace` | exit 0 — 7 of 8 workspace projects, all `Done` |
+| `pnpm build:apps` | exit 0 — 2 successful; folk and gita-life routes all `ƒ`, `Proxy (Middleware)` emitted |
+| `pnpm lint` | exit 1 — 18 problems (12 errors, 6 warnings). All 12 errors are in `.agent/`, `.codebuddy/` and `.neovate/` skill assets (`require()` imports, an unknown `n/no-unsupported-features/node-builtins` rule) and are pre-existing. Of the 6 warnings, the 2 in `lib/authz.ts:5` (`StaffStatus`, `StaffUser` unused type imports) exist at `87425115c4ce2ddd93615331c882eb653ce33826` on a line this diff does not touch; the other 4 are in untouched files. **No new lint findings in any changed file.** |
+
+Manual checks were not run this pass: every one of them needs the hosted project `etwunirahuucodcxydgs`, whose PostgREST endpoint is unreachable from this environment (recorded in the frontmatter's first `deferred` entry, verified again at implementation time). The `location_ids` preservation criterion and the `knownAttendanceIds` filter/discard behaviour are therefore still unexecuted here; both are carried as deferrals to `stories.yaml` story 8, which owns fixture seeding and the CAP-3/5/6 verification suite.
+
+## Auto Run Result
+
+Status: done
+Blocking condition: none
+
+### Summary of implemented change
+
+Every runtime read of an operational entity in `apps/folk` and `apps/gita-life` now goes through `lib/supabase/data.ts` instead of `lib/airtable.ts`. The swap is import-only and symbol-for-symbol, since story 7.3 mirrored the Airtable module's export surface; the substantive items are the two now-impossible `syncStaffSupabaseUserId` calls deleted from the sign-in route, the `rec*`→UUID attendance-id predicate, the `StaffContext.airtableUserId`→`userId` / `assignedPreacherAirtableUserId`→`assignedPreacherUserId` rename at the authz boundary, the `upsertStaffUser` `location_ids` guard, and the dashboard caption. No response shape, status code, offline-queue behaviour or role-scoping branch changed; `public/sw.js` and all three `proxy.ts` files are byte-identical.
+
+This run was review pass 2 over the re-derived code (pass 1 routed `bad_spec` on two `high` findings and incremented `review_loop_iteration` to 1). The review ran four layers over the 35-file diff since baseline `87425115c4ce2ddd93615331c882eb653ce33826`, triaged 48 findings, applied 2 patches, and recorded 10 new deferrals.
+
+### Files changed
+
+This run's patches (on top of the already-committed swap):
+
+- `apps/folk/app/api/volunteers/invite/route.ts` — added the first-time-invitee caveat above `sendStaffInviteEmail`, matching the one already on the `admin/invite-user` call site.
+- `apps/gita-life/app/api/volunteers/invite/route.ts` — same.
+- `_bmad-output/implementation-artifacts/epic-7-context.md` — added the missing trailing newline.
+- `_bmad-output/specs/spec-airtable-to-supabase/stories/5-route-and-page-swap-to-supabase-in-both-apps.md` — trailing newline; 10 new `deferred:` entries; this pass's triage-log entry; recorded verification outcomes; this section; `status`/`followup_review_recommended` frontmatter.
+
+The swap itself (committed as `d30018fb4915b9bbfe598e546aae68e775389d3d`) touched 26 app files, 3 components, 3 `lib/` modules, `lib/supabase/data.ts` (1 insertion / 1 deletion), the epic-7 context and this spec.
+
+### Review findings breakdown
+
+- **48 findings**: high 0, medium 15, low 28, false 5, maybe-false 0.
+- **Patches applied: 2, both `low`.** Edge Case Hunter #21 — `apps/*/app/api/volunteers/invite/route.ts` now carries the same first-time-invitee caveat as `admin/invite-user/route.ts`; both routes call `upsertStaffUser` immediately before `sendStaffInviteEmail`, so both hit the always-`sign-in-link` outcome and the second site was undocumented. Blind Hunter #14 — trailing newlines added to the two markdown files added by this diff; the staged diff now has zero `\ No newline at end of file` markers. No `high` or `medium` entry was patched.
+- **Deferred: 24 findings → 9 carried, 10 new entries, 5 findings sharing a root cause with a carried row.** New entries: CAP-4's import-swap criterion has no committed enforcement and the readiness script cannot see the sign-in route's signature change; `upsertStaffUser`'s `location_ids` guard has no executable assertion; location-only updates never revalidate the active-preachers cache; the admin invite route validates a trimmed assigned-Preacher id but forwards the untrimmed one; `invite_log.airtable_user_id` / `audit_events.actor_airtable_user_id` now hold both `rec*` and UUID values; `mapSession` cannot represent a legacy multi-preacher or multi-location session; `InviteUserForm` has no re-entrancy guard; the service worker's replay loop has no attempt cap or dead-letter; no path can now clear `public.users.location_ids`; and `app/dashboard/page.tsx`'s `createdBy` filter has no Admin escape hatch.
+- **Rejected: 17 findings.** 7 were carried `low` rejections from pass 1 (the PostgREST-22P02-instead-of-4xx group, the id-casing mismatch, and the guardrails-list gap) plus one new site in the 22P02 group; the other 9 are findings whose only fix is to edit this build's spec — the Code Map's `22`/`24`/`26` counts and stale gita-life line refs, the Matrix row that still says "account-setup invite" while the amended acceptance criteria say `sign-in-link` (it lives inside `<intent-contract>`, which a `bad_spec` loopback must not modify, and the SMTP delivery it describes is story 8's), the `invite-user-form.tsx` and caption edits having no dedicated task or verification command, and the split between the triage log and the `deferred:` ledger.
+- **False: 5.** `## Verification` having no results, `## Auto Run Result` being absent, and no pass-2 log entry — all three are written by the workflow's own Finalize step, which this run performed. Intent Alignment #2 — the `Never` clause prohibits renaming the wire-payload keys shared with client forms and names the files as where those keys live; the diff changed one message literal and no key. Verification Gap other #2 — the `Invite sent.` branch is reachable: `upsertStaffUser` calls `auth.admin.createUser` only on the insert branch, so re-inviting an existing `public.users` row whose auth user is absent still yields `delivery: "invite"`.
+
+### Follow-up review recommendation
+
+`false`. Both patched entries were `low` and neither is `high`; on a first pass the bar is a `high` patch or two or more `medium` patches, and this pass patched zero of either. The work has converged: no `intent_gap` and no `bad_spec` this pass, `review_loop_iteration` stays at 1, and the two surviving `low` items are a documentation comment and a trailing newline.
+
+### Verification performed
+
+Every command in `## Verification` was re-run after both patches — see the observed-outcome table above. Grep gates: 6 of 7 return zero matches, and the seventh (`Airtable` in `components`) returns only the `assignedPreacherAirtableUserId` wire-payload key the intent keeps, with the caption gone. `lib/supabase/data.ts` is `1 1` against the baseline and `Array.isArray(data.locationIds)` survives only at the insert path (`:491`), with the update branch guarding on `data.locationIds?.length` (`:429`). No frozen path (`public/sw.js`, any `proxy.ts`, `lib/airtable.ts`, `lib/supabase/types.ts`, `packages/`, `supabase/`) appears in the diff. `guardrails`, `verify-program-readiness.mjs`, `typecheck:workspace` (7/7) and `build:apps` all exit 0. `lint` fails on 12 pre-existing errors confined to `.agent/`/`.codebuddy/`/`.neovate/` skill assets, with no new finding in any file this diff touches.
+
+Manual inspection during triage confirmed, beyond the greps: `GET /attendance`'s Admin branch is intact at `apps/*/app/attendance/route.ts:141` (`staff.role === "Admin" || ...`); `lib/authz.ts` still maps `userId: row.id` and `assignedPreacherUserId: row.assigned_preacher_id`, so the PWA install prompt's `pwa-install-dismissed:<id>` localStorage key is byte-identical before and after the rename; `lib/supabase/data.ts:1` still carries `import "server-only"`, and `build:apps` passing is the backstop that no swapped file is client-reachable; and `verify-program-readiness.mjs`'s `syncStaffProfileByEmail` + adjacent-`ensureSupabaseAuthUser` assertions still hold.
+
+The manual checks in `## Verification` were **not** run — they all need the hosted project, whose PostgREST endpoint is unreachable from this environment. This is unchanged from implementation time and is the first frontmatter `deferred` entry.
+
+### Residual risks
+
+1. **The frozen HTTP and offline contracts are still unexecuted.** The `/attendance` 400/404/409/201 codes, the GET role scoping, the `knownAttendanceIds` filter/discard behaviour, and the service-worker offline replay all live at a surface this environment cannot reach, so their preservation rests on code inspection rather than observation. Carried to `stories.yaml` story 8.
+2. **Pass 1's deferral ledger is incomplete.** Pass 1 routed 10 findings to `defer` but wrote only 2 into the frontmatter; the other 8 survive only in `## Review Triage Log`. The carry-over rule forbids deferring a logged row twice, so this pass did not re-add them — they are visible in the pass-1 log but absent from the machine-readable ledger, and a consumer reading only `deferred:` will miss them.
+3. **The `location_ids` fix is unverified against a database, and it removed the only clearing path.** The guard's correctness is asserted only by reading it; and because both invite routes submit `[]` when nothing is ticked, no shipped surface can now revoke a Preacher's last location. Story 6's location-management UI needs a distinct clearing path.
+4. **`mapSession` cannot represent multi-value sessions.** Airtable's linked-record fields allowed several preachers or locations per session; the Postgres schema has single columns, so story 9's backfill can only preserve one. Co-preachers of a legacy session would get `403` and its public attendance link would get `422`. Unreachable until the backfill runs.
+5. **`app/dashboard/page.tsx` narrows Admin's RLS grant.** An Admin sees no live-session widget for sessions other staff created. Pre-existing, but the swap is the change that makes `public.users.id` the id in `createdBy`, so it is the right moment for a later story to widen the filter.

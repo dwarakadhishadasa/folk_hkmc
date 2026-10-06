@@ -114,6 +114,11 @@ export async function POST(request: Request) {
       assignedPreacherAirtableUserId: assignedPreacherId,
     })
 
+    // `delivery` is whatever `sendStaffInviteEmail` produced, never a local claim about the invitee.
+    // On the insert path `upsertStaffUser` provisions the `auth.users` row above, so Supabase's own
+    // `inviteUserByEmail` then reports the account as already registered and the helper falls through
+    // to an OTP sign-in link: `delivery: "sign-in-link"` is the expected result for *every* insert-path
+    // invite, including a brand-new invitee, and does not imply the account pre-existed.
     const inviteResult = await sendStaffInviteEmail(email, request)
 
     await writeInviteLog({
