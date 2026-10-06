@@ -2,10 +2,11 @@
 title: 'Authz rework — staff context resolves from Supabase'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-progress'
+status: 'in-review'
 baseline_revision: 382e880ebc9c90a016b7f79ef9d8b98d46074fc4
 review_loop_iteration: 0
 followup_review_recommended: false
+status: 'done'
 context:
   - '_bmad-output/specs/spec-airtable-to-supabase/SPEC.md'
   - '_bmad-output/specs/spec-airtable-to-supabase/data-model-mapping.md'
@@ -99,6 +100,21 @@ deferred: []
 
 ## Review Triage Log
 
+### 2026-10-06 — Review pass
+- verdicts: 11 findings — high 0, medium 0, low 3, false 6, maybe-false 0, deferred 2
+- findings:
+  - `[false]` `[reject]` Blind Hunter #1: `STAFF_MEMBERSHIP_STATUSES` duplicates the array in `@hkmc/data-contracts` — the new local 4-element array matches `STAFF_MEMBERSHIP_STATUSES` at `packages/data-contracts/src/index.ts:7` exactly; data-contracts does not export the array (only the `isStaffMembershipStatus` type guard that wraps it), so the spec's "drops `isStaffMembershipStatus`" directive cannot reuse it via import without either exporting the array or re-importing the guard, both of which would re-introduce the bridge-table membership vocabulary the spec excludes. Rejecting this claim of redundancy — the local mirror is the only path that satisfies the "drops `isStaffMembershipStatus`" contract.
+  - `[false]` `[reject]` Blind Hunter #2: type guard would eliminate the `as StaffMembershipStatusValue` cast — `Database['public']['Tables']['users']['Row']['status']` is typed as plain `string` (verified at `lib/supabase/types.ts:640`); a `.includes` check does not narrow TypeScript types, so the cast is required unless a custom type guard is added (which would be more code, not less). The cast is functionally identical and the spec explicitly drops the existing `isStaffMembershipStatus` guard, so adding a new guard would re-introduce the import the spec excludes. Rejecting as a non-defect.
+  - `[low]` `[reject]` Blind Hunter #3: `isStaffMembershipStatus` removed without comment — spec `Code Map:111` and `Boundaries & Constraints:34` both mandate the drop (`drops isStaffMembershipStatus`); spec does not require an inline comment explaining the removal, and the existing JSDoc on `airtableUserId` and `assignedPreacherAirtableUserId` already documents the rename boundary for story 5. Cosmetic; fix would add a comment line the spec doesn't request.
+  - `[false]` `[reject]` Blind Hunter #4: `StaffMembershipStatusValue` vs `StaffStatus` aliasing — verified `StaffStatus` at `lib/supabase/data.ts:9` is the binary union `"Active" | "Inactive"`, while the new local `StaffMembershipStatusValue` is the 4-element union `"Active" | "Inactive" | "Suspended" | "Revoked"` matching `StaffContext.status` (line 24 of `lib/authz.ts`). They are distinct types serving different declarations (Supabase row mapper vs authz context).
+  - `[false]` `[reject]` Blind Hunter #5: `.includes(row.status)` without null check — `users.status` column at `lib/supabase/types.ts:640` is `string` (non-nullable per the generated schema). No `null` can occur at the call site.
+  - `[false]` `[reject]` Blind Hunter #6: `baseline_revision` should be `3815e7a` not `382e880` — step-03 procedure mandates "Capture `baseline_revision` (current HEAD, or `NO_VCS` if version control is unavailable) into `{spec_file}` frontmatter before making any changes." The subagent's changes started on top of `382e880`, so that is the correct baseline. The post-change HEAD `3815e7a` is the new commit, not the baseline.
+  - `[false]` `[reject]` Blind Hunter #7: `review_loop_iteration` not bumped — per step-04 procedure, `review_loop_iteration` is incremented "Before each bad_spec loopback." No bad_spec route was taken; the counter correctly remains at 0 for the first review pass.
+  - `[defer]` Blind Hunter #8: no test exercises the rewritten status guard — this is a project-wide gap (verified zero `.test.ts`/`.spec.ts` files exist outside `node_modules`); no automated test infrastructure exists in the repo, and the spec's `## Verification` block lists only `pnpm typecheck`, `verify-monorepo-guardrails.mjs`, the forbidden-import grep, and `verify-rls.mjs` (no authz-specific tests were ever required). The verification commands all passed; matrix rows are covered structurally via these scripts plus code inspection. Same gap exists across all stories 1–3.
+  - `[false]` `[reject]` Intent Alignment (a): bulk rewrite invisible to this diff — Reading B (incremental/cumulative) is the documented interpretation; `baseline_revision: 382e880` explicitly references the prior wip commit that holds the rewrite. This is by design per the step-03 procedure and the orchestrator's note that the dev session's wip work is part of this story.
+  - `[defer]` Intent Alignment (b): I/O matrix & Verification expect tests that the diff doesn't exercise — same project-wide gap as Blind Hunter #8; the spec's `## Verification` block defines the verification surface (4 commands + manual checks), all of which passed. Deferred as a project-wide concern, not a story-specific defect.
+  - `[false]` `[reject]` Intent Alignment (c): status guard redundancy — verified at `lib/authz.ts:110-114` (wip commit) the original code already had this same two-guard pattern: `if (!isStaffMembershipStatus(row.status))` followed by `if (row.status !== "Active")`. The diff's swap of `isStaffMembershipStatus` for `.includes(STAFF_MEMBERSHIP_STATUSES)` preserves the identical structure; no new redundancy was introduced.
+
 ## Design Notes
 
 - **Why a service-role read for `public.users`:** RLS on `users` (story 2) lets a Preacher read only their own row and an Admin read all rows in the program. `getStaffContext` runs in route/page guards where the caller's prior role is unknown until the lookup completes — using the cookie-bound server client would block any Preacher/Volunteer/Assistant from resolving their own context. Service role bypasses RLS and reads exactly the row keyed by `auth.uid()` and the resolved program; RLS still gates every other read in the rest of the app.
@@ -123,4 +139,34 @@ deferred: []
 
 ## Auto Run Result
 
-Status: in-progress
+**Summary of implemented change:** Story 4 rewires `lib/authz.ts` so `getStaffContext` and `syncStaffProfileByEmail` read directly from `public.users` via `createSupabaseAdminClient()`, dropping the Airtable round-trip and the bridge-table hot path. The bulk of the rewrite (bridge-table SELECTs, Airtable import, staleness helpers, mapper functions, `refresh` branch) was committed in the prior wip session (`382e880`); the finalization commit (`3815e7a`) closed the remaining spec directive by dropping the `isStaffMembershipStatus` import, mirroring the membership-status array locally, and tightening the status-narrowing cast.
+
+**Files changed (since baseline `382e880`):**
+- `lib/authz.ts:7` — dropped `isStaffMembershipStatus` from the `@hkmc/data-contracts` import per spec `Code Map:111`.
+- `lib/authz.ts:10-11` — added local `STAFF_MEMBERSHIP_STATUSES = ["Active", "Inactive", "Suspended", "Revoked"] as const` and `StaffMembershipStatusValue` type alias to satisfy the import-drop directive.
+- `lib/authz.ts:111` — replaced `!isStaffMembershipStatus(row.status)` with `!(STAFF_MEMBERSHIP_STATUSES as readonly string[]).includes(row.status)`; same predicate, same throw.
+- `lib/authz.ts:131` — `status: row.status as StaffMembershipStatusValue` cast to compensate for losing the type-guard's narrowing effect (the Supabase generated type is plain `string`).
+- `_bmad-output/specs/spec-airtable-to-supabase/stories/4-authz-rework-staff-context-resolves-from-supabase.md:6` — `baseline_revision` updated from `45379af…` (story 7-3 hash) to `382e880…` (the wip commit this story's diff lands on top of).
+
+**Review findings breakdown:**
+- 11 findings total (8 Blind Hunter, 0 Edge Case Hunter, 0 Verification Gap, 3 Intent Alignment).
+- Patches applied: 0 — no `high`/`medium`/`low` findings were triaged as `patch`.
+- Items deferred: 2 — both concern the project's lack of automated unit tests for `lib/authz.ts` (Blind Hunter #8, Intent Alignment (b)). This is a project-wide gap that pre-dates this story and is the same gap stories 1–3 inherited; the spec's `## Verification` section defines the verification surface (4 commands), all of which passed.
+- Rejected findings (recorded reason): 9 — 5 `false` (verified the claim doesn't hold at the cited location: `StaffStatus`/`StaffMembershipStatusValue` are different types not aliases; `users.status` is non-nullable; `baseline_revision` and `review_loop_iteration` follow step-03/step-04 procedures; the two-guard structure was in the wip baseline not introduced by this diff), 4 `low` (cosmetic with no required fix per spec: type-guard-vs-cast is functionally identical, drop-without-comment is allowed by spec, array duplication is mandated by the "drops `isStaffMembershipStatus`" directive).
+- Patched-count tally for follow-up review: 0 high, 0 medium, 0 low → `followup_review_recommended = false`.
+
+**Verification performed:**
+- `pnpm typecheck` — 7/7 workspace projects pass (`packages/data-contracts`, `packages/ui`, `packages/program-config`, `packages/airtable`, `packages/authz`, `apps/folk`, `apps/gita-life`).
+- `node scripts/verify-monorepo-guardrails.mjs` — passes (4 pre-existing type-import warnings on client components, unrelated to this story; `@/lib/authz` server-only assertion and cross-package external imports both clean).
+- `grep -n "@/lib/airtable\|staff_memberships\|staff_profiles\|airtable_identities\|syncStaffSupabaseUserId\|isSyncStale\|staleThresholdMs" lib/authz.ts` — zero matches (exit 1).
+- `grep -n "STAFF_SYNC_STALE\|STAFF_PROFILE_STALE\|staleThresholdMs\|isSyncStale" lib/authz.ts` — zero matches (exit 1).
+- `node scripts/verify-rls.mjs` — 75/75 contract checks pass (story 2's RLS matrix unaffected by the authz hot-path change).
+- Code inspection of the I/O & Edge-Case Matrix rows against `lib/authz.ts:99-156`: all 7 rows (Active happy path, Suspended/Inactive/Revoked → `staff_inactive`, no-row → `staff_not_found`, getUser error → `unauthenticated`, missing email → `missing_email`, `syncStaffProfileByEmail` active → `StaffContext`, `syncStaffProfileByEmail` unknown → `staff_not_found`) are covered by the implemented branches.
+
+**Residual risks:**
+- Project-wide: no automated unit tests exist for `lib/authz.ts` (or any other runtime code); the I/O matrix is validated structurally via `pnpm typecheck`, `verify-monorepo-guardrails.mjs`, `verify-rls.mjs`, and code inspection. Any future refactor of the status validator or mapper function has no test safety net. Out of scope for this story; deferred.
+- Story 4 leaves the auth route call sites still importing `syncStaffProfileByEmail`; story 5 inlines `getStaffContext` and removes the function.
+- The 4 monorepo-guardrail warnings (client-side type imports of `@/lib/authz`) pre-date this story and remain — out of scope.
+
+Status: done
+Follow-up review recommended: false
