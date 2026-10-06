@@ -4,7 +4,7 @@ Role-by-entity visibility contract for CAP-3. Scoping semantics are lifted from 
 
 ## Roles
 
-`Admin`, `Preacher`, `Volunteer`, `Assistant` — resolved server-side from the staff table, keyed by the Supabase Auth user.
+`Admin`, `Preacher`, `Volunteer`, `Assistant` — resolved server-side from the `public.users` table (all roles), keyed by the Supabase Auth user.
 
 ## Read scope (authenticated role)
 
@@ -12,8 +12,11 @@ Role-by-entity visibility contract for CAP-3. Scoping semantics are lifted from 
 | --- | --- | --- | --- | --- |
 | `sessions` | All rows in program | Sessions they created (`created_by`) | No session access (no route grants it today) | Sessions they created; sessions of their assigned preacher (dashboard read) |
 | `attendance` | All rows in program | Attendance of sessions where they are the preacher | No attendance dashboard access today | Attendance of their assigned preacher's sessions |
-| `contacts` | All rows in program | Contacts assigned to them (`assigned_preacher_id` = their staff row) | No contact-list read (collection is write-only via server routes, as today) | Contacts whose `assigned_preacher_id` is their assigned preacher |
+| `contacts` | All rows in program | Contacts assigned to them (`assigned_preacher_id` = their `users` row) | No contact-list read (collection is write-only via server routes, as today) | Contacts whose `assigned_preacher_id` is their assigned preacher |
 | `locations` | All rows in program | Only locations in their own `location_ids` | Only their assigned preacher's `location_ids` | Only their assigned preacher's `location_ids` |
+| `users` | All rows in program | Own row only | Own row only | Own row only |
+
+`users` note (assumed 2026-10-06): picker lists (preachers, locations) stay server-mediated via the service role, as today, so non-admin roles need no cross-row `users` reads.
 
 ## Write scope
 
@@ -23,12 +26,12 @@ Role-by-entity visibility contract for CAP-3. Scoping semantics are lifted from 
 
 ## Program scoping
 
-Every policy is additionally constrained by `program_id`: a folk staff JWT must never resolve rows for gita-life and vice versa. The staff membership row binds user → program → role, and policies resolve scope through it.
+Every policy is additionally constrained by `program_id`: a folk staff JWT must never resolve rows for gita-life and vice versa. The `public.users` row binds auth user → program → role, and policies resolve scope through it.
 
 ## Decided scoping notes
 
 - Contacts scope key is **`assigned_preacher_id`** (decided 2026-10-05): Preacher → contacts assigned to them; Assistant → contacts of their assigned preacher; Admin → all in program; Volunteer → no list read. `collected_by_id` is retained as data (audit/routing) but is not an RLS scope key.
-- Locations are **per-user scoped** (verified in `sessions/page.tsx` and `contact/page.tsx`, 2026-10-05): each staff row carries `location_ids`; a Preacher sees only their own, a Volunteer/Assistant sees their assigned preacher's (empty set when no active assigned preacher), an Admin sees all in the program. The contact flow additionally hides `Inactive` locations. The SELECT policy shape is therefore: `program_id` matches **and** (caller is Admin **or** `locations.id = ANY(effective_location_ids)`), where effective ids resolve through the assigned preacher for Volunteer/Assistant.
+- Locations are **per-user scoped** (verified in `sessions/page.tsx` and `contact/page.tsx`, 2026-10-05): each `users` row carries `location_ids`; a Preacher sees only their own, a Volunteer/Assistant sees their assigned preacher's (empty set when no active assigned preacher), an Admin sees all in the program. The contact flow additionally hides `Inactive` locations. The SELECT policy shape is therefore: `program_id` matches **and** (caller is Admin **or** `locations.id = ANY(effective_location_ids)`), where effective ids resolve through the assigned preacher for Volunteer/Assistant.
 
 ## Known deltas from today
 

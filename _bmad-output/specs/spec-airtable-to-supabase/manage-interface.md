@@ -27,7 +27,7 @@ Record list **grouped by Location**. Columns: `Session Date`, `Name`, `Attendanc
 
 ### 4. Attendance
 - Location multi-select filter + sortable contact list (name + phone).
-- Per-contact panel: "Number of sessions attended in past 2 months", and a **Records** table (`Session`, `Session Date`) — the contact's attendance history.
+- Per-contact panel: "Number of sessions attended in past 2 months" (implemented as a rolling 60-day window — assumed 2026-10-06; the interface's own contacts column is `Past60DayAttendanceCount`), and a **Records** table (`Session`, `Session Date`) — the contact's attendance history.
 
 ### 5. Favorites
 - Searchable contact list filterable by location.
