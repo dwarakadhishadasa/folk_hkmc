@@ -34,8 +34,8 @@
 # - Developer typically creates next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
-generated: '2026-06-12T21:29:56+05:30'
-last_updated: 10-06-2026 11:15
+generated: '06-12-2026 21:29'
+last_updated: 10-06-2026 14:33
 project: folk_hkmc
 project_key: NOKEY
 tracking_system: file-system
@@ -92,9 +92,9 @@ development_status:
   6-4-open-airtable-management-handoff-safely: review
   epic-6-retrospective: optional
 
-  epic-7: backlog
+  epic-7: in-progress
   7-1-schema-migration-users-table-and-contact-field-gaps: done
-  7-2-scoped-rls-policies-on-contacts-attendance-sessions-location: backlog
+  7-2-scoped-rls-policies-on-contacts-attendance-sessions-location: done
   7-3-supabase-data-access-module-mirroring-lib-airtable-ts: backlog
   7-4-authz-rework-staff-context-resolves-from-supabase: backlog
   7-5-route-and-page-swap-to-supabase-in-both-apps: backlog

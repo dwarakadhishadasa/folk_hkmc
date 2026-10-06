@@ -2,7 +2,7 @@
 title: 'Scoped RLS policies on contacts, attendance, sessions, locations'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-review'
+status: 'done'
 baseline_revision: 4e3dd47cbf52f6914688b49e75c8f16a88052866
 review_loop_iteration: 0
 followup_review_recommended: false
