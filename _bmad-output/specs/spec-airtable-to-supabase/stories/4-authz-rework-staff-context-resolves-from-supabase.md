@@ -2,11 +2,10 @@
 title: 'Authz rework — staff context resolves from Supabase'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-review'
+status: 'done'
 baseline_revision: 382e880ebc9c90a016b7f79ef9d8b98d46074fc4
 review_loop_iteration: 0
 followup_review_recommended: false
-status: 'done'
 context:
   - '_bmad-output/specs/spec-airtable-to-supabase/SPEC.md'
   - '_bmad-output/specs/spec-airtable-to-supabase/data-model-mapping.md'
