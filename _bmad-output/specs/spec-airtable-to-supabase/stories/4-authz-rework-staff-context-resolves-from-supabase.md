@@ -3,7 +3,7 @@ title: 'Authz rework — staff context resolves from Supabase'
 type: 'feature'
 created: '2026-10-06'
 status: 'in-progress'
-baseline_revision: 45379af3d3946deb1f0a9c9e7d881502677c2db5
+baseline_revision: 382e880ebc9c90a016b7f79ef9d8b98d46074fc4
 review_loop_iteration: 0
 followup_review_recommended: false
 context:

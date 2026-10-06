@@ -4,8 +4,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import type { StaffRole, StaffStatus, StaffUser } from "@/lib/supabase/data"
 import type { Database } from "@/lib/supabase/types"
-import { isProgramId, isStaffMembershipStatus, isStaffRole, type ProgramId } from "@hkmc/data-contracts"
+import { isProgramId, isStaffRole, type ProgramId } from "@hkmc/data-contracts"
 import { resolveProgramId } from "@hkmc/program-config/server"
+
+const STAFF_MEMBERSHIP_STATUSES = ["Active", "Inactive", "Suspended", "Revoked"] as const
+type StaffMembershipStatusValue = (typeof STAFF_MEMBERSHIP_STATUSES)[number]
 
 export type { StaffRole, StaffStatus, StaffUser } from "@/lib/supabase/data"
 
@@ -105,7 +108,7 @@ function mapUsersRowToStaffContext(row: UsersRow): StaffContext {
     throw new AuthzError(403, "unsupported_role", "This staff role is not supported.")
   }
 
-  if (!isStaffMembershipStatus(row.status)) {
+  if (!(STAFF_MEMBERSHIP_STATUSES as readonly string[]).includes(row.status)) {
     throw new AuthzError(403, "staff_inactive", "This staff account is inactive.")
   }
 
@@ -125,7 +128,7 @@ function mapUsersRowToStaffContext(row: UsersRow): StaffContext {
     airtableUserId: row.id,
     name: row.name?.trim() || email,
     role: row.role,
-    status: row.status,
+    status: row.status as StaffMembershipStatusValue,
     locationIds: Array.isArray(row.location_ids) ? row.location_ids.filter(Boolean) : [],
     assignedPreacherAirtableUserId: row.assigned_preacher_id || undefined,
     lastSyncedAt: new Date().toISOString(),
