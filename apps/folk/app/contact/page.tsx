@@ -3,7 +3,7 @@ import { Header } from "@/components/header"
 import { ContactForm } from "@/components/contact-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
-import { findStaffUserById, listCachedActivePreachers, listLocations } from "@/lib/airtable"
+import { findStaffUserById, listCachedActivePreachers, listLocations } from "@/lib/supabase/data"
 
 export const dynamic = "force-dynamic"
 
@@ -15,8 +15,8 @@ export default async function ContactPage() {
       listLocations(),
     ])
     const assignedPreacher =
-      (staff.role === "Volunteer" || staff.role === "Assistant") && staff.assignedPreacherAirtableUserId
-        ? await findStaffUserById(staff.assignedPreacherAirtableUserId)
+      (staff.role === "Volunteer" || staff.role === "Assistant") && staff.assignedPreacherUserId
+        ? await findStaffUserById(staff.assignedPreacherUserId)
         : null
     const scopedLocationIds =
       staff.role === "Admin"

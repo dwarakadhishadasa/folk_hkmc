@@ -1,5 +1,5 @@
 import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
-import { createLocation, findLocationByName } from "@/lib/airtable"
+import { createLocation, findLocationByName } from "@/lib/supabase/data"
 
 export const dynamic = "force-dynamic"
 

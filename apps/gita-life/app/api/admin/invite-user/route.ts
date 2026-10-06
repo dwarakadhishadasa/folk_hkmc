@@ -1,5 +1,5 @@
 import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
-import { findLocationById, findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/airtable"
+import { findLocationById, findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/supabase/data"
 import { writeInviteLog } from "@/lib/invite-log"
 import { sendStaffInviteEmail } from "@/lib/supabase/invite"
 
@@ -64,19 +64,24 @@ export async function POST(request: Request) {
       email,
       name,
       role,
-      invitedByAirtableUserId: staff.airtableUserId,
+      invitedByAirtableUserId: staff.userId,
       assignedPreacherAirtableUserId:
         role === "Volunteer" || role === "Assistant" ? payload.assignedPreacherAirtableUserId : undefined,
       locationIds,
     })
 
+    // `delivery` is whatever `sendStaffInviteEmail` produced, never a local claim about the invitee.
+    // Note that `upsertStaffUser` provisions the `auth.users` row above, so Supabase's own
+    // `inviteUserByEmail` then reports the account as already registered and the helper falls
+    // through to an OTP sign-in link: `delivery: "sign-in-link"` is therefore the expected result
+    // for *every* invite, including a brand-new invitee, and does not imply the account pre-existed.
     const inviteResult = await sendStaffInviteEmail(email, request)
 
     await writeInviteLog({
       programId: staff.programId,
       inviteeEmail: email,
       airtableUserId: user.id,
-      inviterAirtableUserId: staff.airtableUserId,
+      inviterAirtableUserId: staff.userId,
       inviterSupabaseUserId: staff.supabaseUserId,
       inviteeRole: role,
       status: inviteResult.error ? "failed" : "sent",

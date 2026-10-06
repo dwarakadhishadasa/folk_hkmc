@@ -9,11 +9,12 @@ import {
   getAttendanceDashboardRecords,
   getAttendanceBySessionRecord,
   normalizeMobile,
-} from "@/lib/airtable"
+} from "@/lib/supabase/data"
 
 export const dynamic = "force-dynamic"
 
 const MAX_KNOWN_ATTENDANCE_IDS = 1000
+const ATTENDANCE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 interface AttendancePayload {
   mobile?: string
@@ -30,7 +31,7 @@ function parseKnownAttendanceIds(value: string | null): Set<string> | null {
     .map((id) => id.trim())
     .filter(Boolean)
 
-  if (ids.length === 0 || ids.length > MAX_KNOWN_ATTENDANCE_IDS || ids.some((id) => !/^rec[a-zA-Z0-9]{4,32}$/.test(id))) {
+  if (ids.length === 0 || ids.length > MAX_KNOWN_ATTENDANCE_IDS || ids.some((id) => !ATTENDANCE_ID_PATTERN.test(id))) {
     return null
   }
 
@@ -121,7 +122,7 @@ export async function GET(request: Request) {
     const sessionId = searchParams.get("session")?.trim()
     const knownAttendanceIds = parseKnownAttendanceIds(searchParams.get("knownAttendanceIds"))
     const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
-    let airtableRecords: Awaited<ReturnType<typeof getAttendanceByDate>>
+    let dashboardRecords: Awaited<ReturnType<typeof getAttendanceByDate>>
 
     if (sessionId) {
       const session = await findSessionById(sessionId)
@@ -132,12 +133,12 @@ export async function GET(request: Request) {
 
       const isAssistantMatch =
         staff.role === "Assistant" &&
-        Boolean(staff.assignedPreacherAirtableUserId) &&
-        session.preacherIds.includes(staff.assignedPreacherAirtableUserId || "")
+        Boolean(staff.assignedPreacherUserId) &&
+        session.preacherIds.includes(staff.assignedPreacherUserId || "")
 
       const canReadSession =
         staff.role === "Admin" ||
-        session.preacherIds.includes(staff.airtableUserId) ||
+        session.preacherIds.includes(staff.userId) ||
         (staff.role !== "Assistant" &&
           session.locationIds.some((locationId) => staff.locationIds.includes(locationId))) ||
         isAssistantMatch
@@ -146,12 +147,12 @@ export async function GET(request: Request) {
         return Response.json({ error: "This session is outside your allowed scope." }, { status: 403 })
       }
 
-      airtableRecords = await getAttendanceBySessionRecord(session, { knownAttendanceIds })
+      dashboardRecords = await getAttendanceBySessionRecord(session, { knownAttendanceIds })
     } else {
-      airtableRecords = await getAttendanceByDate(date)
+      dashboardRecords = await getAttendanceByDate(date)
     }
 
-    const attendanceList = await getAttendanceDashboardRecords(airtableRecords || [], date, {
+    const attendanceList = await getAttendanceDashboardRecords(dashboardRecords || [], date, {
       hydrateContacts: Boolean(sessionId),
     })
 

@@ -17,22 +17,19 @@ export interface StaffContext {
   supabaseUserId: string
   email: string
   /**
-   * Renamed semantics (story 4 boundary): now carries `public.users.id` (UUID).
-   * Field name is preserved for caller compatibility — the downstream rename
-   * to `userId` is story 5's work.
+   * `public.users.id` (UUID) — the primary key of the staff row, which also
+   * references `auth.users(id)`.
    */
-  airtableUserId: string
+  userId: string
   name: string
   role: StaffRole
   status: "Active" | "Inactive" | "Suspended" | "Revoked"
   locationIds: string[]
   /**
-   * Renamed semantics (story 4 boundary): now carries
-   * `public.users.assigned_preacher_id` (UUID or undefined). Field name is
-   * preserved for caller compatibility — the downstream rename to
-   * `assignedPreacherUserId` is story 5's work.
+   * `public.users.assigned_preacher_id` (UUID) when the staff member is
+   * routed through a Preacher, otherwise `undefined`.
    */
-  assignedPreacherAirtableUserId?: string
+  assignedPreacherUserId?: string
   lastSyncedAt: string
 }
 
@@ -125,12 +122,12 @@ function mapUsersRowToStaffContext(row: UsersRow): StaffContext {
     programId: row.program_id,
     supabaseUserId: row.id,
     email,
-    airtableUserId: row.id,
+    userId: row.id,
     name: row.name?.trim() || email,
     role: row.role,
     status: row.status as StaffMembershipStatusValue,
     locationIds: Array.isArray(row.location_ids) ? row.location_ids.filter(Boolean) : [],
-    assignedPreacherAirtableUserId: row.assigned_preacher_id || undefined,
+    assignedPreacherUserId: row.assigned_preacher_id || undefined,
     lastSyncedAt: new Date().toISOString(),
   }
 }

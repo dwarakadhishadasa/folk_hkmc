@@ -7,7 +7,7 @@ import {
   normalizeMobile,
   type ContactRecord,
   type SessionRecord,
-} from "@/lib/airtable"
+} from "@/lib/supabase/data"
 import { getSessionAttendanceEligibility } from "@/lib/attendance-session"
 
 export const dynamic = "force-dynamic"

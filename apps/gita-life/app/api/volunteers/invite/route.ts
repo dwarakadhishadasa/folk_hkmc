@@ -1,5 +1,5 @@
 import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
-import { findStaffUserByEmail, findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/airtable"
+import { findStaffUserByEmail, findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/supabase/data"
 import { writeInviteLog } from "@/lib/invite-log"
 import { sendStaffInviteEmail } from "@/lib/supabase/invite"
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     }
 
     const assignedPreacherId =
-      staff.role === "Preacher" ? staff.airtableUserId : payload.assignedPreacherAirtableUserId?.trim()
+      staff.role === "Preacher" ? staff.userId : payload.assignedPreacherAirtableUserId?.trim()
 
     if (!assignedPreacherId) {
       return Response.json(
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       email,
       name,
       role: inviteRole,
-      invitedByAirtableUserId: staff.airtableUserId,
+      invitedByAirtableUserId: staff.userId,
       assignedPreacherAirtableUserId: assignedPreacherId,
     })
 
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       programId: staff.programId,
       inviteeEmail: email,
       airtableUserId: user.id,
-      inviterAirtableUserId: staff.airtableUserId,
+      inviterAirtableUserId: staff.userId,
       inviterSupabaseUserId: staff.supabaseUserId,
       inviteeRole: inviteRole,
       status: inviteResult.error ? "failed" : "sent",

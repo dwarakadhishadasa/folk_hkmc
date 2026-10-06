@@ -5,7 +5,7 @@ import {
   findStaffUserById,
   listSessions,
   updateSessionAttendanceUrl,
-} from "@/lib/airtable"
+} from "@/lib/supabase/data"
 
 export const dynamic = "force-dynamic"
 
@@ -54,7 +54,7 @@ export async function GET() {
     requireRole(staff, ["Admin", "Preacher", "Assistant"])
 
     const sessions = await listSessions()
-    const scoped = sessions.filter((session) => session.createdBy.includes(staff.airtableUserId))
+    const scoped = sessions.filter((session) => session.createdBy.includes(staff.userId))
 
     return Response.json({
       sessions: scoped.map((session) => ({
@@ -97,18 +97,18 @@ export async function POST(request: Request) {
       return Response.json({ error: "Selected location does not exist." }, { status: 400 })
     }
 
-    let owningPreacherId = staff.airtableUserId
+    let owningPreacherId = staff.userId
     let owningPreacherLocationIds: string[] = staff.locationIds
 
     if (staff.role === "Assistant") {
-      if (!staff.assignedPreacherAirtableUserId) {
+      if (!staff.assignedPreacherUserId) {
         return Response.json(
           { error: "Assistant sessions require an assigned Preacher." },
           { status: 400 },
         )
       }
 
-      const assignedPreacher = await findStaffUserById(staff.assignedPreacherAirtableUserId)
+      const assignedPreacher = await findStaffUserById(staff.assignedPreacherUserId)
       if (!assignedPreacher || assignedPreacher.role !== "Preacher" || assignedPreacher.status !== "Active") {
         return Response.json({ error: "Assigned Preacher is not an active Preacher." }, { status: 403 })
       }
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       publicAttendanceEnabled: true,
       attendanceOpensAt: startsAt.toISOString(),
       attendanceClosesAt: closesAt.toISOString(),
-      createdBy: staff.airtableUserId,
+      createdBy: staff.userId,
     })
 
     const attendanceUrl = new URL("/attend", siteUrl)

@@ -1,6 +1,6 @@
 import "server-only"
 
-import type { StaffRole } from "@/lib/airtable"
+import type { StaffRole } from "@/lib/supabase/data"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { resolveProgramId } from "@hkmc/program-config/server"
 import type { ProgramId } from "@hkmc/data-contracts"

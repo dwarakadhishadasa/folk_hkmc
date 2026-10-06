@@ -34,7 +34,7 @@ export default async function ManagePage() {
   await writeAuditEvent({
     programId: staff.programId,
     actorSupabaseUserId: staff.supabaseUserId,
-    actorAirtableUserId: staff.airtableUserId,
+    actorAirtableUserId: staff.userId,
     actorRole: staff.role,
     action: "management.misconfigured",
     source: "manage-page",

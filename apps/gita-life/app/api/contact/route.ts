@@ -1,5 +1,11 @@
 import { authzErrorResponse, getStaffContext } from "@/lib/authz"
-import { createContact, findContactByPhone, findStaffUserById, normalizeMobile, type StaffUser } from "@/lib/airtable"
+import {
+  createContact,
+  findContactByPhone,
+  findStaffUserById,
+  normalizeMobile,
+  type StaffUser,
+} from "@/lib/supabase/data"
 
 export const dynamic = "force-dynamic"
 
@@ -52,14 +58,14 @@ async function resolveAssignedPreacher(
   staff: Awaited<ReturnType<typeof getStaffContext>>,
 ): Promise<{ preacher?: ResolvedPreacher; error?: string }> {
   if (staff.role === "Volunteer" || staff.role === "Assistant") {
-    if (!staff.assignedPreacherAirtableUserId) {
+    if (!staff.assignedPreacherUserId) {
       return { error: `${staff.role} contact routing is not configured. Ask an Admin to assign your Preacher.` }
     }
-    return activePreacherResult(await findStaffUserById(staff.assignedPreacherAirtableUserId))
+    return activePreacherResult(await findStaffUserById(staff.assignedPreacherUserId))
   }
 
   if (staff.role === "Preacher") {
-    return { preacher: { id: staff.airtableUserId } }
+    return { preacher: { id: staff.userId } }
   }
 
   const explicitPreacherId = payload.assignedPreacherAirtableUserId?.trim()
@@ -116,7 +122,7 @@ export async function POST(request: Request) {
     }
 
     const collectorId =
-      staff.role === "Volunteer" || staff.role === "Assistant" ? staff.airtableUserId : assignment.preacher.id
+      staff.role === "Volunteer" || staff.role === "Assistant" ? staff.userId : assignment.preacher.id
     const contact = await createContact({
       name,
       phone: mobile,

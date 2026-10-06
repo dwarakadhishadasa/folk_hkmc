@@ -1,6 +1,6 @@
 import "server-only"
 
-import type { SessionRecord } from "@/lib/airtable"
+import type { SessionRecord } from "@/lib/supabase/data"
 
 export interface SessionEligibilityFailure {
   ok: false

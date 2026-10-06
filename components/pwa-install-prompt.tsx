@@ -62,7 +62,7 @@ export function PWAInstallPrompt() {
       return
     }
 
-    const dismissedKey = `pwa-install-dismissed:${staff.airtableUserId}`
+    const dismissedKey = `pwa-install-dismissed:${staff.userId}`
     const dismissed = localStorage.getItem(dismissedKey)
 
     if (!dismissed) {
@@ -109,7 +109,7 @@ export function PWAInstallPrompt() {
     setIsDismissed(true)
     // Remember dismissal for 1 day
     if (staff) {
-      localStorage.setItem(`pwa-install-dismissed:${staff.airtableUserId}`, Date.now().toString())
+      localStorage.setItem(`pwa-install-dismissed:${staff.userId}`, Date.now().toString())
     }
   }
 

@@ -3,7 +3,7 @@ import { Header } from "@/components/header"
 import { InviteUserForm } from "@/components/invite-user-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
-import { listCachedActivePreachers, listLocations } from "@/lib/airtable"
+import { listCachedActivePreachers, listLocations } from "@/lib/supabase/data"
 
 export const dynamic = "force-dynamic"
 

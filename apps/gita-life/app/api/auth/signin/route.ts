@@ -1,4 +1,4 @@
-import { findStaffUserByEmail, syncStaffSupabaseUserId } from "@/lib/airtable"
+import { findStaffUserByEmail } from "@/lib/supabase/data"
 import { syncStaffProfileByEmail } from "@/lib/authz"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { updateAuthEmailBrandingForUserId } from "@/lib/supabase/auth-email-branding"
@@ -41,11 +41,7 @@ async function findSupabaseUserByEmail(
   }
 }
 
-async function ensureSupabaseAuthUser(
-  email: string,
-  staffUserId: string,
-  linkedSupabaseUserId?: string,
-): Promise<string> {
+async function ensureSupabaseAuthUser(email: string, linkedSupabaseUserId?: string): Promise<string> {
   const supabaseAdmin = createSupabaseAdminClient()
 
   if (linkedSupabaseUserId) {
@@ -61,9 +57,6 @@ async function ensureSupabaseAuthUser(
 
   const existingUser = await findSupabaseUserByEmail(supabaseAdmin, email)
   if (existingUser) {
-    if (existingUser.id !== linkedSupabaseUserId) {
-      await syncStaffSupabaseUserId(staffUserId, existingUser.id)
-    }
     return existingUser.id
   }
 
@@ -81,7 +74,6 @@ async function ensureSupabaseAuthUser(
     throw error || new Error("Unable to provision Supabase auth user.")
   }
 
-  await syncStaffSupabaseUserId(staffUserId, user.id)
   return user.id
 }
 
@@ -99,7 +91,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "This email is not linked to an active staff account." }, { status: 403 })
     }
 
-    const supabaseUserId = await ensureSupabaseAuthUser(email, staff.id, staff.supabaseUserId)
+    const supabaseUserId = await ensureSupabaseAuthUser(email, staff.supabaseUserId)
     await syncStaffProfileByEmail({ supabaseUserId, email })
     const authEmailBranding = await updateAuthEmailBrandingForUserId(supabaseUserId)
 

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { Header } from "@/components/header"
 import { SessionsManager } from "@/components/sessions-manager"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
-import { findStaffUserById, listLocations } from "@/lib/airtable"
+import { findStaffUserById, listLocations } from "@/lib/supabase/data"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
@@ -15,10 +15,10 @@ export default async function SessionsPage() {
 
     let scopedLocationIds: string[] | null = staff.locationIds
     if (staff.role === "Assistant") {
-      if (!staff.assignedPreacherAirtableUserId) {
+      if (!staff.assignedPreacherUserId) {
         scopedLocationIds = []
       } else {
-        const assignedPreacher = await findStaffUserById(staff.assignedPreacherAirtableUserId)
+        const assignedPreacher = await findStaffUserById(staff.assignedPreacherUserId)
         if (!assignedPreacher || assignedPreacher.role !== "Preacher" || assignedPreacher.status !== "Active") {
           scopedLocationIds = []
         } else {

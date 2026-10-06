@@ -263,7 +263,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                     {attendanceList.length}
                   </span>
                 </h2>
-                <p className="text-white/70 text-sm">Live updates from Airtable</p>
+                <p className="text-white/70 text-sm">Live updates</p>
               </div>
               <button
                 onClick={fetchAttendance}

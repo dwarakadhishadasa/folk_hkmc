@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { Header } from "@/components/header"
 import { LiveAttendanceDashboard, type DashboardSessionContext } from "@/components/live-attendance-dashboard"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
-import { listLocations, listSessions, type SessionRecord } from "@/lib/airtable"
+import { listLocations, listSessions, type SessionRecord } from "@/lib/supabase/data"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
@@ -41,7 +41,7 @@ export default async function DashboardPage() {
     try {
       const [sessions, locations] = await Promise.all([listSessions(), listLocations()])
       const locationById = new Map(locations.map((location) => [location.id, location.name]))
-      const scopedSessions = sessions.filter((session) => session.createdBy.includes(staff.airtableUserId))
+      const scopedSessions = sessions.filter((session) => session.createdBy.includes(staff.userId))
       const now = Date.now()
       const currentSession = scopedSessions
         .filter((session) => isActiveSession(session, now))

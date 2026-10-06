@@ -426,7 +426,7 @@ export async function upsertStaffUser(data: {
     if (data.assignedPreacherAirtableUserId) {
       updatePayload.assigned_preacher_id = data.assignedPreacherAirtableUserId
     }
-    if (Array.isArray(data.locationIds)) {
+    if (data.locationIds?.length) {
       updatePayload.location_ids = data.locationIds
     }
 

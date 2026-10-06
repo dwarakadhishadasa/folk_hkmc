@@ -181,7 +181,7 @@ export function InviteUserForm({
       if (data.upgraded) {
         setMessage("Existing Volunteer upgraded to Assistant. A sign-in email was sent.")
       } else {
-        setMessage(data.delivery === "sign-in-link" ? "This user already exists. A sign-in email was sent." : "Invite sent.")
+        setMessage(data.delivery === "sign-in-link" ? "A sign-in email was sent." : "Invite sent.")
       }
       setForm(emptyInviteForm())
     } catch (error) {
