@@ -1,0 +1,41 @@
+# OpenCode 1.x driven over its local HTTP server (`opencode serve`).
+#
+# WHY THIS EXISTS: the bundled `opencode-http` profile is documented as "API facts
+# pinned against opencode 1.18.2". opencode v2.0.x moved its HTTP API under /api/
+# and dropped the /global/health route entirely, so the adapter's readiness poll
+# (`GET /global/health`, expecting JSON {"healthy": true}) falls through to the
+# web-UI SPA and can never pass — every session dies with OpencodeServerError
+# "server did not become healthy in time". Verified on this machine:
+#   v2.0.20  GET /global/health    -> 200 text/html  (SPA fallback)
+#   v1.18.34 GET /global/health    -> 200 {"healthy":true,"version":"1.18.34"}
+# So this profile pins the 1.x binary rather than the PATH one.
+#
+# `binary` is an absolute path on purpose: this profile must NOT pick up the v2
+# binary on PATH, which is what the default profile resolves to.
+#
+# The isolated data dir is REQUIRED, not cosmetic: v2 stores state in SQLite
+# (~/.local/share/opencode/opencode.db) while 1.x expects the older store, and
+# pointing 1.x at the v2 database makes it abort at startup with
+#   "Database is not empty and has no session table"
+# Giving 1.x its own data root keeps this session's v2 database untouched and
+# leaves the running v2 CLI completely undisturbed.
+name = "opencode-1x"
+binary = "/home/dwarakadhisha-dasa/.local/share/opencode-1x/node_modules/.bin/opencode"
+adapter = "opencode-http"
+prompt_template = "Use the {skill} skill now: {args}"
+usage_parser = "none"
+skill_tree = ".claude/skills"
+first_run_note = "1.x binary + isolated data dir; run `opencode auth login` once if the profile needs auth"
+
+[env]
+# Keep 1.x's state (and its auth store) entirely away from the v2 CLI's data root.
+XDG_DATA_HOME = "/home/dwarakadhisha-dasa/.local/share/opencode-1x/data"
+OPENCODE_DATA = "/home/dwarakadhisha-dasa/.local/share/opencode-1x/data"
+
+env_fault_patterns = [
+  'error[.]error="AI_APICallError: [^"]{0,400}?(?i:usage limit reached|429|too many requests|rate[ _-]?limit|quota|overloaded)',
+  'error[.]error="AI_APICallError: [^"]{0,400}?(?i:cannot connect to api|socket connection was closed|connection ?(error|refused|reset|timed ?out)|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN)',
+]
+
+[hooks]
+dialect = "none"
