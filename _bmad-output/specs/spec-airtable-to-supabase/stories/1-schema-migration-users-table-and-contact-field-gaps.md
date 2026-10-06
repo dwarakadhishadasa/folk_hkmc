@@ -2,13 +2,20 @@
 title: 'Schema migration — users table and contact field gaps'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-progress'
-baseline_revision: c15d112d7ad018ad4eddd5a5feb519ae788dac60
+status: 'done'
+baseline_revision: 2fe056069f4b707d53a38878caffe10599d0b2c3
 review_loop_iteration: 0
 followup_review_recommended: false
 context: []
 warnings: ['oversized']
-deferred: []
+deferred:
+  - summary: >-
+      No automated verification applies migrations or asserts the contact_attendance_counts rollup; CI runs guardrails/typecheck/build/lint only and the repo has zero test files.
+    evidence: |-
+      Pre-verified by the verification-gap review layer: .github/workflows/quality-gates.yml has no step that starts Supabase or applies migrations; a repo-wide search finds no *.test.*/*.spec.* files and no pgTAP/supabase-test configuration. Pre-existing gap, not caused by this story; stories.yaml assigns the verification suite to story 8. This run executed every acceptance probe manually against the hosted project (see Verification). The intent-alignment layer's surface-mismatch observation (the diff encodes no executable evidence for the hosted-state I/O matrix) shares this root cause.
+    location: >-
+      .github/workflows/quality-gates.yml
+    severity: medium
 ---
 
 <intent-contract>
@@ -99,6 +106,38 @@ deferred: []
 
 ## Review Triage Log
 
+### 2026-10-06 — Review pass
+- verdicts: 28 findings — high 0, medium 2, low 13, false 13, maybe-false 0
+- findings:
+  - `[low]` `[reject]` 60-day window formula coerced via session tz, boundary off ~5.5h from Kolkata wall clock — behavior is verbatim contract-mandated (Boundaries Always clause, matrix row, AC) and AC-verified with 70d/5d probe; deterministic under hosted UTC session tz; hour-level precision is negligible for a 60-day rolling count, and changing the formula would deviate from the pinned contract
+  - `[false]` `[reject]` FK constraints without NOT VALID fail on populated DB — hosted contacts/sessions/attendance/locations/users all verified 0 rows; AC targets a fresh project; story 9 loads data only after schema per playbook order
+  - `[low]` `[reject]` ADD CONSTRAINT lacks idempotency guard unlike IF NOT EXISTS neighbors — applied cleanly; supabase migration tracking is run-once; guards would add DO-block complexity for a partial-failure retry outside the tooling contract; editing the already-applied file would itself create remote drift
+  - `[false]` `[reject]` users.invited_by lacks FK — contract's AC column list specifies plain `invited_by UUID` with no reference; informational audit pointer; no harm demonstrated
+  - `[false]` `[reject]` users.program_id has no FK to programs, "odd one out" — refuted: core operational tables (contacts/sessions/locations/attendance) all carry `program_id TEXT` with no programs FK; users matches that family; bridge tables are the different family
+  - `[low]` `[reject]` UNIQUE(program_id,email) + auth-shared PK blocks multi-program membership — the intent itself pins both constraints (contract Always list, all-roles generalization 2026-10-06); changing it edits the captured intent, which this pass cannot do
+  - `[false]` `[reject]` no updated_at trigger on public.users — no core operational table has an updated_at trigger (only programs has one); contract requires only "timestamps"
+  - `[false]` `[reject]` is_favorite nullable three-state — contract and AC pin `is_favorite BOOLEAN DEFAULT false` exactly; no consumers exist yet; no demonstrated harm
+  - `[false]` `[reject]` rounds TEXT typing possibly wrong — data-model-mapping.md:32 (contract companion) specifies `rounds TEXT`
+  - `[low]` `[reject]` view counts by attendance.created_at not session_date — contract, matrix, and AC explicitly define the metric on created_at; the intent excludes session_date semantics
+  - `[low]` `[reject]` bucket lacks file_size_limit/allowed_mime_types — contract requires only a private bucket with service-role writes; story 6 owns upload policy; harm not demonstrated
+  - `[false]` `[reject]` frontmatter review_loop_iteration/baseline_revision inconsistency — iteration increments only on bad_spec loopbacks per workflow; baseline is HEAD-before-changes per step-03; both correct
+  - `[false]` `[reject]` (edge-case) FK NOT VALID concern — same refutation as the blind-hunter row above: all tables empty at apply time, fresh-project AC, data load follows schema
+  - `[low]` `[reject]` (edge-case) 60-day window timezone claim — same disposition as the blind-hunter row above: contract-mandated formula, AC-verified
+  - `[low]` `[reject]` UNIQUE(program_id, email) bypassed by case-variant emails — contract pins the constraint verbatim; the bridge-table lower(email) pattern is noted, but replacing the constraint with a functional index requires a second migration (more than a direct correction), and emails sourced from Supabase Auth are lowercase in practice
+  - `[false]` `[reject]` ON CONFLICT DO NOTHING leaves a pre-existing public bucket public — condition never holds: this migration created the bucket (verified `public = false` on hosted); prod replay targets a fresh project with no pre-existing bucket
+  - `[low]` `[reject]` no indexes on contacts/sessions FK referencing columns — user deletion is rare and these tables are tiny (0 rows now); scan cost trivial; fix requires a second migration file
+  - `[false]` `[reject]` types.ts users.Insert optional timestamps "suggests hand-edited types" — independently re-ran `supabase gen types typescript --linked`; output byte-identical to the committed file; the generator emits optional for defaulted columns
+  - `[low]` `[reject]` spec Verification text says "four new FKs" while migration adds five — the Boundaries and AC mandate the fifth (sessions.location_id RESTRICT); the only fix edits this build's spec, which is rejected by rule; code matches the AC
+  - `[medium]` `[defer]` no automated verification applies migrations or asserts the view rollup — pre-verified by the layer: CI runs guardrails/typecheck/build/lint only, zero test files, no pgTAP; pre-existing gap not caused by this story; stories.yaml assigns the verification suite to story 8; every AC probe was executed manually against the hosted project this run
+  - `[low]` `[reject]` (verification-gap other) 60-day window timezone — same disposition as above
+  - `[false]` `[reject]` (verification-gap other) FK fails on populated DB — same refutation as above
+  - `[low]` `[reject]` (verification-gap other) mixed idempotency — same disposition as the ADD CONSTRAINT row above
+  - `[medium]` `[defer]` (intent-alignment) diff carries no executable evidence for the hosted-state I/O matrix — same root cause as the verification-gap entry: no automated verification infrastructure exists in the repo; the probes were executed this run and their outcomes are recorded under Verification below
+  - `[low]` `[reject]` (intent-alignment) timezone clause divergence between formula and design-note rationale — same disposition as above; the contract pins the formula
+  - `[false]` `[reject]` (intent-alignment) invited_by/program_id carry no FK — contract permits by silence; consistent with the operational-table family; no harm demonstrated
+  - `[low]` `[reject]` (intent-alignment) ADD CONSTRAINT not idempotent — same disposition as above
+  - `[false]` `[reject]` (intent-alignment) anon storage denial relies on platform default RLS rather than this migration — verified directly: RLS enabled on storage.objects/buckets, zero policies exist, `SET ROLE anon` sees 0 rows in both (probes M1–M4 below)
+
 ## Design Notes
 
 - **Why TEXT + CHECK rather than pg enums:** per the SPEC.md assumption (story 1), role/status stay TEXT so values can be added without an `ALTER TYPE ... ADD VALUE` migration. The CHECK clause still enforces the four-value contract.
@@ -131,5 +170,25 @@ deferred: []
 
 ## Auto Run Result
 
-Status: ready-for-dev
-Blocking condition: invocation prompt explicitly directs `Halt after planning.`
+Status: done
+
+**Summary of implemented change:** One additive migration (`supabase/migrations/20261006000000_add_users_and_contact_columns.sql`) created `public.users` (all roles, `id UUID PK REFERENCES auth.users(id) ON DELETE CASCADE`, TEXT+CHECK role/status, `location_ids UUID[]`, self-FK `assigned_preacher_id ON DELETE SET NULL`, `UNIQUE(program_id, email)`), backfilled five FK constraints (`contacts.assigned_preacher_id`, `contacts.collected_by_id`, `sessions.preacher_id`, `sessions.created_by` → `public.users(id) ON DELETE SET NULL`; `sessions.location_id` → `locations(id) ON DELETE RESTRICT`), added the five contact columns (`source`, `photo_path`, `rounds`, `books_read`, `is_favorite DEFAULT false`), created the `contact_attendance_counts` view with the contract-mandated Asia/Kolkata 60-day window formula, and provisioned the private `contact-photos` Storage bucket. The migration was applied to the hosted project `etwunirahuucodcxydgs` via `supabase link` + `supabase db push`, and `lib/supabase/types.ts` was regenerated with `supabase gen types typescript --linked`. Bridge tables and `audit_events` are untouched; no RLS, app-code, or route changes.
+
+**Files changed:**
+- `supabase/migrations/20261006000000_add_users_and_contact_columns.sql` — NEW; the story's single deliverable migration (91 lines).
+- `lib/supabase/types.ts` — REGENERATED from the live linked schema; adds `Tables.users` (Row/Insert/Update), `Views.contact_attendance_counts`, the five new `contacts` columns, and named FK relationships.
+- This story spec — status/frontmatter, triage log, deferred item, this result.
+
+**Review findings breakdown:** 28 findings across four layers — 0 high, 2 medium, 13 low, 13 false, 0 maybe-false. Patches applied: 0. Deferred: 1 entry (2 grouped findings) — no automated migration verification exists in CI (pre-existing; story 8 owns the verification suite). Rejected: 26 — 13 false (claim disproven at the cited location, e.g. "odd one out" program_id FK claim refuted by the core-tables family pattern; "hand-edited types" refuted by byte-identical regeneration; populated-DB FK failure refuted by verified empty tables and schema-before-data pipeline order), 13 low (contract-mandated shapes the intent pins verbatim — the 60-day window formula, `UNIQUE(program_id, email)`, created_at-based rollup, plain `invited_by`/`is_favorite` shapes — plus negligible-impact items whose fixes would require a second migration or edits to this build's spec).
+
+**Follow-up review recommendation:** false — no entries were patched this pass (patched counts by verdict: high 0, medium 0, low 0), so there is no unverified patch risk to name.
+
+**Verification performed (all against hosted project etwunirahuucodcxydgs unless noted):**
+- `supabase link --project-ref etwunirahuucodcxydgs` — linked; `supabase db push` — all 8 migrations applied; re-run reports "Remote database is up to date."
+- `supabase db diff --linked` — no drift except a known no-op `drop extension if exists "pg_net"` shadow-baseline artifact (pg_net is not installed remotely).
+- `supabase gen types typescript --linked` re-run — output byte-identical to committed `lib/supabase/types.ts` (TYPES_IDEMPOTENT).
+- `pnpm typecheck` — all 7 workspace projects pass.
+- SQL probes (psql, `$POSTGRES_URL_NON_POOLING`): users columns/constraints match the AC list (A/B); five new FKs present with correct delete actions (C); five contact columns present with `is_favorite` default false (D); bucket `contact-photos` present with `public = false` (E); bridge tables present with 0 rows, schemas intact (F).
+- Matrix probes, all executed and passing: ROW 1 happy-path users insert with a real auth.users id → INSERT 0 1, row returned (K); ROW 2 dangling `assigned_preacher_id` → 23503 on `users_assigned_preacher_id_fkey` (G2); ROW 3 dangling `contacts.assigned_preacher_id` → 23503 (H); ROW 4 dangling `sessions.location_id` → 23503 (I); ROW 5 view window → total=2, past_60_day=1 for 70-day-old + 5-day-old rows (J); ROW 6 bucket row public=false (E); ROW 7 anon-key denial — the HTTP storage-API probe was impossible from this network (TLS reset to the project host), so it was verified at the RLS layer: RLS enabled on storage.objects/buckets, zero policies exist, `SET ROLE anon` sees 0 objects in `contact-photos` and 0 bucket rows (M1–M4). All mutating probes ran inside rolled-back transactions; no test data persists.
+
+**Residual risks:** (1) The 60-day window formula is contract-pinned verbatim; its effective boundary is offset ~5.5h from a true Kolkata-midnight reading — negligible for a 60-day rolling count, but story 6 should be aware when surfacing the metric. (2) The migration's `ADD CONSTRAINT` statements are not idempotent — irrelevant under run-once migration tracking, but a manual partial-failure replay would need cleanup first. (3) `users.invited_by` and `users.program_id` are plain UUID/TEXT by contract silence — consistent with the operational-table family. (4) Automated migration verification in CI remains deferred (see `deferred`).

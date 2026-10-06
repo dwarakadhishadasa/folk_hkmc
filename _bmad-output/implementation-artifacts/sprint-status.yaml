@@ -93,7 +93,7 @@ development_status:
   epic-6-retrospective: optional
 
   epic-7: backlog
-  7-1-schema-migration-users-table-and-contact-field-gaps: ready-for-dev
+  7-1-schema-migration-users-table-and-contact-field-gaps: done
   7-2-scoped-rls-policies-on-contacts-attendance-sessions-location: backlog
   7-3-supabase-data-access-module-mirroring-lib-airtable-ts: backlog
   7-4-authz-rework-staff-context-resolves-from-supabase: backlog

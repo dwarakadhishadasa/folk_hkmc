@@ -8,3 +8,11 @@
 - 2026-07-20: FOLK contact and registration routes duplicate occupation-to-contact-field mapping. Consider centralizing a shared mapper so College/Company/occupation semantics cannot drift across entry points.
 - 2026-07-20: Working Professional contact capture currently preserves Company when provided but does not require it. Decide whether blank company should remain allowed or become a server-side validation error.
 - 2026-07-20: `createContact` still supports writing `Year` when callers pass `data.year`. If active Airtable schemas no longer include Year, update the shared contract/configuration or add a field allow-list before new callers rely on it.
+
+### DW-1: No automated verification applies migrations or asserts the contact_attendance_counts rollup; CI runs guardrails/typecheck/build/lint only and the repo has zero test files.
+origin: spec-deferred 948d3b2695da
+location: .github/workflows/quality-gates.yml
+source_spec: `7-1-schema-migration-users-table-and-contact-field-gaps.md`
+severity: medium
+reason: Pre-verified by the verification-gap review layer: .github/workflows/quality-gates.yml has no step that starts Supabase or applies migrations; a repo-wide search finds no *.test.*/*.spec.* files and no pgTAP/supabase-test configuration. Pre-existing gap, not caused by this story; stories.yaml assigns the verification suite to story 8. This run executed every acceptance probe manually against the hosted project (see Verification). The intent-alignment layer's surface-mismatch observation (the diff encodes no executable evidence for the hosted-state I/O matrix) shares this root cause.
+status: open
