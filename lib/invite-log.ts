@@ -20,8 +20,8 @@ export async function writeInviteLog(data: {
   await supabaseAdmin.from("invite_log").insert({
     program_id: data.programId || resolveProgramId(),
     invitee_email: data.inviteeEmail.trim().toLowerCase(),
-    airtable_user_id: data.userId,
-    inviter_airtable_user_id: data.inviterUserId,
+    user_id: data.userId,
+    inviter_user_id: data.inviterUserId,
     inviter_supabase_user_id: data.inviterSupabaseUserId,
     invitee_role: data.inviteeRole,
     status: data.status,

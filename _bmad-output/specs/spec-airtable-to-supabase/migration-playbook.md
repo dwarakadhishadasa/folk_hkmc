@@ -36,11 +36,43 @@ Ordered procedure for the Airtable → Supabase migration, captured so it can be
 
 ## Phase 4 — Verify on the new project
 
-17. ✅/⏳ New Supabase project: **created and Vercel-linked by the user (2026-10-05)** — `etwunirahuucodcxydgs` (ap-south-1). Remaining: `supabase link --project-ref etwunirahuucodcxydgs` (needs `SUPABASE_ACCESS_TOKEN` from `.env`/`.env.migration.local`), push all migrations (`supabase db push`); configure auth — site URL + redirect URLs for `https://folk-hkmc-rho.vercel.app` (OQ-10 resolved), email templates from `supabase/templates` (only `invite.html` and `magic-link.html` exist), SMTP = Mailtrap sandbox (OQ-9 resolved; creds in `.env.migration.local`; **sandbox does not deliver to real inboxes — swap before go-live**, step 27). **Do NOT `supabase config push` `config.toml` verbatim — its `[auth]` section is local-mailpit.**
-18. Seed test staff/contacts/sessions (wipe/re-seed freely — the hosted project is disposable pre-cutover); verify on the **`feature/migrate-airtable-to-supabase` branch deployment**, whose env resolves the new project. Users keep using the old stack's preview deployment, untouched, until cutover (topology corrected 2026-10-06: the branch deployment IS the future production; it goes live by link distribution, not an env flip).
-19. Run the CAP-3 RLS verification: per role, per table, confirm out-of-scope rows are unreadable with a user JWT.
-20. Run the CAP-5/CAP-6 contract checks: attendance POST/GET shapes, offline queue replay, duplicate-409 handling.
-21. Smoke-test PWA install + offline flow on a device/emulator against the preview deployment.
+### Hosted-project tooling (story 7.8)
+
+Five `node` scripts, all run from the repo root with credentials read from the
+gitignored `.env.migration.local`. None of them is wired into
+`.github/workflows/quality-gates.yml` — they need live project credentials, which
+CI does not carry — so run them deliberately, not as part of `pnpm quality:ci`.
+
+| npm script | What it does | Writes to the hosted project? |
+|---|---|---|
+| `pnpm configure:hosted-project` | Patches hosted Auth config field-by-field, then re-reads and asserts each field | **yes** — `site_url`, `uri_allow_list`, `smtp_admin_email`, `smtp_sender_name`, the two mailer templates |
+| `pnpm test:hosted-project` | The same, `--dry-run`: prints the intended patch, sends nothing | no |
+| `pnpm seed:preview-fixtures` | Per program: locations, Admin/Preacher/Volunteer/Assistant, in/out-of-scope contacts, an open session, an out-of-scope session, attendance rows. `--wipe` removes them by tag | **yes** — data rows |
+| `pnpm test:attendance-contract` | CAP-5 over HTTP against a deployment | one attendance row, created and deleted |
+| `pnpm test:offline-queue` | CAP-6 in real Chromium: offline queue, replay, 409-as-synced | one attendance row, created and deleted |
+
+Extra environment:
+
+- `PREVIEW_FIXTURE_PASSWORD` — the password every seeded fixture account gets.
+  When unset, `seed-preview-fixtures.mjs` generates one and writes it to
+  **`.env.preview-seed.local`** (gitignored by the `.env*` rule; the path is
+  printed, the value never is). The two verifiers read it back from there.
+- `PW_CHROMIUM_PATH` (or `--chromium <path>`) — the Chromium executable
+  `test:offline-queue` drives. `playwright-core` is a driver only and downloads
+  no browser; with no resolvable executable the script exits non-zero with an
+  explicit "environment cannot run this check" message rather than passing.
+- `PRODUCTION_URL` / `NEXT_PUBLIC_SITE_URL` — the deployment the verifiers
+  target. Both default to `https://folk-hkmc-rho.vercel.app`.
+
+Never run `supabase config push`: `supabase/config.toml`'s `[auth]` section is the
+discarded local-Mailpit configuration.
+
+
+17. ✅ New Supabase project: **created and Vercel-linked by the user (2026-10-05)** — `etwunirahuucodcxydgs` (ap-south-1). Linked (no-op, `supabase/.temp/linked-project.json` already pins the ref). All ten migrations applied and recorded in `supabase_migrations.schema_migrations` — including `20261007000000_retire_airtable_named_columns.sql`, which retired the Airtable-named columns and dropped the four bridge tables; `lib/supabase/types.ts` was regenerated afterwards with `supabase gen types types`. Auth configured field-by-field via `scripts/configure-hosted-project.mjs` (site URL `https://folk-hkmc-rho.vercel.app`, `uri_allow_list` = that origin + its `/auth/confirm` child + `http://localhost:3000/**`, `smtp_admin_email` = `SMTP_SENDER_EMAIL`, invite/magic-link templates from `supabase/templates`). SMTP = Mailtrap sandbox (OQ-9 resolved; creds in `.env.migration.local`; **sandbox does not deliver to real inboxes — swap before go-live**, step 27). **Do NOT `supabase config push` `config.toml` verbatim — its `[auth]` section is local-mailpit.** ⚠️ **`supabase db push` cannot run from this environment**: direct Postgres times out on both `db.…:5432` and `aws-0-ap-south-1.pooler.supabase.com:{5432,6543}`. The DDL was applied through the Management API's `POST /v1/projects/{ref}/database/query` endpoint (runs as `postgres`) and the version row written explicitly, exactly as the CLI would. Story 9's prod replay must pick a DDL path that can actually connect and confirm the ledger afterwards.
+18. ✅ Seeded preview fixtures: `scripts/seed-preview-fixtures.mjs` creates, per program (`folk`, `gita-life`), two locations, four staff (Admin/Preacher/Volunteer/Assistant, the latter two routed through the Preacher, each with a confirmed `auth.users` row whose id equals `public.users.id` — DW-3), an in-scope and an out-of-scope contact, one open session (`public_attendance_enabled`, window open) plus one deliberately out-of-scope session, and one attendance row. Every row is tagged `preview-fixture-`; `--wipe` is a filter, not a truncate. Idempotent: a re-run creates 0. The fixture password lives in gitignored `.env.preview-seed.local` and is never printed. Verification ran against the **`feature/migrate-airtable-to-supabase` branch deployment** (`https://folk-hkmc-rho.vercel.app`), whose env resolves the new project. ⚠️ **That deployment is one commit behind** — its `<meta description>` still reads "…and Airtable handoff", which story 7.7 removed; **the redeploy is an operator action** (it publishes to the URL that becomes production).
+19. ✅ CAP-3 RLS verification: `node scripts/verify-rls.mjs` → **79/79 passing** in HTTP mode (PostgREST reachable, real per-role user JWTs), proving the retirement migration and the column renames changed no policy.
+20. ✅ CAP-5/CAP-6 contract checks: `node scripts/verify-attendance-contract.mjs` → **19/19** (full POST/GET matrix, including 400/404/409/403 scoping and the `knownAttendanceIds` null path), driven through a real Supabase password sign-in replaying the SSR session cookie, which is the only way to exercise `getStaffContext`. `node scripts/verify-pwa-offline-queue.mjs` → **18/18** in real Chromium via `playwright-core` (offline `POST /attendance` → `202 {queued:true}`, one IndexedDB row in `folk-offline-db/pending-requests`, drain on `SYNC_QUEUE`, and drain again on a `409`). Known gap recorded, not worked around: `sw.js`'s `PRECACHE_ASSETS` lists `/manifest.webmanifest`, which the deployment serves as `404`, so `cache.addAll` rejects and **nothing is precached** — offline *navigation* falls through to the synthetic `503` instead of the cached shell. `sw.js` is frozen for story 7.8; fixing the precache list (or serving the asset) is a follow-up.
+21. ⏳ **Operator action.** Smoke-test PWA install + offline flow on a real device/emulator against the preview deployment — a desktop Chromium context is not a device install and does not prove the manifest installs. Also still owed to a human: the preview redeploy (see step 18), a Mailtrap inbox check of the invite/magic-link templates, and the pre-go-live SMTP swap (step 27).
 22. ✅ Update `docs/data-models.md`, `docs/architecture.md`, `docs/api-contracts.md` to the Supabase-only reality. **Owned by story 7** (decided 2026-10-06).
 
 ## Phase 5 — Cutover (when testing passes)

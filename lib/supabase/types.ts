@@ -39,91 +39,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      airtable_identities: {
-        Row: {
-          airtable_base_id: string
-          airtable_user_id: string
-          created_at: string
-          email: string
-          id: string
-          last_synced_at: string
-          program_id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          airtable_base_id: string
-          airtable_user_id: string
-          created_at?: string
-          email: string
-          id?: string
-          last_synced_at?: string
-          program_id: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          airtable_base_id?: string
-          airtable_user_id?: string
-          created_at?: string
-          email?: string
-          id?: string
-          last_synced_at?: string
-          program_id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "airtable_identities_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "programs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      airtable_sync_state: {
-        Row: {
-          created_at: string
-          error_message: string | null
-          id: string
-          last_synced_at: string | null
-          program_id: string
-          source: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          last_synced_at?: string | null
-          program_id: string
-          source: string
-          status: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          last_synced_at?: string | null
-          program_id?: string
-          source?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "airtable_sync_state_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "programs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       attendance: {
         Row: {
           contact_id: string
@@ -179,9 +94,9 @@ export type Database = {
       audit_events: {
         Row: {
           action: string
-          actor_airtable_user_id: string | null
           actor_role: string | null
           actor_supabase_user_id: string | null
+          actor_user_id: string | null
           created_at: string
           id: number
           metadata: Json
@@ -192,9 +107,9 @@ export type Database = {
         }
         Insert: {
           action: string
-          actor_airtable_user_id?: string | null
           actor_role?: string | null
           actor_supabase_user_id?: string | null
+          actor_user_id?: string | null
           created_at?: string
           id?: number
           metadata?: Json
@@ -205,9 +120,9 @@ export type Database = {
         }
         Update: {
           action?: string
-          actor_airtable_user_id?: string | null
           actor_role?: string | null
           actor_supabase_user_id?: string | null
+          actor_user_id?: string | null
           created_at?: string
           id?: number
           metadata?: Json
@@ -325,48 +240,48 @@ export type Database = {
       invite_log: {
         Row: {
           accepted_at: string | null
-          airtable_user_id: string | null
           created_at: string
           error_message: string | null
           id: number
           invited_at: string
           invitee_email: string
           invitee_role: string
-          inviter_airtable_user_id: string | null
           inviter_supabase_user_id: string | null
+          inviter_user_id: string | null
           program_id: string | null
           status: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           accepted_at?: string | null
-          airtable_user_id?: string | null
           created_at?: string
           error_message?: string | null
           id?: number
           invited_at?: string
           invitee_email: string
           invitee_role: string
-          inviter_airtable_user_id?: string | null
           inviter_supabase_user_id?: string | null
+          inviter_user_id?: string | null
           program_id?: string | null
           status: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           accepted_at?: string | null
-          airtable_user_id?: string | null
           created_at?: string
           error_message?: string | null
           id?: number
           invited_at?: string
           invitee_email?: string
           invitee_role?: string
-          inviter_airtable_user_id?: string | null
           inviter_supabase_user_id?: string | null
+          inviter_user_id?: string | null
           program_id?: string | null
           status?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -498,130 +413,6 @@ export type Database = {
             columns: ["preacher_id"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      staff_memberships: {
-        Row: {
-          airtable_user_id: string
-          assigned_preacher_airtable_user_id: string | null
-          created_at: string
-          email: string
-          id: string
-          last_synced_at: string
-          location_ids: string[]
-          name: string | null
-          program_id: string
-          revoked_at: string | null
-          role: string
-          status: string
-          sync_error: string | null
-          sync_source: string
-          sync_state: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          airtable_user_id: string
-          assigned_preacher_airtable_user_id?: string | null
-          created_at?: string
-          email: string
-          id?: string
-          last_synced_at?: string
-          location_ids?: string[]
-          name?: string | null
-          program_id: string
-          revoked_at?: string | null
-          role: string
-          status: string
-          sync_error?: string | null
-          sync_source?: string
-          sync_state?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          airtable_user_id?: string
-          assigned_preacher_airtable_user_id?: string | null
-          created_at?: string
-          email?: string
-          id?: string
-          last_synced_at?: string
-          location_ids?: string[]
-          name?: string | null
-          program_id?: string
-          revoked_at?: string | null
-          role?: string
-          status?: string
-          sync_error?: string | null
-          sync_source?: string
-          sync_state?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "staff_memberships_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "programs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      staff_profiles: {
-        Row: {
-          airtable_user_id: string
-          assigned_preacher_airtable_user_id: string | null
-          created_at: string
-          email: string
-          id: string
-          last_synced_at: string
-          location_ids: string[]
-          membership_status: string | null
-          name: string | null
-          program_id: string | null
-          role: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          airtable_user_id: string
-          assigned_preacher_airtable_user_id?: string | null
-          created_at?: string
-          email: string
-          id: string
-          last_synced_at?: string
-          location_ids?: string[]
-          membership_status?: string | null
-          name?: string | null
-          program_id?: string | null
-          role: string
-          status: string
-          updated_at?: string
-        }
-        Update: {
-          airtable_user_id?: string
-          assigned_preacher_airtable_user_id?: string | null
-          created_at?: string
-          email?: string
-          id?: string
-          last_synced_at?: string
-          location_ids?: string[]
-          membership_status?: string | null
-          name?: string | null
-          program_id?: string | null
-          role?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "staff_profiles_program_id_fkey"
-            columns: ["program_id"]
-            isOneToOne: false
-            referencedRelation: "programs"
             referencedColumns: ["id"]
           },
         ]

@@ -64,7 +64,7 @@ Tables and views expected after migrations:
 - `public.invite_log`
 - `public.contact_attendance_counts` (view)
 
-`public.staff_memberships`, `public.staff_profiles`, `public.airtable_identities`, and `public.airtable_sync_state` are historical bridge tables with no runtime readers; they are still created by the already-applied migrations and are pending removal by a later schema-cleanup story.
+`public.staff_memberships`, `public.staff_profiles`, `public.airtable_identities`, and `public.airtable_sync_state` were historical bridge tables with no runtime readers. `supabase/migrations/20261007000000_retire_airtable_named_columns.sql` dropped all four on the hosted project; only the migration files that created them survive, as applied history.
 
 Supabase Auth redirect URLs must include:
 

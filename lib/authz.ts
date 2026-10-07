@@ -79,7 +79,7 @@ export async function writeAuditEvent(data: {
     await supabaseAdmin.from("audit_events").insert({
       program_id: data.programId,
       actor_supabase_user_id: data.actorSupabaseUserId,
-      actor_airtable_user_id: data.actorUserId,
+      actor_user_id: data.actorUserId,
       actor_role: data.actorRole,
       action: data.action,
       target_id: data.targetId,

@@ -171,7 +171,7 @@ Authorization/audit event log written by `writeAuditEvent()`.
 | `id` | bigint identity | Primary key |
 | `program_id` | text | References `programs(id)` |
 | `actor_supabase_user_id` | uuid nullable | Supabase actor |
-| `actor_airtable_user_id` | text nullable | Legacy column name from the Airtable era; not written by current code |
+| `actor_user_id` | text nullable | Actor's `public.users` UUID; renamed from the Airtable-era name by `20261007000000_retire_airtable_named_columns.sql` |
 | `actor_role` | text nullable | Staff role at event time |
 | `action` | text | Event action |
 | `target_id` | text nullable | Optional target |
@@ -180,7 +180,7 @@ Authorization/audit event log written by `writeAuditEvent()`.
 | `metadata` | jsonb | Additional event metadata |
 | `created_at` | timestamptz | Default `now()` |
 
-RLS is enabled. `actor_airtable_user_id` is retained because the migration is already applied; its rename is deferred to the schema-cleanup story that owns hosted-project access.
+RLS is enabled. The Airtable-era `actor_airtable_user_id` column was renamed to `actor_user_id` by `20261007000000_retire_airtable_named_columns.sql`; the rename kept the column so the existing audit history survives. `writeAuditEvent` writes it from `actorUserId`, and its current in-repo callers pass only `actorSupabaseUserId` — so `actor_user_id` is present but empty for every row written today, and `actor_supabase_user_id` (which carries `public.users.id`) is the actor id that is actually populated.
 
 ### `public.invite_log`
 
@@ -191,8 +191,8 @@ Invite audit log written by `lib/invite-log.ts`.
 | `id` | bigint identity | Primary key |
 | `program_id` | text nullable | Program for the invite |
 | `invitee_email` | text | Lowercased |
-| `airtable_user_id` | text nullable | Legacy column name; now receives the `public.users` UUID |
-| `inviter_airtable_user_id` | text nullable | Legacy column name; now receives the `public.users` UUID |
+| `user_id` | text nullable | Invitee `public.users` UUID; renamed from the Airtable-era name by `20261007000000_retire_airtable_named_columns.sql` |
+| `inviter_user_id` | text nullable | Inviter `public.users` UUID; renamed from the Airtable-era name by the same migration |
 | `inviter_supabase_user_id` | uuid nullable | Inviter Supabase user |
 | `invitee_role` | text | Staff role |
 | `status` | text | `pending`, `sent`, `failed`, `accepted` |
@@ -202,11 +202,11 @@ Invite audit log written by `lib/invite-log.ts`.
 | `created_at` | timestamptz | Default `now()` |
 | `updated_at` | timestamptz | Trigger-maintained |
 
-### Legacy Bridge Tables
+### Legacy Bridge Tables (dropped)
 
-`public.staff_memberships`, `public.staff_profiles`, `public.airtable_identities`, and `public.airtable_sync_state` were the Airtable→Supabase synchronization bridge. **No runtime code reads or writes them** — `public.users` is authoritative as of the staff-context rework. They remain in the database only because their migrations are already applied on the hosted project; dropping them requires database access and is deferred to the schema-cleanup story.
+`public.staff_memberships`, `public.staff_profiles`, `public.airtable_identities`, and `public.airtable_sync_state` were the Airtable→Supabase synchronization bridge. No runtime code read or wrote them once `public.users` became authoritative, and `supabase/migrations/20261007000000_retire_airtable_named_columns.sql` dropped all four on the hosted project. The migration files that created them remain in `supabase/migrations/` as applied history and must not be deleted; the tables themselves no longer exist.
 
-Do not read these tables from application code. Use `public.users`.
+Use `public.users`. If you need the pre-migration data, it survives in the read-only archive project (`cparpinmalqsimninyfw`), never in this one.
 
 ## Row-Level Security
 

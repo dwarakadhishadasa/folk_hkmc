@@ -125,9 +125,18 @@ const FORBIDDEN = {
     request: `${SVC[0].toUpperCase()}${SVC.slice(1)}RequestError`,
     config: `${SVC[0].toUpperCase()}${SVC.slice(1)}ConfigError`,
   },
-  legacyColumn: `${SVC}_user_id`,
-  legacyInviterColumn: `inviter_${SVC}_user_id`,
-  legacyActorColumn: `actor_${SVC}_user_id`,
+  // The column names `20261007000000_retire_airtable_named_columns.sql` left
+  // behind. `removedColumn` is what the database no longer has;
+  // `currentColumn` is what it has now, and what the service-role inserts must
+  // therefore write. The pre-migration `*_airtable_user_id` spellings are not
+  // asserted here at all: only the migration history still declares them, and
+  // ACCOUNTED_FOR.migrations already covers that wholesale.
+  removedColumn: `${SVC}_user_id`,
+  removedInviterColumn: `inviter_${SVC}_user_id`,
+  removedActorColumn: `actor_${SVC}_user_id`,
+  currentColumn: "user_id",
+  currentInviterColumn: "inviter_user_id",
+  currentActorColumn: "actor_user_id",
   bridgeTables: [`${SVC}_identities`, `${SVC}_sync_state`],
 }
 
@@ -154,20 +163,26 @@ function grepLines(pattern, { ignoreCase = false, allow } = {}) {
   })
 }
 
-// The five accounted-for places an Airtable mention may still survive, and why
-// each one is a fact about history rather than a dependency on the service.
-// Story 8 owns the migration that retires the last three.
+// The places an Airtable mention may still survive, and why each one is a fact
+// about history rather than a dependency on the service. Story 8 retired the
+// three runtime columns, so `lib/invite-log.ts`, `lib/authz.ts` and the
+// regenerated `lib/supabase/types.ts` no longer appear here — their mentions
+// live only in the migration history that declared them, which is never edited.
+// A stale allowance is itself a hole: it would silently permit a fresh mention
+// in a file that no longer has one, so removing the entry is what keeps the gate
+// honest. `lib/supabase/types.ts` has its own gate above.
 const ACCOUNTED_FOR = {
-  // Generated from the applied schema; regenerated, never hand-edited.
-  "lib/supabase/types.ts": [new RegExp(SVC, "i"), new RegExp(`assigned_preacher_${SVC}_user_id`, "i")],
   // Already-applied migration history. Editing these rewrites the record.
   migrations: null,
   "supabase/seed.sql": [new RegExp(`^\\s*--.*${SVC}`, "i")],
-  // The three legacy columns whose rename needs a migration story 8 owns.
-  "lib/invite-log.ts": [new RegExp(`^\\s*(inviter_)?${SVC}_user_id:`)],
-  "lib/authz.ts": [new RegExp(`^\\s*${FORBIDDEN.legacyActorColumn}:`)],
   // A source-text assertion that history still declares the bridge tables.
   "scripts/verify-program-readiness.mjs": [new RegExp(`"${SVC}_(identities|sync_state)"`)],
+  // The CAP-5 verifier explains, in its own comments, which migration it is
+  // guarding against, and carries the `<meta description>` staleness probe that
+  // story 7.7 deleted. Both name the removed thing; neither calls the service.
+  // Only comment lines and the marker binding are allowed -- any other mention
+  // in that file still fails the gate.
+  "scripts/verify-attendance-contract.mjs": [new RegExp(`^\\s*(\\*|//)`), new RegExp(`^\\s*const staleMarker = `)],
 }
 
 function accountedAllowanceFor(file) {
@@ -276,7 +291,7 @@ check("no Airtable service reference, env read, or package import in source", ()
   assert(hits.length === 0, `expected zero matches, found:\n  ${hits.join("\n  ")}`)
 })
 
-check("every remaining Airtable mention is one of the five accounted-for ones", () => {
+check("every remaining Airtable mention is one of the accounted-for ones", () => {
   const hits = grepLines(SVC, { ignoreCase: true, allow: accountedAllowanceFor })
   assert(hits.length === 0, `unaccounted Airtable mentions:\n  ${hits.join("\n  ")}`)
 })
@@ -324,6 +339,20 @@ check("program-config declares no Airtable mapping types", () => {
   const names = exportedTypeNames(parse("packages/program-config/src/types.ts"))
   const airtableNames = names.filter((name) => new RegExp(FORBIDDEN.mappingType, "i").test(name))
   assert(airtableNames.length === 0, `types.ts still declares: ${airtableNames.join(", ")}`)
+})
+
+check("generated Supabase types carry no Airtable mention", () => {
+  // `lib/supabase/types.ts` used to sit in ACCOUNTED_FOR because the Airtable
+  // bridge tables were still declared there. The retirement migration removed
+  // them and the file was regenerated, so the allowance is gone and this check
+  // is what replaces it -- otherwise a future hand edit would only be caught by
+  // the generic repo-wide grep, and a regenerated file silently reintroducing a
+  // bridge table would pass every other gate here.
+  const hits = read("lib/supabase/types.ts")
+    .split("\n")
+    .map((text, index) => `${index + 1}: ${text.trim()}`)
+    .filter((line) => new RegExp(SVC, "i").test(line))
+  assert(hits.length === 0, `lib/supabase/types.ts still mentions Airtable:\n  ${hits.join("\n  ")}`)
 })
 
 check("program-config/server exports no Airtable management helpers", () => {
@@ -440,21 +469,23 @@ check("invite and contact routes trim the assigned preacher id", () => {
   }
 })
 
-check("renamed columns keep their historical names until the schema migration lands", () => {
-  // The three legacy `*_airtable_user_id` columns are renamed by a migration
-  // story 8 owns. The TypeScript keys must match the applied database exactly
-  // or the service-role inserts fail with a PostgREST 42703.
+check("retired columns write their post-migration names", () => {
+  // `20261007000000_retire_airtable_named_columns.sql` renamed the three
+  // `*_airtable_user_id` columns. The TypeScript keys must match the applied
+  // database exactly or the service-role inserts fail with a PostgREST 42703,
+  // so this gate flipped with the migration rather than being deleted: the
+  // columns it names are the columns that now exist.
   assert(
-    new RegExp(`${FORBIDDEN.legacyColumn}: data\\.userId`).test(read("lib/invite-log.ts")),
-    "the invite_log legacy user-id column write changed",
+    new RegExp(`^\\s*${FORBIDDEN.currentColumn}: data\\.userId`, "m").test(read("lib/invite-log.ts")),
+    "the invite_log user-id column write changed",
   )
   assert(
-    new RegExp(`${FORBIDDEN.legacyInviterColumn}: data\\.inviterUserId`).test(read("lib/invite-log.ts")),
-    "the invite_log legacy inviter-id column write changed",
+    new RegExp(`^\\s*${FORBIDDEN.currentInviterColumn}: data\\.inviterUserId`, "m").test(read("lib/invite-log.ts")),
+    "the invite_log inviter-id column write changed",
   )
   assert(
-    new RegExp(`${FORBIDDEN.legacyActorColumn}: data\\.actorUserId`).test(read("lib/authz.ts")),
-    "the audit_events legacy actor-id column write changed",
+    new RegExp(`^\\s*${FORBIDDEN.currentActorColumn}: data\\.actorUserId`, "m").test(read("lib/authz.ts")),
+    "the audit_events actor-id column write changed",
   )
 })
 

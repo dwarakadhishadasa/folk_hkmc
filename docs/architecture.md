@@ -111,7 +111,7 @@ Supabase Postgres is the operational store. `lib/supabase/data.ts` is the single
 - `audit_events`: authorization/audit events, written by `writeAuditEvent()`
 - `invite_log`: invite audit log
 
-`staff_memberships`, `staff_profiles`, `airtable_identities`, and `airtable_sync_state` are the historical synchronization bridge. No runtime code reads or writes them; their migrations are already applied on the hosted project, so dropping them is deferred to the schema-cleanup story. Two legacy column names (`invite_log.airtable_user_id`, `invite_log.inviter_airtable_user_id`, `audit_events.actor_airtable_user_id`) likewise persist with UUID values now written into them.
+`staff_memberships`, `staff_profiles`, `airtable_identities`, and `airtable_sync_state` were the historical synchronization bridge. No runtime code read or wrote them once `public.users` became authoritative, and `supabase/migrations/20261007000000_retire_airtable_named_columns.sql` has since dropped all four on the hosted project. The same migration renamed `invite_log.airtable_user_id` → `user_id`, `invite_log.inviter_airtable_user_id` → `inviter_user_id`, and `audit_events.actor_airtable_user_id` → `actor_user_id`; `lib/supabase/types.ts` was regenerated afterwards. The migration files that created the bridge stay in the repository as applied history — the tables themselves no longer exist.
 
 ### Storage
 

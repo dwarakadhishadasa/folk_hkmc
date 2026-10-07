@@ -76,6 +76,6 @@ Important current caveats:
 
 - The app configs import shared root `next.config.mjs`, which still ignores TypeScript build errors, so run `pnpm typecheck:workspace` explicitly.
 - `components/registration-form.tsx`, `components/offline-sync-provider.tsx`, `lib/offline-sync.ts`, and `lib/store.ts` are present but not part of the active mounted runtime path.
-- Staff access is not localStorage-based anymore; Supabase cookies and `staff_memberships` are the primary source for program staff authorization.
+- Staff access is not localStorage-based anymore; Supabase cookies and `public.users` are the primary source for program staff authorization. The `staff_memberships`/`staff_profiles`/`airtable_identities`/`airtable_sync_state` bridge tables have been dropped.
 
 Updated through a BMAD `document-project` documentation freshness pass on 2026-06-13.
