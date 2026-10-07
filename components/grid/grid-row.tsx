@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react"
 import type { KeyboardEvent } from "react"
 import type { Row } from "@tanstack/react-table"
 
-import type { GridCellView, GridDensity } from "@/components/grid/grid-types"
+import type { GridCellView, GridDensity, GridFrozenColumn } from "@/components/grid/grid-types"
 import { GRID_EMPTY_TEXT, gridCellKey } from "@/components/grid/use-grid-keyboard"
 import { cn } from "@/lib/utils"
 
@@ -73,8 +73,8 @@ function GridCellEditor({
 export interface GridRowProps<TData> {
   row: Row<TData>
   cells: GridCellView[]
-  /** Column id of the frozen first column, or null when nothing is frozen. */
-  frozenColumnId: string | null
+  /** The leading pinned run, in display order; empty when nothing is frozen. */
+  frozenColumns: readonly GridFrozenColumn[]
   density: GridDensity
   isFocused: boolean
   isEditing: boolean
@@ -98,13 +98,17 @@ export interface GridRowProps<TData> {
 export function GridRow<TData>({
   row,
   cells,
-  frozenColumnId,
+  frozenColumns,
   density,
   isFocused,
   isEditing,
   domId,
   onCellPointerDown,
 }: GridRowProps<TData>) {
+  const stickyLeftByColumn = new Map(frozenColumns.map((entry) => [entry.columnId, entry.left]))
+  const lastFrozenColumnId =
+    frozenColumns.length === 0 ? null : frozenColumns[frozenColumns.length - 1].columnId
+
   return (
     <tr
       id={domId}
@@ -126,14 +130,18 @@ export function GridRow<TData>({
       )}
     >
       {cells.map((cell) => {
-        const isFrozen = cell.columnId === frozenColumnId
+        const stickyLeft = stickyLeftByColumn.get(cell.columnId)
 
         return (
           <td
             key={cell.columnId}
             data-grid-cell={gridCellKey(row.id, cell.columnId)}
             tabIndex={-1}
-            title={cell.text === GRID_EMPTY_TEXT ? undefined : (cell.error ?? cell.text)}
+            title={
+              cell.render || cell.text === GRID_EMPTY_TEXT
+                ? undefined
+                : (cell.error ?? cell.text)
+            }
             onPointerDown={() => onCellPointerDown(row.id, cell.columnId)}
             className={cn(
               "truncate px-2 align-middle text-[13px]",
@@ -141,9 +149,13 @@ export function GridRow<TData>({
               cell.tabular && "tabular-nums",
               cell.isFocused && "ring-ring relative z-[5] ring-1 ring-inset",
               cell.error && "text-destructive",
-              // 1px divider instead of a scroll shadow, which design-constraints.md bans.
-              isFrozen && "sticky left-0 z-10 border-r border-border bg-card",
+              // 1px divider instead of a scroll shadow, which design-constraints.md bans —
+              // and on the last pinned column only, so the frozen region is separated from the
+              // scrolling region by one line rather than one line per pinned cell.
+              stickyLeft !== undefined && "sticky z-10 bg-card",
+              cell.columnId === lastFrozenColumnId && "border-r border-border",
             )}
+            style={stickyLeft === undefined ? undefined : { left: stickyLeft }}
           >
             {cell.editing ? (
               <GridCellEditor
@@ -151,6 +163,8 @@ export function GridRow<TData>({
                 onDraftChange={cell.onDraftChange}
                 onDraftKeyDown={cell.onDraftKeyDown}
               />
+            ) : cell.render !== undefined ? (
+              cell.render
             ) : (
               cell.text
             )}

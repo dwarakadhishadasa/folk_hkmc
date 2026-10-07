@@ -29,6 +29,7 @@ export type {
   GridDensity,
   GridEditError,
   GridEditErrorHandler,
+  GridFrozenColumn,
   GridPanelState,
   GridTransientHandle,
 } from "@/components/grid/grid-types"

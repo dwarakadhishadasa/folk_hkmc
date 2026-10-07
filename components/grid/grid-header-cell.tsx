@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import type { ReactNode } from "react"
 import {
   ArrowDown,
   ArrowUp,
@@ -31,7 +32,8 @@ export interface GridHeaderCellProps {
   width: number
   /** Height of the header row; matches the body row height for a tight grid. */
   rowHeight: number
-  isFrozen: boolean
+  /** `left` offset inside the pinned run, or null when the column scrolls away. */
+  stickyLeft: number | null
   sortDirection: "asc" | "desc" | false
   isSortable: boolean
   onSortToggle: () => void
@@ -46,6 +48,13 @@ export interface GridHeaderCellProps {
   onHide: () => void
   /** `Header.getResizeHandler()`, attached to mouse and touch start. */
   resizeHandler: (event: unknown) => void
+  /**
+   * The consumer's own `columnDef.header` output, when it supplied one — a
+   * select-all control, typically. Supplying it turns the cell into a plain
+   * container: sort, filter, column menu and resize are suppressed, because a
+   * header that is a control must not also be a sort button.
+   */
+  render?: ReactNode
 }
 
 function SortIndicator({ direction }: { direction: "asc" | "desc" | false }) {
@@ -104,7 +113,7 @@ function GridColumnFilterInput({ columnId, label, kind, value, onChange }: GridC
 
 /**
  * Sticky header cell: sortable label, per-column filter popover, column menu and
- * resize handle.
+ * resize handle — or, when `render` is supplied, just the consumer's node.
  *
  * Column order moves through Move left / Move right rather than drag-and-drop:
  * it is deterministic, keyboard-operable, and serializes straight to `cols`
@@ -115,7 +124,7 @@ export function GridHeaderCell({
   columnId,
   width,
   rowHeight,
-  isFrozen,
+  stickyLeft,
   sortDirection,
   isSortable,
   onSortToggle,
@@ -129,7 +138,10 @@ export function GridHeaderCell({
   onMoveRight,
   onHide,
   resizeHandler,
+  render,
 }: GridHeaderCellProps) {
+  const isFrozen = stickyLeft !== null
+  const hasCustomHeader = render !== undefined && render !== null
   const isFiltered = filterKind !== null && filterValue.trim().length > 0
   const ariaSort = sortDirection === "asc" ? "ascending" : sortDirection === "desc" ? "descending" : "none"
 
@@ -138,95 +150,101 @@ export function GridHeaderCell({
       scope="col"
       data-grid-column={columnId}
       aria-sort={ariaSort}
-      style={{ width, height: rowHeight }}
+      style={{ width, height: rowHeight, left: stickyLeft ?? undefined }}
       className={cn(
         GRID_BASE_FONT_CLASS,
-        "bg-card text-muted-foreground sticky top-0 z-20 border-b border-r border-border p-0 font-medium",
-        isFrozen && "left-0 z-30",
+        "bg-card text-muted-foreground sticky top-0 border-b border-r border-border p-0 font-medium",
+        isFrozen ? "z-30" : "z-20",
       )}
     >
-      <div className="flex h-full items-center gap-0.5 px-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={!isSortable}
-          onClick={onSortToggle}
-          aria-label={`Sort by ${label}`}
-          className={cn(
-            "h-6 min-w-0 flex-1 justify-start gap-1 px-1 text-[13px] font-medium",
-            sortDirection && "text-foreground",
-          )}
-        >
-          <span className="truncate">{label}</span>
-          {isSortable ? <SortIndicator direction={sortDirection} /> : null}
-        </Button>
-
-        {filterKind !== null ? (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="size-6"
-                aria-label={isFiltered ? `Edit filter for ${label}` : `Filter ${label}`}
-              >
-                <Filter
-                  aria-hidden="true"
-                  className={cn("size-3.5", isFiltered ? "text-foreground" : "opacity-50")}
-                />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-64 p-3">
-              <GridColumnFilterInput
-                columnId={columnId}
-                label={label}
-                kind={filterKind}
-                value={filterValue}
-                onChange={onFilterChange}
-              />
-            </PopoverContent>
-          </Popover>
-        ) : null}
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+      {hasCustomHeader ? (
+        <div className="flex h-full items-center justify-center px-1">{render}</div>
+      ) : (
+        <>
+          <div className="flex h-full items-center gap-0.5 px-1">
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
-              className="size-6"
-              aria-label={`Column options for ${label}`}
+              size="sm"
+              disabled={!isSortable}
+              onClick={onSortToggle}
+              aria-label={`Sort by ${label}`}
+              className={cn(
+                "h-6 min-w-0 flex-1 justify-start gap-1 px-1 text-[13px] font-medium",
+                sortDirection && "text-foreground",
+              )}
             >
-              <MoreHorizontal aria-hidden="true" className="size-3.5 opacity-60" />
+              <span className="truncate">{label}</span>
+              {isSortable ? <SortIndicator direction={sortDirection} /> : null}
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
-            <DropdownMenuItem disabled={!canMoveLeft} onSelect={onMoveLeft}>
-              <MoveLeft aria-hidden="true" />
-              Move left
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={!canMoveRight} onSelect={onMoveRight}>
-              <MoveRight aria-hidden="true" />
-              Move right
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem disabled={!canHide} onSelect={onHide}>
-              Hide column
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
 
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={`Resize ${label}`}
-        onMouseDown={resizeHandler}
-        onTouchStart={resizeHandler}
-        className="border-ring/40 hover:bg-ring/60 absolute right-0 top-0 h-full w-1 cursor-col-resize touch-none border-l bg-transparent select-none"
-      />
+            {filterKind !== null ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-6"
+                    aria-label={isFiltered ? `Edit filter for ${label}` : `Filter ${label}`}
+                  >
+                    <Filter
+                      aria-hidden="true"
+                      className={cn("size-3.5", isFiltered ? "text-foreground" : "opacity-50")}
+                    />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-3">
+                  <GridColumnFilterInput
+                    columnId={columnId}
+                    label={label}
+                    kind={filterKind}
+                    value={filterValue}
+                    onChange={onFilterChange}
+                  />
+                </PopoverContent>
+              </Popover>
+            ) : null}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="size-6"
+                  aria-label={`Column options for ${label}`}
+                >
+                  <MoreHorizontal aria-hidden="true" className="size-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-44">
+                <DropdownMenuItem disabled={!canMoveLeft} onSelect={onMoveLeft}>
+                  <MoveLeft aria-hidden="true" />
+                  Move left
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!canMoveRight} onSelect={onMoveRight}>
+                  <MoveRight aria-hidden="true" />
+                  Move right
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem disabled={!canHide} onSelect={onHide}>
+                  Hide column
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={`Resize ${label}`}
+            onMouseDown={resizeHandler}
+            onTouchStart={resizeHandler}
+            className="border-ring/40 hover:bg-ring/60 absolute right-0 top-0 h-full w-1 cursor-col-resize touch-none border-l bg-transparent select-none"
+          />
+        </>
+      )}
     </th>
   )
 }

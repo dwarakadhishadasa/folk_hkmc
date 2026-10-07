@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
-import { Columns3, Search, X } from "lucide-react"
+import { useState } from 'react'
+import type { ReactNode } from 'react'
+import { Columns3, Search, X } from 'lucide-react'
 
 import { Button } from "@/components/ui/button"
 import {
@@ -40,8 +41,14 @@ export interface GridToolbarProps {
   /** Rows currently passing filters, and rows in the source set. */
   visibleCount: number
   totalCount: number
-  /** Id of the frozen column, so it cannot be hidden out from under itself. */
-  frozenColumnId: string | null
+  /** Ids of the pinned columns, so none can be hidden out from under itself. */
+  frozenColumnIds: readonly string[]
+  /**
+   * Consumer chrome rendered between the density control and the row count.
+   * A selection-aware action surface belongs in the grid's own chrome rather
+   * than in a second band above it, so the two never disagree about layout.
+   */
+  toolbarExtra?: ReactNode
 }
 
 /**
@@ -62,7 +69,8 @@ export function GridToolbar({
   onDensityChange,
   visibleCount,
   totalCount,
-  frozenColumnId,
+  frozenColumnIds,
+  toolbarExtra,
 }: GridToolbarProps) {
   const [searchFocused, setSearchFocused] = useState(false)
   const [draft, handleGlobalFilterChange] = useUrlBackedDraft(
@@ -123,10 +131,10 @@ export function GridToolbar({
             <DropdownMenuCheckboxItem
               key={column.id}
               checked={column.visible}
-              disabled={column.id === frozenColumnId}
+              disabled={frozenColumnIds.includes(column.id)}
               onCheckedChange={(checked) => onColumnVisibilityChange(column.id, checked === true)}
               onSelect={(event) => {
-                if (column.id === frozenColumnId) {
+                if (frozenColumnIds.includes(column.id)) {
                   event.preventDefault()
                 }
               }}
@@ -147,6 +155,8 @@ export function GridToolbar({
           <SelectItem value="dense">Dense rows</SelectItem>
         </SelectContent>
       </Select>
+
+      {toolbarExtra}
 
       <p className="text-muted-foreground ml-auto text-[13px] tabular-nums">
         {visibleCount.toLocaleString("en-IN")} of {totalCount.toLocaleString("en-IN")} in scope

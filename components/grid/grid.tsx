@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import {
+  flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
@@ -12,9 +13,11 @@ import type {
   ColumnDef,
   ColumnSizingInfoState,
   ColumnSizingState,
+  Header,
   OnChangeFn,
   Row,
   RowData,
+  RowSelectionState,
   Table,
   TableState,
 } from "@tanstack/react-table"
@@ -28,6 +31,7 @@ import type {
   GridCellCommitHandler,
   GridDensity,
   GridEditErrorHandler,
+  GridFrozenColumn,
   GridPanelState,
   GridTransientHandle,
 } from "@/components/grid/grid-types"
@@ -185,6 +189,73 @@ function resolveColumnLabel<TData extends RowData>(
 }
 
 /**
+ * Resolves the leading pinned region and each column's `left` offset.
+ *
+ * A column marked `meta.grid.frozen` joins, and so does a `selectable` column
+ * ahead of it: a selection control is chrome rather than identity, but it still
+ * has to stick or the pinned identity column scrolls out from underneath it. The
+ * region ends at the first column that is neither, which is what makes it
+ * leading — a pinned region with a gap in it has no meaningful offset.
+ *
+ * A table that marks nothing falls back to pinning only its first visible column,
+ * the behaviour that predates the flag, and skips that fallback when the first
+ * column is a selection control rather than an identity.
+ */
+function resolveFrozenRun<TData extends RowData>(headers: Header<TData, unknown>[]): GridFrozenColumn[] {
+  const marked = headers.some((header) => header.column.columnDef.meta?.grid?.frozen === true)
+  const run: GridFrozenColumn[] = []
+  let left = 0
+
+  for (const [index, header] of headers.entries()) {
+    const meta = header.column.columnDef.meta?.grid
+    const isSelectable = meta?.selectable === true
+
+    if (marked) {
+      if (!isSelectable && meta?.frozen !== true) {
+        break
+      }
+    } else if (index > 0 || isSelectable) {
+      break
+    }
+
+    run.push({ columnId: header.column.id, left })
+    left += header.getSize()
+  }
+
+  return run
+}
+
+/**
+ * The consumer's own header node, or `undefined` for a plain labelled column.
+ *
+ * A string header is the label path the cell already renders, so only a
+ * function or element header counts as a consumer-rendered body — that is how
+ * the cell knows to suppress its own sort button, filter, menu and resize.
+ */
+function renderHeaderNode<TData extends RowData>(header: Header<TData, unknown>): ReactNode | undefined {
+  const definition = header.column.columnDef.header
+
+  if (typeof definition !== "function" && typeof definition !== "object") {
+    return undefined
+  }
+
+  return flexRender(definition, header.getContext()) ?? undefined
+}
+
+/**
+ * Narrows a resolved table state to what the URL writer is allowed to see.
+ *
+ * `GridProps.onStateChange` is typed for a complete `TableState` because that is
+ * what TanStack hands it, but the URL half is genuinely partial — the consumer
+ * reads six keys out of it and ignores the rest. One documented assertion here
+ * is cheaper than widening that prop, and it keeps the row-selection removal in
+ * a single place rather than one per call site.
+ */
+function forUrlWriter(state: Partial<TableState>): TableState {
+  return state as TableState
+}
+
+/**
  * Clamps and rounds to what the table will actually render, so the committed
  * `size.<colId>` value and the measured width agree even when a drag stopped
  * against the minimum.
@@ -210,6 +281,15 @@ export interface GridProps<TData extends RowData> {
   /** Controlled table state. `useGridViewState` supplies it, URL-derived. */
   state: Partial<TableState>
   onStateChange: OnChangeFn<TableState>
+  /**
+   * Receives the resolved selection whenever it changes.
+   *
+   * Selection is deliberately not part of `state`'s URL half: `pickGridState`
+   * enumerates six grid keys and `rowSelection` is not among them, because a
+   * selection is per-visit working state rather than a shareable view. It is
+   * intercepted here so a checkbox click never reaches the URL writer.
+   */
+  onRowSelectionChange?: (rowSelection: RowSelectionState) => void
   ariaLabel: string
   density: GridDensity
   onDensityChange: (density: GridDensity) => void
@@ -221,6 +301,8 @@ export interface GridProps<TData extends RowData> {
   onClearFilters?: () => void
   /** Replaces the filtered-empty panel body entirely. */
   emptyContent?: ReactNode
+  /** Consumer chrome rendered in the toolbar, after the density control. */
+  toolbarExtra?: ReactNode
   /** Forces a CAP-9 variant, for the review harness. Derived from rows otherwise. */
   panel?: GridPanelState
   className?: string
@@ -239,7 +321,8 @@ export interface GridProps<TData extends RowData> {
  *
  * Grid view state is controlled from props and round-trips through the URL via
  * the caller's `onStateChange`; this component holds no sort, filter, order,
- * visibility or size state of its own.
+ * visibility or size state of its own. Row selection is the one exception and
+ * it is routed to `onRowSelectionChange` instead of the URL writer.
  */
 export function Grid<TData extends RowData>({
   rows,
@@ -247,6 +330,7 @@ export function Grid<TData extends RowData>({
   getRowId,
   state,
   onStateChange,
+  onRowSelectionChange,
   ariaLabel,
   density,
   onDensityChange,
@@ -255,6 +339,7 @@ export function Grid<TData extends RowData>({
   onEditError,
   onClearFilters,
   emptyContent,
+  toolbarExtra,
   panel,
   className,
 }: GridProps<TData>) {
@@ -309,7 +394,7 @@ export function Grid<TData extends RowData>({
     active: boolean
     moved: boolean
     startSize: number
-    pending: TableState | null
+    pending: Partial<TableState> | null
   }>({ active: false, moved: false, startSize: GRID_DEFAULT_COLUMN_WIDTH, pending: null })
 
   const tableState = useMemo<Partial<TableState>>(() => {
@@ -346,15 +431,29 @@ export function Grid<TData extends RowData>({
       // the object form safe.
       const resolved = typeof updater === "function" ? updater(table.getState()) : updater
 
+      // Row selection rides the same updater as everything else, so every
+      // checkbox click resolves a full table state that carries it. It is split
+      // off here and never forwarded: `onStateChange` is the URL writer, and a
+      // selection is per-visit working state, not a shareable view. Only a
+      // genuine change is handed on, so a resize drag — which re-resolves the
+      // whole state on every move — does not re-notify the selection.
+      const forwarded: Partial<TableState> = { ...resolved }
+      const nextRowSelection = forwarded.rowSelection
+      delete forwarded.rowSelection
+
+      if (nextRowSelection !== undefined && nextRowSelection !== table.getState().rowSelection) {
+        onRowSelectionChange?.(nextRowSelection)
+      }
+
       if (resizeRef.current.active) {
         // Mid-drag: hold the width locally instead of driving the router per move.
-        resizeRef.current.pending = resolved
+        resizeRef.current.pending = forwarded
         return
       }
 
-      onStateChange(resolved)
+      onStateChange(forUrlWriter(forwarded))
     },
-    [onStateChange],
+    [onRowSelectionChange, onStateChange],
   )
 
   const handleColumnSizingInfoChange = useCallback<OnChangeFn<ColumnSizingInfoState>>(
@@ -399,10 +498,12 @@ export function Grid<TData extends RowData>({
       // A click without a move leaves the width untouched; committing it would
       // write a `size.*` key equal to the default for no reason.
       if (pending && moved) {
-        onStateChange({
-          ...pending,
-          columnSizing: clampColumnSizing(pending.columnSizing),
-        })
+        onStateChange(
+          forUrlWriter({
+            ...pending,
+            columnSizing: clampColumnSizing(pending.columnSizing ?? {}),
+          }),
+        )
       }
     },
     [onStateChange, transient],
@@ -418,6 +519,11 @@ export function Grid<TData extends RowData>({
     columnResizeMode: "onChange",
     onColumnSizingInfoChange: handleColumnSizingInfoChange,
     defaultColumn: { minSize: GRID_MIN_COLUMN_WIDTH },
+    // Stated explicitly rather than inherited from TanStack's default of `true`:
+    // `grid-row.tsx` keys `data-state="selected"` off `row.getIsSelected()`, and a
+    // selection surface that depends on an unstated default is one refactor away
+    // from silently rendering unchecked rows.
+    enableRowSelection: true,
     // Client-side row models over the full scoped set. Server-side paging is
     // deferred behind the numeric trigger in data-loading-decision.md §3, and
     // these flags are the switch that move would flip.
@@ -439,7 +545,8 @@ export function Grid<TData extends RowData>({
   const headerHeaders = table.getHeaderGroups()[0]?.headers ?? []
   const visibleColumnIds = headerHeaders.map((header) => header.column.id)
   const visibleIndexById = new Map(visibleColumnIds.map((id, index) => [id, index]))
-  const frozenColumnId = visibleColumnIds[0] ?? null
+  const frozenColumns = resolveFrozenRun(headerHeaders)
+  const frozenColumnIds = frozenColumns.map((entry) => entry.columnId)
 
   const panelState = useMemo<GridPanelState>(() => {
     if (panel) {
@@ -580,7 +687,8 @@ export function Grid<TData extends RowData>({
         onDensityChange={onDensityChange}
         visibleCount={rowModel.length}
         totalCount={rows.length}
-        frozenColumnId={frozenColumnId}
+        frozenColumnIds={frozenColumnIds}
+        toolbarExtra={toolbarExtra}
       />
 
       <p
@@ -615,9 +723,15 @@ export function Grid<TData extends RowData>({
             <tr style={{ height: rowHeight }}>
               {headerHeaders.map((header) => {
                 const column = header.column
-                const isFrozen = column.id === frozenColumnId
+                const stickyLeft =
+                  frozenColumns.find((entry) => entry.columnId === column.id)?.left ?? null
                 const filterKind = column.columnDef.meta?.grid?.filter ?? null
                 const visibleIndex = visibleIndexById.get(column.id) ?? 0
+                // TanStack has no reorder flag of its own — `columnOrder` is
+                // always writable — so the selection control is held in place here
+                // instead. A leading control column that could be dragged out from
+                // the pinned region would take the identity column with it.
+                const isSelectable = column.columnDef.meta?.grid?.selectable === true
 
                 return (
                   <GridHeaderCell
@@ -626,7 +740,7 @@ export function Grid<TData extends RowData>({
                     columnId={column.id}
                     width={header.getSize()}
                     rowHeight={rowHeight}
-                    isFrozen={isFrozen}
+                    stickyLeft={stickyLeft}
                     sortDirection={column.getIsSorted()}
                     isSortable={column.getCanSort()}
                     onSortToggle={() => {
@@ -637,9 +751,15 @@ export function Grid<TData extends RowData>({
                     onFilterChange={(value) => {
                       column.setFilterValue(value.length === 0 ? undefined : value)
                     }}
-                    canHide={column.getCanHide() && !isFrozen}
-                    canMoveLeft={visibleIndex > 0}
-                    canMoveRight={visibleIndex > -1 && visibleIndex < visibleColumnIds.length - 1}
+                    canHide={
+                      column.getCanHide() &&
+                      column.columnDef.meta?.grid?.hideable !== false &&
+                      !frozenColumnIds.includes(column.id)
+                    }
+                    canMoveLeft={visibleIndex > 0 && !isSelectable}
+                    canMoveRight={
+                      !isSelectable && visibleIndex > -1 && visibleIndex < visibleColumnIds.length - 1
+                    }
                     onMoveLeft={() => {
                       moveColumn(column.id, -1)
                     }}
@@ -650,6 +770,7 @@ export function Grid<TData extends RowData>({
                       column.toggleVisibility(false)
                     }}
                     resizeHandler={header.getResizeHandler()}
+                    render={renderHeaderNode(header)}
                   />
                 )
               })}
@@ -683,7 +804,7 @@ export function Grid<TData extends RowData>({
                   key={row.id}
                   row={row}
                   cells={row.getVisibleCells().map((cell) => keyboard.getCellView(row, cell))}
-                  frozenColumnId={frozenColumnId}
+                  frozenColumns={frozenColumns}
                   density={density}
                   isFocused={keyboard.isRowFocused(row)}
                   isEditing={keyboard.isRowEditing(row)}

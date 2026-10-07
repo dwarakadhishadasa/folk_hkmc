@@ -1,8 +1,9 @@
 import "server-only"
 
-import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
+import { authzErrorResponse, getStaffContext, requireRole, type StaffContext } from "@/lib/authz"
 import {
   MANAGE_CONTACT_PATCH_KEYS,
+  type ManageContactBulkResult,
   type ManageContactPatch,
   type ManageContactPatchKey,
 } from "@/components/manage/manage-types"
@@ -27,6 +28,16 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const MAX_TEXT_LENGTH = 2000
 const MAX_PHONE_LENGTH = 20
 const MAX_NAME_LENGTH = 120
+
+/**
+ * Rows one bulk request may carry.
+ *
+ * A timeout guard, not a product limit: the batch is processed sequentially so
+ * the cap is what bounds the worst-case request duration. The client surfaces
+ * the number, so an operator who selects more sees the ceiling rather than a
+ * silent truncation.
+ */
+export const MANAGE_BULK_MAX_ITEMS = 200
 
 const ALLOWED_PATCH_KEYS = new Set<string>(MANAGE_CONTACT_PATCH_KEYS)
 const ALLOWED_PHOTO_CONTENT_TYPES = new Set<string>(MANAGE_PHOTO_CONTENT_TYPES)
@@ -238,6 +249,108 @@ export async function handleManageContactUpdate(request: Request): Promise<Respo
     const contact = await updateManageContact({ staff, contactId, patch })
 
     return Response.json({ contact }, { status: 200 })
+  } catch (error) {
+    return badRequestResponse(error) ?? authzErrorResponse(error)
+  }
+}
+
+/** One human-readable line for a per-row failure. Mirrors `authzErrorResponse`. */
+function rowFailureMessage(error: unknown): string {
+  if (error instanceof Error && error.message.length > 0) {
+    return error.message
+  }
+
+  return "The update could not be saved."
+}
+
+/**
+ * One batch item, run through exactly the single-row path.
+ *
+ * `parseContactPatch` is reused per item — on `item.patch`, not on the item, so
+ * the envelope key `patch` is never itself read as a field — which means a bad
+ * key is rejected with the same 400 wording the single-row route uses and
+ * against the same `MANAGE_CONTACT_PATCH_KEYS` allow-list. `updateManageContact`
+ * is reused per item so each row keeps its own scope assertion and its own audit
+ * event. No set-based write exists anywhere on this path, and there is no second
+ * authorization decision: a row outside the caller's scope surfaces as an
+ * `AuthzError` that becomes that row's failure, not a batch rejection.
+ */
+async function applyContactBulkItem(
+  staff: StaffContext,
+  item: unknown,
+): Promise<ManageContactBulkResult> {
+  const record =
+    item && typeof item === "object" && !Array.isArray(item)
+      ? (item as Record<string, unknown>)
+      : null
+  const requestedId = typeof record?.contactId === "string" ? record.contactId : null
+
+  try {
+    const contactId = normalizeContactId(record?.contactId)
+    if (!contactId) {
+      throw new AuthzBadRequest("contactId must be a UUID.")
+    }
+
+    const patch = parseContactPatch(record?.patch)
+    const contact = await updateManageContact({ staff, contactId, patch })
+
+    return { contactId, ok: true, contact }
+  } catch (error) {
+    return { contactId: requestedId, ok: false, error: rowFailureMessage(error) }
+  }
+}
+
+/**
+ * Bulk contact update: `{ items: [{ contactId, patch }] }`.
+ *
+ * The semantics here are the ones every `/manage` table copies, so they are
+ * stated rather than left to be inferred from the loop:
+ *
+ * - A `400` means the *envelope* was wrong — not an object, `items` absent, not
+ *   an array, empty, or over `MANAGE_BULK_MAX_ITEMS`. Nothing was written.
+ * - Any per-row failure, an `AuthzError` included, is a `200` with `ok: false`
+ *   on that item. Partial success is reported item by item rather than collapsed.
+ * - Items run **sequentially**, which keeps audit events in request order, keeps
+ *   each row's scope assertion independent, and avoids a burst of concurrent
+ *   writes against PostgREST.
+ */
+export async function handleManageContactBulkUpdate(request: Request): Promise<Response> {
+  try {
+    const staff = await getStaffContext()
+    requireRole(staff, ["Admin", "Preacher"])
+
+    let payload: unknown
+    try {
+      payload = await request.json()
+    } catch {
+      throw new AuthzBadRequest("A JSON object body is required.")
+    }
+
+    const record = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null
+    if (!record) {
+      throw new AuthzBadRequest("A JSON object body is required.")
+    }
+
+    const items = (record as { items?: unknown }).items
+    if (!Array.isArray(items)) {
+      throw new AuthzBadRequest("items must be an array.")
+    }
+
+    if (items.length === 0) {
+      throw new AuthzBadRequest("items must contain at least one row.")
+    }
+
+    if (items.length > MANAGE_BULK_MAX_ITEMS) {
+      throw new AuthzBadRequest(`items must contain ${MANAGE_BULK_MAX_ITEMS} rows or fewer.`)
+    }
+
+    const results: ManageContactBulkResult[] = []
+
+    for (const item of items) {
+      results.push(await applyContactBulkItem(staff, item))
+    }
+
+    return Response.json({ results }, { status: 200 })
   } catch (error) {
     return badRequestResponse(error) ?? authzErrorResponse(error)
   }

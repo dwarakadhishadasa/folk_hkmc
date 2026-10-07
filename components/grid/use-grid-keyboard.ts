@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useId, useRef, useState } from "react"
-import type { KeyboardEvent } from "react"
+import type { KeyboardEvent, ReactNode } from "react"
+import { flexRender } from "@tanstack/react-table"
 import type { Cell, Row, Table } from "@tanstack/react-table"
 
 import type {
@@ -69,6 +70,17 @@ function readFailureMessage(cause: unknown): string {
   }
 
   return GENERIC_COMMIT_FAILURE
+}
+
+/**
+ * The consumer's own cell node, or `undefined` for a plain value column.
+ *
+ * `flexRender` is TanStack's own contract and already returns `null` for a
+ * column def with no `cell`, so this stays the single rendering path instead of
+ * a second one the primitive would have to thread through `GridCellView`.
+ */
+function renderCellNode<TData>(cell: Cell<TData, unknown>): ReactNode | undefined {
+  return flexRender(cell.column.columnDef.cell, cell.getContext()) ?? undefined
 }
 
 interface CellOverride {
@@ -450,6 +462,7 @@ export function useGridKeyboard<TData>({
       return {
         columnId: cell.column.id,
         text: text.length > 0 ? text : GRID_EMPTY_TEXT,
+        render: renderCellNode(cell),
         align: meta?.align ?? "left",
         tabular: meta?.tabular === true,
         isFocused: isRowFocused(row) && focusedColumnId === cell.column.id,

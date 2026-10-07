@@ -183,6 +183,34 @@ export interface ManageContactWriteResult {
   locationIds: string[]
 }
 
+/**
+ * One item of a bulk request. A per-item patch rather than one shared patch, so
+ * a future bulk action whose rows need different values does not need a second
+ * endpoint.
+ *
+ * The `patch` keys are validated per item against `MANAGE_CONTACT_PATCH_KEYS`,
+ * so a client cannot widen what the single-row route accepts.
+ */
+export interface ManageContactBulkItem {
+  contactId: string
+  patch: ManageContactPatch
+}
+
+/**
+ * One row's outcome. `ok: false` carries the reason that row failed and is a
+ * `200` outcome, not a rejection of the batch.
+ *
+ * `contactId` echoes the id as supplied — a malformed one is preserved so the
+ * response can be matched back to what was requested, and is `null` when the item
+ * carried no usable id at all.
+ */
+export interface ManageContactBulkResult {
+  contactId: string | null
+  ok: boolean
+  contact?: ManageContactWriteResult
+  error?: string
+}
+
 export function isManageView(value: unknown): value is ManageView {
   return typeof value === "string" && (MANAGE_VIEWS as readonly string[]).includes(value)
 }

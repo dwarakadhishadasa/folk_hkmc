@@ -12,7 +12,7 @@
  * shape here becomes contacts-shaped it stops being a primitive.
  */
 
-import type { KeyboardEvent } from "react"
+import type { KeyboardEvent, ReactNode } from "react"
 import type { RowData } from "@tanstack/react-table"
 
 export type GridDensity = "default" | "dense"
@@ -25,12 +25,32 @@ export type GridColumnAlign = "left" | "right" | "center"
  * `editable` gates the `e` key. `filter` chooses the per-column filter control
  * (`number` filters compare numerically, `text` filters substring-match).
  * `align` and `tabular` are presentation-only and reach the cell directly.
+ *
+ * `frozen` pins the column to the left edge while the table scrolls sideways;
+ * `selectable` marks the column as the row-selection control; `hideable: false`
+ * opts a column out of the visibility menu.
  */
 export interface GridColumnMeta {
   editable?: boolean
   filter?: "text" | "number"
   align?: GridColumnAlign
   tabular?: boolean
+  frozen?: boolean
+  selectable?: boolean
+  hideable?: boolean
+}
+
+/**
+ * One member of the leading pinned run, with the `left` offset it sticks at.
+ *
+ * A run rather than a single column because a selection control in front of the
+ * identity column must be pinned too, and because each member needs its own
+ * cumulative offset — one frozen column only ever needs `left: 0`.
+ */
+export interface GridFrozenColumn {
+  columnId: string
+  /** Distance from the frozen region's left edge, in px. */
+  left: number
 }
 
 /**
@@ -123,6 +143,12 @@ export interface GridCellView {
   columnId: string
   /** Already-resolved display text, including the empty-value placeholder. */
   text: string
+  /**
+   * The consumer's own `columnDef.cell` output, when it supplied one. Supplied
+   * through TanStack's renderer rather than a bespoke prop so a column def owns
+   * its cells the same way it owns its header; absent for a plain value column.
+   */
+  render?: ReactNode
   align: GridColumnAlign
   tabular: boolean
   isFocused: boolean
