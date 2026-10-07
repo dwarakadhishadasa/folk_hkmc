@@ -2,7 +2,8 @@
 title: 'Grid primitives, toolbar, and URL-backed view-state hook'
 type: 'feature'
 created: '2026-10-07'
-status: 'ready-for-dev'
+status: 'in-progress'
+baseline_revision: '5678c08cf7114e6e942228c7a5088ff85110a4c5'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
