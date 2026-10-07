@@ -35,6 +35,14 @@ OPENCODE_DATA = "/home/dwarakadhisha-dasa/.local/share/opencode-1x/data"
 env_fault_patterns = [
   'error[.]error="AI_APICallError: [^"]{0,400}?(?i:usage limit reached|429|too many requests|rate[ _-]?limit|quota|overloaded)',
   'error[.]error="AI_APICallError: [^"]{0,400}?(?i:cannot connect to api|socket connection was closed|connection ?(error|refused|reset|timed ?out)|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN)',
+  # opencode 1.x reports a socket dropped mid-TLS-handshake as a certificate
+  # failure. Observed 2026-10-07 on run 20261007-111510-a3ad: the underlying
+  # log line was `AI_APICallError: Cannot connect to API: The socket connection
+  # was closed unexpectedly`, retried into `unknown certificate verification
+  # error`, which matched no pattern above and stalled story 7-9 as a
+  # no-subagents halt instead of a retryable env fault.
+  'error[.]error="[^"]{0,200}?(?i:unknown certificate verification error)',
+  'error="[^"]{0,200}?(?i:unknown certificate verification error)',
 ]
 
 [hooks]
