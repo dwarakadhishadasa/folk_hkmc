@@ -1,32 +1,29 @@
 # Story breakdown for SPEC-manage-dashboard-grid.
 # Execution order is list order. Derived from .memlog.md on 2026-10-07.
 #
-# Checkpoints: ONE, on story 2 only, at done. Every other story runs end-to-end with no human
-# pause (user, 2026-10-07; autonomy reaffirmed 2026-10-08; the story 2 done gate reinstated the
-# same day). spec_checkpoint is false on ALL stories — nothing halts after planning.
+# Checkpoints: NONE. Every story is dispatched to an agent end-to-end with no human pause
+# (user, 2026-10-07; autonomy reaffirmed 2026-10-08, a story 2 done gate was tried and then
+# withdrawn the same day). BOTH spec_checkpoint and done_checkpoint are false on ALL SIX
+# stories — written explicitly rather than omitted, because omission is what let `true` creep
+# back onto stories 1, 2, and 5 while this header still claimed NONE.
 #
-# done_checkpoint is false everywhere except story 2. Values are written explicitly on every
-# story rather than omitted, because omission is what let `true` creep back onto stories 1, 2,
-# and 5 while this header still claimed NONE.
-#
-# Why story 2 keeps a human gate: it decides bulk-action BATCH SEMANTICS, and stories 3 and 5
-# each copy those semantics onto more tables. The done checkpoint puts one human decision in
-# front of that fan-out — after the implementation exists, so the review is about semantics
-# rather than about a plan. It is a done gate, not a planning gate: the agent plans, builds,
-# self-verifies and lands the story, and the run then pauses for you.
+# Consequence, accepted knowingly: story 2 decides the bulk-action BATCH SEMANTICS that stories
+# 3 and 5 each copy onto more tables, and no human now signs off on that decision before the
+# fan-out. The loop's per-story review stage is the only check between the decision and its
+# three copies.
 #
 # This reverses the spec's original incremental-delivery constraint, which paused for human
 # review before a second table was built on the pattern. The risk that constraint existed to
-# prevent — unreviewed replication across four tables — is now mitigated three ways instead:
+# prevent — unreviewed replication across four tables — is now mitigated two ways instead:
 #   1. A WRITTEN PATTERN CONTRACT. Story 2 lands docs/manage-grid-pattern.md recording the column,
 #      editing, selection, and URL-state conventions. Story 5 reads it before porting. An agent
 #      cannot inherit tacit agreement across sessions; it can only inherit a written contract.
 #   2. PER-STORY SELF-VERIFICATION. Every story must pass typecheck, lint, build, and both guardrail
 #      scripts, and must be able to demonstrate its own capabilities, before reporting done.
 #   3. PER-STORY CODE REVIEW. The loop's own review stage runs after every story, so an agent that
-#      misreads the pattern is caught before the next story copies it. This is a backstop, not a
-#      substitute for the story 2 done checkpoint: review catches defects, whereas the human gate
-#      confirms a deliberate design decision is the one later tables should inherit.
+#      misreads the pattern is caught before the next story copies it. With no human checkpoint,
+#      this stage is the only thing standing between the story 2 batch-semantics decision and the
+#      three tables that copy it.
 #
 # Keyboard operation lives in story 1, not a later story: the grid is shared, so j/k/e/Enter/Escape
 # are written once and are present in the pattern reviewed at story 2. Only the command palette is
@@ -50,6 +47,7 @@
     CAP-1, CAP-2, CAP-3, CAP-8 (grid keys only) and CAP-9 per SPEC.md, design-constraints.md,
     and capability-tiers.md.
   spec_checkpoint: false
+  done_checkpoint: false
   invoke_dev_with: >-
     Read _bmad-output/specs/spec-manage-dashboard-grid/SPEC.md plus ALL companions —
     design-constraints.md is a binding contract here, not inspiration: 13px grid base font,
@@ -95,11 +93,10 @@
     Refactors the existing manage-contacts-table.tsx onto the story 1 grid, deleting its
     hand-rolled useMemo sort and location filter, and adds inline cell editing with optimistic
     save plus visible rollback, and row selection with a bulk action reporting per-row outcomes.
-    Implements CAP-4 and CAP-5 as the worked example every later table copies. Carries the spec's
-    only human checkpoint: the run pauses here, after the story lands, for sign-off on the bulk
-    action's batch semantics before stories 3 and 5 copy them.
+    Implements CAP-4 and CAP-5 as the worked example every later table copies. The bulk-action batch
+    semantics chosen here are copied by stories 3 and 5 without a human gate, so get them right.
   spec_checkpoint: false
-  done_checkpoint: true # THE one human gate. See header.
+  done_checkpoint: false
   invoke_dev_with: >-
     This is THE pattern story. The spec forbids a parallel second table implementation — this
     is a refactor of the existing component onto the grid, not a new table beside it. Delete
@@ -135,6 +132,7 @@
     shell and its history.replaceState sync with real navigation, adds the permanent ?view=
     redirect that carries ?mode= through, and adds the Cmd/Ctrl+K command palette. Implements
     CAP-6, CAP-8 (palette) and CAP-10.
+  spec_checkpoint: false
   done_checkpoint: false
   invoke_dev_with: >-
     Read navigation-decision.md and data-loading-decision.md §1 before writing anything; both
@@ -176,6 +174,7 @@
     Replaces the single loadManagePortalData call with four per-table loaders and an aggregate
     summary loader for /manage, so opening a table fetches only that table's rows and the
     dashboard ships counts and derived chart series instead of row arrays. Implements CAP-7.
+  spec_checkpoint: false
   done_checkpoint: false
   invoke_dev_with: >-
     Read data-loading-decision.md §2 and §3 first — they are the contract for this story.
@@ -209,6 +208,7 @@
     Moves the three remaining manage tables onto the agreed story 2 pattern, one table at a
     time, each reviewed against the contacts example rather than against each other. Implements
     CAP-1 through CAP-5 and CAP-9 for sessions, attendance, and favorites.
+  spec_checkpoint: false
   done_checkpoint: false
   invoke_dev_with: >-
     Port ONE table at a time in this order: sessions, then attendance, then favorites. Do not
@@ -234,6 +234,7 @@
     Measures real scoped row counts for all four tables against the pagination trigger, proves
     both guardrail scripts still pass, and updates docs/architecture.md to describe routes
     instead of tabs.
+  spec_checkpoint: false
   done_checkpoint: false
   invoke_dev_with: >-
     Measure actual scoped row counts for ALL FOUR tables against the seeded program and compare
