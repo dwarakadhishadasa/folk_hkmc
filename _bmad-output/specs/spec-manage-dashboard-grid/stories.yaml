@@ -1,23 +1,32 @@
 # Story breakdown for SPEC-manage-dashboard-grid.
 # Execution order is list order. Derived from .memlog.md on 2026-10-07.
 #
-# Checkpoints: NONE. Every story is dispatched to an agent end-to-end with no human pause
-# (user, 2026-10-07; reaffirmed 2026-10-08), so spec_checkpoint and done_checkpoint are false
-# on every story — written explicitly rather than omitted, because omitting them is what let
-# `true` creep back onto stories 1, 2, and 5 while this header still claimed NONE.
+# Checkpoints: ONE, on story 2 only, at done. Every other story runs end-to-end with no human
+# pause (user, 2026-10-07; autonomy reaffirmed 2026-10-08; the story 2 done gate reinstated the
+# same day). spec_checkpoint is false on ALL stories — nothing halts after planning.
 #
-# This reverses the spec's original incremental-delivery constraint, which paused for human review
-# before a second table was built on the pattern. The risk that constraint existed to prevent —
-# unreviewed replication across four tables — is now mitigated three ways instead:
+# done_checkpoint is false everywhere except story 2. Values are written explicitly on every
+# story rather than omitted, because omission is what let `true` creep back onto stories 1, 2,
+# and 5 while this header still claimed NONE.
+#
+# Why story 2 keeps a human gate: it decides bulk-action BATCH SEMANTICS, and stories 3 and 5
+# each copy those semantics onto more tables. The done checkpoint puts one human decision in
+# front of that fan-out — after the implementation exists, so the review is about semantics
+# rather than about a plan. It is a done gate, not a planning gate: the agent plans, builds,
+# self-verifies and lands the story, and the run then pauses for you.
+#
+# This reverses the spec's original incremental-delivery constraint, which paused for human
+# review before a second table was built on the pattern. The risk that constraint existed to
+# prevent — unreviewed replication across four tables — is now mitigated three ways instead:
 #   1. A WRITTEN PATTERN CONTRACT. Story 2 lands docs/manage-grid-pattern.md recording the column,
 #      editing, selection, and URL-state conventions. Story 5 reads it before porting. An agent
 #      cannot inherit tacit agreement across sessions; it can only inherit a written contract.
 #   2. PER-STORY SELF-VERIFICATION. Every story must pass typecheck, lint, build, and both guardrail
 #      scripts, and must be able to demonstrate its own capabilities, before reporting done.
 #   3. PER-STORY CODE REVIEW. The loop's own review stage runs after every story, so an agent that
-#      misreads the pattern is caught before the next story copies it. This is what replaces the
-#      human gate on the bulk-action batch semantics: the semantics still get reviewed, but by a
-#      reviewer in the loop rather than by a human stopping the run.
+#      misreads the pattern is caught before the next story copies it. This is a backstop, not a
+#      substitute for the story 2 done checkpoint: review catches defects, whereas the human gate
+#      confirms a deliberate design decision is the one later tables should inherit.
 #
 # Keyboard operation lives in story 1, not a later story: the grid is shared, so j/k/e/Enter/Escape
 # are written once and are present in the pattern reviewed at story 2. Only the command palette is
@@ -86,9 +95,11 @@
     Refactors the existing manage-contacts-table.tsx onto the story 1 grid, deleting its
     hand-rolled useMemo sort and location filter, and adds inline cell editing with optimistic
     save plus visible rollback, and row selection with a bulk action reporting per-row outcomes.
-    Implements CAP-4 and CAP-5 as the worked example every later table copies.
+    Implements CAP-4 and CAP-5 as the worked example every later table copies. Carries the spec's
+    only human checkpoint: the run pauses here, after the story lands, for sign-off on the bulk
+    action's batch semantics before stories 3 and 5 copy them.
   spec_checkpoint: false
-  done_checkpoint: false
+  done_checkpoint: true # THE one human gate. See header.
   invoke_dev_with: >-
     This is THE pattern story. The spec forbids a parallel second table implementation — this
     is a refactor of the existing component onto the grid, not a new table beside it. Delete
