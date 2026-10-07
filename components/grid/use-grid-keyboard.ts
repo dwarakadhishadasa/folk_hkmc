@@ -382,6 +382,11 @@ export function useGridKeyboard<TData>({
       }
 
       if (event.key === "e") {
+        // `preventDefault` is load-bearing, not tidy: the editor mounts and takes
+        // focus during this same keydown, and without it the browser's default
+        // text insertion then lands in the freshly focused input, so the key that
+        // opened the editor also types a stray "e" into it.
+        event.preventDefault()
         beginEditing()
         return
       }

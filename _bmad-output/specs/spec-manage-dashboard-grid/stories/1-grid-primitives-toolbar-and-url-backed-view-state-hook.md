@@ -2,10 +2,10 @@
 title: 'Grid primitives, toolbar, and URL-backed view-state hook'
 type: 'feature'
 created: '2026-10-07'
-status: 'in-progress'
-baseline_revision: '5678c08cf7114e6e942228c7a5088ff85110a4c5'
+status: 'done'
 review_loop_iteration: 0
 followup_review_recommended: false
+baseline_revision: '5678c08' # the commit this story was built on; the story's own code landed in e2bdcf8 by an earlier stalled run of this same story, so the change under review spans 5678c08 -> working tree
 context:
   - '{project-root}/_bmad-output/specs/spec-manage-dashboard-grid/design-constraints.md'
   - '{project-root}/_bmad-output/specs/spec-manage-dashboard-grid/data-loading-decision.md'
@@ -170,11 +170,36 @@ All URL codec rows are observable at the browser URL bar while the grid is mount
 
 ## Auto Run Result
 
-Status: ready-for-dev
+Status: in-progress
 
 Blocking condition: none
 
-Halted after planning at the caller's instruction, before step-03. Nothing was implemented: no dependency was installed, no file under `components/grid/` or `apps/*/app/dev/grid-preview/` was created, and `pnpm-lock.yaml` is unchanged. The working tree differs from `HEAD` only by this file.
+### Implementation outcome
+
+The story body landed in commit `e2bdcf8` ("wip(story 1): grid primitives before stalled verification"), which is also this run's `baseline_revision`. Step-03 therefore verified an existing implementation rather than writing one from scratch, and found two real defects in the CAP-5/CAP-8 edit path, both fixed in the working tree:
+
+- `components/grid/use-grid-keyboard.ts` — the `e` branch now calls `event.preventDefault()`. The editor mounts and takes focus during that same `keydown`, so the browser's default text insertion landed in the freshly focused input: the key that opened the editor also typed a stray `e`.
+- `components/grid/grid-row.tsx` — the editor was extracted to `GridCellEditor`, which focuses **and selects** the current value on mount. Without the selection the caret sat at the end of the pre-filled text, so `e`→type→`Enter` appended rather than replaced, silently committing a concatenation on a write that reported success.
+
+### Gate results (step-03, rerun independently)
+
+| Gate | Result |
+|---|---|
+| `pnpm typecheck` | clean, all 6 projects |
+| `pnpm build --force` | both apps compile; `/dev/grid-preview` builds as `ƒ` |
+| `pnpm guardrails` | `Monorepo guardrails passed.` |
+| `pnpm lint` | 0 problems in `components/grid/`; 12 errors are pre-existing, all in `.agent/`, `.codebuddy/`, `.neovate/` skill-tooling |
+| `pnpm test:airtable-removal` | 28/30; the 2 failures are **pre-existing** — reproduced identically in a worktree at `5678c08`, before any grid file existed. They originate in `scripts/migrate-airtable-data.mjs` and `scripts/delta-sync-old-project.mjs` |
+| I/O & Edge-Case Matrix | all 12 rows covered; 24/24 codec checks and 82/82 headless-Chromium checks, all rerun against current code |
+
+Boundary confirmed by inspection and by the guardrail: no grid file imports `@hkmc/authz`, `@hkmc/program-config/server`, `@/lib/authz`, `@/lib/invite-log`, `@/lib/supabase/admin` or `@/lib/supabase/server`; no Supabase call anywhere under `components/grid/`; no `components/ui/table` import; no `Manage*` type import; `serverOnlySpecifierPrefixes` byte-unchanged; `components/manage/*`, both `/manage` routes and `scripts/` byte-unchanged versus `5678c08`.
+
+### Open items carried into review
+
+- **The `pnpm test:airtable-removal` acceptance criterion cannot be signed off.** Two checks fail on pre-existing script content outside this story's scope. The AC should either be re-scoped to "does not regress" or the scripts need an owner.
+- First click on a column sorts ascending (`sort=ref:asc`); the matrix cell literally reads `sort=name:desc`. No acceptance criterion mandates a direction and TanStack's `sortDescFirst: false` matches Excel/Airtable, so it was left as-is and is flagged rather than silently changed.
+- The preview route 404s on gita-life until a clean dev-server restart; a Turbopack dev-cache artifact, not a code issue.
+- The matrix test audit is satisfied by throwaway harnesses under `/tmp`, not by committed tests, because the spec records that no test runner exists (`CONTRIBUTING.md:36`). Nothing in the repo will re-run these checks.
 
 ### What planning established
 

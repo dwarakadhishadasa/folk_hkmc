@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect, useRef } from "react"
+import type { KeyboardEvent } from "react"
 import type { Row } from "@tanstack/react-table"
 
 import type { GridCellView, GridDensity } from "@/components/grid/grid-types"
@@ -25,6 +27,47 @@ const ALIGN_CLASS: Record<GridCellView["align"], string> = {
   left: "text-left",
   right: "text-right",
   center: "text-center",
+}
+
+/**
+ * The in-cell editor.
+ *
+ * It takes focus and selects the current value on mount, so the first keystroke
+ * *replaces* the value rather than appending to it. Without the selection the
+ * caret lands at the end of the pre-filled text and `e` then typing silently
+ * commits a concatenation — the worst possible failure for a write that looks
+ * like it succeeded. Focus and select are done in an effect rather than through
+ * `autoFocus` because `select()` needs the input mounted and focused first.
+ */
+function GridCellEditor({
+  draft,
+  onDraftChange,
+  onDraftKeyDown,
+}: {
+  draft: string
+  onDraftChange: (value: string) => void
+  onDraftKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    const input = inputRef.current
+
+    input?.focus()
+    input?.select()
+  }, [])
+
+  return (
+    <input
+      ref={inputRef}
+      value={draft}
+      onChange={(event) => onDraftChange(event.target.value)}
+      onKeyDown={onDraftKeyDown}
+      onPointerDown={(event) => event.stopPropagation()}
+      aria-label="Edit cell value"
+      className="border-ring bg-card focus-visible:ring-ring/50 h-full w-full rounded-[3px] border bg-transparent px-1 text-[13px] outline-none focus-visible:ring-[2px]"
+    />
+  )
 }
 
 export interface GridRowProps<TData> {
@@ -103,14 +146,10 @@ export function GridRow<TData>({
             )}
           >
             {cell.editing ? (
-              <input
-                autoFocus
-                value={cell.draft}
-                onChange={(event) => cell.onDraftChange(event.target.value)}
-                onKeyDown={cell.onDraftKeyDown}
-                onPointerDown={(event) => event.stopPropagation()}
-                aria-label="Edit cell value"
-                className="border-ring bg-card focus-visible:ring-ring/50 h-full w-full rounded-[3px] border bg-transparent px-1 text-[13px] outline-none focus-visible:ring-[2px]"
+              <GridCellEditor
+                draft={cell.draft}
+                onDraftChange={cell.onDraftChange}
+                onDraftKeyDown={cell.onDraftKeyDown}
               />
             ) : (
               cell.text
