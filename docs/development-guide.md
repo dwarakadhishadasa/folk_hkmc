@@ -110,6 +110,7 @@ pnpm build:apps
 pnpm lint
 pnpm quality:ci
 pnpm test:program-readiness
+pnpm test:airtable-removal
 pnpm build
 pnpm start
 pnpm start:gita-life
@@ -123,6 +124,7 @@ Notes:
 - `pnpm guardrails` checks Turborepo/package boundaries, workspace dependency cycles, declared `@hkmc/*` dependencies, and client leakage of server-only services.
 - `pnpm lint` uses `eslint.config.mjs` and ignores `.next`, `.agents`, `_bmad-output`, `docs`, generated output, and `next-env.d.ts`.
 - `pnpm test:program-readiness` runs the current readiness smoke script for program-scoped setup checks.
+- `pnpm test:airtable-removal` is the CAP-7 regression gate: it re-checks the Airtable deletions, the env/import grep gate, the Supabase-only program profiles, the renamed wire contracts on both the client and route side, and the Vercel deploy preflight. It reads sources only — no database, no network.
 
 ## Important Development Rules
 

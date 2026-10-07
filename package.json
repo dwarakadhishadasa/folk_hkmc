@@ -31,6 +31,7 @@
     "start": "pnpm --filter @hkmc/folk start",
     "start:gita-life": "pnpm --filter @hkmc/gita-life start",
     "test:program-readiness": "node scripts/verify-program-readiness.mjs",
+    "test:airtable-removal": "node scripts/verify-airtable-removal.mjs",
     "typecheck": "pnpm typecheck:workspace",
     "typecheck:workspace": "pnpm -r --if-present typecheck"
   },
