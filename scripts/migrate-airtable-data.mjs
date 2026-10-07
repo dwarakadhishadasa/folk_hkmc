@@ -34,6 +34,15 @@
  * that never attended. Every quarantine is counted so source-vs-target
  * accounting stays exact.
  *
+ * Two absences are deliberately NOT quarantined, because the source's own absence
+ * is the whole truth about the value and nothing has to be invented for it:
+ *
+ *   * a contact with no name loads with `name = ''` (`contacts.name` is NOT NULL);
+ *     the app finds contacts by phone, so quarantining it would lose a real
+ *     attendee instead of a blank label;
+ *   * an Airtable field that is simply not set maps to NULL rather than being
+ *     dropped, exactly as a mapped-but-absent field is.
+ *
  * ## `created_at` re-pinning
  *
  * Airtable's `Attendance Date` lookup is the session's program day; the record's
@@ -1409,15 +1418,17 @@ async function loadProgram(programId, report) {
   const contactRows = []
   const contactIdBySourceId = new Map()
   const survivingPhones = new Map()
+  const unnamedContacts = []
   for (const record of source.contacts) {
     const row = mapContactRow(programId, record.id, assigned.contacts.get(record.id).targetId, record, {
       ...contextBase,
       userIdBySourceId: resolvedUserIdBySourceId,
     })
     contactIdBySourceId.set(record.id, row.targetId)
-    // Phone before name: `contacts.phone` is NOT NULL and `contacts.name` is NOT
-    // NULL, but the phone is the one the app cannot work around. A record with
-    // neither is reported as an unusable phone, which is what it is.
+    // Phone first: `contacts.phone` is NOT NULL and `findContactByPhone` matches on
+    // it after the same normalization, so a phone that does not normalize to ten
+    // digits cannot be stored at all. A record with neither a name nor a phone is
+    // reported as an unusable phone, which is the more fundamental of the two.
     if (!row.phone) {
       quarantines.push(
         quarantine(programId, "contacts", record.id, "unusable_phone", {
@@ -1430,9 +1441,15 @@ async function loadProgram(programId, report) {
       )
       continue
     }
+    // An absent name is NOT a quarantine. `contacts.name` is `NOT NULL`, so the
+    // source's own absence is stored as the empty string — nothing is invented and
+    // nothing is lost: `findContactByPhone` matches on the phone, so the contact
+    // stays reachable by the only route the app has for it. Quarantining it instead
+    // would drop a person who was really at the sessions, and the app has no way to
+    // create a display name the source never carried. Counted and reported below.
     if (!row.name) {
-      quarantines.push(quarantine(programId, "contacts", record.id, "missing_name", { phone: row.phone }))
-      continue
+      row.values.name = ""
+      unnamedContacts.push(record.id)
     }
     // Pre-flight `UNIQUE (phone, program_id)` inside the batch, so a collision is a
     // quarantine and not a 409 half way through the load.
@@ -1630,6 +1647,13 @@ async function loadProgram(programId, report) {
       `(${new Set(unresolvedLegacy.map((row) => row.legacyLocation.via)).size ? [...new Set(unresolvedLegacy.map((row) => row.legacyLocation.via))].join(", ") : "none"})`,
   )
 
+  if (unnamedContacts.length > 0) {
+    log(
+      `    ${unnamedContacts.length} contact(s) carry no name in the source and are loaded with an empty ` +
+        `name (contacts.name is NOT NULL): ${unnamedContacts.join(", ")}`,
+    )
+  }
+
   const reportedStaleUserIds = userRows.filter((row) => row.declaredSupabaseUserId && row.declaredMatchesResolved === false)
   if (reportedStaleUserIds.length > 0) {
     log(`    Airtable "Supabase User ID" disagreed with the resolved auth id for ${reportedStaleUserIds.length} user(s):`)
@@ -1650,6 +1674,18 @@ async function loadProgram(programId, report) {
       .map(([key, value]) => `${key}=${typeof value === "string" ? JSON.stringify(value) : JSON.stringify(value)}`)
       .join(" ")
     log(`    ${entry.entity}/${entry.sourceRecordId}  ${entry.reason}${detail ? `  ${detail}` : ""}`)
+  }
+
+  // Grouped by reason, so a count an operator will be asked about ("how many rows
+  // did not migrate, and why?") is one line rather than a scroll.
+  const byReason = new Map()
+  for (const entry of quarantines) {
+    const key = `${entry.entity}/${entry.reason}`
+    byReason.set(key, (byReason.get(key) ?? 0) + 1)
+  }
+  if (byReason.size > 0) {
+    log("")
+    log(`  quarantine by reason: ${[...byReason].map(([key, n]) => `${key} ${n}`).join(", ")}`)
   }
 
   report.quarantines.push(...quarantines)
@@ -1824,6 +1860,36 @@ function safeHost(url) {
 // ---------------------------------------------------------------------------
 // Reconciliation
 // ---------------------------------------------------------------------------
+
+/**
+ * Staff records a person serves in more than one program, reported once at the end
+ * of a run.
+ *
+ * `public.users.id` is `UUID PRIMARY KEY REFERENCES auth.users(id)`, so one auth
+ * user can hold exactly ONE `public.users` row — a person who serves both programs
+ * cannot be represented twice, and there is no second auth user to give the other
+ * program either, because `users_email_partial_key` is unique on `auth.users(email)`.
+ * `loadStaffContextForUser` filters on `id` AND `program_id`, so the program that
+ * does not hold the row answers `403 staff_not_found` at sign-in.
+ *
+ * That is a property of the frozen `20261006000000` schema and of the
+ * program-agnostic RLS helpers in `20261006010000`, not of this loader, so it is
+ * reported rather than worked around: inventing a second row against a mismatched
+ * auth id would grant one program's staff another person's identity.
+ */
+function reportBlockedUsers(report) {
+  const blocked = report.quarantines.filter((entry) => entry.reason === "user_id_claimed_by_other_program")
+  if (blocked.length === 0) return
+  log("")
+  log(
+    `  ${blocked.length} Airtable staff record(s) could not be loaded: the same person already holds their ` +
+      "one `public.users` row in another program (public.users.id is the PRIMARY KEY), so a second row for the",
+  )
+  log("  other program is impossible without inventing an id. Those people keep their existing program's role:")
+  for (const entry of blocked) {
+    log(`    ${entry.detail.email}: wanted ${entry.detail.role} in ${entry.programId}; holds ${entry.detail.held_by}`)
+  }
+}
 
 async function reconcile(report, programIds) {
   log("")
@@ -2009,10 +2075,13 @@ async function main() {
       const quarantineCount = report.quarantines.filter((entry) => entry.programId === programId).length
       log(`  ${programId}: ${totals}; ${quarantineCount} quarantine(s)`)
     }
+    reportBlockedUsers(report)
     log("")
     log("  Re-run without --dry-run to apply this plan.")
     return
   }
+
+  reportBlockedUsers(report)
 
   await reconcile(report, programIds)
 }
