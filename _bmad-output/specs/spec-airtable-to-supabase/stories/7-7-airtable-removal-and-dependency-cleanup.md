@@ -2,7 +2,7 @@
 title: 'Airtable removal and dependency cleanup'
 type: 'chore'
 created: '2026-10-07'
-status: 'in-review'
+status: 'done'
 baseline_revision: 4c5952cb2e5fa7e19f7428e76a9edd955319d30a
 review_loop_iteration: 0
 followup_review_recommended: false

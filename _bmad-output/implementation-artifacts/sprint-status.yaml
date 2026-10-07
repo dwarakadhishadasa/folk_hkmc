@@ -98,8 +98,8 @@ development_status:
   7-3-supabase-data-access-module-mirroring-lib-airtable-ts: done
   7-4-authz-rework-staff-context-resolves-from-supabase: done
   7-5-route-and-page-swap-to-supabase-in-both-apps: done
-  7-6-in-app-manage-portal-replacing-the-airtable-interface: awaiting-operator
-  7-7-airtable-removal-and-dependency-cleanup: backlog
+  7-6-in-app-manage-portal-replacing-the-airtable-interface: done
+  7-7-airtable-removal-and-dependency-cleanup: done
   7-8-configure-and-verify-the-hosted-supabase-project-and-preview: backlog
   7-9-cutover-backfill-auth-migration-delta-sync-go-live: backlog
   epic-7-retrospective: optional
