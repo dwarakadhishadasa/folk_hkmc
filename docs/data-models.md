@@ -232,7 +232,7 @@ All are `STABLE`, `SECURITY DEFINER`, pinned to `search_path = public, pg_temp`,
 | --- | --- | --- |
 | `public.users` | "Users can read own row or program rows as admin" | Own row always; all rows in own program when Admin |
 | `public.contacts` | "Contacts are scoped by caller role and program" | Program **and** (Admin ∨ Preacher with `assigned_preacher_id = caller` ∨ Assistant with `assigned_preacher_id = caller's active assigned preacher`) |
-| `public.sessions` | "Sessions are scoped by creator and program" | Program **and** (Admin ∨ Preacher/Assistant with `created_by = caller` ∨ Assistant with `created_by = caller's active assigned preacher`) |
+| `public.sessions` | "Sessions are scoped by creator, preacher and program" | Program **and** (Admin ∨ Preacher/Assistant with `created_by = caller` ∨ `preacher_id = caller` ∨ `created_by`/`preacher_id` = caller's active assigned preacher) |
 | `public.attendance` | "Attendance is scoped by session preacher and program" | Program **and** (Admin ∨ (Preacher/Assistant ∨ Assistant) where `caller_can_read_attendance_session(session_id)`) |
 | `public.locations` | "Locations are scoped by effective locations and program" | Program **and** (Admin ∨ `id = ANY(caller_effective_location_ids())`) |
 
@@ -316,4 +316,4 @@ This path is not active because `OfflineSyncProvider` is not mounted. The servic
 - One contact per phone per program is enforced by the `idx_contacts_phone_program` unique index, not by application code.
 - One attendance row per contact per session is enforced by the `idx_attendance_contact_session` unique index.
 - Staff access requires an `Active` `public.users` row matching the caller's `auth.uid()` and program; a missing or non-Active row resolves to zero visible rows.
-- Preacher session access is limited by `created_by` or, for attendance, by the parent session's `preacher_id`.
+- Preacher session access is limited to sessions they created or lead (`created_by` or `preacher_id` = their `users` row), matching the attendance scope on the same session's `preacher_id`.

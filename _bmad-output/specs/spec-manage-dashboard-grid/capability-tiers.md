@@ -39,9 +39,15 @@ Not in this spec's scope. Named here so a downstream agent does not read their a
 
 ## Delivery order
 
-1. Grid primitives + toolbar + view-state hook
-2. **`manage-contacts-table.tsx` refactored onto it** (the worked example, reviewed by a human)
+1. Grid primitives + toolbar + view-state hook, with sort/filter/column state in the URL
+2. **`manage-contacts-table.tsx` refactored onto it** (the worked example), including CAP-4 row selection and its bulk action, landing `docs/manage-grid-pattern.md`
 3. Per-table routes wired to the existing views
-4. Remaining tables migrated, one at a time, each reviewed against the agreed contacts pattern
+4. Remaining tables migrated, one at a time, each following the written pattern contract
+5. Verification at scale, guardrails, and docs
 
-Step 2 is the checkpoint that matters. One worked example a human has agreed to beats four built on an unvalidated pattern.
+Step 2 is the story everything else copies. With no human gate, its agreement role moves into a written artifact: **story 2 must land `docs/manage-grid-pattern.md`**, recording the column-definition conventions, the editing commit/rollback contract, the selection and bulk-action semantics, and the URL state contract. Later ports read it before porting. Two things the gate used to settle are settled there instead:
+
+- **Bulk-action batch semantics** in `lib/manage/api-handlers.ts`. CAP-4 ships in slice one because row selection is a grid primitive that all four tables need; the *action* is documented once, on real code, before three more copy it.
+- **How a port signals the pattern did not fit.** A port reports what carried over and what did not, rather than quietly absorbing a divergence.
+
+Row counts for all four tables are measured in the final story, not at a gate — the measurement is a deliverable, not a decision point.

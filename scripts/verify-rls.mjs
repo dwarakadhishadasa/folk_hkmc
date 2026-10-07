@@ -126,8 +126,10 @@ async function assertReadMatrix(fx, get) {
     check(`${tag} Preacher contacts: only assigned to them`,
       !r.error && eqSet(r.ids, new Set([f.contacts.c_in])), r.error?.message ?? fmt(r.ids))
     r = await get("preacher", "sessions", program)
-    check(`${tag} Preacher sessions: only created_by them`,
-      !r.error && eqSet(r.ids, new Set([f.sessions.s1])), r.error?.message ?? fmt(r.ids))
+    // s1 is their own creation, s2 is someone else's creation they lead — a
+    // session the preacher preaches must be readable however it was created.
+    check(`${tag} Preacher sessions: created_by them OR preacher_id = them`,
+      !r.error && eqSet(r.ids, new Set([f.sessions.s1, f.sessions.s2])), r.error?.message ?? fmt(r.ids))
     r = await get("preacher", "attendance", program)
     check(`${tag} Preacher attendance: sessions where preacher_id = them (incl. created by others)`,
       !r.error && eqSet(r.ids, new Set([f.attendance.a1, f.attendance.a2])), r.error?.message ?? fmt(r.ids))
@@ -143,8 +145,10 @@ async function assertReadMatrix(fx, get) {
     check(`${tag} Assistant contacts: assigned preacher's contacts`,
       !r.error && eqSet(r.ids, new Set([f.contacts.c_in])), r.error?.message ?? fmt(r.ids))
     r = await get("assistant", "sessions", program)
-    check(`${tag} Assistant sessions: own + assigned preacher's created`,
-      !r.error && eqSet(r.ids, new Set([f.sessions.s1, f.sessions.s4])), r.error?.message ?? fmt(r.ids))
+    // s4 own-created; s1 the assigned preacher's own creation; s2 led by the
+    // assigned preacher but created by the Admin.
+    check(`${tag} Assistant sessions: own + assigned preacher's created or led`,
+      !r.error && eqSet(r.ids, new Set([f.sessions.s1, f.sessions.s2, f.sessions.s4])), r.error?.message ?? fmt(r.ids))
     r = await get("assistant", "attendance", program)
     check(`${tag} Assistant attendance: assigned preacher's sessions`,
       !r.error && eqSet(r.ids, new Set([f.attendance.a1, f.attendance.a2])), r.error?.message ?? fmt(r.ids))

@@ -70,4 +70,11 @@ Under route-per-table this becomes `?mode=` carried on every table route, which 
 
 ## Bulk note on the 60-second reads
 
-`loadManagePortalData` returns `contacts`, `sessions`, `attendance`, `charts`, `locations`, `staffNames`, and `booksReadOptions` together. Every tab switch pays for the tabs not being viewed. This is the defect CAP-7 addresses, and it is also why the dashboard question (whether it needs the full payload) must be answered before the split is designed.
+`loadManagePortalData` returns `contacts`, `sessions`, `attendance`, `charts`, `locations`, `staffNames`, and `booksReadOptions` together. Every tab switch pays for the tabs not being viewed. This is the defect CAP-7 addresses.
+
+The dashboard question is answered: `manage-dashboard.tsx` reads rows only as three counts (lines 265, 270, 271) and otherwise renders from `charts`, so the overview needs an aggregate payload rather than the full one. See `data-loading-decision.md` §2.
+
+Two facts about the existing loader that shape the data-access design:
+
+- **`collectPagedRows` (`manage.ts:200-218`) does not cap anything.** It pages at `MANAGE_PAGE_SIZE = 1000` and appends until a short page returns, so it already materializes the complete scoped row set. Server-side pagination would be new work, and it would not reduce server-side reads — the chart series at `manage.ts:694-706` still need every row.
+- **Cross-table derivation is real.** `charts` is built from all three scoped sets, so `/manage` cannot avoid a cross-table query. What changes is that only the derived series crosses the wire, not the rows.

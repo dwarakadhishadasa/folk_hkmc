@@ -1,0 +1,243 @@
+# Story breakdown for SPEC-manage-dashboard-grid.
+# Execution order is list order. Derived from .memlog.md on 2026-10-07.
+#
+# Checkpoints: NONE. Every story is dispatched to an agent end-to-end with no human pause
+# (user, 2026-10-07), so spec_checkpoint and done_checkpoint are false throughout — deliberately
+# absent rather than written as false.
+#
+# This reverses the spec's original incremental-delivery constraint, which paused for human review
+# before a second table was built on the pattern. The risk that constraint existed to prevent —
+# unreviewed replication across four tables — is now mitigated two ways instead:
+#   1. A WRITTEN PATTERN CONTRACT. Story 2 lands docs/manage-grid-pattern.md recording the column,
+#      editing, selection, and URL-state conventions. Story 5 reads it before porting. An agent
+#      cannot inherit tacit agreement across sessions; it can only inherit a written contract.
+#   2. PER-STORY SELF-VERIFICATION. Every story must pass typecheck, lint, build, and both guardrail
+#      scripts, and must be able to demonstrate its own capabilities, before reporting done.
+#
+# Keyboard operation lives in story 1, not a later story: the grid is shared, so j/k/e/Enter/Escape
+# are written once and are present in the pattern reviewed at story 2. Only the command palette is
+# portal-level, so it ships with routes in story 3.
+#
+# The loader split (story 4) follows the route change (story 3) because per-table loading is not
+# observable until the routes exist, and because the dashboard summary plus four per-table loaders
+# are one change to lib/supabase/manage.ts.
+#
+# Environment: NO local Supabase stack. Hosted project only, same contract as
+# spec-airtable-to-supabase — see .env.migration.local at repo root, gitignored. Read credential
+# values from there; never copy them into code, docs, spec artifacts, commits, or chat output.
+
+- id: "1"
+  title: Grid primitives, toolbar, and URL-backed view-state hook
+  description: >-
+    Builds the shared grid foundation on @tanstack/react-table and
+    @tanstack/react-virtual — virtualized rows, sticky header with a frozen first column,
+    the toolbar, the column and filter model, explicit loading/empty/error states, and a
+    view-state hook that keeps sort, filters, and column arrangement in the URL. Implements
+    CAP-1, CAP-2, CAP-3, CAP-8 (grid keys only) and CAP-9 per SPEC.md, design-constraints.md,
+    and capability-tiers.md.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read _bmad-output/specs/spec-manage-dashboard-grid/SPEC.md plus ALL companions —
+    design-constraints.md is a binding contract here, not inspiration: 13px grid base font,
+    32px default row height with a 28px dense option, tabular-nums on numeric columns, sticky
+    column headers, first column frozen, 1px borders instead of drop shadows, no card-in-card
+    nesting, one accent color reserved for selection and focus, hairline row separators instead
+    of alternating stripes. Build generic and table-agnostic: this story ships no table wiring,
+    because four tables consume it and a contacts-shaped primitive becomes a contacts table with
+    extra steps.
+    Dependencies: @tanstack/react-table (peer react ">=18") and @tanstack/react-virtual@3.x
+    (peer react "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0") — both verified React 19
+    compatible 2026-10-07. Neither is installed yet; add them.
+    View-state hook: sort, global filter, per-column filters, column order, visibility, and size
+    all serialize to the URL. This is a hard requirement, not a convenience — it is what makes
+    CAP-2 and CAP-3 persistence work and what keeps a future move to server-side row models a
+    data-source swap behind the manualPagination/manualSorting/manualFiltering flags rather than
+    a rewrite. Do NOT hold grid state in component state "for now". Use TanStack's
+    onStateChange/updater + controlled state pattern so the URL is the single source of truth and
+    back/forward navigation restores a prior arrangement.
+    Row models: client-side (getCoreRowModel, getSortedRowModel, getFilteredRowModel) with the
+    manual* flags false. Server-side pagination is out of scope — see
+    data-loading-decision.md §3 for the numeric trigger that reopens it.
+    Keyboard (design-constraints.md minimum set): j/k move row focus, e edits the focused cell,
+    Enter commits, Escape cancels. Scope this story to grid-level keys only; the Cmd/Ctrl+K
+    command palette is portal-level and ships in story 3. Keys must not fire while focus is in
+    an input, textarea, select, or a Radix popover — check event.target before handling.
+    All three panel states (loading, empty, error) must be reachable on demand and visually
+    distinct from each other; CAP-9 is P0 in capability-tiers.md precisely because agents skip
+    it. Wire a way to force each state for review.
+    Row virtualization via @tanstack/react-virtual with a measured scroll container. Note the
+    limit recorded in data-loading-decision.md §3: virtualization bounds the DOM, not the
+    transfer — do not treat smooth scrolling as evidence the payload is small.
+    Honor the server-only boundary in scripts/verify-monorepo-guardrails.mjs:10-17. A client
+    grid component must never import @hkmc/authz, @hkmc/program-config/server, @/lib/authz,
+    @/lib/invite-log, @/lib/supabase/admin, or @/lib/supabase/server. Do not edit that prefix
+    list — scripts/verify-airtable-removal.mjs:628-636 asserts its contents.
+    Client components must not call Supabase directly; data reaches the grid as props from a
+    server component. This story ships no data fetching of its own.
+
+- id: "2"
+  title: Refactor manage-contacts-table onto the grid with inline editing and bulk actions
+  description: >-
+    Refactors the existing manage-contacts-table.tsx onto the story 1 grid, deleting its
+    hand-rolled useMemo sort and location filter, and adds inline cell editing with optimistic
+    save plus visible rollback, and row selection with a bulk action reporting per-row outcomes.
+    Implements CAP-4 and CAP-5 as the worked example every later table copies.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    This is THE checkpoint story. The spec forbids a parallel second table implementation — this
+    is a refactor of the existing component onto the grid, not a new table beside it. Delete
+    manage-contacts-table.tsx's SortKey union, COLUMNS array, useMemo sorting, ALL_LOCATIONS
+    sentinel Select, and Status union as they are superseded. Two grids means two sets of bugs and
+    a permanent migration tax.
+    Inline editing (CAP-5): show the new value immediately, persist across reload, and on write
+    failure revert visibly WITH an error message. Optimistic update plus rollback is required;
+    a silent revert is a failed CAP-5 even though the data is correct.
+    Selection and bulk action (CAP-4): multi-row selection visibly indicated, bulk action applies
+    to every selected row and reports per-row outcomes — partial success must be visible, not
+    collapsed into one green toast. Selection is a grid primitive and belongs here; the BULK
+    ACTION is the part that reaches lib/manage/api-handlers.ts, and its batch semantics are the
+    thing a human agrees on at this gate before three more tables copy them.
+    Do not re-implement authorization in the client. RLS is the sole enforcement point; a client
+    may render a disabled affordance for a field the operator cannot write. Note that
+    manage-types.ts:5-6 claims @/lib/supabase/manage is in the server-only prefix list and it is
+    NOT (brownfield.md) — respect the boundary by convention, do not rely on that comment, and do
+    not "fix" the list without checking verify-airtable-removal.mjs first.
+    Writes go through the existing /api/manage surface in lib/manage/api-handlers.ts. No new
+    authorization logic, no schema change, no RLS change.
+    PRESERVE readError (manage-contacts-table.tsx:43-51) — it defensively narrows an unknown
+    payload before surfacing a message. Losing it turns a malformed response into a render crash.
+    At this gate, record actual scoped row counts for the contacts table. Story 6 measures all
+    four, but contacts is the one that validates the client-side pagination decision now, while
+    a human is looking. Report the number in your summary — it is an input to the trigger
+    thresholds in data-loading-decision.md §3.
+
+- id: "3"
+  title: Per-table routes, the ?view= redirect, scope preservation, and command palette
+  description: >-
+    Splits /manage into /manage plus four per-table routes carrying ?mode=, replaces the tab
+    shell and its history.replaceState sync with real navigation, adds the permanent ?view=
+    redirect that carries ?mode= through, and adds the Cmd/Ctrl+K command palette. Implements
+    CAP-6, CAP-8 (palette) and CAP-10.
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read navigation-decision.md and data-loading-decision.md §1 before writing anything; both
+    record decisions already made that must not be relitigated.
+    Route shape: /manage (dashboard overview), /manage/contacts, /manage/sessions,
+    /manage/attendance, /manage/favorites, with ?mode=admin|preacher carried on every route.
+    ManageView/MANAGE_VIEWS (manage-types.ts:13-21) become the route segment validator;
+    isManageView is the natural fit.
+    THE REDIRECT IS THE HIGHEST-RISK DETAIL IN THIS STORY. /manage?view=<x> must 308 via
+    permanentRedirect() to /manage/<x>, and it MUST carry ?mode= through:
+    /manage?view=contacts&mode=preacher must land on /manage/contacts?mode=preacher. Dropping
+    the query silently promotes a Preacher following a shared bookmark into admin scope — the
+    exact CAP-10 failure, arriving through the one path nobody tests. Fire the redirect BEFORE
+    any data load, and fall back to /manage for an unrecognized or absent view.
+    Every <Link> in the portal carries ?mode=. This is the main regression risk of the whole
+    spec change: miss one and a Preacher silently lands in admin scope (CAP-10). Audit every
+    link, including ones inside table toolbars and the command palette.
+    ManagePortal becomes a layout that resolves staff context, renders nav and the scope toggle,
+    and yields to the active table's load — it no longer owns a TabsContent tree. The scope
+    toggle stays a real <Link> navigation, because mode changes what the server reads.
+    Back/forward now behave as real navigation. This is more correct but means deciding whether
+    filter/sort lives in the URL, component state, or both — the answer is already fixed: URL
+    (story 1's hook). Do not reintroduce component state.
+    BOTH APPS: apps/folk and apps/gita-life must stay byte-identical. Their manage/page.tsx files
+    are identical today; a divergence after this change is a bug, not a variant.
+    Command palette (CAP-8): Cmd/Ctrl+K jumps between tables, and must carry ?mode= like every
+    other navigation.
+    Do NOT change resolveManageMode's fail-open coercion of non-"preacher" into "admin"
+    (manage-types.ts:190-192) — it is confirmed intentional (data-loading-decision.md §5). RLS is
+    the enforcement point and app-layer narrowing can only shrink the set (manage.ts:520), so a
+    malformed mode cannot expose rows outside the caller's RLS scope. Preserve the existing
+    redirect branches for AuthzError (401 -> /login?redirect=/manage, other -> /auth/error), and
+    keep the console.error-and-rethrow behavior for non-AuthzError so a data-layer outage is not
+    misreported as an authorization failure.
+
+- id: "4"
+  title: Split the portal loader into per-table loaders and a dashboard aggregate summary
+  description: >-
+    Replaces the single loadManagePortalData call with four per-table loaders and an aggregate
+    summary loader for /manage, so opening a table fetches only that table's rows and the
+    dashboard ships counts and derived chart series instead of row arrays. Implements CAP-7.
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read data-loading-decision.md §2 and §3 first — they are the contract for this story.
+    The four table routes load only their own rows. /manage stays an aggregate view and is
+    explicitly EXEMPT from CAP-7: it loads a summary shape of { scope, generatedAt, charts,
+    totals: { contacts, sessions, attendanceRecords } }. ManageDashboard stops receiving
+    ManagePortalPayload and its three stat tiles read totals.*; everything else it renders comes
+    from the already-derived charts object.
+    Evidence this is sufficient: manage-dashboard.tsx touches rows in exactly three places, all
+    reductions to a count — contacts.length (line 270), sessions.length (line 271), and a sum of
+    session.attendees.length (line 265). It reads no other row field.
+    Do not overclaim the win. The server STILL reads every contact, session, and attendance row
+    to build the chart series (manage.ts:694-706). Nothing here makes the dashboard query cheap,
+    and aggregating in Postgres is barred by the no-schema-change non-goal. What changes is what
+    crosses the network boundary: O(rows) becomes O(series). If the dashboard query ever becomes
+    the bottleneck the fix is a Postgres view or RPC — a separate story with its own schema
+    decision.
+    All data access stays in lib/supabase/manage.ts and lib/manage/api-handlers.ts. Components
+    never call Supabase. RLS scoping and the app-layer narrowing that can only shrink the set
+    (manage.ts:520) are preserved exactly — this story splits loading, it does not change what
+    is readable.
+    The per-table loaders must each reproduce the narrowing their slice needs. Note the
+    dependency recorded at manage.ts:585-626: attendance RLS scopes by the parent session's
+    preacher while sessions RLS scopes by creator, so a readable attendance row can point at a
+    session the caller may not read. That row is still counted and listed, just without a session
+    name or date. Preserve that behavior — it is a deliberate RLS consequence, not a bug to fix.
+
+- id: "5"
+  title: Port sessions, attendance, and favorites onto the grid
+  description: >-
+    Moves the three remaining manage tables onto the agreed story 2 pattern, one table at a
+    time, each reviewed against the contacts example rather than against each other. Implements
+    CAP-1 through CAP-5 and CAP-9 for sessions, attendance, and favorites.
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Port ONE table at a time in this order: sessions, then attendance, then favorites. Do not
+    build all three in one pass — the contacts pattern is the reference and each port is a chance
+    to find where the pattern does not generalize, which is exactly what the review gate is for.
+    Where a table genuinely does not fit the shared grid, say so and stop rather than forking the
+    grid or bolting table-specific behavior into the primitives. A second grid is forbidden by the
+    spec; a second column definition is not, but justify it.
+    Existing components to port, not rewrite: manage-sessions-view.tsx (106 lines),
+    manage-attendance-view.tsx (291 lines), manage-favorites-view.tsx (581 lines).
+    Favorites is a filtered subset of contacts, not a separate entity — do not give it its own
+    write path or its own notion of a contact row.
+    Same boundaries as story 2: writes through lib/manage/api-handlers.ts, RLS as the sole
+    authorization enforcement point, no schema change, no RLS change, no direct Supabase calls
+    from components. Keep apps/folk and apps/gita-life byte-identical.
+    Report per table: what carried over cleanly from contacts, what did not, and any primitive
+    that had to change as a result. A primitive change here affects all four tables — surface it
+    rather than absorbing it silently.
+
+- id: "6"
+  title: Verify at scale, refresh guardrails and docs
+  description: >-
+    Measures real scoped row counts for all four tables against the pagination trigger, proves
+    both guardrail scripts still pass, and updates docs/architecture.md to describe routes
+    instead of tabs.
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Measure actual scoped row counts for ALL FOUR tables against the seeded program and compare
+    them to the trigger thresholds in data-loading-decision.md §3: >10,000 scoped rows, >1MB
+    gzipped payload, >100ms sort/filter keystroke latency, >2s server time for one table route.
+    Judge PER TABLE, not portal-wide — contacts and sessions have very different growth curves and
+    favorites may never trip. The authoring-time "a few hundred rows" assumption was never
+    verified; this story is what turns the trigger from a guess into a fact. If any threshold is
+    tripped, STOP and report it rather than silently implementing server-side pagination — that
+    is a scope change and needs a human decision.
+    Also record the actual serialized per-table RSC payload size. Virtualization bounds the DOM,
+    not the transfer, so smooth scrolling is not evidence the payload is small; measure it.
+    Guardrails: scripts/verify-monorepo-guardrails.mjs and scripts/verify-airtable-removal.mjs
+    must both still pass. If either fails because a server-only prefix was edited, revert the
+    prefix list rather than relaxing the check — verify-airtable-removal.mjs:628-636 asserts
+    its contents.
+    Update docs/architecture.md:164, which still describes /manage as "five tabs ... from
+    loadManagePortalData()". That was accurate for the pre-route portal and is now wrong.
+    The repo has no test runner; verification here is the existing verify-*.mjs scripts plus
+    manual measurement against the hosted project.
+    Environment: hosted project only, no local Supabase stack. Credentials in the gitignored
+    .env.migration.local at repo root — read values from there, never copy them into code, docs,
+    commits, or your report.

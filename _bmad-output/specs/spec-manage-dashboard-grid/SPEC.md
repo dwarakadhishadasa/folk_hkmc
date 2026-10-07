@@ -3,6 +3,7 @@ id: SPEC-manage-dashboard-grid
 companions:
   - brownfield.md
   - capability-tiers.md
+  - data-loading-decision.md
   - design-constraints.md
   - navigation-decision.md
 sources: []
@@ -66,13 +67,17 @@ Story 7-9 is completing the Airtable-to-Supabase migration. Doing this navigatio
 
 - Stack is fixed: Next.js 16 App Router, React 19, Tailwind v4, shadcn/ui `new-york`, Supabase. `components.json` and both deployed apps already pin these; substitution is not available.
 - The grid model comes from `@tanstack/react-table` v8 and row virtualization from `@tanstack/react-virtual`. Hand-rolled sorting and filtering state is prohibited — the `useMemo` approach in `manage-contacts-table.tsx` is the defect being fixed, not a pattern to extend.
+- Sorting, filtering, and column arrangement are **URL state**, not component state. This is what makes CAP-2 and CAP-3 persistence work and what keeps a later move to server-side row models a data-source swap rather than a rewrite.
+- Rows are virtualized client-side over the full scoped row set; server-side pagination is out of scope for this spec. `data-loading-decision.md` records the numeric trigger that reopens it.
 - All data access flows through `lib/supabase/manage.ts` and `lib/manage/api-handlers.ts`. Components never call Supabase directly.
 - RLS is the sole authorization enforcement point. A client may render a disabled affordance for a field the operator cannot write, but must not re-implement authorization logic.
 - `manage-contacts-table.tsx` is refactored onto the new grid and its hand-rolled sort and filter removed. A parallel second table implementation is forbidden: two grids means two sets of bugs and a permanent migration tax.
 - `/manage` remains the dashboard overview; `contacts`, `sessions`, `attendance`, and `favorites` each get their own route.
-- Route navigation removes the `?view=` parameter and the `history.replaceState` tab sync, so a `/manage?view=<x>` request must redirect to `/manage/<x>` rather than 404. Existing staff bookmarks must keep working.
+- CAP-7 binds the four table routes. `/manage` is an aggregate view, exempt by design, and loads its own summary: three row counts plus the already-derived `charts` series, never row arrays. `ManageDashboard` stops receiving `ManagePortalPayload`.
+- Route navigation removes the `?view=` parameter and the `history.replaceState` tab sync, so a `/manage?view=<x>` request must redirect to `/manage/<x>` rather than 404. Existing staff bookmarks must keep working. The redirect is permanent, fires before any data load, and **must carry `?mode=` through** — dropping it would silently promote a Preacher following a shared bookmark into admin scope.
 - The admin/preacher scope toggle stays a real server-affecting navigation, carried as `?mode=` on every table route.
-- Delivered incrementally: the grid plus the contacts refactor lands first and pauses for human review before a second table is built on the pattern.
+- Delivered incrementally and autonomously: the grid plus the contacts refactor lands first, and no story pauses for human review. The mitigation for unreviewed replication across four tables is a **written pattern contract**, not a human gate — the contacts story lands `docs/manage-grid-pattern.md` recording the agreed column, editing, selection, and state conventions, and every later port follows that document. An agent cannot inherit tacit agreement across sessions; it can only inherit a written one.
+- Every story self-verifies before reporting done: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `scripts/verify-monorepo-guardrails.mjs`, and `scripts/verify-airtable-removal.mjs` all pass, and the story's own capabilities are demonstrable. A story that cannot make its capabilities demonstrable is not done and must say so rather than claim completion.
 - `scripts/verify-monorepo-guardrails.mjs` and `scripts/verify-airtable-removal.mjs` must both still pass.
 
 ## Non-goals
@@ -88,15 +93,23 @@ An operator opens `/manage/contacts` with the full scoped contact set, scrolls t
 
 ## Assumptions
 
-- `@tanstack/react-table` v8 and `@tanstack/react-virtual` are assumed React 19 compatible. **Not verified** at authoring time; if the peer range excludes React 19, this becomes a blocking decision.
-- Real contact volume is assumed to exceed a few hundred rows, which is what makes virtualization and TanStack Table necessary over the current approach. Exact production counts were not provided.
+- `@tanstack/react-table` and `@tanstack/react-virtual` are React 19 compatible. **Verified** 2026-10-07 against the published peer ranges: `@tanstack/react-table` declares `react: ">=18"`, `@tanstack/react-virtual@3.14.13` declares `react: "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"`. The blocking risk named at authoring time does not exist.
+- Real contact volume is assumed to exceed a few hundred rows, which is what makes virtualization and TanStack Table necessary over the current approach. Exact production counts were not provided. **Actual scoped row counts for all four tables are measured in the final story** and reported — that measurement is what validates the client-side pagination decision and its trigger thresholds.
 - Both `apps/folk` and `apps/gita-life` expose `/manage` and must keep working. Their `manage/page.tsx` files are byte-identical today.
-- The dashboard overview is assumed to render from a narrower payload once tables load their own data. If it genuinely needs rows from every table, CAP-7 does not apply to `/manage` itself.
+- ~~The dashboard overview is assumed to render from a narrower payload~~ — **no longer an assumption.** Confirmed by reading `manage-dashboard.tsx`: the overview renders from counts and pre-derived chart series. See Resolved questions.
 
-## Open Questions
+## Resolved questions
 
-- Does anything outside `/manage` link to a `?view=` URL? A repo-wide grep found only `manage-portal.tsx:23` producing one, so a redirect is probably sufficient — but bookmarks living in staff browsers cannot be enumerated from the repo.
-- Must `ManageDashboard` keep receiving the full `ManagePortalPayload`? If its charts need rows from every table, the dashboard keeps its own aggregate load and CAP-7 applies only to the four table routes.
-- Is server-side pagination in scope, or is client-side virtualization over the full scoped row set acceptable? This decides whether CAP-7 means one query per table or a paginated query, and materially changes the data-access work.
-- Should bulk actions (CAP-4) ship in the first slice or wait for the contacts pattern to be reviewed? Bulk edit implies new batch semantics in `lib/manage/api-handlers.ts`.
-- Is `resolveManageMode`'s coercion of anything that is not literally `"preacher"` into `"admin"` (`manage-types.ts:190-192`) intended? It is fail-open toward the wider scope, which is more dangerous once a malformed link lands on a new route.
+All five questions raised at authoring time are now closed. Rationale and evidence live in `data-loading-decision.md` and `navigation-decision.md`; the binding outcomes are restated here.
+
+- **`?view=` producers:** closed. Nothing outside `/manage` links to a `?view=` URL — the only producer in the repo is `manage-portal.tsx:23`. Unenumerable browser bookmarks are not a reason to keep the parameter; they are exactly what the redirect in the Constraints section exists to absorb.
+- **Dashboard payload:** closed. `ManageDashboard` does **not** need `ManagePortalPayload`. Verified against `manage-dashboard.tsx`: it touches rows only through three integers — `contacts.length` (line 270), `sessions.length` (line 271), and a sum of `session.attendees.length` (line 265) — plus the pre-derived `charts` object. It reads no other row field.
+- **Pagination:** closed. Client-side virtualization over the full scoped row set, with sort/filter/column state in the URL. Server-side pagination is deferred behind a stated numeric trigger; see the companion.
+- **Bulk actions:** closed. CAP-4 ships in the first slice. Its batch semantics are settled once on the contacts table and recorded in `docs/manage-grid-pattern.md`, which later ports follow.
+- **`resolveManageMode` fail-open:** closed as **intentional**. Its safety does not depend on the coercion being strict: RLS is the enforcement point and app-layer narrowing can only shrink the set (`manage.ts:520`), so a malformed link cannot expose rows outside the caller's RLS scope.
+
+## Decisions this spec now rests on
+
+- **`/manage` stays an aggregate view and is exempt from CAP-7.** It keeps a cross-table load, but ships aggregates rather than rows: three counts plus the already-derived `charts` series. The server still reads rows to build the series; the client stops receiving them.
+- **The redirect must preserve `?mode=`.** `/manage?view=<x>&mode=preacher` redirects to `/manage/<x>?mode=preacher`. A redirect that drops the query would fail CAP-10 in the one case where it is hardest to notice — a shared bookmark.
+- **Grid state lives in the URL.** Sort, filters, column order, visibility, and size are URL state, which is what makes CAP-2/CAP-3 persistence free and makes a later move to server-side row models a data-source swap rather than a rewrite.
