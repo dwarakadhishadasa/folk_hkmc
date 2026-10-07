@@ -100,6 +100,6 @@ development_status:
   7-5-route-and-page-swap-to-supabase-in-both-apps: done
   7-6-in-app-manage-portal-replacing-the-airtable-interface: done
   7-7-airtable-removal-and-dependency-cleanup: done
-  7-8-configure-and-verify-the-hosted-supabase-project-and-preview: backlog
-  7-9-cutover-backfill-auth-migration-delta-sync-go-live: backlog
+  7-8-configure-and-verify-the-hosted-supabase-project-and-preview: done
+  7-9-cutover-backfill-auth-migration-delta-sync-go-live: done
   epic-7-retrospective: optional

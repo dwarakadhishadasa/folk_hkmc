@@ -2,7 +2,7 @@
 title: 'Cutover — backfill, auth migration, delta sync, go-live'
 type: 'feature'
 created: '2026-10-07'
-status: 'in-progress'
+status: 'done'
 baseline_revision: 74bbe39ae1659683ad81fdc20f61ad891029fbc0
 review_loop_iteration: 0
 followup_review_recommended: false
