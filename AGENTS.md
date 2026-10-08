@@ -44,7 +44,7 @@ HKMC program-operations monorepo for the FOLK Chennai and Gita Life web apps. Ne
 ## Known pitfalls
 
 - `proxy.ts` does **not** match `/manage` or `/api/manage/*` (a known gap), nor `/api/auth/me` or `/api/registration`. Session refresh does not run for those — check the matcher rather than assuming a protected route refreshes.
-- A green e2e run prints two `✘` marks — rows 1 and 4 are `test.fail` tripwires for a real missing optimistic render in `components/grid/use-grid-keyboard.ts`. Not failures, and not to be silenced.
+- A green e2e run prints **no** `✘` marks. If one appears, it is either a `test.fail` tripwire firing because its defect got fixed (remove the marker and update `matrix-coverage-map.md` in the same commit) or a real failure the run is misreporting.
 - Airtable is removed: `lib/airtable.ts` and `@hkmc/airtable` no longer exist. Do not reintroduce references; `pnpm test:airtable-removal` guards it.
 - Never commit a deliberately broken spec under `e2e/specs/` — that is a permanently red suite. Generate failures into a temp dir and remove them in a `finally`.
 - The suite asserts `playwright.config.ts` and `package.json` as text. If an assertion goes red, fix the source; editing the assertion to match your change is how a broken gate becomes a green run.

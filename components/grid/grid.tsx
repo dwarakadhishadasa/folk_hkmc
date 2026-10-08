@@ -226,20 +226,64 @@ function resolveFrozenRun<TData extends RowData>(headers: Header<TData, unknown>
 }
 
 /**
+ * Column ids whose own definition supplied a body renderer, per slot.
+ *
+ * TanStack merges `_getDefaultColumnDef()` into **every** column, so
+ * `columnDef.cell` and `columnDef.header` are both defined even for a plain
+ * accessor column — reading them to decide whether the consumer rendered
+ * anything answers "always". `columnDef.cell` is
+ * `props => props.renderValue()?.toString() ?? null` and `columnDef.header` is
+ * the accessor key, which means a check that trusts them hands the row renderer
+ * to a column that never asked for one.
+ *
+ * The defaults are unreachable from the public API, so the answer is taken from
+ * the definitions the consumer passed in, before any default was merged. That is
+ * also the only honest place to ask: "did this column author a widget" is a
+ * question about the author's code, not about the resolved library state.
+ *
+ * `cells` counts any renderer at all, because any renderer replaces the value
+ * the grid would otherwise print. `headers` counts only a function or an
+ * element, because a *string* header is the label the header cell already
+ * renders — treating it as a widget would suppress sort, filter, menu and resize
+ * on every labelled column.
+ */
+function resolveConsumerRenderers<TData extends RowData>(definitions: GridColumnDef<TData>[]) {
+  const cells = new Set<string>()
+  const headers = new Set<string>()
+
+  definitions.forEach((definition, index) => {
+    const id = resolveColumnId(definition, index)
+
+    if ("cell" in definition && definition.cell !== undefined && definition.cell !== null) {
+      cells.add(id)
+    }
+
+    const header = "header" in definition ? definition.header : undefined
+
+    if (typeof header === "function" || (typeof header === "object" && header !== null)) {
+      headers.add(id)
+    }
+  })
+
+  return { cells, headers }
+}
+
+/**
  * The consumer's own header node, or `undefined` for a plain labelled column.
  *
  * A string header is the label path the cell already renders, so only a
  * function or element header counts as a consumer-rendered body — that is how
  * the cell knows to suppress its own sort button, filter, menu and resize.
  */
-function renderHeaderNode<TData extends RowData>(header: Header<TData, unknown>): ReactNode | undefined {
-  const definition = header.column.columnDef.header
-
-  if (typeof definition !== "function" && typeof definition !== "object") {
+function renderHeaderNode<TData extends RowData>(
+  header: Header<TData, unknown>,
+  consumerRendered: ReadonlySet<string>,
+): ReactNode | undefined {
+  if (!consumerRendered.has(header.column.id)) {
     return undefined
   }
 
-  return flexRender(definition, header.getContext()) ?? undefined
+  return flexRender(header.column.columnDef.header, header.getContext()) ?? undefined
 }
 
 /**
@@ -371,6 +415,8 @@ export function Grid<TData extends RowData>({
     () => columnDefinitions.map((definition) => definition.id ?? "").filter((id) => id.length > 0),
     [columnDefinitions],
   )
+
+  const consumerRenderers = useMemo(() => resolveConsumerRenderers(columns), [columns])
 
   const labelById = useMemo(() => {
     const labels = new Map<string, string>()
@@ -582,6 +628,7 @@ export function Grid<TData extends RowData>({
     scrollToIndex,
     onCellCommit,
     onEditError,
+    consumerRenderedCells: consumerRenderers.cells,
   })
 
   useEffect(() => {
@@ -774,7 +821,7 @@ export function Grid<TData extends RowData>({
                       column.toggleVisibility(false)
                     }}
                     resizeHandler={header.getResizeHandler()}
-                    render={renderHeaderNode(header)}
+                    render={renderHeaderNode(header, consumerRenderers.headers)}
                   />
                 )
               })}

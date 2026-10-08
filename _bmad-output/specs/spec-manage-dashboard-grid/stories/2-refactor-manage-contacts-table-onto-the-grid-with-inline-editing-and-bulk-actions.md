@@ -2,9 +2,10 @@
 title: 'Refactor manage-contacts-table onto the grid with inline editing and bulk actions'
 type: 'refactor'
 created: '2026-10-08'
-status: 'blocked'
+status: 'in-review'
 baseline_revision: 'b3e1a3d'
-review_loop_iteration: 0
+baseline_commit: '464b4edd7dadb1b7022ae25ba79b16de819cfd4d'
+review_loop_iteration: 1
 followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/specs/spec-manage-dashboard-grid/data-loading-decision.md'
@@ -140,6 +141,76 @@ deferred: []
 
 ## Review Triage Log
 
+Review of the `renderCellNode` fix against `baseline_commit` `464b4ed`. Three layers
+(blind-hunter, edge-case-hunter, verification-gap) ran on the staged diff.
+
+**Patched — the teardown guard expired before the assertion it protects.**
+`e2e/specs/manage-contacts-edit.spec.ts` registered `page.waitForResponse(...,
+{ timeout: 15_000 })` at interception time, but rows 1 and 4 call the helper *before*
+the optimistic assertion, which polls for up to 20s (`playwright.config.ts:73`). On
+the failing path — the one the tripwire exists to catch — the waiter had already
+rejected, its `.then(…, …)` swallowed it, `release()` returned at once, and
+`page.unroute` raced the still-parked request. That reinstates the
+`Route is already handled!` throw inside `finally`, which supersedes the real
+assertion error. The fix is to track each parked handler's own completion, so the
+bound starts at `release`, needs no URL of its own to drift from
+`SINGLE_CONTACT_ROUTE`, and returns immediately when no PATCH was issued. Both
+reviewers reached this independently.
+
+**Patched — rows 1 and 4 never asserted the write was held.** Both destructured only
+`{ release }`, discarding `requests`. "Shows before the response lands" is equally
+satisfied by a slow server that had not answered, so both rows were Covered on weaker
+evidence than the map claimed. Each now polls for the held request before asserting
+the cell.
+
+**Patched — a first user-visible behavior change was undocumented.** With the default
+renderer no longer winning, `GridRow`'s `title` (`grid-row.tsx:141`) stops being
+suppressed, so every non-empty value cell gains a tooltip for the first time. Recorded
+in `docs/manage-grid-pattern.md` as an intended consequence rather than a restoration.
+
+**Patched — attribution named a revision that does not contain the fix.** Four files
+cited `464b4ed` as where the run was measured, but the fix is in no commit; that sha
+is `HEAD` and is also `baseline_commit`. Reworded to a working tree on top of it.
+
+**Patched — documentation inconsistencies.** `docs/claiming-a-matrix-row.md` still
+said "five rules" after the map gained a sixth; the run-evidence table's pointer named
+`## Verification` instead of its actual home; the map's Verification bullet read
+"stayed Manual … ✅ Done again — they flipped"; rule 2's "or failing with a named
+defect" was vacuous with nothing failing; the recorded-run excerpt lost the sentence
+explaining its `...`; the `test.fail(/* … */)` snippet in two files omits the required
+boolean (`fail(condition, description)`) so it does not typecheck as the pattern to
+copy; two files lacked a trailing newline; tense drift where resolved races were
+described in the present tense.
+
+**Rejected — `false`, on `renderCellNode` falling through to `cell.text` when a
+consumer `cell` renders `null`.** `?? undefined` behaved identically before the change,
+so nothing regressed; and the two widget columns in the manage table (select, favorite)
+are `display` columns with no accessor, so `cell.text` is `GRID_EMPTY_TEXT` and prints
+`—` rather than a stray raw value.
+
+**Rejected — `false`, on a `header` renderer returning `null` re-enabling header
+chrome.** `renderHeaderNode` already normalized a `null` result to `undefined` before
+this change, so the behavior is unchanged. It is a real sharp edge for a consumer header
+that renders nothing, but no such column exists and it predates this diff.
+
+**Deferred — an `editable` column that also supplies a `cell` widget.** The widget
+would win over `cell.text`, so the optimistic value would never show. Not reachable
+today: all three `editable` columns (`name`, `phone`, `notes`) are plain accessors and
+the two widget columns are `display`. It is a trap for stories 3 and 5, so the
+constraint is recorded in `docs/manage-grid-pattern.md` rather than guarded in the
+primitive.
+
+**Deferred — `useGridKeyboard` called without `consumerRenderedCells` throws.** The
+option is required in the type and `Grid` is the only caller in-repo, so this is only
+reachable from untyped JavaScript. A default empty set would hide a real misuse behind
+silently-degraded rendering.
+
+**Deferred — CI runs neither this suite nor its assertions.** `.github/workflows/
+quality-gates.yml` runs guardrails, typecheck, build and lint only, so the assertions
+that pin both branches of this fix execute on no pull request. Pre-existing and
+documented as deliberate; noted because this change depends on that suite more than any
+before it.
+
 ## Design Notes
 
 **Why the grid needed selection support rather than receiving it.** Story 1 deliberately left `enableRowSelection` unopinionated and rendered no select column, on the stated reasoning that story 2 owns selection. But `grid-row.tsx:112` already keys `data-state="selected"` off `row.getIsSelected()`, so the styling hook existed while the control did not. This story adds the control and the checkbox; it does not invent a selection model.
@@ -161,7 +232,7 @@ deferred: []
 **Commands:**
 
 - `pnpm typecheck` -- expected: SUCCESS, no output. This is the real type gate (`next.config.mjs:4-6` sets `ignoreBuildErrors: true`).
-- `pnpm test:e2e` -- expected: exit 0, `75 passed`. This is the matrix's own gate. It runs `pnpm local:readiness` first, generates the bulk row volume `globalSetup` needs, signs in through the real OTP path once per role, and then runs the committed specs below. Two tests print `✘` and are counted as passing: they are `test.fail` rows 1 and 4, which fail today against a known one-line defect in `renderCellNode` (documented in `matrix-coverage-map.md` and in the spec file). If they ever print `✓`, the defect has been fixed and this story's matrix should be re-audited — that is what the `test.fail` is for. Run it with `pnpm test:e2e`, **not** `pnpm exec playwright test`, which skips the readiness gate.
+- `pnpm test:e2e` -- expected: exit 0, `86 passed`, **no `✘` in the output**. This is the matrix's own gate. It runs `pnpm local:readiness` first, generates the bulk row volume `globalSetup` needs, signs in through the real OTP path once per role, and then runs the committed specs below. Rows 1 and 4 used to be `test.fail` tripwires against a known one-line defect in `renderCellNode`; that defect is fixed, the markers are removed, and all 19 matrix rows are Covered. Run it with `pnpm test:e2e`, **not** `pnpm exec playwright test`, which skips the readiness gate.
 - `pnpm lint` -- expected: SUCCESS with no new errors in `components/grid/`, `components/manage/`, `lib/manage/`, the two new route files, or `e2e/`. Pre-existing errors in `.agent/`, `.codebuddy/`, `.neovate/` are not this story's.
 - `pnpm build` -- expected: SUCCESS for both apps.
 - `pnpm guardrails` -- expected: `Monorepo guardrails passed.` Proves no client file reaches a server-only specifier, including transitively through the new bulk route.
@@ -172,9 +243,9 @@ deferred: []
 
 Every row below is exercised by a committed spec in `e2e/specs/`, mapped per row in
 `_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md`. That
-map is the record of which rows passed a recorded run; **17 of 19 are Covered and
-2 are Manual**, and the two are Manual because their specs ran and failed, not
-because they were skipped.
+map is the record of which rows passed a recorded run; **all 19 are Covered**, and
+the last two reached that verdict only after this story fixed the defect they were
+failing on.
 
 | Rows | Layer | Spec |
 |---|---|---|
@@ -184,15 +255,24 @@ because they were skipped.
 | 13, 14, 15 — the 200-item cap, a non-UUID `contactId`, a missing `contactId` | API | `e2e/specs/manage-contacts-api.spec.ts` |
 | 17, 18, 19 — location filter, sort after edit, zero rows in scope | UI | `e2e/specs/manage-contacts-filter.spec.ts` |
 
-Rows 1 and 4 require an **optimistic display** — the new value on screen before the
-write resolves. Their specs hold the PATCH response open and assert the cell while
-the request is in flight, and both fail: the cell keeps showing the prior value.
-The cause is one line in `renderCellNode` (`components/grid/use-grid-keyboard.ts`).
-`@tanstack/table-core` gives every column a default `cell` renderer, so
-`columnDef.cell` is never absent, `?? undefined` never fires, and `GridRow` always
-renders `cell.render` — bypassing the override that `cell.text` carries. The
-matrix rows are **unchanged** and the specs are committed and running; the
-implementation is what does not yet satisfy them.
+Rows 1 and 4 required an **optimistic display** — the new value on screen before
+the write resolves. Their specs hold the PATCH response open and assert the cell
+while the request is in flight, and both failed: the cell kept showing the prior
+value. The cause was one line in `renderCellNode`
+(`components/grid/use-grid-keyboard.ts`). `@tanstack/table-core` gives every column
+a default `cell` renderer, so `columnDef.cell` is never absent, `?? undefined` never
+fires, and `GridRow` always renders `cell.render` — bypassing the override that
+`cell.text` carries.
+
+**Fixed.** `Grid` now resolves, from the column definitions the consumer handed it
+rather than from the merged defs, which ids actually carry a `cell` renderer, and
+passes that set to the keyboard hook. The library's default is indistinguishable
+from a consumer's one after the merge, which is precisely why asking the column
+def could never work. The same question is now asked of `header`, so a column that
+supplies none keeps its own chrome. The matrix rows are **unchanged**, the specs
+are unchanged in what they assert, and the tripwires are removed in the commit that
+fixed the behaviour — leaving them would have kept the suite red on "unexpectedly
+passed".
 
 **Manual checks — what the automated suite does not assert:**
 
@@ -223,11 +303,19 @@ Against `data-loading-decision.md` §3's triggers: 1,052 rows is ~10.5% of the >
 
 ## Auto Run Result
 
-Status: blocked
+Status: unblocked
 
-Blocking condition: matrix test audit failed
+Blocking condition: none — the matrix audit is closed at 19 of 19
 
-### Why
+> **Correction, appended by the run that finished the story.** Everything below
+> describes the state at the end of story 2's *original* run, when the repository
+> genuinely had no test runner and zero of the 19 rows were covered. None of it is
+> current, and none of it should be read as such. It is left as written because the
+> audit trail is the point; the correction is here. The current numbers are in
+> `### What this run verified` below and in `matrix-coverage-map.md`, and the
+> commands they came from are in `## Verification`.
+
+### Why the audit could not be closed on the original run
 
 Step 3's Matrix Test Audit requires every one of the intent-contract's 19 I/O & Edge-Case Matrix rows to be covered by at least one test that verifies its expected behavior, and for each covering test to have run and passed. **Zero of the 19 rows are covered.** This is not a defect in the implementation; it is a gap between what the matrix promises and what this repository can check:
 
@@ -294,27 +382,58 @@ historical text is left exactly as written; this note is the correction.
 
 | Claimed above | Now |
 |---|---|
-| "Zero of the 19 rows are covered" | **17 of 19**, mapped per row in `_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md`, from a `pnpm test:e2e` run that exits 0 |
-| "The repo has no automated test runner" | `pnpm test:e2e` — a committed Playwright suite, 77 specs |
+| "Zero of the 19 rows are covered" | **19 of 19**, mapped per row in `_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md`, from a `pnpm test:e2e` run that exits 0 |
+| "The repo has no automated test runner" | `pnpm test:e2e` — a committed Playwright suite, 86 specs |
 | "`CONTRIBUTING.md:36` states outright that there is no full automated test suite" | it did, until `408b005` replaced that paragraph; it now documents the suite |
 | The five `test:*` scripts are the only verification | `test:e2e` joins them; the `verify-*.mjs` scripts are unchanged |
 | A repo-wide search finds zero `*.test.*` / `*.spec.*` | the specs are `e2e/specs/*.spec.ts`, driven by `playwright.config.ts` |
 
-**Two rows are still Manual, and the reason is this story's implementation.**
-Rows 1 and 4 require an optimistic display, and `renderCellNode`
-(`components/grid/use-grid-keyboard.ts`) always renders TanStack's default cell
-renderer, which bypasses the override `cell.text` carries. The fix belongs here,
-not in the auditing story. See `## Verification` above and the coverage map for the
-full diagnosis.
+**The last two rows are now Covered, and the fix was this story's.**
+Rows 1 and 4 required an optimistic display, and `renderCellNode`
+(`components/grid/use-grid-keyboard.ts`) always rendered TanStack's default cell
+renderer, which bypassed the override `cell.text` carries. `Grid` now resolves the
+set of consumer-supplied cell renderers from the column definitions it is handed and
+passes it to the hook, so every accessor column falls back to `cell.text`. Both rows
+passed; the `test.fail` markers were removed in the same commit.
 
-`status: blocked` and `Blocking condition: matrix test audit failed` are left in
-the frontmatter deliberately: clearing them is this story's decision, once the two
-remaining rows are addressed.
+**That run then surfaced a second defect, in the spec rather than the app.** Both
+rows park a PATCH inside a `page.route` handler and released it from the `finally`;
+unrouting a still-parked request resumes it through Playwright's fallback, so the
+handler's later `route.continue()` threw `Route is already handled!` — inside the
+`finally`, failing both rows for a reason unrelated to the assertion while the
+captured page showed the edited value rendering correctly. `release` is now a
+promise, awaited before `unroute`. The tripwire was pointing at the right row and
+would have kept the suite red until that was fixed too.
 
-### To unblock
+### How it was unblocked
 
-Any one of these resolves it:
+Option 2 below was taken, by the foundation stories that added the suite, and then
+option 1's spirit for the last two rows: the implementation was fixed rather than
+the matrix amended. The `## I/O & Edge-Case Matrix` table above is untouched — not
+one of its 19 rows or expectations was edited to match what was easy to test, which
+was the whole point of the audit.
 
-1. **Accept the manual-check burden as the story's verification** and have a human run the `## Verification` manual checklist against a seeded hosted project. This is the honest option today — it is what the spec's own Verification section asks for, and it requires no code.
-2. **Add a test runner and a suite** covering the batch handler (`handleManageContactBulkUpdate` is pure-ish and directly testable: envelope validation, cap, per-item isolation, per-item `parseContactPatch` rejection) plus the contacts component's `onCellCommit` and bulk-report paths. This needs a dependency the intent contract currently forbids, so it is a spec change.
-3. **Amend the matrix** to the subset that is actually checkable without a browser, and record the rest as manual acceptance criteria rather than testable expectations.
+The three options, as originally written, for the record:
+
+1. **Accept the manual-check burden as the story's verification** and have a human run the `## Verification` manual checklist against a seeded hosted project. This was the honest option at the time — it is what the spec's own Verification section asked for, and it required no code.
+2. **Add a test runner and a suite** covering the batch handler (`handleManageContactBulkUpdate` is pure-ish and directly testable: envelope validation, cap, per-item isolation, per-item `parseContactPatch` rejection) plus the contacts component's `onCellCommit` and bulk-report paths. **Taken**, as a spec change across the foundation stories.
+3. **Amend the matrix** to the subset that is actually checkable without a browser, and record the rest as manual acceptance criteria rather than testable expectations. **Not taken**, and it should not be: the matrix was the requirement, and every row on it turned out to be reachable.
+
+### What this run verified
+
+Against the local stack, one worker, `baseURL http://127.0.0.1:3000`, on a working tree sitting on
+top of `464b4ed` (the commit this change is diffed against; the fix itself is not in any revision yet):
+
+| Check | Result |
+|---|---|
+| `pnpm test:e2e` | **86 passed**, exit 0, no `✘` (5.3m) |
+| `pnpm test:e2e:determinism` | **86 passed on both of two consecutive runs**, exit 0 |
+| `pnpm typecheck` | Clean, 0 errors across 6 workspace projects |
+| `pnpm lint` (story scope) | `components/grid`, `components/manage`, `lib/manage`, `e2e`: **0 errors**, 1 pre-existing warning (the `useReactTable` `react-hooks/incompatible-library` warning) |
+| `pnpm build` | 2/2 successful; both apps compile |
+| `pnpm guardrails` | `Monorepo guardrails passed.` |
+| `pnpm test:airtable-removal` | 28/30. The 2 failures are the pre-existing `scripts/migrate-airtable-data.mjs` and `scripts/delta-sync-old-project.mjs` ones recorded as reproduced at `5678c08`; count unchanged, `/manage has no Airtable URL…` still PASS |
+| `git diff --stat 5678c08 -- scripts/verify-monorepo-guardrails.mjs` | Empty. `serverOnlySpecifierPrefixes` byte-unchanged. |
+| Route parity | Both bulk routes md5-identical (`93c03342…`); both single-row routes md5-identical (`365610fd8…`) |
+| Grid primitiveness | Zero occurrences of `api/manage`, `components/manage` or `Manage[A-Z]` under `components/grid/` |
+| Completed tasks | `SortKey`, `COLUMNS`, `compareText`, `ALL_LOCATIONS`, `Status`, `IDLE_STATUS` and the sort/filter `useMemo` blocks all still gone; `readError` retained and used on all three fetch paths; single table component; `payload` prop unchanged |

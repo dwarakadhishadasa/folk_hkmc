@@ -411,10 +411,12 @@ passes twice. Both are now committed mechanisms rather than habits:
 The double-run itself cannot live in the suite, because a spec cannot re-run the
 suite it is inside of. That is why it is a script.
 
-Recorded result: **86 passed on each of two consecutive runs**, script exit 0, at
-revision `c2cfaa6` with Playwright 1.62.0. Note `retries` is a determinism
-property here, not a CI preference — under `CI` the key becomes 1, so treat a CI
-number as a different measurement rather than this one.
+Recorded result: **86 passed on each of two consecutive runs**, script exit 0, with
+Playwright 1.62.0 — first at revision `c2cfaa6`, and re-measured on a working tree on
+top of `464b4ed` after this story's grid fix, with the same count and no `✘` in either
+run's output. Note
+`retries` is a determinism property here, not a CI preference — under `CI` the key
+becomes 1, so treat a CI number as a different measurement rather than this one.
 
 Nothing runs the e2e suite in CI (`.github/workflows/quality-gates.yml` covers
 guardrails, typecheck, build and lint). That is deliberate: a red or flaky suite in
@@ -427,8 +429,9 @@ turning a matrix row green: which layer to use (UI, Playwright `request`, or
 `page.route` interception) and the observable that selects each, what the row
 needs seeded, and what evidence flips it to **Covered** — a spec that passed in a
 recorded run, quoted with that run's revision, Playwright version, `baseURL` and
-worker count. It also covers the `test.fail` tripwire pattern used for rows 1 and 4
-above. Cross-linked from the coverage map's "Claiming a matrix row" section.
+worker count. It also covers the `test.fail` tripwire pattern that rows 1 and 4
+carried until this story fixed the defect they named. Cross-linked from the
+coverage map's "Claiming a matrix row" section.
 
 ### How staff auth works in the suite
 

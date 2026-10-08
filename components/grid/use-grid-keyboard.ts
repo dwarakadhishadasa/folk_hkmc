@@ -78,8 +78,24 @@ function readFailureMessage(cause: unknown): string {
  * `flexRender` is TanStack's own contract and already returns `null` for a
  * column def with no `cell`, so this stays the single rendering path instead of
  * a second one the primitive would have to thread through `GridCellView`.
+ *
+ * The membership test is load-bearing and cannot be replaced by asking the
+ * column def whether it has a `cell`: `table._getDefaultColumnDef()` supplies
+ * `cell: props => props.renderValue()?.toString() ?? null` for **every** column,
+ * so `columnDef.cell` is never absent. Trusting it made `render` defined for
+ * every accessor column, and because `GridRow` prefers `render` over `text`,
+ * `cell.text` — which carries the optimistic override, the `GRID_EMPTY_TEXT`
+ * placeholder and the `title` tooltip — became dead, and an in-flight edit kept
+ * showing the prior value until the write resolved.
  */
-function renderCellNode<TData>(cell: Cell<TData, unknown>): ReactNode | undefined {
+function renderCellNode<TData>(
+  cell: Cell<TData, unknown>,
+  consumerRendered: ReadonlySet<string>,
+): ReactNode | undefined {
+  if (!consumerRendered.has(cell.column.id)) {
+    return undefined
+  }
+
   return flexRender(cell.column.columnDef.cell, cell.getContext()) ?? undefined
 }
 
@@ -96,6 +112,14 @@ export interface UseGridKeyboardOptions<TData> {
   scrollToIndex: (index: number) => void
   onCellCommit?: GridCellCommitHandler<TData>
   onEditError?: GridEditErrorHandler<TData>
+  /**
+   * Column ids whose definition supplied a `cell` renderer.
+   *
+   * Required rather than inferred: TanStack's per-column default renderer cannot
+   * be distinguished from a consumer's one after the defaults are merged, so
+   * `Grid` resolves it from the definitions it was handed and passes it down.
+   */
+  consumerRenderedCells: ReadonlySet<string>
 }
 
 export interface GridKeyboardApi<TData> {
@@ -128,6 +152,7 @@ export function useGridKeyboard<TData>({
   scrollToIndex,
   onCellCommit,
   onEditError,
+  consumerRenderedCells,
 }: UseGridKeyboardOptions<TData>): GridKeyboardApi<TData> {
   const domId = useId()
   const focusedRowDomId = `${domId}-focused-row`
@@ -462,7 +487,7 @@ export function useGridKeyboard<TData>({
       return {
         columnId: cell.column.id,
         text: text.length > 0 ? text : GRID_EMPTY_TEXT,
-        render: renderCellNode(cell),
+        render: renderCellNode(cell, consumerRenderedCells),
         align: meta?.align ?? "left",
         tabular: meta?.tabular === true,
         isFocused: isRowFocused(row) && focusedColumnId === cell.column.id,
@@ -473,7 +498,16 @@ export function useGridKeyboard<TData>({
         onDraftKeyDown: handleDraftKeyDown,
       }
     },
-    [draft, editing, focusedColumnId, handleDraftKeyDown, isRowFocused, overrides, rowCellText],
+    [
+      consumerRenderedCells,
+      draft,
+      editing,
+      focusedColumnId,
+      handleDraftKeyDown,
+      isRowFocused,
+      overrides,
+      rowCellText,
+    ],
   )
 
   return {

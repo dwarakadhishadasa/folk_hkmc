@@ -74,6 +74,33 @@ be a second contract for one job.
 A header widget suppresses that header's sort button, filter popover, column menu and resize
 handle. A header that is a control must not also be a sort button.
 
+**Omit `cell` on every plain value column — and know that omitting it is the whole point.**
+TanStack's `_getDefaultColumnDef()` supplies `cell: props => props.renderValue()?.toString() ?? null`
+for *every* column, so `columnDef.cell` is never absent and cannot be used to ask whether a column
+carries a widget. The grid therefore resolves that question from the column definitions **you handed
+it**, before the defaults are merged, and renders `cell.text` — not the default renderer — for every
+column that supplies none.
+
+That is not cosmetic. `cell.text` is where the optimistic override, the `—` placeholder and the
+`title` tooltip live. A grid that trusted `columnDef.cell` renders the library's `renderValue` for
+every accessor column instead, and an in-flight edit sits there showing the *old* value until the
+write resolves — with nothing in the console and no failing type check. This shipped once; it is
+why `renderCellNode` takes a resolved set instead of asking the column def.
+
+**Never mark a column `editable` *and* give it a `cell` widget.** The two are exclusive
+here. A widget renderer replaces the value the grid would otherwise print, and `cell.text`
+is where the optimistic override lives — so an editable column with a widget shows the
+*old* value for the whole round trip, with no error anywhere. Nothing warns you: the
+column typechecks, it renders, and it silently loses CAP-5. An editable column must be a
+plain accessor; put the widget in `header`, or in a separate non-editable column.
+
+**One consequence to expect on your table: tooltips.** While the default renderer was winning,
+`cell.render` was defined for every accessor column, and `GridRow` skips `title` whenever `render`
+is set — so no value cell had a tooltip at all. Now that plain columns fall back to `cell.text`,
+every non-empty value cell carries one, showing the full text behind a truncated cell and the
+rejection message on a reverted one. That is the intended behavior for a fixed-row-height grid, and
+it is a visible change on a table that already shipped: nothing regressed, something appeared.
+
 Two conventions inside a custom cell:
 
 - `onPointerDown` → `stopPropagation()`. Otherwise the cell takes the pointer, the grid moves cell

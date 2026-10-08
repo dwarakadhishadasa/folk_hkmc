@@ -69,29 +69,49 @@ them.
 Re-running is safe and needs no reset: the setup projects delete and regenerate
 each `storageState` file on every run.
 
-### Why a green run shows two `✘` marks
+### `test.fail` rows, and what they are for
 
-`pnpm test:e2e` reports `86 passed` and exits 0 while printing two `✘` lines
-(the row numbers shift as specs are added; the titles do not):
+`pnpm test:e2e` reports `86 passed` and exits 0 with **no `✘` in the output**. It
+used to print two.
 
+Those two were `test.fail` rows in `e2e/specs/manage-contacts-edit.spec.ts`, for
+matrix rows 1 and 4: the grid did not show an edited value optimistically,
+because `renderCellNode` in `components/grid/use-grid-keyboard.ts` always
+rendered TanStack's default cell renderer and so bypassed the override that
+carries the draft. Playwright counts an expected failure as passing, so the run
+stayed green while the behaviour was genuinely missing.
+
+That is the pattern to reach for when you find a real defect rather than working
+around it:
+
+```ts
+// Row N — <what the row asserts>
+test("...", async ({ page }) => {
+  // `fail(condition, description)`: `true` marks the tripwire, and the
+  // description is what a future reader needs in order to remove it.
+  test.fail(true, "known defect: <link> — fixed in <sha>, or unfixed")
+  // the correct assertion for the row's expected behavior — not a weakened one
+})
 ```
-row 1 — a committed edit shows the new value before the response lands
-row 4 — clearing a required field shows the empty value before the response lands
-```
 
-Update this paragraph and the table below in the same commit that changes the
-suite's shape, or the first thing it says to the next reader is wrong.
+The bodies still run, so the assertions stay live, and the day the defect is fixed
+they report "unexpectedly passed" and turn the suite red — which is the signal to
+fix the code, then remove the marker and update the coverage map **in the same
+commit**. Leaving the marker behind after fixing the defect is a permanently red
+suite.
 
-Those are `test.fail` rows in `e2e/specs/manage-contacts-edit.spec.ts`. Playwright
-counts an expected failure as passing, so they are **not** skipped, not flaky, and
-not a broken run. They exist because the behaviour they assert is genuinely
-missing: the grid does not show an edited value optimistically, because
-`renderCellNode` in `components/grid/use-grid-keyboard.ts` always renders
-TanStack's default cell renderer and so bypasses the override.
+It is also the run that surfaces defects in the test's own teardown. Rows 1 and 4
+parked a PATCH inside a `page.route` handler and released it from the `finally`;
+unrouting a still-parked request resumed it through Playwright's fallback, so the
+handler's later `route.continue()` threw `Route is already handled!` — inside the
+`finally`, failing both rows for a reason unrelated to the assertion, while the
+captured page showed the edited value rendering correctly. `release` is now awaited
+before `unroute`, and both rows assert the interception actually caught the write —
+otherwise "shows before the response lands" is also satisfied by a slow server.
 
-They are wired in on purpose. The day the defect is fixed they print `✓`, report
-"unexpectedly passed", and turn the suite red — which is the signal to update the
-coverage map. Details and the full row-to-spec mapping live in
+Update this section and the table below in the same commit that changes the
+suite's shape, or the first thing it says to the next reader is wrong. Details and
+the full row-to-spec mapping live in
 `_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md`.
 
 ### What the suite covers today

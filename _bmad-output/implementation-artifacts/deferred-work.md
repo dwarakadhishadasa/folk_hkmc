@@ -209,3 +209,19 @@ source_spec: `2-playwright-harness-and-deterministic-staff-authentication.md`
 severity: medium
 reason: The gap layer verified this by reading the workflow in full and listing its steps; neither `pnpm test:e2e` nor `pnpm test` appears. The demonstration: breaking the `Send Code` submit path in `apps/folk/app/login/login-page-client.tsx` leaves `quality-gates.yml` green, because `pnpm lint` and `pnpm typecheck:workspace` do not exercise the runtime path. The suite would catch it, if run. Deferred rather than patched because the intent excludes it: SPEC.md's non-goals state "No CI workflow changes. Wiring `pnpm test:e2e` into `.github/workflows` is a follow-up once the suite is green and not flake-prone", and doing it properly needs Supabase and Mailpit as CI services — a substantially larger change than this story.
 status: open
+
+### DW-26: `useGridKeyboard` is exported from `components/grid/index.ts` with a required `consumerRenderedCells` option, so an untyped JavaScript caller passing options without it throws `consumerRenderedCells.has is not a function` on the first rendered cell
+origin: spec-deferred story-2-renderCellNode-fix
+location: components/grid/use-grid-keyboard.ts:112
+source_spec: `_bmad-output/specs/spec-manage-dashboard-grid/stories/2-refactor-manage-contacts-table-onto-the-grid-with-inline-editing-and-bulk-actions.md`
+severity: low
+reason: The option is required in the TypeScript type and `Grid` is the only in-repo caller, so no current call path reaches it. It is unreachable from any typed caller, and adding a default empty set would convert a loud misuse into silently degraded rendering (every widget column falling back to its raw value) — the worse failure. Revisit if the hook gains a second consumer.
+status: open
+
+### DW-27: A column marked `meta.grid.editable` that also supplies a `cell` widget renderer silently loses its optimistic display, because the widget replaces the `cell.text` that carries the override
+origin: spec-deferred story-2-renderCellNode-fix
+location: components/grid/grid.tsx:250
+source_spec: `_bmad-output/specs/spec-manage-dashboard-grid/stories/2-refactor-manage-contacts-table-onto-the-grid-with-inline-editing-and-bulk-actions.md`
+severity: medium
+reason: Unreachable in the current tree: all three `editable` columns in `manage-contacts-table.tsx` (`name`, `phone`, `notes`) are plain accessors with no `cell`, and the two widget columns (`select`, `favorite`) are `display` columns that are not editable. It is a trap for stories 3 and 5, which copy this column model. It typechecks, renders, and loses CAP-5 with no error, so the constraint is recorded in `docs/manage-grid-pattern.md` now; a guard in the primitive was deferred rather than added, because `resolveConsumerRenderers` is table-agnostic by contract and has no business knowing which columns are editable.
+status: open

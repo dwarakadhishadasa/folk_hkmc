@@ -1,6 +1,6 @@
 # Claiming a matrix row
 
-The long-form version of the five rules in
+The long-form version of the six rules in
 [`matrix-coverage-map.md`](../_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md#claiming-a-matrix-row-the-rule-this-map-now-enforces).
 That section is the contract; this is how you satisfy it.
 
@@ -94,13 +94,13 @@ Quote these from the actual run, in the verdict's Spec column or beside it:
   **refuses** to run against a non-loopback address
 - the **worker count** — 1, per `playwright.config.ts`
 
-### A green run still prints two `✘` marks
+### A `test.fail` row, and the tripwire it is
 
-This surprises people, so it gets its own note. Rows 1 and 4 of story 2's matrix
-carry a `test.fail` tripwire: the spec asserts the row's *expected* behavior, that
-assertion currently fails because of one named defect, and `test.fail` marks the
-failure as expected so the run stays green while the defect is open. The marks are
-the tripwire doing its job.
+Rows 1 and 4 of story 2's matrix carried a `test.fail` tripwire: the spec asserts
+the row's *expected* behavior, that assertion failed because of one named defect,
+and `test.fail` marks the failure as expected so the run stays green while the
+defect is open. A green run printing `✘` marks is the tripwire doing its job, not
+a lying suite.
 
 The tripwire is the pattern to copy when you find a real defect rather than working
 around it:
@@ -108,24 +108,44 @@ around it:
 ```ts
 // Row N — <what the row asserts>
 test("...", async ({ page }) => {
-  test.fail(/* known defect: <link or issue>, fixed in <sha or unfixed> */)
+  // `fail(condition, description)`: `true` marks the tripwire, and the
+  // description is what a future reader needs in order to remove it.
+  test.fail(true, "known defect: <link or issue> — fixed in <sha>, or unfixed")
   // the correct assertion for the row's expected behavior — not a weakened one
 })
 ```
 
 When the underlying defect is fixed, the tripwire turns **red**, which is the
 point: it forces the verdict table to be revisited rather than leaving a stale
-Manual in place.
+Manual in place. Remove the marker and flip the verdict **in the same commit** as
+the fix. Leaving the marker behind is a permanently red suite.
 
-### The worked example that stays Manual
+Read the error the tripped row reports, not just the verdict. The run that trips a
+tripwire is the first run exercising that path end to end, so it is also the first
+run that can surface a defect in the **test's own** teardown — and that defect
+buries the signal you were waiting for.
 
-Rows 1 and 4 — happy-path cell edit, and empty required field. Both specs are
-committed and wired into `pnpm test:e2e`. Both run. Both fail, for one named reason
-recorded in the map. Neither is marked Covered.
+### The worked example, start to finish
+
+Rows 1 and 4 — happy-path cell edit, and empty required field. Both specs were
+committed and wired into `pnpm test:e2e`. Both ran. Both failed, for one named
+reason recorded in the map. Neither was marked Covered.
 
 That is the rule working, not the rule being bent. If you find yourself explaining
 why a row deserves Covered despite its spec not passing, the answer is that the
 row is Manual and the map should say so.
+
+Story 2 then fixed the defect. The tripwires turned red naming exactly those two
+rows, both flipped to Covered, and the run reported `86 passed` with no `✘` — twice
+back to back.
+
+And the tripped run then surfaced a second defect, this one in the spec: both rows
+park a PATCH inside a `page.route` handler and release it from the `finally`.
+Unrouting a still-parked request resumes it through Playwright's fallback, so the
+handler's later `route.continue()` threw `Route is already handled!` — inside the
+`finally`, failing both rows for a reason unrelated to the assertion, while the
+captured page showed the edited value rendering perfectly. `release` became a
+promise, awaited before `unroute`.
 
 ### The `Unreachable` escape hatch is closed
 
@@ -149,6 +169,6 @@ The suite's own determinism is now a committed mechanism rather than a habit:
   registered, and that a deliberately broken spec turns the gate red.
 
 `CONTRIBUTING.md` and `docs/development-guide.md` record the current pass counts and
-the spec inventory. Per `CONTRIBUTING.md:80`, update them in the same change that
-alters the suite's shape — a spec added without a count update is the stale-doc
-failure this doc exists to prevent.
+the spec inventory. Update them in the same change that alters the suite's shape —
+a spec added without a count update is the stale-doc failure this doc exists to
+prevent.

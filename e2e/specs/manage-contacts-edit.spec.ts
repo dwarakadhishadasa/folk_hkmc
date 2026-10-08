@@ -18,14 +18,14 @@
  * Every test narrows the grid to a single row before editing, because the rows
  * are virtualized and an unfiltered grid does not render the row under test.
  *
- * ## Rows 1 and 4 are `test.fail`, and that is a finding
+ * ## Rows 1 and 4 were `test.fail`, and that is what they were for
  *
  * Both rows require an **optimistic display** — the new value on screen *before*
  * the write resolves. Both specs hold the PATCH response open and assert the cell
- * while the request is still in flight, and both fail: the cell keeps showing the
- * prior value until the server answers.
+ * while the request is still in flight. Both ran, and both failed: the cell kept
+ * showing the prior value until the server answered.
  *
- * The cause is one line, in `renderCellNode` (`components/grid/use-grid-keyboard.ts`):
+ * The cause was one line, in `renderCellNode` (`components/grid/use-grid-keyboard.ts`):
  *
  * ```ts
  * return flexRender(cell.column.columnDef.cell, cell.getContext()) ?? undefined
@@ -37,29 +37,40 @@
  * never absent and the `?? undefined` never fires. `GridCellView.render` is
  * therefore always defined, and `GridRow`'s `cell.render !== undefined ? … :
  * cell.text` always takes the first branch. `cell.text` — which carries the
- * override, the `GRID_EMPTY_TEXT` placeholder and the `title` tooltip — is dead
+ * override, the `GRID_EMPTY_TEXT` placeholder and the `title` tooltip — was dead
  * for every accessor column.
  *
- * `test.fail` rather than `test.fixme` on purpose: the body still runs, so the
- * assertion stays live, and the moment the defect is fixed this test reports
- * "unexpectedly passed" and the suite goes red. That is the tripwire that forces
- * the two verdicts in `matrix-coverage-map.md` to be revisited rather than
- * silently left on Manual.
+ * The tripwires did their job: `Grid` now resolves, from the column definitions
+ * it was handed, which columns actually carry a `cell` renderer, and
+ * `renderCellNode` renders only those. Every accessor column falls back to
+ * `cell.text`, so the override reaches the screen while the write is in flight.
+ * Both `test.fail` markers are removed in the same change that fixes the
+ * behaviour — leaving them would turn the suite red with "unexpectedly passed".
  *
- * Each of those two rows is therefore **split in two**. A `test.fail` body aborts
- * at its first failed assertion and inverts its verdict for everything after it, so
- * a single combined test would (a) never execute the row's remaining clauses and
- * (b) be unable to fail the suite even if it did. Rows 1 and 4 each get a
- * `test.fail` test holding only the optimistic-display assertion, plus an ordinary
- * test — `row 1 (remaining clauses)` and `row 4 (remaining clauses)` — that asserts
- * the one-PATCH / commit clauses and the server-400 / revert clauses, and that can
- * turn the run red.
+ * Each of those two rows is **split in two**, and the split is kept. A
+ * `test.fail` body aborts at its first failed assertion and inverts its verdict
+ * for everything after it, so a single combined test would have been unable to
+ * fail the suite at all. Rows 1 and 4 each hold the optimistic-display assertion,
+ * plus an ordinary test — `row 1 (remaining clauses)` and `row 4 (remaining
+ * clauses)` — that asserts the one-PATCH / commit clauses and the server-400 /
+ * revert clauses.
  *
- * The remediation is a one-liner in story 2's own code — render `cell.render`
- * only when the consumer supplied a `cell` renderer, rather than whenever
- * TanStack's default is present. It is **not** applied here: this story
- * explicitly does not re-implement story 2's table, and a fix belongs in the
- * story that owns the behaviour, recorded against its own run.
+ * ## Why `release` is awaited before `unroute`
+ *
+ * Fixing the defect exposed a defect in this spec. Both rows park the PATCH in a
+ * `page.route` handler, and the handler's `route.continue()` used to run after
+ * the caller's `finally` had already called `page.unroute` — which resumes a
+ * parked request through Playwright's own fallback, so the handler threw
+ * `Route is already handled!` **inside the `finally`**. That failed rows 1 and 4
+ * for a reason that had nothing to do with the assertion under test, and, worse,
+ * buried it: the trace showed the page rendering the edited value correctly while
+ * the reported error was a teardown race.
+ *
+ * `release` is awaited first, and both rows also assert the interception caught
+ * the write. That assertion matters as much as the ordering: without it, "shows
+ * before the response lands" is equally satisfied by a slow server that simply
+ * had not answered yet, so the row would pass without ever testing the
+ * optimistic display it exists to cover.
  */
 
 import { expect, test, type Page } from "@playwright/test"
@@ -115,13 +126,38 @@ async function focusNameCell(page: Page, id: string, name: string): Promise<void
   await cellIn(rowById(page, id), "name").click()
 }
 
-/** A PATCH interception that counts requests and holds each response open. */
-function holdContactPatch(page: Page): { requests: unknown[]; release: () => void } {
+/** Teardown bound; see `release` below for why it exists at all. */
+const RELEASE_TIMEOUT_MS = 15_000
+
+/**
+ * A PATCH interception that counts requests and holds each response open.
+ *
+ * `release` must be awaited before the caller unroutes, and that ordering is
+ * load-bearing. Unrouting while a request is still parked resumes it through
+ * Playwright's own fallback, so the handler's later `route.continue()` throws
+ * `Route is already handled!` — inside the caller's `finally`. A throw there
+ * supersedes the assertion error the test was actually reporting, so the
+ * diagnosis is replaced by a teardown race: which is precisely how the missing
+ * optimistic value stayed invisible behind this defect once already.
+ *
+ * The wait is therefore driven by the parked handlers themselves, not by a
+ * `waitForResponse` registered here. A waiter created at interception time
+ * starts its clock before the test has even pressed `e`, so it expires during
+ * the optimistic assertion's own 20s poll — and on the failing path, the one
+ * that matters, it is already spent. Tracking each handler's completion makes
+ * the bound restart at `release`, needs no URL of its own to drift from
+ * `SINGLE_CONTACT_ROUTE`, and resolves immediately when no PATCH was ever
+ * issued, so an early failure does not stall teardown.
+ */
+function holdContactPatch(page: Page): { requests: unknown[]; release: () => Promise<void> } {
   const requests: unknown[] = []
   let open: () => void = () => undefined
   const held = new Promise<void>((resolve) => {
     open = resolve
   })
+
+  /** Resolves once a parked handler has finished continuing its request. */
+  const parked: Promise<void>[] = []
 
   void page.route(SINGLE_CONTACT_ROUTE, async (route) => {
     if (route.request().method() !== "PATCH") {
@@ -130,11 +166,37 @@ function holdContactPatch(page: Page): { requests: unknown[]; release: () => voi
     }
 
     requests.push(route.request().postDataJSON())
-    await held
-    await route.continue()
+    parked.push(
+      (async () => {
+        await held
+        await route.continue()
+      })(),
+    )
+
+    // Swallowed deliberately: a handler that cannot continue is the teardown
+    // race `release` exists to prevent, and `release` is what surfaces it.
+    await parked[parked.length - 1].catch(() => undefined)
   })
 
-  return { requests, release: open }
+  return {
+    requests,
+    release: async () => {
+      open()
+
+      // Nothing was ever parked, so there is nothing to wait for.
+      if (parked.length === 0) {
+        return
+      }
+
+      // Bounded so a handler that never returns cannot hang the test past the
+      // per-test timeout. `allSettled` plus the race means a slow box loses the
+      // wait, never the run.
+      await Promise.race([
+        Promise.allSettled(parked),
+        new Promise((resolve) => setTimeout(resolve, RELEASE_TIMEOUT_MS)),
+      ])
+    },
+  }
 }
 
 /** The in-cell editor the keyboard hook mounts. */
@@ -179,14 +241,14 @@ async function phoneRow(): Promise<{ id: string; name: string; phone: string }> 
 }
 
 test.describe("inline cell editing", () => {
-  test.fail("row 1 — a committed edit shows the new value before the response lands", async ({ page }) => {
+  test("row 1 — a committed edit shows the new value before the response lands", async ({ page }) => {
     const target = await inScopeRow(TARGET_OFFSETS.happyPath)
     const renamed = `${target.name}-Edited`
     const originalNames = await readContactNames([target.id])
 
     await focusNameCell(page, target.id, target.name)
 
-    const { release } = holdContactPatch(page)
+    const { requests, release } = holdContactPatch(page)
     try {
       await page.keyboard.press("e")
       await expect(cellEditor(page)).toBeFocused()
@@ -196,6 +258,14 @@ test.describe("inline cell editing", () => {
       await page.keyboard.type(renamed)
       await page.keyboard.press("Enter")
 
+      // The interception really did catch the write, so "before the response
+      // lands" is load-bearing: without this, the assertion below would also
+      // pass against a merely slow server that had not answered yet, which is
+      // a different claim than the optimistic display this row exists to test.
+      await expect
+        .poll(() => requests.length, { message: "the held PATCH must be in flight" })
+        .toBe(1)
+
       // Observed while the response is still held open, so the only possible
       // source of this text is the client's own state.
       await expect(
@@ -203,7 +273,7 @@ test.describe("inline cell editing", () => {
         "the new value must show before the response lands",
       ).toHaveText(renamed)
     } finally {
-      release()
+      await release()
       await page.unroute(SINGLE_CONTACT_ROUTE)
       await restoreContactNames(originalNames)
     }
@@ -333,7 +403,7 @@ test.describe("inline cell editing", () => {
     }
   })
 
-  test.fail("row 4 — clearing a required field shows the empty value before the response lands", async ({ page }) => {
+  test("row 4 — clearing a required field shows the empty value before the response lands", async ({ page }) => {
     const target = await phoneRow()
 
     await openContactsGrid(page)
@@ -345,12 +415,18 @@ test.describe("inline cell editing", () => {
 
     await phoneCell.click()
 
-    const { release } = holdContactPatch(page)
+    const { requests, release } = holdContactPatch(page)
     try {
       await page.keyboard.press("e")
       await expect(cellEditor(page)).toBeFocused()
       await clearCellEditor(page)
       await page.keyboard.press("Enter")
+
+      // The write really is held open, so the placeholder below is the
+      // optimistic empty value rather than a slow server that had not answered.
+      await expect
+        .poll(() => requests.length, { message: "the held PATCH must be in flight" })
+        .toBe(1)
 
       // The optimistic display of an empty value, observed while the PATCH is
       // still in flight.
@@ -359,7 +435,7 @@ test.describe("inline cell editing", () => {
         "the empty value shows before the server answers",
       ).toHaveText(GRID_EMPTY_TEXT)
     } finally {
-      release()
+      await release()
       await page.unroute(SINGLE_CONTACT_ROUTE)
     }
   })
