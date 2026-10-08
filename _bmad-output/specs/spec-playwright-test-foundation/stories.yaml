@@ -1,0 +1,266 @@
+# Story breakdown for SPEC-playwright-test-foundation.
+# Execution order is list order — it is a dependency chain, not a preference. Story 2 cannot be
+# verified without story 1; the row specs in story 5 cannot be written without the volume from
+# story 4. Reordering breaks the spec silently.
+#
+# spec_checkpoint and done_checkpoint are OFF for every story: an agent takes each end-to-end
+# without a human gate. This spec builds infrastructure that nothing else depends on for
+# correctness, and a checkpoint here is a human reading a Playwright config, which is not a
+# review that needs doing by hand.
+#
+# Environment contract: LOCAL ONLY. Every story works against the local Supabase stack
+# (127.0.0.1:54321) and Mailpit (127.0.0.1:8025). The hosted project etwunirahuucodcxydgs is
+# pre-cutover and disposable — the E2E suite MUST NOT write to it. This matters because
+# scripts/seed-preview-fixtures.mjs loads .env.migration.local, which points at the hosted URL;
+# story 3 exists specifically to make that impossible to do by accident.
+#
+# Credentials: never copy credential values into code, docs, spec artifacts, commits, or chat
+# output. Local service-role keys come from `supabase status -o env` at runtime. The fixture
+# password comes from PREVIEW_FIXTURE_PASSWORD, else the gitignored .env.preview-seed.local.
+#
+# Baseline: dev is fast-forwarded to feature/migrate-airtable-to-supabase as of 2026-10-08
+# (commit c16d387), so all 12 Supabase migrations and the Supabase-only runtime are present.
+# Verify with `ls supabase/migrations/ | wc -l` == 12 before starting; 6 means the fast-forward
+# was lost and every story below will fail confusingly.
+
+- id: "1"
+  title: Migrated baseline and populated local schema
+  description: >-
+    Closes CAP-E. Confirms dev carries the migration branch (12 migrations, lib/supabase/,
+    components/grid/), and that the local database is populated rather than schema-only — the
+    current state is all 12 migrations applied and 9 tables present but ZERO rows in contacts,
+    users, locations, and sessions. Adds a readiness check that catches an empty database and a
+    wrong-target configuration, both of which otherwise fail later as confusing test errors.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md plus companions branch-and-schema-baseline.md, local-environment.md, and
+    matrix-coverage-map.md before writing anything. All three are load-bearing: the first has the
+    verified evidence, the second the command chain, the third tells you what row volume the row
+    specs will need later.
+    VERIFIED FACTS — do not re-derive, do not assume, these were checked:
+      * `git merge-base --is-ancestor origin/dev feature/migrate-airtable-to-supabase` exits 0. dev
+        was fast-forwarded to the migration branch on 2026-10-08 (c16d387) and pushed. dev now
+        equals feature/migrate-airtable-to-supabase exactly.
+      * dev has all 12 migrations. Six of them exist ONLY on the migration branch
+        (20261004000000_create_core_tables, 20261006000000_add_users_and_contact_columns,
+        20261006010000_scoped_rls_policies, 20261007000000_retire_airtable_named_columns,
+        20261007120000_scope_sessions_by_preacher, 20261008000000_add_airtable_id_map). If you
+        ever see 6, the fast-forward was lost — re-apply with
+        `git checkout dev && git merge --ff-only feature/migrate-airtable-to-supabase`.
+      * Local stack: 12 migrations applied, 9 tables (airtable_id_map, attendance, audit_events,
+        contacts, invite_log, locations, programs, sessions, users).
+      * Seed was verified working against local: 24 rows created (contacts 4, users 8,
+        locations 4), DW-3 check passed, and idempotent on re-run (Total created: 0).
+    THE TRAP THIS STORY EXISTS TO FIX: scripts/seed-preview-fixtures.mjs:44 calls
+    process.loadEnvFile(".env.migration.local"), and that file holds the HOSTED project URL
+    (etwunirahuucodcxydgs). Run naively it writes to hosted pre-cutover data while the app reads
+    empty local Postgres — silently, with no error. Verified that process.loadEnvFile DEFERS to
+    already-exported environment variables, so the fix needs no change to the seed script's
+    internals: export local credentials first, and it uses those.
+    YOUR WORK:
+      1. Add a `pnpm seed:local` script that exports the local credentials from
+         `supabase status -o env` (API_URL, SERVICE_ROLE_KEY) as NEXT_PUBLIC_SUPABASE_URL,
+         SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, defaults PREVIEW_FIXTURE_PASSWORD when
+         unset, then invokes scripts/seed-preview-fixtures.mjs. Wrap the whole thing in a script
+         file rather than a fragile inline env chain, and document it.
+      2. Add seed:local to the dev:local chain AFTER supabase:env, so the empty-database gap
+         closes automatically. dev:local is currently
+         `supabase:start && mailpit:start && supabase:push && supabase:env && dev`.
+      3. Make the seed REFUSE a non-local NEXT_PUBLIC_SUPABASE_URL (anything that is not
+         127.0.0.1 or localhost) unless explicitly overridden by a flag or env var. This turns a
+         silent data-mutation bug into a loud failure. This is the highest-value part of the
+         story — do not skip it because it feels defensive.
+      4. Write a readiness script that asserts the stack is genuinely usable, not merely running.
+         Assert: Supabase :54321 health 200, Mailpit :8025 answers, and — the part that matters —
+         that row counts are NON-ZERO and the app's configured SUPABASE_URL equals local API_URL.
+         A check that only asserts "Postgres answers" passes against an empty database while the
+         app points at hosted. On failure, print `supabase status` output in the failure message;
+         a bare timeout costs more debugging time than the assertion costs to write.
+    PRESERVE: do not edit scripts/seed-preview-fixtures.mjs's seeding logic, its DW-3 assertion, or
+    its preview-fixture- tag convention. Story 4 depends on the tag filter. Refuse-and-redirect is
+    an env guard, not a rewrite.
+    Report in your summary: the exact command a developer runs to get a populated local database,
+    and confirmation that a non-local URL is refused.
+
+- id: "2"
+  title: Playwright harness and deterministic staff authentication
+  description: >-
+    Closes CAP-A, CAP-B and CAP-C. Installs the Playwright harness (playwright-core is already a
+    devDependency at ^1.63.0 and chromium-1234 is already in ~/.cache/ms-playwright), and builds
+    the sign-in automation that lets any spec start already authenticated as a known staff role.
+    Ends with one green smoke spec proving the whole chain works end to end.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md plus companions auth-and-fixtures.md and local-environment.md. auth-and-fixtures.md
+    traces the sign-in flow from source — use it rather than re-deriving, and do not assume the
+    flow is simpler than it is.
+    VERIFIED FACTS about the sign-in flow (traced from source, do not substitute your own guess):
+      * apps/folk/app/login/login-page-client.tsx collects an email, calls login(email) from
+        lib/auth-context.tsx.
+      * login (lib/auth-context.tsx:118) POSTs /api/auth/signin, then calls
+        supabase.auth.signInWithOtp({ email, shouldCreateUser: false }). The
+        shouldCreateUser: false is load-bearing: an unknown email must FAIL rather than silently
+        provision an account. A test signing in with a typo'd address expects failure, and this
+        flag is why it fails.
+      * Supabase auth emails a 6-DIGIT OTP. MIN_EMAIL_OTP_LENGTH is 6 and verifyLoginCode strips
+        non-digits, so the code must be numeric.
+      * Locally, [auth.email.smtp] in supabase/config.toml points at mailpit:1025, so the message
+        lands in the Mailpit container.
+      * verifyLoginCode (lib/auth-context.tsx:148) calls supabase.auth.verifyOtp({ type: "email" }),
+        then completeStaffProfileSync() and sets staff context.
+    THE INTEGRATION SEAM: Mailpit's HTTP API on :8025 — GET /api/v1/messages lists captured mail
+    (each entry has ID and To[].Address); GET /api/v1/message/{ID} returns the body whose Text
+    carries the OTP. Target Mailpit's HTTP API, NOT Supabase internals: Mailpit's message API is
+    a stable documented surface, while Supabase email-delivery internals can change under you.
+    POLL WITH A BOUNDED RETRY, NEVER waitForTimeout. Mail delivery is asynchronous and is the most
+    flake-prone step in the suite. Key the poll on the RECIPIENT ADDRESS, not "the newest message"
+    — otherwise a parallel spec's mail gets read by the wrong fixture. On timeout, fail with the
+    captured message ids and subjects; "timed out waiting for OTP" with no context is the worst
+    possible failure message.
+    storageState: sign in ONCE per role and save to a gitignored file, then reuse. Build a setup
+    project that produces storageState for Admin, Preacher, and Volunteer, and have ordinary specs
+    declare test.use({ storageState: ... }) so they never touch /login. ADD AN EXPLICIT GITIGNORE
+    ENTRY for these files — the repo's .gitignore has .env* and .bmad-loop/runs/ but no rule that
+    covers them, and they contain live Supabase session tokens for fixture accounts. This is the
+    one genuinely sensitive artifact this spec produces. Regenerate on every run so a stale session
+    cannot silently poison a run, but make an expired token fail with the 401 status rather than a
+    confusing downstream failure.
+    ROLE/SCOPE FACTS (verified): landingPathForRole routes Volunteer and Assistant to /contact;
+    Admin and Preacher land on /. The bulk-contact route requires
+    requireRole(staff, ["Admin", "Preacher"]) in lib/manage/api-handlers.ts. So Admin and Preacher
+    reach /manage and can bulk-edit; Volunteer and Assistant cannot. Preacher mode is scoped to
+    assigned contacts, and the seed creates exactly one OUT-OF-SCOPE contact per program precisely
+    so scope assertions have something to fail against.
+    DO NOT STUB Supabase auth. The OTP path is the thing most likely to break silently, and a stub
+    is exactly what would hide that break.
+    End with ONE smoke spec that signs in as a seeded Admin and asserts it lands on the app's
+    landing path. That green spec is this story's whole deliverable — it proves stack + seed + OTP
+    + storageState + session reuse all work together.
+    Also add a `pnpm test:e2e` script and a turbo `test` task (turbo.json currently has build, dev,
+    lint, typecheck only — no test pipeline).
+    No Vitest and no unit runner. Playwright covers everything this spec needs.
+
+- id: "3"
+  title: Bulk-data fixture generator for matrix row coverage
+  description: >-
+    Generates the row volume the matrices assume. HARD PREREQUISITE, not an optional extra: the
+    current seed creates ONE in-scope contact per program, but story 2's matrix assumes 40+ rows
+    for indeterminate-header and select-all, 2-5 selectable rows for selection and bulk rows, and
+    distinct location names for the per-column filter. Story 1's matrix assumed 500 rows for
+    virtualization. Without this generator, 16 of story 2's 19 matrix rows stay Manual and story 2
+    blocks again on its next attempt for a different-sounding reason at similar cost.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md plus companions matrix-coverage-map.md (the per-row table is your work order) and
+    branch-and-schema-baseline.md (the local-only contract).
+    WHY THIS STORY IS SEQUENCED BEFORE THE ROW SPECS: building the harness first and the data
+    second produces a green suite that still cannot cover the matrix it exists to cover. Do not
+    defer this to story 5.
+    Build on the Supabase client pattern already in scripts/seed-preview-fixtures.mjs — it takes a
+    service-role key and applies the DW-3 assertion (public.users.id MUST equal the auth.users.id
+    it names; mismatch is unfixable corrupt data and the script exits 1 rather than write it).
+    REQUIREMENTS for generated contacts:
+      * distinct name values — needed by the sort-after-edit row and the global filter row
+      * distinct location_id values pointing at REAL locations — needed by the per-column
+        location-filter row, which filters on joined location NAMES
+      * at least one with phone set (empty-required-field row) and at least one without it
+        (forced-400 row)
+      * both IN-SCOPE for a seeded Preacher and OUT-OF-SCOPE, so per-item isolation and scope
+        assertions have rows on both sides
+      * enough total volume that the 200-item bulk cap is meaningful and selection is non-trivial
+    Every generated row MUST carry the preview-fixture- tag so `--wipe` finds it, and specs must
+    clean up after themselves rather than relying on rows a previous run left behind.
+    BULK INSERT. Inserting rows one call at a time over PostgREST is minutes per run, which is its
+    own kind of failure. Use a batched/chunked insert.
+    VOLUME MUST BE A PARAMETER with a fast default sufficient for rows 6-18 (roughly 250 rows).
+    The full 1,052 in-scope rows story 2 measured belongs to a manual/perf check, not every run.
+    Report in your summary: the default volume, the insert strategy, and confirmation that a
+    second run is idempotent.
+
+- id: "4"
+  title: Coverage map and the story 2 matrix amendment
+  description: >-
+    Closes CAP-D. Turns matrix-coverage-map.md from a prediction into a record: runs the suite,
+    maps each of story 2's 19 rows to the spec that actually verified it, flips verdicts to what
+    genuinely passed, and amends story 2's Verification section to point at committed specs instead
+    of manual checks.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md plus companion matrix-coverage-map.md, then the story 2 spec itself at
+    _bmad-output/specs/spec-manage-dashboard-grid/stories/
+    2-refactor-manage-contacts-table-onto-the-grid-with-inline-editing-and-bulk-actions.md.
+    THE RULE THAT GOVERNS THIS STORY: a row flips Manual to Covered ONLY IF its spec ran and
+    passed in the recorded run output. A spec that is skipped, flaky, absent, or did not execute
+    leaves the row Manual. "Unreachable" is NOT a verdict — a row whose behavior is browser- or
+    HTTP-observable is coverable, and claiming otherwise to avoid writing the test is how the audit
+    became unsatisfiable in the first place.
+    Story 2's 19 rows split across three layers, no unit runner needed:
+      * UI (page.* against signed-in storageState) — browser-observable: optimistic display,
+        keyboard, selection, sorting, filtering
+      * API (Playwright's request fixture against /api/manage/... with the same cookies) — status
+        code and body shape: the 200-item cap, per-item isolation, malformed envelopes. This also
+        proves the route's real status codes rather than a mock's idea of them.
+      * Route interception (page.route fulfilling or aborting) — failure modes a live server will
+        not produce on demand: forced 400, dropped fetch, malformed 200. This is NOT mocking the
+        system under test: the request still reaches the real handler unless the spec deliberately
+        intercepts it.
+    Write the 19 row specs across those layers, then update matrix-coverage-map.md's verdicts to
+    what actually passed. Per matrix-coverage-map.md, rows 13/14/15 (the cap, a bad contactId, an
+    item missing contactId) are coverable with no fixture dependency — start there and confirm the
+    harness end-to-end before the rest.
+    AMENDING STORY 2 — what changes and what must NOT:
+      * Change: the "Manual checks (no test runner exists — CONTRIBUTING.md:36)" section points at
+        committed specs, and `pnpm test:e2e` joins the Verification command list with its expected
+        output.
+      * DO NOT change: the 19-row matrix table's rows or their expected outputs. The
+        implementation must satisfy the matrix; the matrix is not edited to match what happened to
+        be easy to test. That asymmetry is the entire point of the Matrix Test Audit.
+      * Story 2 is currently status: 'blocked' with blocking condition "matrix test audit failed".
+        Its implementation work is already committed (a2fd12f) plus the pinned-column reorder fix
+        (85e3923) — do NOT re-implement the table. This story only unblocks its verification.
+    ALSO UPDATE CONTRIBUTING.md:36, which currently states "This project currently has no full
+    automated test suite". That becomes false the moment this lands and it will contradict the
+    harness on every future read.
+    Report in your summary: the final Manual-vs-Covered tally out of 19, and the full
+    `pnpm test:e2e` output including the pass count.
+
+- id: "5"
+  title: Suite determinism and handoff
+  description: >-
+    Proves the suite is a gate rather than a one-shot. Runs it twice consecutively to confirm
+    green-without-reset, confirms a deliberately broken spec makes it exit non-zero, and writes the
+    handoff that tells later story authors how to claim a matrix row. Closes the spec's remaining
+    verification obligations.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md (especially the Verification section and the bootstrap caveat) plus companions
+    local-environment.md and matrix-coverage-map.md.
+    THIS STORY IS WHERE THE BOOTSTRAP CAVEAT IS PAID OFF. This spec's own matrix was, by
+    construction, not satisfiable until this harness existed — its first story would hit the same
+    wall story 2 hit. The harness stories satisfied their rows against the mechanisms they
+    themselves introduced (the readiness assertions, the seed idempotence check, the OTP reader,
+    the coverage-map check): narrow, but real, and each genuinely runnable the moment its own story
+    landed. The forbidden shortcut, which must not appear anywhere in the committed history of
+    this spec, is marking a row Covered against a throwaway /tmp script — that is the exact failure
+    mode story 1 used and the one this spec exists to end.
+    DETERMINISM, in order:
+      1. Run `pnpm test:e2e` twice back to back. The second run must be green with NO manual reset
+         in between. A suite that only passes on a fresh stack is not deterministic and every
+         future run inherits the doubt.
+      2. Introduce a deliberate failure in one spec and confirm the suite exits NON-ZERO and names
+         it. A suite that cannot fail is not a gate. Revert the deliberate failure afterward.
+      3. Confirm no spec depends on wall-clock time, on rows a previous spec left behind, or on
+         execution order.
+    HANDOFF: write the guidance a later story author follows to claim a matrix row is covered —
+      which layer to use (UI / API / interception), how to seed what it needs, and the rule that
+      Covered requires a passed spec in the recorded run. Cross-link it from the matrix-coverage-map
+      so it is found from the place the question gets asked.
+    OUT OF SCOPE, deliberately: wiring pnpm test:e2e into .github/workflows. A red suite in CI blocks
+    everyone, so that is a follow-up once the suite is green and not flake-prone. Do not touch CI.
+    Report in your summary: both consecutive run results with pass counts, the deliberate-failure
+      exit code, and confirmation the failure was reverted.
