@@ -53,11 +53,17 @@ scrolled away.
 | `filter: "text" \| "number"` | Chooses the per-column filter control and supplies its `filterFn` |
 | `align`, `tabular` | Reaches the cell directly |
 | `frozen: true` | Joins the pinned run |
-| `selectable: true` | Row-selection control: excluded from the pinned run and from hiding |
+| `selectable: true` | Row-selection control: joins the pinned run ahead of the identity column |
 | `hideable: false` | Removed from the visibility menu |
 
 For the select column set `enableSorting: false` and `enableHiding: false` on the def as well; the
 metadata expresses intent, the flags express behaviour.
+
+**A column in the pinned run cannot be hidden or reordered.** `columnOrder` is always writable in
+TanStack — there is no flag to turn off — so the grid gates Move left / Move right on pinned
+membership, exactly as it gates the visibility menu. Reordering `select` drops it out of the run and
+takes the identity column with it; reordering the identity column lets it scroll away. Either one
+undoes the reason the run exists.
 
 ### Custom cells and headers use TanStack's renderer
 
@@ -227,7 +233,8 @@ strips it.
 
 - [ ] Refactored in place; the caller and the prop signature did not change.
 - [ ] `sort`, `q`, `f.*`, `cols`, `hide`, `size.*` round-trip; `?mode=` survives.
-- [ ] Identity column pinned as part of the leading run; one 1px divider, no scroll shadow.
+- [ ] Identity column pinned as part of the leading run; one 1px divider, no scroll shadow; no
+      pinned column is hideable or reorderable.
 - [ ] `select` first, row action last.
 - [ ] Editable columns appear in `meta.grid.editable` **and** `PATCH_KEY_BY_COLUMN`.
 - [ ] Every commit rejects with an `Error` carrying the server's message.

@@ -727,11 +727,15 @@ export function Grid<TData extends RowData>({
                   frozenColumns.find((entry) => entry.columnId === column.id)?.left ?? null
                 const filterKind = column.columnDef.meta?.grid?.filter ?? null
                 const visibleIndex = visibleIndexById.get(column.id) ?? 0
-                // TanStack has no reorder flag of its own — `columnOrder` is
-                // always writable — so the selection control is held in place here
-                // instead. A leading control column that could be dragged out from
-                // the pinned region would take the identity column with it.
                 const isSelectable = column.columnDef.meta?.grid?.selectable === true
+                // TanStack has no reorder flag of its own — `columnOrder` is always
+                // writable — so this is the only gate. Reordering a pinned column
+                // breaks the run it belongs to: moving the select column out of it
+                // takes the identity column with it, and moving the identity column
+                // itself lets it scroll away, which is the one thing the pinned run
+                // exists to prevent. Hiding is gated the same way, one line below.
+                const isPinned = frozenColumnIds.includes(column.id)
+                const canReorder = !isSelectable && !isPinned
 
                 return (
                   <GridHeaderCell
@@ -754,11 +758,11 @@ export function Grid<TData extends RowData>({
                     canHide={
                       column.getCanHide() &&
                       column.columnDef.meta?.grid?.hideable !== false &&
-                      !frozenColumnIds.includes(column.id)
+                      !isPinned
                     }
-                    canMoveLeft={visibleIndex > 0 && !isSelectable}
+                    canMoveLeft={canReorder && visibleIndex > 0}
                     canMoveRight={
-                      !isSelectable && visibleIndex > -1 && visibleIndex < visibleColumnIds.length - 1
+                      canReorder && visibleIndex > -1 && visibleIndex < visibleColumnIds.length - 1
                     }
                     onMoveLeft={() => {
                       moveColumn(column.id, -1)

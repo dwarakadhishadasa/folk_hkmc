@@ -2,7 +2,7 @@
 title: 'Refactor manage-contacts-table onto the grid with inline editing and bulk actions'
 type: 'refactor'
 created: '2026-10-08'
-status: 'in-progress'
+status: 'blocked'
 baseline_revision: 'b3e1a3d'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -182,9 +182,88 @@ deferred: []
 
 **Scoped row count recorded at this gate** (story 6 measures all four; contacts is the one that validates the client-side pagination decision now):
 
-| Program | Scoped contacts | Raw JSON | Gzipped |
-|---|---|---|---|
-| FOLK Chennai (`program_id = folk`) | **1,037** | 669,787 B | 68,561 B |
-| Gita Life (`program_id = gita-life`) | **42** | 26,648 B | 3,666 B |
+Re-measured against the hosted project on 2026-10-08, superseding the figures first recorded earlier in this run:
 
-Against `data-loading-decision.md` §3's triggers: 1,037 rows is ~10% of the > 10,000 row threshold, and 68.6 KB gzipped is ~6.7% of the > 1 MB payload threshold. **Neither trigger fires; the client-side virtualization decision holds for contacts.** Note this is also why `collectPagedRows` exists — `manage.ts:196-199` documents the folk program's volume exceeding PostgREST's 1,000-row cap, and 1,037 rows means the contacts query spans two pages on every load. FOLK has 5 distinct assigned preachers, so preacher-mode narrowing is a real subset rather than a no-op.
+| Program | Scoped contacts | Query pages | Raw JSON | Gzipped | Distinct assigned preachers |
+|---|---|---|---|---|---|
+| FOLK Chennai (`program_id = folk`) | **1,052** | 2 | 484,488 B | 55,915 B | 5 |
+| Gita Life (`program_id = gita-life`) | **42** | 1 | 18,346 B | 3,004 B | 4 |
+
+Measured by paging `contacts` on `program_id` with `CONTACT_COLUMNS` and the same `limit=1000&offset=` loop `collectPagedRows` uses, so the row count is the one the loader would materialize. Two caveats on the figures: they are the raw REST row set, not the full RSC payload the loader assembles (the earlier 669,787 B / 68,561 B pair included joined names, rollups and staff names, so the smaller gzipped size here is a narrower measurement rather than a regression); and the count is program scope, which corresponds to admin mode — preacher mode narrows it to a subset. FOLK's 5 distinct assigned preachers confirm that subset is real rather than a no-op.
+
+Superseded figures from the earlier run in this same story, for the audit trail: FOLK 1,037 rows / 669,787 B / 68,561 B; Gita Life 42 / 26,648 B / 3,666 B. The folk count moved by +15 rows between the two measurements; gita-life is unchanged.
+
+Against `data-loading-decision.md` §3's triggers: 1,052 rows is ~10.5% of the > 10,000 row threshold, and 55.9 KB gzipped is ~5.6% of the > 1 MB payload threshold. **Neither trigger fires; the client-side virtualization decision holds for contacts.** The folk query still spans two pages on every load, which is what `collectPagedRows` (`manage.ts:196-199`) exists for. The two measurable-without-a-browser triggers — > 100 ms sort/filter keystroke latency and > 2 s server time for the route — were not exercised and remain unmeasured; both need a running app on target hardware.
+
+## Auto Run Result
+
+Status: blocked
+
+Blocking condition: matrix test audit failed
+
+### Why
+
+Step 3's Matrix Test Audit requires every one of the intent-contract's 19 I/O & Edge-Case Matrix rows to be covered by at least one test that verifies its expected behavior, and for each covering test to have run and passed. **Zero of the 19 rows are covered.** This is not a defect in the implementation; it is a gap between what the matrix promises and what this repository can check:
+
+- The repo has no automated test runner. `package.json` exposes five `test:*` scripts, all of which are `verify-*.mjs` static/live-analysis scripts, and `CONTRIBUTING.md:36` states outright that there is no full automated test suite.
+- A repo-wide search finds **zero** `*.test.*` / `*.spec.*` files.
+- None of the five `verify-*.mjs` scripts reference `manage-contacts-table`, `components/grid`, `rowSelection`, `contacts/bulk`, or `handleManageContactBulkUpdate`, so none of them covers a matrix row either.
+- Every matrix row is a browser-observable behavior: the optimistic cell display, the visible revert plus destructive cell on a 400, `Unable to reach the server.` on a rejected fetch, the indeterminate header state, selection retained across filtering, one result line per selected row, per-item isolation when a single `contactId` is not a UUID, the 200-item cap, the malformed-`results` bulk failure. Each needs an authenticated staff session, a seeded program and a browser. `pnpm dev:folk` is the only instrument that can reach them.
+
+Closing this audit means either adding a test runner and writing the suite, or amending the matrix. Both are out of this story's scope and neither was requested: the spec's own `## Verification` section designates the manual browser checks as the verification method, and the intent contract's `Boundaries & Constraints` forbid a new package. That is the tension worth a human decision — **not** a silent drop.
+
+### What verification did pass
+
+Run from the repository root against `baseline_revision` `b3e1a3d`:
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | Clean, 0 errors across 6 workspace projects |
+| `pnpm lint` (repo-wide) | 24 problems — 12 errors, 12 warnings. The 12 errors are all pre-existing and all in `.agent/`, `.codebuddy/`, `.neovate/`. |
+| `pnpm lint` (story scope only) | `components/grid`, `components/manage`, `lib/manage`, both new route files: **0 errors**, 2 warnings, both pre-existing at `b3e1a3d` (the `useReactTable` `react-hooks/incompatible-library` warning and an `<img>` in the untouched `manage-favorites-view.tsx`). |
+| `pnpm build` (forced, `--force`, not cached) | 2/2 successful; both apps compile and register `/api/manage/contacts/bulk` |
+| `pnpm guardrails` | `Monorepo guardrails passed.` |
+| `pnpm test:airtable-removal` | 28/30. The 2 failures are the pre-existing `scripts/migrate-airtable-data.mjs` and `scripts/delta-sync-old-project.mjs` ones the spec records as reproduced at `5678c08`. `/manage has no Airtable URL` PASS; zero Airtable mentions under `components/manage/`, `lib/manage/`, `apps/*/app/manage/`. |
+| `git diff --stat 5678c08 -- scripts/verify-monorepo-guardrails.mjs` | Empty. `serverOnlySpecifierPrefixes` byte-unchanged. |
+| Bulk route parity | `apps/folk/.../bulk/route.ts` and `apps/gita-life/.../bulk/route.ts` md5-identical (`93c03342…`); the pre-existing single-row routes remain md5-identical (`365610fd8…`) |
+| Grid primitiveness | Zero occurrences of `api/manage`, `components/manage`, or `Manage[A-Z]` anywhere under `components/grid/` |
+| Spec deletions | `SortKey`, `COLUMNS`, `compareText`, `timestamp`, `ALL_LOCATIONS`, `Status`, `IDLE_STATUS` and all sort/filter `useMemo` blocks gone; `readError` retained and used on all three fetch paths (single-row patch, favorite toggle, bulk) |
+
+### What was changed this run
+
+The prior session left the work as commit `a2fd12f`. An implementation subagent audited all 18 execution tasks and 14 acceptance criteria against the tree and fixed three defects:
+
+- `components/grid/grid.tsx` — real defect. Only `selectable` columns were gated from Move left/right, but `name` was not. TanStack has no reorder flag — `columnOrder` is always writable — so moving `name` one slot right broke the pinned run at index 1: the identity column scrolled away *and* became hideable, violating `design-constraints.md`'s "scrolling right must never lose the row's identity". Now gated on pinned membership, matching the `canHide` gate beside it.
+- `docs/manage-grid-pattern.md` — the `selectable` row wrongly claimed the select column is "excluded from the pinned run" when it joins it; corrected, and the pinned-column no-reorder/no-hide rule plus a checklist line added.
+- `components/grid/grid-toolbar.tsx` — two single-quoted imports reverted to the file's double-quoted style.
+
+Nothing was committed; the working tree holds these three files on top of `a2fd12f`.
+
+### Divergences from the pre-refactor table, surfaced rather than absorbed
+
+- **`college` is no longer globally searchable.** The old hand-rolled haystack included `contact.college`; the grid's global filter only sees existing columns, and this story's column model has no `college`. Fixing it means adding a column the spec does not list.
+- **No default sort.** The old table opened sorted by `name` ascending; the grid opens unsorted. Story 1 defined no default, and the URL contract only writes non-defaults.
+- **Server-normalized edits stay visually stale until reload.** After a commit the keyboard override holds the raw draft, so a name the server trims keeps its untrimmed display. This is pre-existing `use-grid-keyboard` behavior the spec said to reuse, not reimplement.
+- **Stale `cols` links degrade.** A link written by a pre-story-2 build (9 ids, no `select`) places `select` last, collapsing the pinned run to `[name]`. Cosmetic, transient, and the codec's documented degradation behavior.
+
+### The human gate did not happen, and this is the story where that matters most
+
+`stories.yaml` sets both `spec_checkpoint` and `done_checkpoint` to `false` on all six stories, and its header records that a story-2 done gate "was tried and then withdrawn the same day." The prompt for this run described the batch semantics as "the thing a human agrees on at this gate before three more tables copy them." No such agreement occurred: build-auto has no checkpoint step, and stories 3 and 5 copy these semantics unattended. The written contract `docs/manage-grid-pattern.md` §5 is therefore the **only** thing standing between this decision and its three copies. It records the request shape, the `MANAGE_BULK_MAX_ITEMS = 200` cap, the sequential loop, the per-row outcome shape and the per-row reporting rule — but a document is not a review.
+
+The batch semantics an operator is currently signing off by proxy:
+
+- Request `PATCH /api/manage/contacts/bulk` with `{ items: [{ contactId, patch }] }` — per-item patches, not one shared patch.
+- `400` means the **envelope** was wrong (not an object, `items` absent, not an array, empty, or over 200). Nothing is written.
+- **Any** per-row failure, an `AuthzError` included, is a `200` with `ok: false` on that item. Partial success is normal, never all-or-nothing.
+- Items run **sequentially**: ordered audit events, independent scope assertions, no burst against PostgREST.
+- The client lists one result line per selected row, successes included; only server-confirmed rows are applied locally; selection clears after the run, never during.
+
+Two of those are product decisions rather than engineering ones, and both are now load-bearing for three more tables: the **cap of 200** is a timeout guard whose real worst case is 200 sequential RLS-checked writes plus 200 audit events in one request, and **`isFavorite: true` is the only bulk action shipped**, so "remove from favorites" is described in the spec's task list and the pattern document but has no implementation to confirm it against.
+
+### To unblock
+
+Any one of these resolves it:
+
+1. **Accept the manual-check burden as the story's verification** and have a human run the `## Verification` manual checklist against a seeded hosted project. This is the honest option today — it is what the spec's own Verification section asks for, and it requires no code.
+2. **Add a test runner and a suite** covering the batch handler (`handleManageContactBulkUpdate` is pure-ish and directly testable: envelope validation, cap, per-item isolation, per-item `parseContactPatch` rejection) plus the contacts component's `onCellCommit` and bulk-report paths. This needs a dependency the intent contract currently forbids, so it is a spec change.
+3. **Amend the matrix** to the subset that is actually checkable without a browser, and record the rest as manual acceptance criteria rather than testable expectations.
