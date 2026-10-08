@@ -201,3 +201,11 @@ source_spec: `1-migrated-baseline-and-populated-local-schema.md`
 severity: low
 reason: docs/development-guide.md still carries the stale sentence, and matrix-coverage-map.md assigns the update to the story that builds the Playwright suite. This story adds harness scripts, not a product test suite, so amending that section here would overstate what exists.
 status: open
+
+### DW-25: Nothing automated runs the suite — `.github/workflows/quality-gates.yml` executes guardrails, typecheck, build, and lint only — so a break in the `/login` -> Mailpit OTP -> `verifyOtp` path is
+origin: spec-deferred f57c9d95a1a3
+location: .github/workflows/quality-gates.yml
+source_spec: `2-playwright-harness-and-deterministic-staff-authentication.md`
+severity: medium
+reason: The gap layer verified this by reading the workflow in full and listing its steps; neither `pnpm test:e2e` nor `pnpm test` appears. The demonstration: breaking the `Send Code` submit path in `apps/folk/app/login/login-page-client.tsx` leaves `quality-gates.yml` green, because `pnpm lint` and `pnpm typecheck:workspace` do not exercise the runtime path. The suite would catch it, if run. Deferred rather than patched because the intent excludes it: SPEC.md's non-goals state "No CI workflow changes. Wiring `pnpm test:e2e` into `.github/workflows` is a follow-up once the suite is green and not flake-prone", and doing it properly needs Supabase and Mailpit as CI services — a substantially larger change than this story.
+status: open

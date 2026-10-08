@@ -31,9 +31,44 @@ Before opening a PR, run the checks that fit the change:
 pnpm exec tsc --noEmit
 pnpm build
 pnpm lint
+pnpm test:e2e
 ```
 
-This project currently has no full automated test suite. Add manual verification notes for affected user flows, especially staff auth, attendance, Supabase-backed reads/writes, and offline/PWA behavior.
+`pnpm test:e2e` runs the Playwright end-to-end suite against the **local** stack
+and is local-only — it refuses a non-loopback `E2E_BASE_URL`, so it can never
+touch the hosted project.
+
+Its prerequisites are the stack itself plus the app env file:
+
+```bash
+pnpm supabase:start && pnpm mailpit:start && pnpm supabase:push && pnpm supabase:env && pnpm seed:local
+pnpm exec playwright install chromium
+```
+
+`apps/folk/.env.local` must carry `SUPABASE_SERVICE_ROLE_KEY` and a **loopback**
+`SUPABASE_URL`; the unknown-email row queries `auth.users` through the admin API
+to prove nothing was provisioned, and it throws rather than skipping when either
+is missing.
+
+`pnpm test:e2e` then runs `pnpm local:readiness` as its own gate and boots the folk
+app via Playwright's `webServer`, so you do not need to start `pnpm dev` yourself.
+(If the app is already running from `pnpm dev:local`, Playwright reuses it and
+skips the boot — the readiness gate still runs, because it is not inside
+`webServer`. Run `pnpm test:e2e` rather than `pnpm exec playwright test`, which
+skips the gate.)
+
+It signs in through the real `/login` → Mailpit OTP → `verifyOtp` path once per
+role, writes a `storageState` file per role into the gitignored `e2e/.auth/`, and
+every spec then runs signed in without touching `/login`. Those files hold live
+Supabase session tokens for the seeded fixture staff accounts — never commit
+them.
+
+Re-running is safe and needs no reset: the setup projects delete and regenerate
+each `storageState` file on every run.
+
+Add manual verification notes alongside the suite for any flow it does not cover —
+especially staff auth, attendance, Supabase-backed reads/writes, and
+offline/PWA behaviour.
 
 ## GitHub Copilot MCP
 

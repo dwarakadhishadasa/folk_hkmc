@@ -39,6 +39,16 @@ packages/*/.turbo/
 .bmad-loop/runs/
 .bmad-loop/cache/
 .bmad-loop/policy.toml
+
+# playwright
+# e2e/.auth/ holds live Supabase session tokens for the seeded fixture staff
+# accounts. Nothing else in this file covers a *.json token artifact, so the
+# rule has to be explicit. The report directories are anchored so a tracked
+# directory of the same name deeper in the tree is not swept up by accident.
+/e2e/.auth/
+/playwright-report/
+/blob-report/
+/test-results/
 _bmad/render/
 .claude/settings.json
 .github/copilot/settings.json

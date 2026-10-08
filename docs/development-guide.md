@@ -248,7 +248,7 @@ Notes:
 - Keep public registration, attendance, service worker queue paths, and dashboard polling in sync.
 - Use UUIDs for record references; all record IDs are `public.*` primary keys.
 - Preserve mobile normalization to the last 10 digits.
-- Run `pnpm guardrails`, `pnpm typecheck:workspace`, and manual checks because no product test suite exists.
+- Run `pnpm guardrails`, `pnpm typecheck:workspace`, `pnpm test:e2e`, and the manual smoke checks; the e2e suite covers staff auth and the manage API, not attendance, offline/PWA, or the registration flows.
 
 ## Manual Smoke Checks
 
@@ -284,4 +284,77 @@ Use the flows relevant to your change:
 
 ## Current Test Status
 
-There is no automated application test suite. Existing validation is guardrails/typecheck/lint/build/manual. Add tests deliberately if a change introduces shared logic or risky behavior.
+`pnpm test:e2e` is the automated application test suite (Playwright, specs under
+`e2e/specs/`). It is **local-only**: the config throws at load if `E2E_BASE_URL`
+is not loopback, so the suite can never be pointed at the hosted project.
+
+Prerequisite: the local stack (Supabase on `:54321`, Mailpit on `:8025`) up and
+seeded — `pnpm supabase:start && pnpm mailpit:start && pnpm supabase:push &&
+pnpm supabase:env && pnpm seed:local`. `pnpm test:e2e` then runs
+`pnpm local:readiness` as its own gate and boots the folk app through Playwright's
+`webServer`, so you do not need `pnpm dev` running (if it is, Playwright reuses
+it and skips the boot). Use `pnpm test:e2e`, not `pnpm exec playwright test`:
+the readiness gate lives in the script precisely because Playwright's
+`reuseExistingServer` short-circuits a command chained into `webServer`, so a
+direct `playwright test` runs against an unasserted stack.
+
+`pnpm test` is the turbo task (`turbo run test`) for per-package `test` scripts.
+The e2e suite is not routed through turbo because it needs a live stack.
+
+### How staff auth works in the suite
+
+- The `setup-admin` / `setup-preacher` / `setup-volunteer` projects drive the real
+  two-step `/login` form. The 6-digit OTP is read from **Mailpit's HTTP API** on
+  `:8025` (`GET /api/v1/messages`, then `GET /api/v1/message/{ID}`). The wait is
+  condition-driven with a bounded budget — never an unconditional sleep — and it
+  never stubs Supabase. On timeout it fails with the captured message ids,
+  subjects, recipients, probe URL and watermark; `e2e/specs/mailpit-reader.spec.ts`
+  asserts that diagnostic against an injected mailbox, so no real message is
+  ever read or written by the assertion itself.
+  `e2e/specs/harness-guards.spec.ts` covers the harness's own boundaries the
+  same way — the two loopback refusals, the `test:e2e` gate wiring, and the
+  ignore rules for the directories a run leaves behind.
+- On success the browser's `storageState` is written to `e2e/.auth/<role>.json`,
+  and the setup asserts the file's `mtimeMs` is at or after the run's start — so
+  "written by this run" is distinguishable from "survived from the last one".
+- `e2e/.auth/` is gitignored: those files are live session tokens for the seeded
+  fixture staff accounts. The setup projects delete and regenerate them on every
+  run, so re-running twice in a row is safe with no manual reset.
+- The `smoke` project defaults to the **Admin** `storageState`, so a new spec
+  under `e2e/specs/` is signed in as Admin unless it calls
+  `test.use({ storageState: ... })` itself. Add a `setup-*` project and a
+  `dependencies` entry in `playwright.config.ts` when a spec needs a new role.
+
+### Environment knobs
+
+| Variable | Effect |
+|---|---|
+| `E2E_BASE_URL` | App under test. Default `http://127.0.0.1:3000`. Refused unless loopback. |
+| `E2E_MAILPIT_URL` | Mailpit base URL. Default `http://127.0.0.1:8025`. |
+| `E2E_PROGRAM_ID` | Program whose fixtures are used. Default `folk`. |
+| `E2E_ADMIN_EMAIL`, `E2E_PREACHER_EMAIL`, `E2E_VOLUNTEER_EMAIL` | Override one fixture address. |
+| `E2E_ADMIN_STORAGE_STATE`, `E2E_PREACHER_STORAGE_STATE`, `E2E_VOLUNTEER_STORAGE_STATE` | Override a `storageState` path. |
+| `E2E_UNKNOWN_EMAIL` | The unseeded address used by the "provisions nothing" row. |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Read from `process.env` first, then `apps/folk/.env.local`. |
+
+`apps/folk/.env.local` must carry `SUPABASE_SERVICE_ROLE_KEY` and a **loopback**
+`SUPABASE_URL` for the suite to run: the unknown-email row queries
+`auth.users` through the admin API to prove nothing was provisioned, and it
+refuses a non-loopback URL rather than checking the hosted project by mistake.
+
+### Browsers
+
+`@playwright/test` is pinned at `^1.62.0` because that is the release whose
+Chromium revision (`1234`) is what this environment has cached; a newer 1.x wants
+a revision that cannot be downloaded here. On a fresh machine run
+`pnpm exec playwright install chromium` before `pnpm test:e2e`, and if you bump
+the pin, check `npx playwright install chromium --dry-run` first — the failure
+mode of a mismatched pin is a browser launch error, not a readable assertion.
+
+### Other checks
+
+`pnpm guardrails`, `pnpm typecheck:workspace`, `pnpm build`, `pnpm lint`, and the
+`verify-*.mjs` scripts. `pnpm lint` and `pnpm exec tsc --noEmit` also cover
+`e2e/` and `playwright.config.ts`. Manual checks still apply to everything the
+suite does not cover — see [Manual Smoke Checks](#manual-smoke-checks). Add
+specs deliberately if a change introduces shared logic or risky behaviour.
