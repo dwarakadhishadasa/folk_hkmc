@@ -161,24 +161,50 @@ deferred: []
 **Commands:**
 
 - `pnpm typecheck` -- expected: SUCCESS, no output. This is the real type gate (`next.config.mjs:4-6` sets `ignoreBuildErrors: true`).
-- `pnpm lint` -- expected: SUCCESS with no new errors in `components/grid/`, `components/manage/`, `lib/manage/` or the two new route files. Pre-existing errors in `.agent/`, `.codebuddy/`, `.neovate/` are not this story's.
+- `pnpm test:e2e` -- expected: exit 0, `75 passed`. This is the matrix's own gate. It runs `pnpm local:readiness` first, generates the bulk row volume `globalSetup` needs, signs in through the real OTP path once per role, and then runs the committed specs below. Two tests print `✘` and are counted as passing: they are `test.fail` rows 1 and 4, which fail today against a known one-line defect in `renderCellNode` (documented in `matrix-coverage-map.md` and in the spec file). If they ever print `✓`, the defect has been fixed and this story's matrix should be re-audited — that is what the `test.fail` is for. Run it with `pnpm test:e2e`, **not** `pnpm exec playwright test`, which skips the readiness gate.
+- `pnpm lint` -- expected: SUCCESS with no new errors in `components/grid/`, `components/manage/`, `lib/manage/`, the two new route files, or `e2e/`. Pre-existing errors in `.agent/`, `.codebuddy/`, `.neovate/` are not this story's.
 - `pnpm build` -- expected: SUCCESS for both apps.
 - `pnpm guardrails` -- expected: `Monorepo guardrails passed.` Proves no client file reaches a server-only specifier, including transitively through the new bulk route.
 - `pnpm test:airtable-removal` -- expected: no regression. The two pre-existing failures in `scripts/migrate-airtable-data.mjs` and `scripts/delta-sync-old-project.mjs` were reproduced at `5678c08` before any grid file existed and are out of scope; the count must not increase, and the `/manage has no Airtable URL…` check must stay at zero hits — the new files live under `components/manage/` and `lib/manage/`.
 - `git diff --stat 5678c08 -- scripts/verify-monorepo-guardrails.mjs` -- expected: empty. Proves the prefix list was not touched.
 
-**Manual checks (no test runner exists — `CONTRIBUTING.md:36`):**
+**Automated checks — the I/O & Edge-Case Matrix (19 rows):**
+
+Every row below is exercised by a committed spec in `e2e/specs/`, mapped per row in
+`_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md`. That
+map is the record of which rows passed a recorded run; **17 of 19 are Covered and
+2 are Manual**, and the two are Manual because their specs ran and failed, not
+because they were skipped.
+
+| Rows | Layer | Spec |
+|---|---|---|
+| 1, 2, 3, 4, 5 — inline editing, persistence, 400 revert, empty required field, network failure | UI + route interception | `e2e/specs/manage-contacts-edit.spec.ts` |
+| 6, 7, 8, 12 — selection, indeterminate header, select-all then filter, empty selection | UI | `e2e/specs/manage-contacts-selection.spec.ts` |
+| 9, 10, 11, 16 — bulk all-succeed, partial success, one unreachable row, malformed `results` | UI + API + interception | `e2e/specs/manage-contacts-bulk.spec.ts` |
+| 13, 14, 15 — the 200-item cap, a non-UUID `contactId`, a missing `contactId` | API | `e2e/specs/manage-contacts-api.spec.ts` |
+| 17, 18, 19 — location filter, sort after edit, zero rows in scope | UI | `e2e/specs/manage-contacts-filter.spec.ts` |
+
+Rows 1 and 4 require an **optimistic display** — the new value on screen before the
+write resolves. Their specs hold the PATCH response open and assert the cell while
+the request is in flight, and both fail: the cell keeps showing the prior value.
+The cause is one line in `renderCellNode` (`components/grid/use-grid-keyboard.ts`).
+`@tanstack/table-core` gives every column a default `cell` renderer, so
+`columnDef.cell` is never absent, `?? undefined` never fires, and `GridRow` always
+renders `cell.render` — bypassing the override that `cell.text` carries. The
+matrix rows are **unchanged** and the specs are committed and running; the
+implementation is what does not yet satisfy them.
+
+**Manual checks — what the automated suite does not assert:**
 
 - `pnpm dev:folk`, open `/manage` → Contacts. Scroll a 1,000+ row table end to end; confirm smooth scroll and a bounded `<tr>` count. Confirm the header stays pinned and both the select and name columns stay pinned when scrolled right, separated by one 1px divider and no shadow.
 - Confirm the dense/default toggle, `tabular-nums` alignment of the two count columns, hairline separators, no stripes, and no drop shadow on the grid surface.
 - Sort, move, hide and resize; confirm the URL updates, Back restores, and `mode=preacher` survives every write.
 - Confirm the per-column filter on `location` narrows and combines with the global filter, and that the global filter narrows across every column.
 - Press `j`/`k` to move row focus, `e` then type then `Enter` to commit an edit, `e` then type then `Escape` to cancel; confirm the first keystroke replaces rather than appends.
-- Force a rejection: clear `phone` and commit (server answers 400 `Phone is required.`), and separately stop the network and commit. Both must revert visibly with a message.
-- Reload after a successful edit; confirm the committed value is present.
-- Select several rows including one outside the current filter; confirm every selected row is visibly indicated and the count is right. Confirm the header control shows the mixed state on partial selection.
-- Run the bulk action on a selection where one row is forced to fail; confirm one result row per selected row, the failure naming its row and reason, and the successes not collapsed into a single green summary.
 - Confirm both apps render identically, and that no file under `components/grid/` imports `@/components/manage/*` or references `/api/manage`.
+
+Everything the matrix names is now automated; what remains above is the visual
+and multi-app surface the specs deliberately do not assert.
 
 **Scoped row count recorded at this gate** (story 6 measures all four; contacts is the one that validates the client-side pagination decision now):
 
@@ -259,6 +285,31 @@ The batch semantics an operator is currently signing off by proxy:
 - The client lists one result line per selected row, successes included; only server-confirmed rows are applied locally; selection clears after the run, never during.
 
 Two of those are product decisions rather than engineering ones, and both are now load-bearing for three more tables: the **cap of 200** is a timeout guard whose real worst case is 200 sequential RLS-checked writes plus 200 audit events in one request, and **`isFavorite: true` is the only bulk action shipped**, so "remove from favorites" is described in the spec's task list and the pattern document but has no implementation to confirm it against.
+
+### Superseded in part — the audit has since been run
+
+Everything above records the state at the end of story 2's own run. The harness it
+was missing now exists, and the 19 rows have been audited against it. The
+historical text is left exactly as written; this note is the correction.
+
+| Claimed above | Now |
+|---|---|
+| "Zero of the 19 rows are covered" | **17 of 19**, mapped per row in `_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md`, from a `pnpm test:e2e` run that exits 0 |
+| "The repo has no automated test runner" | `pnpm test:e2e` — a committed Playwright suite, 77 specs |
+| "`CONTRIBUTING.md:36` states outright that there is no full automated test suite" | it did, until `408b005` replaced that paragraph; it now documents the suite |
+| The five `test:*` scripts are the only verification | `test:e2e` joins them; the `verify-*.mjs` scripts are unchanged |
+| A repo-wide search finds zero `*.test.*` / `*.spec.*` | the specs are `e2e/specs/*.spec.ts`, driven by `playwright.config.ts` |
+
+**Two rows are still Manual, and the reason is this story's implementation.**
+Rows 1 and 4 require an optimistic display, and `renderCellNode`
+(`components/grid/use-grid-keyboard.ts`) always renders TanStack's default cell
+renderer, which bypasses the override `cell.text` carries. The fix belongs here,
+not in the auditing story. See `## Verification` above and the coverage map for the
+full diagnosis.
+
+`status: blocked` and `Blocking condition: matrix test audit failed` are left in
+the frontmatter deliberately: clearing them is this story's decision, once the two
+remaining rows are addressed.
 
 ### To unblock
 

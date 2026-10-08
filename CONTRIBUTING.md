@@ -66,6 +66,51 @@ them.
 Re-running is safe and needs no reset: the setup projects delete and regenerate
 each `storageState` file on every run.
 
+### Why a green run shows two `✘` marks
+
+As of `0e82a77`, `pnpm test:e2e` reports `77 passed` and exits 0 while printing two
+`✘` lines (the row numbers shift as specs are added; the titles do not):
+
+```
+row 1 — a committed edit shows the new value before the response lands
+row 4 — clearing a required field shows the empty value before the response lands
+```
+
+Update this paragraph and the table below in the same commit that changes the
+suite's shape, or the first thing it says to the next reader is wrong.
+
+Those are `test.fail` rows in `e2e/specs/manage-contacts-edit.spec.ts`. Playwright
+counts an expected failure as passing, so they are **not** skipped, not flaky, and
+not a broken run. They exist because the behaviour they assert is genuinely
+missing: the grid does not show an edited value optimistically, because
+`renderCellNode` in `components/grid/use-grid-keyboard.ts` always renders
+TanStack's default cell renderer and so bypasses the override.
+
+They are wired in on purpose. The day the defect is fixed they print `✓`, report
+"unexpectedly passed", and turn the suite red — which is the signal to update the
+coverage map. Details and the full row-to-spec mapping live in
+`_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md`.
+
+### What the suite covers today
+
+| Spec | Covers |
+|---|---|
+| `e2e/specs/smoke.spec.ts` | sign-in, `storageState` reuse, dead session vs role gate, unknown email, gitignored artifacts |
+| `e2e/specs/mailpit-reader.spec.ts` | the OTP reader's polling, recipient keying and timeout diagnostics |
+| `e2e/specs/harness-guards.spec.ts` | the suite's own guards: local-only target, readiness gate, ignored artifacts |
+| `e2e/specs/bulk-fixtures.spec.ts` | `pnpm seed:bulk-local`: volume, idempotence, batching, refusals |
+| `e2e/specs/manage-contacts-api.spec.ts` | the 200-item cap and per-item `contactId` isolation, over real HTTP |
+| `e2e/specs/manage-contacts-edit.spec.ts` | inline editing: happy path, persistence, 400 revert, empty field, dropped fetch |
+| `e2e/specs/manage-contacts-selection.spec.ts` | selection, the indeterminate header, select-all then filter, empty selection |
+| `e2e/specs/manage-contacts-bulk.spec.ts` | bulk outcomes: all succeed, partial success, an unreported row, a malformed envelope |
+| `e2e/specs/manage-contacts-filter.spec.ts` | the per-column location filter, sort-after-edit, the empty scope |
+
+Specs that write to shared fixtures restore what they changed. This matters more
+than it looks: `pnpm seed:bulk-local` is idempotent by *exact deterministic name*,
+so a spec that leaves a renamed fixture behind makes the next run fail in
+`globalSetup` with a `contacts_phone_program` unique-violation that names the
+generator rather than the spec.
+
 Add manual verification notes alongside the suite for any flow it does not cover —
 especially staff auth, attendance, Supabase-backed reads/writes, and
 offline/PWA behaviour.
