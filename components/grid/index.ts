@@ -23,6 +23,7 @@ export type {
   GridCellCommit,
   GridCellCommitHandler,
   GridCellCoordinate,
+  GridCellSelection,
   GridCellView,
   GridColumnAlign,
   GridColumnMeta,
@@ -31,6 +32,7 @@ export type {
   GridEditErrorHandler,
   GridFrozenColumn,
   GridPanelState,
+  GridSelectionCoordinate,
   GridTransientHandle,
 } from "@/components/grid/grid-types"
 export {

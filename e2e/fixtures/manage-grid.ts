@@ -20,6 +20,7 @@
  * | `[role=group][aria-label=Contacts]`     | `grid.tsx`'s scroll container |
  * | `tr[data-grid-row="<id>"]`              | `components/grid/grid-row.tsx`|
  * | `[data-grid-cell="<id>~<columnId>"]`    | `gridCellKey`, same file      |
+ * | `[data-grid-cell-selected]`             | `grid-row.tsx`, cell range only |
  * | `[data-grid-column="<columnId>"]`       | `grid-header-cell.tsx`        |
  * | `[data-bulk-selection-count]`           | `manage-contacts-table.tsx`   |
  *
@@ -89,6 +90,61 @@ export function rowById(page: Page, contactId: string): Locator {
 /** One cell, addressed the way the grid itself addresses it. */
 export function cellIn(row: Locator, columnId: string): Locator {
   return row.locator(`[data-grid-cell$="${GRID_CELL_KEY_SEPARATOR}${columnId}"]`)
+}
+
+/**
+ * One cell by its *position* in the rendered row model.
+ *
+ * Positions, not row ids, because a cell range is anchored on a visible-row
+ * index: what a range covers is a span of the order the operator is looking at,
+ * and a spec that addressed cells by id would be testing row identity, which is
+ * the other half of the model and the one a sort does not move.
+ */
+export function cellAt(page: Page, rowIndex: number, columnId: string): Locator {
+  return cellIn(renderedRows(page).nth(rowIndex), columnId)
+}
+
+/**
+ * The cells inside the live cell range, by their `data-grid-cell` key, in DOM order.
+ *
+ * `data-grid-cell-selected` is the grid's own marker for range membership
+ * (`grid-row.tsx`). It is deliberately a different attribute from
+ * `data-state="selected"`, which is **row** selection and belongs to the
+ * consumer — reading the wrong one would let a checkbox test pass as a range
+ * test.
+ */
+export function selectedCells(page: Page): Locator {
+  return gridRoot(page).locator("[data-grid-cell-selected]")
+}
+
+/** The rendered rows' `data-grid-row` ids, in viewport order. */
+export async function renderedRowIds(page: Page): Promise<string[]> {
+  return renderedRows(page).evaluateAll((rows) =>
+    rows.map((row) => row.getAttribute("data-grid-row") ?? ""),
+  )
+}
+
+/** The `data-grid-cell` keys of every cell inside the live range, in DOM order. */
+export async function selectedCellKeys(page: Page): Promise<string[]> {
+  return selectedCells(page).evaluateAll((cells) =>
+    cells.map((cell) => cell.getAttribute("data-grid-cell") ?? ""),
+  )
+}
+
+/** Point the cell range at one cell, with the grid container holding focus. */
+export async function focusCellAt(page: Page, rowIndex: number, columnId: string): Promise<void> {
+  await cellAt(page, rowIndex, columnId).click()
+
+  // The click focuses the cell, which is what the grid's own
+  // "only move DOM focus when the grid already owns it" check looks for. Making
+  // it explicit means the spec is asserting keyboard behaviour rather than
+  // relying on whether a given browser focuses a `tabindex="-1"` cell on click.
+  await gridScroll(page).focus()
+}
+
+/** Toggle a column's sort, moving none → ascending → descending → none. */
+export async function toggleSort(page: Page, columnId: string, label: string): Promise<void> {
+  await headerCell(page, columnId).getByRole("button", { name: `Sort by ${label}` }).click()
 }
 
 /** The header cell for a column. */

@@ -136,6 +136,45 @@ export interface GridCellCoordinate {
 }
 
 /**
+ * Address of a cell in the **selection** model: a visible-row index plus a column id.
+ *
+ * Deliberately not `GridCellCoordinate`. That one addresses a row by `rowId`,
+ * which is what a commit needs — the write has to name a row that survives
+ * re-sorting. A selection is the opposite requirement: it is a *view* over the
+ * cells currently on screen, so it must never name a row that is not rendered.
+ * A `rowId` anchor keeps pointing at its row after a filter removes it, which
+ * leaves the highlight drawn over a cell that no longer exists and makes the
+ * range unresolvable at all. Indexing by visible-row position means the anchor
+ * always addresses something the grid is showing, whatever the row set did.
+ */
+export interface GridSelectionCoordinate {
+  /** Index into the table's current (sorted, filtered) row model. */
+  rowIndex: number
+  columnId: string
+}
+
+/**
+ * The cell range: a rectangle between two corners, plus the cell plain arrows
+ * move on their own.
+ *
+ * - `anchor` — where the selection started; survives `Shift`+arrow and
+ *   `Shift`+click, and is what `Escape` collapses back to.
+ * - `focus` — the cell the operator is on. Plain arrows move it.
+ * - `extent` — the moving corner of the range. `Shift`+arrow and `Shift`+click
+ *   move it.
+ *
+ * A range is active when `anchor` and `extent` differ, and its cells are every
+ * cell of the rectangle between them, inclusive. Rectangular, not a linear walk:
+ * a spreadsheet range is a rectangle, and a walk would drag in columns the
+ * operator never selected.
+ */
+export interface GridCellSelection {
+  anchor: GridSelectionCoordinate
+  focus: GridSelectionCoordinate
+  extent: GridSelectionCoordinate
+}
+
+/**
  * Everything `GridRow` needs to render one cell, resolved by the keyboard hook
  * so that row rendering stays free of edit-state plumbing.
  */
@@ -152,6 +191,12 @@ export interface GridCellView {
   align: GridColumnAlign
   tabular: boolean
   isFocused: boolean
+  /**
+   * Inside the current cell range, which is not the same thing as the focused
+   * cell and not the same thing as a selected row. Rendered as its own surface
+   * so a range reads as a block rather than as eleven separately focused cells.
+   */
+  isSelected: boolean
   editing: boolean
   draft: string
   /** Set when the last commit for this cell was rejected. */

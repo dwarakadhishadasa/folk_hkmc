@@ -80,7 +80,11 @@ export interface GridRowProps<TData> {
   isEditing: boolean
   /** DOM id referenced by the container's `aria-activedescendant`. */
   domId?: string
-  onCellPointerDown: (rowId: string, columnId: string) => void
+  /**
+   * Pointer activation on one cell. `extend` carries the `Shift` modifier, which
+   * is what separates "focus this cell" from "extend the range to this cell".
+   */
+  onCellPointerDown: (rowId: string, columnId: string, extend: boolean) => void
 }
 
 /**
@@ -93,7 +97,9 @@ export interface GridRowProps<TData> {
  *
  * Selection is expressed through `data-state="selected"` so a consumer's select
  * column and the `hover`/`selected` idioms from `components/ui/table.tsx` land
- * without re-styling this component.
+ * without re-styling this component. That attribute is **row** selection and
+ * belongs to the consumer; the cell range is `data-grid-cell-selected`, and the
+ * two never share a signal.
  */
 export function GridRow<TData>({
   row,
@@ -126,6 +132,12 @@ export function GridRow<TData>({
         "[&>td]:bg-card [&:hover>td]:bg-muted/50",
         "data-[state=selected]:[&>td]:bg-muted",
         isFocused && "[&>td]:bg-muted/40",
+        // The cell range, applied per cell rather than per row. It has to be
+        // qualified by the cell's own attribute instead of being a `bg-*` on the
+        // `<td>`: the four rules above target `>td` from this row and would
+        // otherwise win on specificity, and the double attribute raises this one
+        // above all of them without an `!important` anywhere.
+        "[&>td[data-grid-cell-selected][data-grid-cell-selected]]:bg-accent/30",
         isEditing && "[&>td]:bg-accent/40",
       )}
     >
@@ -136,13 +148,14 @@ export function GridRow<TData>({
           <td
             key={cell.columnId}
             data-grid-cell={gridCellKey(row.id, cell.columnId)}
+            data-grid-cell-selected={cell.isSelected ? "true" : undefined}
             tabIndex={-1}
             title={
               cell.render || cell.text === GRID_EMPTY_TEXT
                 ? undefined
                 : (cell.error ?? cell.text)
             }
-            onPointerDown={() => onCellPointerDown(row.id, cell.columnId)}
+            onPointerDown={(event) => onCellPointerDown(row.id, cell.columnId, event.shiftKey)}
             className={cn(
               "truncate px-2 align-middle text-[13px]",
               ALIGN_CLASS[cell.align],
