@@ -51,7 +51,7 @@ All 19 rows, with the row text abbreviated to its subject.
 
 That is the real prerequisite, and it is the part most likely to be underestimated.
 
-## The blocking prerequisite: row volume
+## The blocking prerequisite: row volume — **now exists**
 
 `scripts/seed-preview-fixtures.mjs` seeds, per program: **one** in-scope contact. The matrix assumes:
 
@@ -71,10 +71,38 @@ Rows must be `preview-fixture-` tagged so `--wipe` finds them, and must be **bul
 
 Volume must be a parameter. A fast default (enough for rows 6–18, say 250 rows) keeps the suite quick; the full 1,052 belongs to a manual/perf check, not to every run.
 
+### What landed
+
+`scripts/bulk-contact-fixtures.mjs`, run as `pnpm seed:bulk-local`:
+
+| | |
+|---|---|
+| **Default volume** | **250** tagged contacts for `folk` — above the 200-item bulk cap, far above row 7's 40 |
+| **Batched insert** | one PostgREST request per `--chunk-size` (default 250) rows, so the default volume is a single request; the request count is printed, not guessed |
+| **Flags** | `--count`, `--program` (`folk` \| `gita-life` \| `both`), `--locations` (default 5), `--chunk-size` (default 250), `--wipe`, `--allow-non-local` |
+| **Full volume** | `pnpm seed:bulk-full` = `--count 1052 --program folk`, the manual/perf check |
+| **Tag** | `preview-fixture-bulk-`, a strict prefix of the seeder's `preview-fixture-`, so the seeder's `--wipe` filter covers it |
+| **Idempotence** | `--count` is a **floor**, not a truncate; names are deterministic, so a second run inserts 0 and never deletes a row a lower `--count` would drop |
+
+Playwright's `globalSetup` runs the generator once per suite invocation, so a run cannot report green against 24 rows. Two supporting details make the data usable rather than merely present:
+
+- **Distinct joined location names.** Each program gets `preview-fixture-bulk-location-<n>-<program>` locations, and the generator **widens the seeded Preacher's `users.location_ids`** to the union of its seeded ids and the bulk locations. `caller_effective_location_ids()` hands a Preacher only its own `location_ids`, so without the widening a Preacher session renders raw UUIDs in the Location column and row 17's filter has nothing to match. The widening is why the generator must run **after** `pnpm seed:local`, which resets that column.
+- **Exactly one blank phone.** `contacts.phone` is `NOT NULL` and `UNIQUE (phone, program_id)`, so the empty string is the only possible "contact with no phone" and at most one such row per program can exist. Row 3's forced-400 case is served by route interception instead.
+
+### Deviations from the story as written
+
+Three, all recorded here because the story is the record and a silent divergence is worse than a documented one:
+
+1. **`seed:bulk-full` is folk-only** (`--count 1052 --program folk`), not `--program both`. The story's flag description has `both` *split* the count, which would leave folk with 526 rows — but the story's own manual check expects folk to carry more than 1,000, reproducing the 1,052 in-scope rows story 2 measured. Splitting cannot satisfy that; folk-only can. The split behaviour is kept, tested, and available via `--program both`.
+2. **The out-of-scope ratio is every tenth row**, not every fourth. Every fourth left 188 in-scope rows at the 250 default — below `MANAGE_BULK_MAX_ITEMS = 200` — so no spec could select over the cap. Every tenth gives 225 in-scope and 25 out-of-scope, which is what the bulk-cap rows need.
+3. **`scripts/seed-preview-fixtures.mjs`'s `--wipe` deletes were batched.** The Code Map marked that file read-only, but Acceptance Criterion 2 and the manual check require its `preview-fixture-%` filter to remove ~250 generated rows, and its single `.in("id", …)` request is a `URI too long` at that volume. Only the request count changed: the filter, the tag convention, the seeding logic and DW-3 are untouched.
+
+**The verdict column above is unchanged, on purpose.** Every row that said Manual still says Manual. This story delivered the prerequisite the map asked for; story 4 owns the row specs, and a row flips to Covered only when its spec passed in a recorded run. A verdict must never change because a fixture landed.
+
 ## Recommended sequencing
 
 1. **Build the harness** (this spec's stories): stack assertions, Mailpit OTP reader, `storageState` setup, config, one passing smoke spec.
-2. **Build the bulk-data generator.** Without it, 16 of 19 rows stay Manual and story 2 blocks again on the next attempt — for a different-sounding reason, at similar cost.
+2. **Build the bulk-data generator.** Without it, 16 of 19 rows stay Manual and story 2 blocks again on the next attempt — for a different-sounding reason, at similar cost. ✅ **Done** — `pnpm seed:bulk-local`, described above.
 3. **Write the 19 row specs**, then update this map's verdicts to what actually passed.
 4. **Only then** amend story 2's matrix and re-run it.
 

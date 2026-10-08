@@ -39,6 +39,7 @@ import {
   unquoteEnvValue,
 } from "./local-supabase-target.mjs"
 import { resolveFixturePasswordDefault } from "./seed-local-fixtures.mjs"
+import { STATUS_COMMAND, STATUS_TIMEOUT_MS } from "./local-supabase-credentials.mjs"
 import { countFromContentRange, parseArgs } from "./verify-local-stack-readiness.mjs"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -174,6 +175,25 @@ check("keeps an = inside a JWT (cut -d= -f2- hazard)", parseSupabaseStatusEnv('S
 check("parses API_URL from real status output", parseSupabaseStatusEnv('API_URL="http://127.0.0.1:54321"\nANON_KEY="x"').API_URL === "http://127.0.0.1:54321")
 check("ignores non KEY=value lines", parseSupabaseStatusEnv('supabase local development setup is running.').API_URL === undefined)
 check("tolerates empty input", Object.keys(parseSupabaseStatusEnv(undefined)).length === 0)
+
+// ===========================================================================
+// 4b. The shared `supabase status -o env` chain
+// ===========================================================================
+
+// `pnpm seed:local` and `pnpm seed:bulk-local` both resolve credentials through
+// `scripts/local-supabase-credentials.mjs`, so there is exactly one spelling of
+// the command. Nothing else observed it: the wrapper's `PATH`-emptied run fails
+// before argv is read, and the stub `pnpm` below answers any `dlx` invocation —
+// so an unpinned `supabase` (or a dropped `-o env`) would reach both entry points
+// silently, and a new CLI's output shape would be parsed by a parser written for
+// the old one.
+section("Credential chain (STATUS_COMMAND / STATUS_TIMEOUT_MS)")
+check(
+  "the chain runs `supabase status -o env` at the pinned version",
+  STATUS_COMMAND.join(" ") === "dlx supabase@2.98.2 status -o env",
+  STATUS_COMMAND.join(" "),
+)
+check("the chain is bounded", Number.isFinite(STATUS_TIMEOUT_MS) && STATUS_TIMEOUT_MS > 0, String(STATUS_TIMEOUT_MS))
 
 // ===========================================================================
 // 5. Readiness argument parsing

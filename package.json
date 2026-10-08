@@ -38,6 +38,8 @@
     "test:offline-queue": "node scripts/verify-pwa-offline-queue.mjs",
     "seed:preview-fixtures": "node scripts/seed-preview-fixtures.mjs",
     "seed:local": "node scripts/seed-local-fixtures.mjs",
+    "seed:bulk-local": "node scripts/bulk-contact-fixtures.mjs",
+    "seed:bulk-full": "node scripts/bulk-contact-fixtures.mjs --count 1052 --program folk",
     "local:readiness": "node scripts/verify-local-stack-readiness.mjs",
     "test:seed-local-guard": "node scripts/verify-seed-local-guard.mjs",
     "typecheck": "pnpm typecheck:workspace",

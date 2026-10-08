@@ -56,6 +56,14 @@ const SETUP_TIMEOUT_MS = 180_000
 
 export default defineConfig({
   testDir: "e2e/specs",
+  /**
+   * Row volume, generated before any spec runs. `matrix-coverage-map.md` is the
+   * reason: 16 of story 2's 19 rows need more contacts than `pnpm seed:local`
+   * creates. The generator is idempotent, so this is cheap on a warm database —
+   * and a suite that cannot get its data fails here, with the generator's own
+   * message, instead of reporting green against 24 rows.
+   */
+  globalSetup: "e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   forbidOnly: isCI,

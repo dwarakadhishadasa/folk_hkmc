@@ -290,6 +290,25 @@ async function upsert({ table, key, row, label }) {
 // Wipe
 // ---------------------------------------------------------------------------
 
+/**
+ * How many ids one PostgREST `.in(...)` may carry.
+ *
+ * `.in()` puts every id in the query string, so a single unbatched delete over a
+ * few hundred tagged ids is a `URI too long`. That is invisible at the 5 contacts
+ * this script seeds and fatal the moment the bulk fixture generator
+ * (`scripts/bulk-contact-fixtures.mjs`) has put ~250 tagged contacts alongside
+ * them — so the wipe would fail exactly when a developer most needs it. The filter
+ * is unchanged; only the number of requests changes.
+ */
+const DELETE_BATCH_SIZE = 100
+
+/** Slices ids into fixed-size batches. */
+function* batched(items, size) {
+  for (let offset = 0; offset < items.length; offset += size) {
+    yield items.slice(offset, offset + size)
+  }
+}
+
 async function wipe() {
   log(`Wiping rows tagged "${TAG}" (untagged rows are left untouched)…`)
 
@@ -311,17 +330,27 @@ async function wipe() {
   // Order matters: attendance references contacts and sessions; sessions
   // reference locations (ON DELETE RESTRICT) and users.
   if (sessionIds.length || contactIds.length) {
-    let query = db.from("attendance").delete().like("name", likeTag).select("id")
-    query = contactIds.length ? query.in("contact_id", contactIds) : query.eq("id", "00000000-0000-0000-0000-000000000000")
-    await del(query, "tagged attendance rows")
+    if (contactIds.length) {
+      for (const batch of batched(contactIds, DELETE_BATCH_SIZE)) {
+        await del(db.from("attendance").delete().like("name", likeTag).in("contact_id", batch).select("id"), "tagged attendance rows")
+      }
+    } else {
+      // No tagged contact to scope by, so the delete is aimed at an id that cannot
+      // exist — the same guard the single-request form used.
+      await del(db.from("attendance").delete().like("name", likeTag).eq("id", "00000000-0000-0000-0000-000000000000").select("id"), "tagged attendance rows")
+    }
   }
-  if (sessionIds.length) await del(db.from("sessions").delete().in("id", sessionIds).select("id"), "tagged sessions")
-  if (contactIds.length) await del(db.from("contacts").delete().in("id", contactIds).select("id"), "tagged contacts")
+  for (const batch of batched(sessionIds, DELETE_BATCH_SIZE)) {
+    await del(db.from("sessions").delete().in("id", batch).select("id"), "tagged sessions")
+  }
+  for (const batch of batched(contactIds, DELETE_BATCH_SIZE)) {
+    await del(db.from("contacts").delete().in("id", batch).select("id"), "tagged contacts")
+  }
   await del(db.from("locations").delete().like("name", likeTag).select("id"), "tagged locations")
 
   const taggedUsers = (await unwrap(db.from("users").select("id,email").like("email", likeTag), "reading tagged users")) ?? []
-  if (taggedUsers.length) {
-    await del(db.from("users").delete().in("id", taggedUsers.map((row) => row.id)).select("id"), "tagged public.users rows")
+  for (const batch of batched(taggedUsers.map((row) => row.id), DELETE_BATCH_SIZE)) {
+    await del(db.from("users").delete().in("id", batch).select("id"), "tagged public.users rows")
   }
 
   let authRemoved = 0

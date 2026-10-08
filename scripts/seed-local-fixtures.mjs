@@ -12,7 +12,9 @@
  * This wrapper therefore:
  *
  *   1. reads `supabase status -o env` (the same source `use-local-supabase-env.sh`
- *      uses, pinned to the same CLI version),
+ *      uses, pinned to the same CLI version), via the shared
+ *      `scripts/local-supabase-credentials.mjs` helper — one definition, so the
+ *      bulk generator cannot drift on the credential chain,
  *   2. strips the surrounding quotes the CLI emits,
  *   3. exports `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` = `API_URL` and
  *      `SUPABASE_SERVICE_ROLE_KEY` = `SERVICE_ROLE_KEY`,
@@ -26,25 +28,15 @@
  *   pnpm seed:local --wipe
  */
 
-import { spawn, spawnSync } from "node:child_process"
+import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { parseSupabaseStatusEnv } from "./local-supabase-target.mjs"
+import { readLocalSupabaseCredentials } from "./local-supabase-credentials.mjs"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const SEEDER = path.join(repoRoot, "scripts", "seed-preview-fixtures.mjs")
 const SEED_FILE = path.join(repoRoot, ".env.preview-seed.local")
-
-// Pinned to the same version `scripts/use-local-supabase-env.sh` and the
-// `supabase:*` package scripts use, so a credential shape can never differ
-// between the two paths into the local stack.
-const STATUS_COMMAND = ["dlx", "supabase@2.98.2", "status", "-o", "env"]
-
-// `pnpm dlx` resolves a package before answering; on a cold cache that can
-// exceed the default spawnSync budget. A hang here would look like a hung
-// readiness check, so bound it.
-const STATUS_TIMEOUT_MS = 120000
 
 /**
  * The fixture-password default, as a decision rather than an inline `if`.
@@ -68,41 +60,19 @@ function fail(message) {
   process.exit(1)
 }
 
-/**
- * A `spawnSync` that was killed by `timeout` reports `status === null` and
- * `signal` set. Printing that as "exited null" would be a lie.
- */
-function describeExit(result) {
-  if (result.error) return result.error.message
-  if (result.status === null) return `timed out after ${STATUS_TIMEOUT_MS}ms${result.signal ? ` (signal ${result.signal})` : ""}`
-  return `exit ${result.status}`
-}
-
 function main() {
-  const status = spawnSync("pnpm", STATUS_COMMAND, { cwd: repoRoot, encoding: "utf8", timeout: STATUS_TIMEOUT_MS })
-  if (status.error || status.status !== 0) {
-    fail(
-      [
-        "Could not read local Supabase credentials from `supabase status -o env`.",
-        "Is the local stack running? Start it with `pnpm supabase:start`.",
-        `Underlying result: ${describeExit(status)}.`,
-      ].join("\n"),
-    )
+  // The credential chain itself lives in `local-supabase-credentials.mjs` so the
+  // bulk generator resolves it identically. Only the wording of the failure
+  // belongs here, and the helper already words it around `pnpm supabase:start`.
+  let credentials
+  try {
+    credentials = readLocalSupabaseCredentials({ cwd: repoRoot })
+  } catch (error) {
+    fail(error.message)
+    return
   }
 
-  const credentials = parseSupabaseStatusEnv(status.stdout)
-  const apiUrl = credentials.API_URL
-  const serviceRoleKey = credentials.SERVICE_ROLE_KEY
-
-  if (!apiUrl || !serviceRoleKey) {
-    fail(
-      [
-        "Local Supabase status did not report both API_URL and SERVICE_ROLE_KEY.",
-        "Start the stack with `pnpm supabase:start`, then retry.",
-        `Got: API_URL=${apiUrl ? "<set>" : "<missing>"}, SERVICE_ROLE_KEY=${serviceRoleKey ? "<set>" : "<missing>"}`,
-      ].join("\n"),
-    )
-  }
+  const { apiUrl, serviceRoleKey } = credentials
 
   const childEnv = {
     ...process.env,

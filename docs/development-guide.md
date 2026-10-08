@@ -110,6 +110,78 @@ password of auth users that already exist, so seeding would still report
 `Total created: 0` and pass its integrity check while every sign-in broke.
 Setting `PREVIEW_FIXTURE_PASSWORD` yourself always wins.
 
+#### Bulk contact fixtures (row volume)
+
+`pnpm seed:local` creates **one** in-scope contact per program. That is enough to
+sign in, and not enough to test a contacts grid: the manage-contacts matrix needs
+≥40 rows for an indeterminate header and a select-all, distinct joined location
+names for the per-column location filter, and 2–5 selectable rows for the bulk
+actions.
+
+```bash
+pnpm seed:bulk-local     # 250 tagged contacts for folk (the default)
+pnpm seed:bulk-full      # --count 1052 --program folk — manual/perf check only
+pnpm seed:bulk-local --wipe   # delete only `preview-fixture-bulk-` rows
+```
+
+`scripts/bulk-contact-fixtures.mjs` resolves local credentials the same way
+`pnpm seed:local` does, refuses any non-loopback target before it constructs a
+Supabase client, and applies the same DW-3 check to the staff rows its scope
+depends on. 250 is chosen to sit above the 200-item bulk cap
+(`lib/manage/api-handlers.ts`) and far above the matrix's 40; the 1,052 rows a
+perf check measures is `pnpm seed:bulk-full`, not something every run pays for.
+
+The refusal names the same two override routes the seeder's does —
+`--allow-non-local` (passed straight through) and `SEED_ALLOW_NON_LOCAL=1`. Both
+only get a run *past* the guard, which then fails downstream against an unusable
+target; they are for a deliberate one-off, not a way to seed the hosted project.
+
+Note the split: **every tenth generated row is assigned to the Admin**, so it is
+out of the Preacher's scope. At the 250-row default a Preacher session therefore
+sees **225 in-scope rows** and 25 out-of-scope ones; `--count 1052` yields 947 and
+105. The ratio exists to keep the in-scope set *above* the 200-item bulk cap, so a
+spec can select over the cap — an every-fourth-row split left only 188 in-scope
+and made the cap untestable. Both sides have to be non-empty or the scope
+assertions have nothing to fail against.
+
+Useful flags:
+
+```bash
+pnpm seed:bulk-local --program both   # split --count across folk and gita-life
+pnpm seed:bulk-local --count 1052 --program folk   # 1,052 in folk alone
+pnpm seed:bulk-local --chunk-size 50               # smaller PostgREST batches
+pnpm seed:bulk-local --locations 8                 # more distinct joined location names
+```
+
+**Run it after `pnpm seed:local`, and re-run it after any re-seed.** The generator
+widens the seeded Preacher's `users.location_ids` so a Preacher session can
+resolve location *names* rather than raw UUIDs in the Location column — and
+`pnpm seed:local` resets that column on every run. In one line:
+
+```bash
+pnpm seed:local && pnpm seed:bulk-local
+```
+
+Every generated row is tagged `preview-fixture-bulk-`, a strict prefix of the
+seeder's own `preview-fixture-` tag, so the seeder's `--wipe` filter covers it
+and no untagged row is ever created or deleted.
+
+`--count` is a **floor, not a truncate**: the generator tops the program up to at
+least N tagged rows and never deletes a row a lower `--count` would drop. A
+second run therefore inserts 0, which is what makes every Playwright suite run a
+live idempotence check — `playwright.config.ts` runs the generator from
+`globalSetup`, so a suite cannot report green against a 24-row database.
+
+`pnpm seed:preview-fixtures --wipe` still removes the generated rows — they carry
+the seeder's own tag prefix — and both wipes batch their `.in("id", …)` deletes at
+100 ids per request, so a wipe works at bulk volume rather than failing with
+`URI too long` at exactly the moment it is needed. Checked by hand rather than in
+`pnpm test:e2e`: the seeder's wipe deletes the fixture **auth users** and
+`seed:local` mints new UUIDs for them, so a spec that ran it would invalidate every
+`storageState` file in the run and have to re-authenticate three roles mid-suite —
+a global reseed hidden inside a row is exactly the order-dependence story 5 exists
+to remove.
+
 ### Local stack readiness
 
 ```bash
@@ -147,9 +219,9 @@ node scripts/verify-local-stack-readiness.mjs --timeout-ms 15000
 
 `--min-rows` defaults to **1** — the requirement is that the seeded tables are
 non-empty, not that they are large. Raise it once a spec genuinely needs bulk
-volume: the bulk-data fixture generator is a later story, and raising the
-default before it ships would keep `local:readiness` permanently red. The value
-must be at least 1, since `0` would silently disable the check.
+volume: `pnpm seed:bulk-local` creates the row volume (see above), so a
+`--min-rows 300` gate is satisfiable by running it first. The value must be at
+least 1, since `0` would silently disable the check.
 
 The app on `:3000` is reported as a **warning, not a failure** — `pnpm dev:local`
 runs the app last and blocks, so this script is commonly run before it starts.
@@ -280,6 +352,7 @@ Use the flows relevant to your change:
 | App boots but every list is empty, locally | Env file still points at the hosted project — run `pnpm supabase:env`, then `pnpm seed:local`. `pnpm local:readiness` names the mismatch |
 | `local:readiness` fails with `Table <name> has 0 row(s)` | The local database is reachable but unseeded — run `pnpm seed:local` |
 | `Refusing to seed a non-local Supabase target` | The seeder resolved the hosted URL from `.env.migration.local` — use `pnpm seed:local`. Override only with `--allow-non-local` or `SEED_ALLOW_NON_LOCAL=1` |
+| Location column shows raw UUIDs for a Preacher | `pnpm seed:local` reset the Preacher's `location_ids` — re-run `pnpm seed:bulk-local` |
 | Sign-in emails never arrive | Mailpit is down — run `pnpm mailpit:start`; `pnpm local:readiness` asserts it |
 
 ## Current Test Status
@@ -297,6 +370,21 @@ it and skips the boot). Use `pnpm test:e2e`, not `pnpm exec playwright test`:
 the readiness gate lives in the script precisely because Playwright's
 `reuseExistingServer` short-circuits a command chained into `webServer`, so a
 direct `playwright test` runs against an unasserted stack.
+
+Playwright's `globalSetup` also runs `pnpm seed:bulk-local` once per invocation,
+so the suite has its contact row volume without anyone remembering to generate
+it. It **tops the folk set up rather than replacing it** — `--count` is a floor,
+not a truncate — so a warm database costs a no-op run and a suite that cannot get
+its data fails at that gate with the generator's own message instead of reporting
+green against 24 rows.
+
+`e2e/specs/bulk-fixtures.spec.ts` owns that fixture contract: one row per case in
+the story's matrix, from the batched-insert request count and the Preacher's
+widened `location_ids` through the non-local refusal, the `cleanupTaggedContacts`
+tag guard, and DW-3's id-mismatch clause. The
+CLI rows spawn the generator; the data rows read it back through
+`e2e/fixtures/bulk-contacts.ts`, which story 4's row specs also use so "in scope"
+and "the blank-phone row" mean one thing across both.
 
 `pnpm test` is the turbo task (`turbo run test`) for per-package `test` scripts.
 The e2e suite is not routed through turbo because it needs a live stack.
