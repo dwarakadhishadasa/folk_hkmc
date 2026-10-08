@@ -1,6 +1,7 @@
 ---
 id: SPEC-playwright-test-foundation
 companions:
+  - branch-and-schema-baseline.md
   - local-environment.md
   - auth-and-fixtures.md
   - matrix-coverage-map.md
@@ -12,6 +13,16 @@ sources: []
 # Local environment and Playwright test foundation
 
 ## Why
+
+Two preconditions sit under everything else, and both are currently false. Details and verified evidence are in `branch-and-schema-baseline.md`.
+
+**`dev` does not have the migration.** `feature/migrate-airtable-to-supabase` holds 40 commits that `dev` lacks, and `dev` holds none that the branch lacks — so it fast-forwards cleanly. Those 40 commits include **six Supabase migrations that exist nowhere on `dev`**: core tables, the `users` table, scoped RLS, retired Airtable columns, preacher session scoping, and the id map. A developer agent on `dev` has no `lib/supabase/`, no `components/grid/`, and no database schema.
+
+**The local database is empty.** The local stack has all 12 migrations applied and all 9 tables — but `contacts`, `users`, `locations`, and `sessions` all hold **zero rows**. `pnpm dev:local` has no seed step, and `supabase/seed.sql` is a documented stub. An empty database is worse than a missing one: the app boots, renders empty states, and every spec fails at sign-in with an error that reads like an auth bug.
+
+**And the seed script points at the hosted project.** `seed-preview-fixtures.mjs` loads `.env.migration.local`, which holds the hosted URL. Run naively after `dev:local`, it writes 24 rows to hosted pre-cutover data while the app reads empty local Postgres — silently. The fix is to export local credentials first, because `process.loadEnvFile` defers to already-exported variables (verified, not assumed), and to make the script refuse a non-local URL.
+
+Behind those preconditions is the reason this spec exists at all.
 
 Every story whose intent-contract carries an **I/O & Edge-Case Matrix** must satisfy `bmad-build-auto` step 3's **Matrix Test Audit**, which requires each matrix row to be covered by a test that *verifies its expected behavior* **and that ran and passed**. A covering test that exists but did not run — unregistered, filtered, skipped — counts as missing. The rule is unconditional; there is no manual-check escape hatch.
 
@@ -42,12 +53,17 @@ Left alone this recurs on every remaining story, and every occurrence costs a de
   - **intent:** Any story author can tell, without running anything, which of their matrix rows are covered and which are not — before they claim completion.
   - **success:** A committed mapping lists each matrix row to the spec that verifies it; a row with no entry, or whose entry did not pass, is visibly uncovered.
 
+- **CAP-E** — Correct code and populated schema
+  - **intent:** A developer agent working from `dev` tests the code that actually exists, against a local database that actually has data — the two preconditions without which every other capability is theatre.
+  - **success:** `dev` carries the migration branch's commits including all six Supabase-schema migrations; `pnpm dev:local` leaves a seeded local database; and the harness refuses to run against a non-local Supabase URL rather than mutating hosted data.
+
 ## Non-goals
 
 - **No Vitest or any unit runner.** Playwright covers every row we need. API-level rows (the 200-item cap, a bad `contactId`, a malformed `results` body) are exercised over real HTTP via Playwright's `APIRequestContext`, which also proves the route's status codes and body shape rather than a mock's idea of them.
 - **No hosted-environment runs.** This spec is local-only by design. The hosted project is pre-cutover and disposable; pointing an E2E suite at it would make tests mutate production-shaped data. Hosted verification stays with the existing `verify-*.mjs` scripts.
 - **No test coverage of pre-existing grid logic beyond what matrices claim.** Stories own their rows. This spec builds the harness; it does not retro-audit stories 1–3.
 - **No CI workflow changes.** Wiring `pnpm test:e2e` into `.github/workflows` is a follow-up once the suite is green and not flake-prone. Out of scope here, deliberately: a red suite in CI blocks everyone.
+- **No promotion of the migration branch to `main`.** CAP-E fast-forwards `dev` only. Cutting over to `main` is story 7-9's decision, not a testing concern.
 
 ## I/O & Edge-Case Matrix
 
@@ -70,6 +86,10 @@ Option 1 is preferred — it keeps the spec honest and costs one clarification. 
 | API row: bad item isolated | one item's `contactId` not a UUID | that item alone reports `contactId must be a UUID.`; every other item commits | per-item isolation, never a batch rejection |
 | API row: malformed response | `200` whose body lacks `results` | client reports a bulk failure naming the response; never renders success | no success state on an unverified payload |
 | Coverage map is honest | a row mapped to a spec that did not run | the row reads uncovered | an unrun spec never counts as coverage |
+| Baseline is migrated | checkout of `dev` after the fast-forward | `components/grid/`, `lib/supabase/` present; all 12 migrations under `supabase/migrations/` | a non-fast-forward merge fails loudly rather than being forced |
+| Seed targets local | `pnpm seed:local` with local env exported | 24 tagged rows created locally; hosted project untouched | a non-local `NEXT_PUBLIC_SUPABASE_URL` is refused, not obeyed |
+| Seed is repeatable | `pnpm seed:local` run twice | second run reports `Total created: 0` | a non-zero count on re-run means the tag filter broke |
+| Stack is not empty | readiness check before the suite | row counts are non-zero **and** the app's configured URL equals local `API_URL` | a schema-only-but-empty database fails the check, not the first spec |
 
 ## Verification
 
@@ -82,9 +102,16 @@ Option 1 is preferred — it keeps the spec honest and costs one clarification. 
 - `pnpm test:airtable-removal` -- expected: no regression. The two pre-existing failures in `scripts/migrate-airtable-data.mjs` and `scripts/delta-sync-old-project.mjs` were reproduced at `5678c08` before any grid file existed; the count must not increase.
 - `git diff --stat 5678c08 -- scripts/verify-monorepo-guardrails.mjs` -- expected: empty. Proves the prefix list was not touched.
 
+**Baseline commands (CAP-E):**
+
+- `git merge-base --is-ancestor origin/dev feature/migrate-airtable-to-supabase` -- expected: exit 0, proving the fast-forward is available and no divergence needs a human.
+- `ls supabase/migrations/ | wc -l` -- expected: 12 on `dev` after the fast-forward; 6 means the branch was not fully merged.
+- `pnpm seed:local` twice -- expected: `Total created: 24` then `Total created: 0`, with the DW-3 check passing both times.
+- `pnpm supabase:status` and confirm the app's configured `SUPABASE_URL` matches the local `API_URL` -- expected: both `127.0.0.1:54321`. A hosted URL here is the silent-failure case this spec exists to prevent.
+
 **Manual checks:**
 
-- From a clean shell, follow `local-environment.md` verbatim. It must work without tribal knowledge.
+- From a clean shell, follow `local-environment.md` and `branch-and-schema-baseline.md` verbatim. They must work without tribal knowledge.
 - With the stack up, sign in as a seeded Admin on `http://localhost:3000/login` and confirm the OTP arrives in Mailpit at `http://localhost:8025`.
 - Re-run `pnpm test:e2e` twice. The second run must be green without a manual reset — a suite that only passes on a fresh stack is not deterministic.
 - Introduce a deliberate failure in one spec and confirm `pnpm test:e2e` exits non-zero and names it. A suite that cannot fail is not a gate.
@@ -97,4 +124,7 @@ Option 1 is preferred — it keeps the spec honest and costs one clarification. 
 | OTP mail is not delivered instantly | sign-in race, the flakiest step in the suite | poll Mailpit's API with a bounded retry, keyed on the recipient, rather than a fixed `waitForTimeout` |
 | Tests mutate shared local data | ordering-dependent failures | each spec seeds its own tagged fixtures and cleans up after itself; no reliance on rows left by a previous run |
 | Email OTP flow changes | `lib/auth-context.tsx` is a dependency, not a fixture | the OTP reader targets Mailpit's HTTP API, not Supabase internals, so an auth-library change does not break it |
+| Seed writes to hosted by default | `.env.migration.local` holds the hosted URL and `loadEnvFile` supplies it | `seed:local` exports local credentials first (which `loadEnvFile` defers to) and refuses a non-local URL outright |
+| `dev` drifts from the migration branch | a developer agent tests pre-migration code that still resolves Airtable paths | the fast-forward lands before any harness work; the migration count assertion fails loudly if `dev` is behind |
+| Local DB is schema-only | `dev:local` has no seed step, so the app boots against empty tables | `seed:local` joins the `dev:local` chain; readiness asserts non-zero rows, not merely a reachable database |
 | Matrix audit still unsatisfiable after this ships | would re-block story 2 | CAP-D's coverage map is verified *by this spec* before any dependent story claims a matrix row is covered |
