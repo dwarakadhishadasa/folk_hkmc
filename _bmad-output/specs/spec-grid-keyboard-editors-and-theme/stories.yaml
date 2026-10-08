@@ -1,0 +1,209 @@
+# Story breakdown for SPEC-grid-keyboard-editors-and-theme.
+# Execution order is list order. Derived from SPEC.md on 2026-10-09.
+#
+# Baseline: 3c7bfc1 — upstream story 2 (manage-contacts-table onto the grid,
+# with inline editing and bulk actions), merged as the optimistic-override fix.
+#
+# Five stories, one per capability group. Each is independently shippable and
+# reviewable as its own PR. Order is dependency order, not preference:
+#
+#   1 before 3 — a range selection is what makes copy/paste mean anything.
+#     Copy/paste shipped first would be single-cell copy, which is a feature
+#     nobody asks for.
+#   2 before 4 — the row lifecycle (add/delete record) reuses the keyboard
+#     focus model to land focus in a new row's first editable cell. Without the
+#     arrow/Tab navigation it would have to reach for the mouse.
+#   4 before 5 — the theme story grades the grid visually, so it runs against a
+#     fully populated set of editors rather than three text columns.
+#
+# Environment: NO local Supabase stack required for the grid primitives — the
+# /dev/grid-preview harness is synthetic and deterministic. The /manage stories
+# need the local stack (pnpm dev:local) and pnpm test:e2e.
+
+- id: "1"
+  title: Cell range selection with a rectangular anchor and extent
+  description: >-
+    Adds the anchor/extent selection model to the grid primitive — Shift+click
+    and Shift+Arrow extend a rectangular range, Escape collapses it, and the
+    range is visually distinct from the single focused cell. This is CAP-4 and
+    the prerequisite for CAP-3. Read keyboard-model.md: it is a binding
+    contract, not inspiration.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md, keyboard-model.md and existing-state.md in full.
+    Extend components/grid/use-grid-keyboard.ts in place — do not add a
+    selection module beside it. The selection shape is anchor + focus + extent
+    as GridCellCoordinate, and the range is the rectangle between anchor and
+    extent, not a linear walk. Both anchors are expressed in visible-row index
+    plus column id so sorting or filtering under a live selection cannot leave
+    it pointing at rows that are no longer rendered.
+    Stay behind the existing isGuardedTarget guard at use-grid-keyboard.ts:405,
+    and keep the handler on the grid container — no capture-phase global
+    listener. Every new key that opens an editor needs event.preventDefault()
+    for the reason recorded at use-grid-keyboard.ts:423.
+    Do not touch the commit path, the panel model, or the URL codec. Row
+    selection is already rowSelection state and is a separate concern from cell
+    range selection; do not conflate them.
+    Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
+    Add Playwright specs for extend-by-arrow, extend-by-shift-click, escape
+    collapse, and selection surviving a sort.
+
+- id: "2"
+  title: Keyboard completion — arrows, Tab, Home/End, type-to-edit, clear, Space
+  description: >-
+    Completes the keyboard model: arrow navigation, Tab/Shift+Tab with commit
+    and wrap, Home/End and Cmd+Home/End, printable-character type-to-edit via
+    one openEditor(coordinate, seed) helper, Delete/Backspace clear, Space
+    toggling a checkbox, and scroll-into-view for horizontal reveal past the
+    frozen run. This is CAP-1 and CAP-2. Extends keyboard-model.md's key table
+    without changing j/k/e.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md and keyboard-model.md in full, plus story 1's diff.
+    The three openers — Enter, e, and the printable-char branch — must all go
+    through one openEditor(coordinate, seed?) helper, so the seeding rules
+    cannot drift apart. Space is the case that needs thought: it toggles a
+    checkbox cell and is a printable character everywhere else, seeding the
+    editor with " ". Making Space inert everywhere is worse, because an
+    operator typing a space into a text cell would get nothing.
+    Skip Delete on the select column and any column whose control owns its own
+    activation — clearing a selection checkbox is not a cell write.
+    Every commit goes through the existing onCellCommit handler. Do not add a
+    write path, and do not add a dependency.
+    Horizontal scroll-into-view must account for the frozen run's width, or a
+    cell in the last column reveals only its frozen neighbour.
+    Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
+    Specs for arrow navigation, Tab wrap at the row end, type-to-edit replacing
+    rather than appending, Space on a checkbox and on a text cell, and Delete
+    clearing through the revertable write path.
+
+- id: "3"
+  title: Clipboard copy and paste over the selection
+  description: >-
+    Cmd/Ctrl+C copies the selection as TSV and Cmd/Ctrl+V pastes it, handled
+    before the modifier bail-out at use-grid-keyboard.ts:400 and via the paste
+    event rather than a keydown read of navigator.clipboard. A paste into an
+    editable cell commits through the existing revertable path. This is CAP-3.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md and keyboard-model.md in full, plus story 1's diff — this
+    story depends on the range selection it landed and is weak without it.
+    A missing cell contributes an empty field, never GRID_EMPTY_TEXT: the
+    placeholder is a display affordance and must not leak into the clipboard.
+    A paste into a read-only or checkbox cell is skipped and the skip reported
+    in the grid's existing statusMessage channel, not silently swallowed.
+    No new dependency. No execCommand.
+    Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
+    Specs for copying a rectangular range, pasting into a single cell,
+    round-tripping TSV, a skipped read-only target reporting visibly, and a
+    failed paste write reverting like any other write.
+    Playwright needs clipboard-read/clipboard-write context permissions granted
+    for the copy specs.
+
+- id: "4"
+  title: Typed editors, the editor registry, and DW-27
+  description: >-
+    Ships the ten typed editors — text, long text, number, currency, checkbox,
+    single select, multi-select, date, URL, email, user — behind a typed
+    registry keyed from meta.grid.editor, wired into the contacts table where
+    real data supports it and into /dev/grid-preview where it does not, and
+    resolves deferred-work.md DW-27 in the primitive. This is CAP-5.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md, editor-catalog.md and existing-state.md in full. This is the
+    largest story and the one with the most explicit rules.
+    DW-27 IS IN SCOPE. GridRow prefers cell.render over cell.text, and
+    cell.text carries the optimistic override — so any column supplying
+    renderDisplay loses its optimistic display unless the editor renders the
+    passed-in override itself. resolveConsumerRenderers is table-agnostic by
+    contract and must stay that way; fix this in the cell, not by teaching the
+    primitive which columns are editable.
+    Validation is parse() throwing. That reuses the existing revert path, so a
+    rejected value shows the same destructive cell and message a rejected write
+    shows. No editor gets its own error UI — one validation story, one
+    presentation.
+    Editors render anchored in a Popover, never in-cell and growing the row:
+    GridRow enforces fixed row heights. longtext is a popover precisely because
+    it cannot fit in 32px.
+    checkbox is the only editor that commits on interaction; everything else
+    commits on Enter, blur, or explicit close.
+    Four editors have no contact column (currency, multiselect, url, email) and
+    the upstream spec forbids a schema change. They are demonstrated on
+    /dev/grid-preview, which already exists with 500 deterministic rows. Do not
+    stub them, and do not add a schema change.
+    Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
+    Specs per editor type: commit, validation rejection, and — for every type —
+    that an in-flight edit shows the new value before the write resolves.
+
+- id: "5"
+  title: Row lifecycle — add record and delete row
+  description: >-
+    Adds a contextual "+ Add record" control that appends a blank row and
+    focuses its first editable cell through the keyboard focus model, and a
+    delete affordance that confirms before acting and reports per-row outcomes
+    the way the existing bulk action does. This is CAP-6.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md, existing-state.md and docs/manage-grid-pattern.md in full,
+    plus story 2's diff.
+    The grid primitive ships the affordance as an opt-in slot; the contacts
+    table supplies the row factory, the create write and the delete write. The
+    primitive never calls an API.
+    New row focus lands through the story 2 keyboard model, not through a
+    ref-and-scroll. A required blank row must not be creatable on an empty
+    draft — the same validation story 4 established.
+    The "+" control is contextual: a small control in the grid chrome, not a
+    permanently large footer bar. Delete confirms, and reports one outcome per
+    row rather than a collapsed toast, because CAP-4's success condition is
+    per-row reporting and a later port will copy this.
+    If add or delete needs a new API route, it follows the existing
+    byte-identical-pair convention across apps/folk and apps/gita-life, and
+    goes through lib/manage/api-handlers.ts with the same getStaffContext +
+    requireRole the single-row handlers use. No direct Supabase from a
+    component, and no new authorization logic.
+    Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
+    Specs for add-then-immediately-type, add with an invalid required field,
+    delete confirmation, per-row delete outcomes, and a failed create reverting.
+
+- id: "6"
+  title: Light/dark theme switch and grid legibility in both
+  description: >-
+    Mounts next-themes' ThemeProvider per the shadcn recipe, adds
+    suppressHydrationWarning to <html>, ships a theme toggle in the shared app
+    header, and verifies the grid is legible in both themes. This is CAP-7 and
+    it runs last so it grades a fully populated grid.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Read SPEC.md and theme-contract.md in full. Both are binding.
+    The theme is already defined and dead: next-themes is installed,
+    components/theme-provider.tsx exists and is correct, both globals.css files
+    carry a full .dark block, and nothing mounts the provider. Mount it as the
+    OUTERMOST provider in components/providers.tsx — anything reading a token
+    before next-themes runs sees the wrong theme.
+    disableTransitionOnChange is not optional. The grid is thousands of cells
+    and every transition-colors would visibly cascade across the swap.
+    The toggle renders null until mounted; useTheme cannot know the theme
+    during SSR and a wrong-icon-then-flip toggle is its own hydration mismatch.
+    The toggle belongs in the app header, not the grid toolbar.
+    THE GRID IS ALREADY TOKEN-CLEAN. grep for raw hex, rgb(, white and black
+    under components/grid/ returns zero, and it must stay zero after this
+    story. There is nothing to rewrite — do not go looking for hardcoded colors
+    to fix, and do not introduce any. Confirm instead that the focus ring, the
+    frozen-run divider and the destructive cell read at both themes, and adjust
+    alpha rather than tokens where they do not.
+    In scope outside the grid, /manage only: hover:bg-black/5 is invisible on a
+    dark surface and becomes hover:bg-foreground/5. Leave text-white on
+    program-primary headers alone — that brand color is dark in both themes.
+    components/ui/sonner.tsx:7 already calls useTheme() and is currently
+    getting a no-op; mounting the provider fixes it as a side effect.
+    Keep apps/folk and apps/gita-life layout.tsx mirrored — md5sum them after
+    editing.
+    Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm build,
+    pnpm test:e2e. Add a spec that the theme persists across a reload, plus a
+    screenshot assertion in both themes.
