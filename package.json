@@ -45,7 +45,8 @@
     "typecheck": "pnpm typecheck:workspace",
     "typecheck:workspace": "pnpm -r --if-present typecheck",
     "test": "turbo run test",
-    "test:e2e": "pnpm local:readiness && playwright test"
+    "test:e2e": "pnpm local:readiness && playwright test",
+    "test:e2e:determinism": "node scripts/verify-suite-determinism.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

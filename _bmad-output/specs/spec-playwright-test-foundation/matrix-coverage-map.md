@@ -274,6 +274,11 @@ assume the suite is lying to them.
 
 ### Claiming a matrix row: the rule this map now enforces
 
+The five rules below are the contract.
+[`docs/claiming-a-matrix-row.md`](../../../docs/claiming-a-matrix-row.md) is the
+long-form version of them: which layer to use for a given row and the observable
+that selects it, what a row needs seeded, and what to record when you flip it.
+
 1. **A row flips only on a passed spec in the recorded run.** Not on a spec that
    exists, and not on a spec that is "obviously" correct.
 2. **"Unreachable" is not a verdict.** If the behavior is browser- or

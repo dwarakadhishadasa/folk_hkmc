@@ -389,6 +389,47 @@ and "the blank-phone row" mean one thing across both.
 `pnpm test` is the turbo task (`turbo run test`) for per-package `test` scripts.
 The e2e suite is not routed through turbo because it needs a live stack.
 
+### Proving the suite is deterministic
+
+A green run is not evidence the suite can go red, and it is not evidence the suite
+passes twice. Both are now committed mechanisms rather than habits:
+
+- `pnpm test:e2e:determinism` (`scripts/verify-suite-determinism.mjs`) runs
+  `pnpm test:e2e` **twice back to back with nothing between them** — no
+  `supabase:reset`, no re-seed, no manual reset — and fails naming which run
+  failed, echoing that run's own output. Pass counts are read from the run's
+  reporter output, never estimated.
+- `e2e/specs/suite-determinism.spec.ts` asserts the rest offline, on every run:
+  no `waitForTimeout` anywhere under `e2e/`; `globalSetup` wired and each setup
+  project deleting its `storageState` before writing one; `fullyParallel: false`,
+  `workers: 1` and `retries: 0` when `CI` is unset, so a flake cannot hide behind
+  a retry; every `e2e/specs/*.spec.ts` appearing in `playwright test --list`; and
+  a deliberately failing generated spec exiting non-zero *with its name*, paired
+  with an identical passing spec that must exit 0 — the pair is what stops a
+  permanently-red harness from satisfying the red case.
+
+The double-run itself cannot live in the suite, because a spec cannot re-run the
+suite it is inside of. That is why it is a script.
+
+Recorded result: **86 passed on each of two consecutive runs**, script exit 0, at
+revision `c2cfaa6` with Playwright 1.62.0. Note `retries` is a determinism
+property here, not a CI preference — under `CI` the key becomes 1, so treat a CI
+number as a different measurement rather than this one.
+
+Nothing runs the e2e suite in CI (`.github/workflows/quality-gates.yml` covers
+guardrails, typecheck, build and lint). That is deliberate: a red or flaky suite in
+CI blocks everyone, and wiring it in is a follow-up once the suite is stable.
+
+### Claiming a matrix row
+
+[`docs/claiming-a-matrix-row.md`](claiming-a-matrix-row.md) is the handoff for
+turning a matrix row green: which layer to use (UI, Playwright `request`, or
+`page.route` interception) and the observable that selects each, what the row
+needs seeded, and what evidence flips it to **Covered** — a spec that passed in a
+recorded run, quoted with that run's revision, Playwright version, `baseURL` and
+worker count. It also covers the `test.fail` tripwire pattern used for rows 1 and 4
+above. Cross-linked from the coverage map's "Claiming a matrix row" section.
+
 ### How staff auth works in the suite
 
 - The `setup-admin` / `setup-preacher` / `setup-volunteer` projects drive the real

@@ -34,6 +34,9 @@ pnpm lint
 pnpm test:e2e
 ```
 
+When you have touched the e2e suite, add `pnpm test:e2e:determinism` — see
+[Proving the suite is a gate](#proving-the-suite-is-a-gate) below.
+
 `pnpm test:e2e` runs the Playwright end-to-end suite against the **local** stack
 and is local-only — it refuses a non-loopback `E2E_BASE_URL`, so it can never
 touch the hosted project.
@@ -68,8 +71,8 @@ each `storageState` file on every run.
 
 ### Why a green run shows two `✘` marks
 
-As of `0e82a77`, `pnpm test:e2e` reports `77 passed` and exits 0 while printing two
-`✘` lines (the row numbers shift as specs are added; the titles do not):
+`pnpm test:e2e` reports `86 passed` and exits 0 while printing two `✘` lines
+(the row numbers shift as specs are added; the titles do not):
 
 ```
 row 1 — a committed edit shows the new value before the response lands
@@ -104,6 +107,30 @@ coverage map. Details and the full row-to-spec mapping live in
 | `e2e/specs/manage-contacts-selection.spec.ts` | selection, the indeterminate header, select-all then filter, empty selection |
 | `e2e/specs/manage-contacts-bulk.spec.ts` | bulk outcomes: all succeed, partial success, an unreported row, a malformed envelope |
 | `e2e/specs/manage-contacts-filter.spec.ts` | the per-column location filter, sort-after-edit, the empty scope |
+| `e2e/specs/suite-determinism.spec.ts` | the suite's own determinism: no sleeps, per-run regeneration, order independence, spec registration, and that a broken spec turns the gate red |
+
+### Proving the suite is a gate
+
+`pnpm test:e2e` reporting green once is not evidence that it can go red.
+
+```bash
+pnpm test:e2e:determinism
+```
+
+That runs `pnpm test:e2e` **twice back to back with nothing between them** — no
+`supabase:reset`, no re-seed, no manual reset — and fails naming *which* run
+failed, echoing that run's own output. The point is the pair: a suite that only
+passes on a fresh stack is not deterministic, and every later run inherits the
+doubt. The recorded result in this file and in `docs/development-guide.md` comes
+from running it — a count no run produced is a claim, not a record.
+
+Most of the underlying checks run every time as ordinary tests in
+`e2e/specs/suite-determinism.spec.ts`; the double-run itself cannot, since a spec
+cannot re-run the suite it is inside of.
+
+To claim a matrix row is Covered, follow
+[`docs/claiming-a-matrix-row.md`](docs/claiming-a-matrix-row.md) — which layer to
+use, what to seed, and what evidence the row needs.
 
 Specs that write to shared fixtures restore what they changed. This matters more
 than it looks: `pnpm seed:bulk-local` is idempotent by *exact deterministic name*,
