@@ -193,3 +193,11 @@ source_spec: `3-supabase-data-access-module-mirroring-lib-airtable-ts.md`
 severity: low
 reason: data.ts:452 — `const listResult = await supabaseAdmin.auth.admin.listUsers(...)` does not check `listResult.error`. Pre-existing issue; would require restructuring the auth-user provisioning path.
 status: open
+
+### DW-24: docs/development-guide.md still states that no product test suite exists and the "Current Test Status" section has no automated suite, which now understates the repo — `test:seed-local-guard` and
+origin: spec-deferred 1bc6a38e991a
+location: docs/development-guide.md:140
+source_spec: `1-migrated-baseline-and-populated-local-schema.md`
+severity: low
+reason: docs/development-guide.md still carries the stale sentence, and matrix-coverage-map.md assigns the update to the story that builds the Playwright suite. This story adds harness scripts, not a product test suite, so amending that section here would overstate what exists.
+status: open

@@ -38,12 +38,31 @@ import { writeFile } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createClient } from "@supabase/supabase-js"
+import { assertLocalSupabaseTarget } from "./local-supabase-target.mjs"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 try {
   process.loadEnvFile(path.join(repoRoot, ".env.migration.local"))
 } catch {
   // Fall back to an already-exported environment.
+}
+
+// ---------------------------------------------------------------------------
+// Local-target refusal — BEFORE any client is constructed, so a refused run
+// performs zero network I/O. `pnpm seed:local` exports local credentials first
+// and never trips this; a bare `node scripts/seed-preview-fixtures.mjs` reads
+// the hosted URL out of .env.migration.local and is refused.
+// ---------------------------------------------------------------------------
+
+const allowNonLocal = process.argv.slice(2).includes("--allow-non-local") || process.env.SEED_ALLOW_NON_LOCAL === "1"
+
+for (const variableName of ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL"]) {
+  try {
+    assertLocalSupabaseTarget({ url: process.env[variableName], allowNonLocal, variableName })
+  } catch (error) {
+    console.error(`ERROR ${error.message}`)
+    process.exit(1)
+  }
 }
 
 // ---------------------------------------------------------------------------
