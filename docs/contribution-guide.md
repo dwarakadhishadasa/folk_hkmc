@@ -58,9 +58,9 @@ Add manual verification notes for affected flows, especially:
 
 ## AI Agent Rules
 
-Repository-level Copilot/agent instructions live in `.github/copilot-instructions.md`. Key rules:
+Repository-level agent instructions live in `AGENTS.md`; Copilot additionally loads its own `.github/copilot-instructions.md`. Key rules:
 
-- Read `_bmad-output/project-context.md` before product-code changes.
+- Read `AGENTS.md` before product-code changes.
 - Keep secrets server-only.
 - Treat Turborepo as the task runner, not the package-boundary enforcer; run `pnpm guardrails` after workspace/package/import changes.
 - Never rely on `next build` alone for type safety because build-time type errors are ignored by Next config.

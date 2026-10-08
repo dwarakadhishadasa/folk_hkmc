@@ -21,8 +21,17 @@ const eslintConfig = defineConfig([
     ".next/**",
     ".vercel/**",
     "apps/*/.next/**",
+    // Vendored agent-harness trees. These are tracked copies of BMAD skill
+    // resources, not product code: they use `require()` in CommonJS hooks and
+    // would otherwise fail this repo's TS rules. `.agents/**` was the older
+    // spelling; the directory is `.agent` (singular).
+    ".agent/**",
     ".agents/**",
     ".claude/**",
+    ".codebuddy/**",
+    ".codex/**",
+    ".neovate/**",
+    ".opencode/**",
     ".qwen/**",
     "_bmad/**",
     "_bmad-output/**",

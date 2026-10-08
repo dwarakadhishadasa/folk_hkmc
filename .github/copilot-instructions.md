@@ -26,7 +26,7 @@ Use GitHub MCP for repository, branch, PR, and review context. Ask Dwaraka befor
 
 ## Project Implementation Rules
 
-- Read `_bmad-output/project-context.md` before implementing product code.
+- Read `AGENTS.md` before implementing product code.
 - Keep server secrets server-only.
 - Treat Turborepo as the task runner, not the architecture enforcer. Run `pnpm guardrails` after changing workspace packages, imports, or `turbo.json`.
 - Do not introduce workspace dependency cycles, undeclared `@hkmc/*` imports, or one-off package config drift. New packages must follow the existing `private`, `type: module`, `lint`, `typecheck`, and `tsconfig.base.json` pattern.

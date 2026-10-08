@@ -52,6 +52,6 @@ The product is two Next.js web applications backed by shared code:
 ## 8. Recommended Next Steps
 
 - Treat `docs/index.md` as the primary AI context entry point.
-- Keep `_bmad-output/project-context.md` aligned with route/auth/data changes.
+- Keep `AGENTS.md` aligned with route/auth/data changes.
 - Add automated coverage around auth, registration, attendance, and staff invite flows when practical.
 - Confirm production Supabase redirect URLs, `PROGRAM_ID`/`NEXT_PUBLIC_PROGRAM_ID`, and Airtable table IDs before deployment changes.
