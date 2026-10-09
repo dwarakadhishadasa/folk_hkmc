@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
-import type { KeyboardEvent, ReactNode } from "react"
+import type { ClipboardEvent, KeyboardEvent, ReactNode } from "react"
 import { flexRender } from "@tanstack/react-table"
 import type { Cell, Row, Table } from "@tanstack/react-table"
 
@@ -164,6 +164,7 @@ export interface GridKeyboardApi<TData> {
   getCellView: (row: Row<TData>, cell: Cell<TData, unknown>) => GridCellView
   containerProps: {
     onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+    onPaste: (event: ClipboardEvent<HTMLDivElement>) => void
     "aria-activedescendant": string | undefined
   }
 }
@@ -878,6 +879,204 @@ export function useGridKeyboard<TData>({
     exitEditing()
   }, [editing, exitEditing])
 
+
+  /**
+   * Copies the live range — or the single focused cell when no range is
+   * active — as tab-separated text, one line per row. A missing cell
+   * contributes an empty field, never the `GRID_EMPTY_TEXT` placeholder: the
+   * placeholder is a display affordance and must not leak into the clipboard.
+   */
+  const copySelection = useCallback((): boolean => {
+    if (visibleRows.length === 0 || visibleColumnIds.length === 0 || clampedRowIndex < 0) {
+      return false
+    }
+
+    const bounds =
+      selectionBounds ??
+      (() => {
+        const columnIndex = focusedColumnId ? (columnIndexById.get(focusedColumnId) ?? -1) : -1
+
+        if (columnIndex === -1) {
+          return null
+        }
+
+        return {
+          firstRow: clampedRowIndex,
+          lastRow: clampedRowIndex,
+          firstColumn: columnIndex,
+          lastColumn: columnIndex,
+        }
+      })()
+
+    if (!bounds) {
+      return false
+    }
+
+    const lines: string[] = []
+
+    for (let rowIndex = bounds.firstRow; rowIndex <= bounds.lastRow; rowIndex += 1) {
+      const row = visibleRows[rowIndex]
+
+      if (!row) {
+        continue
+      }
+
+      const cells = row.getVisibleCells()
+      const fields: string[] = []
+
+      for (let columnIndex = bounds.firstColumn; columnIndex <= bounds.lastColumn; columnIndex += 1) {
+        const columnId = visibleColumnIds[columnIndex]
+        const cell = columnId
+          ? cells.find((candidate) => candidate.column.id === columnId)
+          : undefined
+
+        if (!cell || !columnId) {
+          fields.push("")
+          continue
+        }
+
+        fields.push(overrides[gridCellKey(row.id, columnId)]?.value ?? rowCellText(cell))
+      }
+
+      lines.push(fields.join("\t"))
+    }
+
+    const text = lines.join("\n")
+
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      setStatusMessage("Copy is not available in this browser.")
+      return false
+    }
+
+    void navigator.clipboard
+      .writeText(text)
+      .catch(() => setStatusMessage("Copy failed: the browser refused clipboard access."))
+
+    return true
+  }, [
+    clampedRowIndex,
+    columnIndexById,
+    focusedColumnId,
+    overrides,
+    rowCellText,
+    selectionBounds,
+    visibleColumnIds,
+    visibleRows,
+  ])
+
+  /**
+   * Pastes tab-separated text starting at the focused cell, expanding down and
+   * right. Every editable cell commits through the normal revertable path;
+   * read-only and checkbox cells are skipped and the skip is reported in the
+   * status channel rather than silently swallowed.
+   */
+  const pasteText = useCallback(
+    (text: string): boolean => {
+      if (visibleRows.length === 0 || visibleColumnIds.length === 0 || clampedRowIndex < 0) {
+        return false
+      }
+
+      const startColumnIndex = focusedColumnId
+        ? (columnIndexById.get(focusedColumnId) ?? -1)
+        : -1
+
+      if (startColumnIndex === -1) {
+        return false
+      }
+
+      const rows = text.replace(/\r\n?/g, "\n").split("\n")
+
+      // A trailing newline is a line terminator, not another row: without this
+      // a spreadsheet's copy (which always ends one) pastes a phantom row.
+      if (rows.length > 0 && rows[rows.length - 1] === "") {
+        rows.pop()
+      }
+
+      let committed = 0
+      let skipped = 0
+
+      rows.forEach((line, rowOffset) => {
+        const row = visibleRows[clampedRowIndex + rowOffset]
+
+        if (!row) {
+          return
+        }
+
+        const cells = row.getVisibleCells()
+
+        line.split("\t").forEach((field, columnOffset) => {
+          const columnId = visibleColumnIds[startColumnIndex + columnOffset]
+          const cell = columnId
+            ? cells.find((candidate) => candidate.column.id === columnId)
+            : undefined
+          const meta = cell?.column.columnDef.meta?.grid
+
+          if (
+            !cell ||
+            !columnId ||
+            meta?.editable !== true ||
+            meta.selectable === true ||
+            meta.editor === CHECKBOX_EDITOR ||
+            consumerRenderedCells.has(columnId)
+          ) {
+            skipped += 1
+            return
+          }
+
+          runCommit({ rowId: row.id, columnId }, field, displayCellText(row.id, cell))
+          committed += 1
+        })
+      })
+
+      if (committed === 0 && skipped === 0) {
+        return false
+      }
+
+      if (skipped > 0) {
+        setStatusMessage(
+          `Skipped ${skipped} read-only cell${skipped === 1 ? "" : "s"}; ${committed} pasted.`,
+        )
+      }
+
+      return true
+    },
+    [
+      clampedRowIndex,
+      columnIndexById,
+      consumerRenderedCells,
+      displayCellText,
+      focusedColumnId,
+      runCommit,
+      visibleColumnIds,
+      visibleRows,
+    ],
+  )
+
+  /**
+   * The container's paste handler. The `paste` event carries the text without
+   * a permission prompt and without a lost-user-activation failure, which is
+   * why pasting reads the event rather than `navigator.clipboard` from a
+   * keydown. While editing — or in any other guarded target — the event is
+   * left alone so the draft input keeps its native paste.
+   */
+  const handleContainerPaste = useCallback(
+    (event: ClipboardEvent<HTMLDivElement>) => {
+      if (editing || isGuardedTarget(event.target)) {
+        return
+      }
+
+      const text = event.clipboardData?.getData("text")
+
+      if (!text) {
+        return
+      }
+
+      event.preventDefault()
+      pasteText(text)
+    },
+    [editing, pasteText],
+  )
+
   const handleDraftKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
       if (event.key === "Enter") {
@@ -928,18 +1127,25 @@ export function useGridKeyboard<TData>({
       }
 
       // Handled before the modifier bail-out: `Cmd/Ctrl+Home/End` must jump
-      // while the grid owns focus rather than yielding to the browser, the
-      // same reason the clipboard pair (story 3) will sit here too.
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !editing) {
-        if (event.key === "Home") {
+      // while the grid owns focus rather than yielding to the browser, and
+      // `Cmd/Ctrl+C` must copy the selection rather than the page. In a
+      // guarded target the event is left alone so inputs keep native copy.
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !isGuardedTarget(event.target)) {
+        if (event.key === "Home" && !editing) {
           event.preventDefault()
           moveToEdge(true, true)
           return
         }
 
-        if (event.key === "End") {
+        if (event.key === "End" && !editing) {
           event.preventDefault()
           moveToEdge(false, true)
+          return
+        }
+
+        if (event.key === "c" || event.key === "C") {
+          event.preventDefault()
+          copySelection()
           return
         }
       }
@@ -1088,6 +1294,7 @@ export function useGridKeyboard<TData>({
       clampedRowIndex,
       collapseSelection,
       commitEditing,
+      copySelection,
       editing,
       focusedColumnId,
       hasRangeSelection,
@@ -1206,6 +1413,7 @@ export function useGridKeyboard<TData>({
     getCellView,
     containerProps: {
       onKeyDown: handleContainerKeyDown,
+      onPaste: handleContainerPaste,
       "aria-activedescendant": clampedRowIndex >= 0 ? focusedRowDomId : undefined,
     },
   }
