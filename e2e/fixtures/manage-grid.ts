@@ -72,6 +72,29 @@ export function gridScroll(page: Page): Locator {
   return page.getByRole("group", { name: "Contacts" })
 }
 
+/** The preview harness's scroll container — the same keyboard contract, no contacts. */
+export function previewScroll(page: Page): Locator {
+  return page.getByRole("group", { name: "Grid preview rows" })
+}
+
+/**
+ * Open the synthetic preview grid: 500 deterministic rows, an in-memory
+ * commit, no Supabase. Keyboard specs prefer it wherever the behaviour under
+ * test does not need the contacts table, because nothing written here needs
+ * restoring afterwards — each test gets a fresh page and fresh row state.
+ */
+export async function openPreviewGrid(page: Page): Promise<void> {
+  await page.goto("/dev/grid-preview")
+  await expect(previewScroll(page)).toBeVisible()
+  await expect(page.locator('tbody[data-grid-panel="ready"]')).toBeAttached()
+}
+
+/** Point the preview grid at one cell, with the grid container holding focus. */
+export async function focusPreviewCellAt(page: Page, rowIndex: number, columnId: string): Promise<void> {
+  await cellAt(page, rowIndex, columnId).click()
+  await previewScroll(page).focus()
+}
+
 /** The grid's `aria-live` status line — where a rejected commit's message lands. */
 export function gridStatusLine(page: Page): Locator {
   return gridRoot(page).locator('p[role="status"]').first()

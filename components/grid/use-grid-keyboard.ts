@@ -33,6 +33,9 @@ const GENERIC_COMMIT_FAILURE = "The change could not be saved."
 
 const MISSING_COMMIT_HANDLER = "This grid was mounted without an onCellCommit handler."
 
+/** Value of `meta.grid.editor` for a cell the `Space` key toggles. */
+const CHECKBOX_EDITOR = "checkbox"
+
 /**
  * One step of a cell move, in the visible row model and in display-column order.
  *
@@ -340,9 +343,29 @@ export function useGridKeyboard<TData>({
         return
       }
 
-      container
-        .querySelector<HTMLElement>(`[data-grid-cell=${JSON.stringify(key)}]`)
-        ?.focus()
+      const cell = container.querySelector<HTMLElement>(
+        `[data-grid-cell=${JSON.stringify(key)}]`,
+      )
+
+      if (cell) {
+        cell.focus()
+        return
+      }
+
+      // The target is not rendered: a jump scrolled it out of the virtualized
+      // window before focus landed, and the previously focused cell unmounts
+      // with it. Park focus on the container — but only when the grid owns it
+      // or just lost it to the unmount — so the next keystroke still reaches
+      // the grid instead of dying on <body>.
+      const active = document.activeElement
+
+      if (
+        active === container ||
+        active === document.body ||
+        (active instanceof HTMLElement && container.contains(active))
+      ) {
+        container.focus()
+      }
     },
     [containerRef],
   )
@@ -367,6 +390,52 @@ export function useGridKeyboard<TData>({
     [containerRef, focusCellElement],
   )
 
+  /**
+   * Scrolls a focused cell into view horizontally, past the frozen run.
+   *
+   * Vertical reveal is the virtualizer's `scrollToIndex`; this is the axis it
+   * does not cover. The frozen run is added to the occluded edge because a
+   * cell revealed only up to the sticky columns is revealed behind them —
+   * which is exactly where the last columns land without the adjustment.
+   */
+  const revealCell = useCallback(
+    (rowIndex: number, columnId: string) => {
+      const container = containerRef.current
+      const row = visibleRows[rowIndex]
+
+      if (!container || !row) {
+        return
+      }
+
+      const cell = container.querySelector<HTMLElement>(
+        `[data-grid-cell=${JSON.stringify(gridCellKey(row.id, columnId))}]`,
+      )
+
+      if (!cell) {
+        return
+      }
+
+      const frozenWidth = table
+        .getVisibleLeafColumns()
+        .filter((column) => column.columnDef.meta?.grid?.frozen === true)
+        .reduce((sum, column) => sum + column.getSize(), 0)
+
+      const cellRect = cell.getBoundingClientRect()
+      const containerRect = container.getBoundingClientRect()
+      const absoluteLeft = container.scrollLeft + (cellRect.left - containerRect.left)
+      const absoluteRight = absoluteLeft + cell.offsetWidth
+      const viewLeft = container.scrollLeft + frozenWidth
+      const viewRight = container.scrollLeft + container.clientWidth
+
+      if (absoluteLeft < viewLeft) {
+        container.scrollLeft = Math.max(0, absoluteLeft - frozenWidth)
+      } else if (absoluteRight > viewRight) {
+        container.scrollLeft = absoluteRight - container.clientWidth
+      }
+    },
+    [containerRef, table, visibleRows],
+  )
+
   const moveFocus = useCallback(
     (nextIndex: number) => {
       if (visibleRows.length === 0) {
@@ -387,9 +456,10 @@ export function useGridKeyboard<TData>({
         // across the grid.
         setSelectionAnchor({ rowIndex: clamped, columnId })
         focusCellIfGridHasFocus(gridCellKey(row.id, columnId))
+        revealCell(clamped, columnId)
       }
     },
-    [focusCellIfGridHasFocus, focusedColumnId, scrollToIndex, visibleRows],
+    [focusCellIfGridHasFocus, focusedColumnId, revealCell, scrollToIndex, visibleRows],
   )
 
   /**
@@ -440,6 +510,7 @@ export function useGridKeyboard<TData>({
 
       if (nextRow) {
         focusCellIfGridHasFocus(gridCellKey(nextRow.id, nextColumnId))
+        revealCell(nextRowIndex, nextColumnId)
       }
     },
     [
@@ -447,6 +518,7 @@ export function useGridKeyboard<TData>({
       columnIndexById,
       focusCellIfGridHasFocus,
       focusedColumnId,
+      revealCell,
       scrollToIndex,
       selectionAnchor,
       visibleColumnIds,
@@ -454,9 +526,116 @@ export function useGridKeyboard<TData>({
     ],
   )
 
+  /**
+   * `Tab` / `Shift+Tab`: the next / previous cell in the same row, wrapping to
+   * the adjacent row's edge cell at the row ends and stopping at the grid's
+   * corners. A plain move, so the range collapses onto the destination.
+   */
+  const moveTab = useCallback(
+    (fromRowIndex: number, fromColumnId: string, backward: boolean) => {
+      if (visibleRows.length === 0 || visibleColumnIds.length === 0) {
+        return
+      }
+
+      const fromColumnIndex = columnIndexById.get(fromColumnId) ?? 0
+      const lastColumnIndex = visibleColumnIds.length - 1
+      const fromRow = visibleRows[fromRowIndex]
+
+      // The grid's corners are stops, not wrap points: `Tab` on the last cell
+      // stays, rather than landing on the last row's first cell. Focus still
+      // lands on the current cell, so the stop is visible rather than silent.
+      if (!backward && fromRowIndex >= visibleRows.length - 1 && fromColumnIndex >= lastColumnIndex) {
+        if (fromRow) {
+          focusCellIfGridHasFocus(gridCellKey(fromRow.id, fromColumnId))
+          revealCell(fromRowIndex, fromColumnId)
+        }
+
+        return
+      }
+
+      if (backward && fromRowIndex <= 0 && fromColumnIndex <= 0) {
+        if (fromRow) {
+          focusCellIfGridHasFocus(gridCellKey(fromRow.id, fromColumnId))
+          revealCell(fromRowIndex, fromColumnId)
+        }
+
+        return
+      }
+
+      let nextRowIndex = fromRowIndex
+      let nextColumnIndex = fromColumnIndex + (backward ? -1 : 1)
+
+      if (nextColumnIndex > lastColumnIndex) {
+        nextColumnIndex = 0
+        nextRowIndex += 1
+      } else if (nextColumnIndex < 0) {
+        nextColumnIndex = lastColumnIndex
+        nextRowIndex -= 1
+      }
+
+      nextRowIndex = Math.min(Math.max(nextRowIndex, 0), visibleRows.length - 1)
+      const nextColumnId = visibleColumnIds[nextColumnIndex]
+      const nextRow = visibleRows[nextRowIndex]
+
+      if (!nextColumnId || !nextRow) {
+        return
+      }
+
+      setSelectionAnchor({ rowIndex: nextRowIndex, columnId: nextColumnId })
+      setFocusedRowIndex(nextRowIndex)
+      setFocusedColumnId(nextColumnId)
+      scrollToIndex(nextRowIndex)
+      focusCellIfGridHasFocus(gridCellKey(nextRow.id, nextColumnId))
+      revealCell(nextRowIndex, nextColumnId)
+    },
+    [
+      columnIndexById,
+      focusCellIfGridHasFocus,
+      revealCell,
+      scrollToIndex,
+      visibleColumnIds,
+      visibleRows,
+    ],
+  )
+
+  /**
+   * `Home` / `End`: the first / last cell of the focused row.
+   * `Cmd/Ctrl+Home/End`: the first cell of the first row / the last cell of
+   * the last row. Plain moves, so both collapse the range.
+   */
+  const moveToEdge = useCallback(
+    (toFirst: boolean, toGridEdge: boolean) => {
+      if (visibleRows.length === 0 || visibleColumnIds.length === 0) {
+        return
+      }
+
+      const edgeColumnId = toFirst ? visibleColumnIds[0] : visibleColumnIds[visibleColumnIds.length - 1]
+      const edgeRowIndex = toGridEdge ? (toFirst ? 0 : visibleRows.length - 1) : clampedRowIndex
+      const edgeRow = visibleRows[edgeRowIndex]
+
+      if (!edgeColumnId || !edgeRow) {
+        return
+      }
+
+      setSelectionAnchor({ rowIndex: edgeRowIndex, columnId: edgeColumnId })
+      setFocusedRowIndex(edgeRowIndex)
+      setFocusedColumnId(edgeColumnId)
+      scrollToIndex(edgeRowIndex)
+      focusCellIfGridHasFocus(gridCellKey(edgeRow.id, edgeColumnId))
+      revealCell(edgeRowIndex, edgeColumnId)
+    },
+    [
+      clampedRowIndex,
+      focusCellIfGridHasFocus,
+      revealCell,
+      scrollToIndex,
+      visibleColumnIds,
+      visibleRows,
+    ],
+  )
+
   /** Puts the focus back on the anchor and collapses the range onto it. */
-  const collapseSelection = useCallback(() => {
-    if (selectionAnchor === null) {
+  const collapseSelection = useCallback(() => {    if (selectionAnchor === null) {
       return
     }
 
@@ -471,13 +650,46 @@ export function useGridKeyboard<TData>({
 
     if (anchorRow) {
       focusCellIfGridHasFocus(gridCellKey(anchorRow.id, selectionAnchor.columnId))
+      revealCell(selectionAnchor.rowIndex, selectionAnchor.columnId)
     }
-  }, [focusCellIfGridHasFocus, scrollToIndex, selectionAnchor, visibleRows])
+  }, [focusCellIfGridHasFocus, revealCell, scrollToIndex, selectionAnchor, visibleRows])
 
   const exitEditing = useCallback(() => {
     setEditing(null)
     setDraft("")
   }, [])
+
+  /**
+   * The one opener. `Enter`, `e` and the printable-character branch all land
+   * here, so the seeding rules cannot drift apart: `Enter` and `e` seed the
+   * cell's display text for in-place editing, a printable character seeds
+   * itself to replace the value. Returns false on a non-editable cell, which
+   * the callers treat as a no-op rather than an error.
+   */
+  const openEditor = useCallback(
+    (rowIndex: number, columnId: string, seed?: string): boolean => {
+      const row = visibleRows[rowIndex]
+
+      if (!row) {
+        return false
+      }
+
+      const cell = row
+        .getVisibleCells()
+        .find((candidate) => candidate.column.id === columnId)
+
+      if (!cell || cell.column.columnDef.meta?.grid?.editable !== true) {
+        return false
+      }
+
+      setFocusedRowIndex(rowIndex)
+      setFocusedColumnId(columnId)
+      setEditing({ rowId: row.id, columnId })
+      setDraft(seed ?? displayCellText(row.id, cell))
+      return true
+    },
+    [displayCellText, visibleRows],
+  )
 
   const beginEditing = useCallback(() => {
     const row = visibleRows[clampedRowIndex]
@@ -486,25 +698,24 @@ export function useGridKeyboard<TData>({
       return
     }
 
-    const cells = row.getVisibleCells()
-    // With no column focused, `e` starts the first editable cell so the key is
-    // useful from a cold grid. With a column focused, that column decides: `e`
-    // on a non-editable cell is a no-op, not a jump to a different cell.
-    const target = focusedColumnId
-      ? cells.find(
-          (cell) =>
-            cell.column.id === focusedColumnId && cell.column.columnDef.meta?.grid?.editable === true,
-        )
-      : cells.find((cell) => cell.column.columnDef.meta?.grid?.editable === true)
-
-    if (!target) {
+    if (focusedColumnId) {
+      // With a column focused, that column decides: `e` on a non-editable cell
+      // is a no-op, not a jump to a different cell.
+      openEditor(clampedRowIndex, focusedColumnId)
       return
     }
 
-    setFocusedColumnId(target.column.id)
-    setEditing({ rowId: row.id, columnId: target.column.id })
-    setDraft(displayCellText(row.id, target))
-  }, [clampedRowIndex, displayCellText, focusedColumnId, visibleRows])
+    // With no column focused, `e` starts the first editable cell so the key is
+    // useful from a cold grid.
+    const cells = row.getVisibleCells()
+    const target = cells.find(
+      (cell) => cell.column.columnDef.meta?.grid?.editable === true,
+    )
+
+    if (target) {
+      openEditor(clampedRowIndex, target.column.id)
+    }
+  }, [clampedRowIndex, focusedColumnId, openEditor, visibleRows])
 
   const revertCommit = useCallback(
     (
@@ -538,13 +749,70 @@ export function useGridKeyboard<TData>({
     [onEditError, visibleRows],
   )
 
+  /**
+   * The one write path. Draft commits, `Delete` clears and `Space` toggles all
+   * land here, so every write gets the optimistic override and the visible
+   * revert. `attemptedValue` is the typed value; the override carries its
+   * display text, which is what makes a boolean toggle paint immediately.
+   */
+  const runCommit = useCallback(
+    (target: GridCellCoordinate, attemptedValue: unknown, previousText: string) => {
+      const key = gridCellKey(target.rowId, target.columnId)
+      const row = visibleRows.find((candidate) => candidate.id === target.rowId)
+      const displayValue =
+        attemptedValue === null || attemptedValue === undefined
+          ? ""
+          : Array.isArray(attemptedValue)
+            ? attemptedValue.join(", ")
+            : String(attemptedValue)
+
+      // Enter, like Escape, hands focus back to the cell it was editing.
+      restoreFocusRef.current = key
+      exitEditing()
+
+      if (!onCellCommit) {
+        revertCommit(key, target, previousText, displayValue, new Error(MISSING_COMMIT_HANDLER))
+        return
+      }
+
+      setOverrides((previous) => ({ ...previous, [key]: { value: displayValue } }))
+      setStatusMessage(null)
+
+      let pending: void | Promise<void>
+
+      try {
+        pending = onCellCommit({
+          rowId: target.rowId,
+          columnId: target.columnId,
+          row: row?.original as TData,
+          previousValue: row
+            ?.getVisibleCells()
+            .find((candidate) => candidate.column.id === target.columnId)
+            ?.getValue(),
+          value: attemptedValue,
+        })
+      } catch (cause) {
+        revertCommit(key, target, previousText, displayValue, cause)
+        return
+      }
+
+      if (pending && typeof (pending as Promise<void>).then === "function") {
+        const rejected = (pending as Promise<void>).catch((cause: unknown) => {
+          revertCommit(key, target, previousText, displayValue, cause)
+        })
+
+        void rejected
+      }
+    },
+    [exitEditing, onCellCommit, revertCommit, visibleRows],
+  )
+
   const commitEditing = useCallback(() => {
     if (!editing) {
       return
     }
 
     const target = editing
-    const key = gridCellKey(target.rowId, target.columnId)
     const row = visibleRows.find((candidate) => candidate.id === target.rowId)
     const cell = row?.getVisibleCells().find((candidate) => candidate.column.id === target.columnId)
 
@@ -553,44 +821,53 @@ export function useGridKeyboard<TData>({
       return
     }
 
-    const previousText = displayCellText(target.rowId, cell)
-    const attemptedText = draft
+    runCommit(target, draft, displayCellText(target.rowId, cell))
+  }, [displayCellText, draft, editing, exitEditing, runCommit, visibleRows])
 
-    // Enter, like Escape, hands focus back to the cell it was editing.
-    restoreFocusRef.current = key
-    exitEditing()
+  /**
+   * Clears a cell through the normal commit path. Skipped — silently — on the
+   * select column and any column whose control owns its own activation:
+   * clearing a selection checkbox is not a cell write, and neither is clearing
+   * a checkbox cell, whose empty state is `false` rather than `""`.
+   */
+  const clearCell = useCallback(
+    (rowIndex: number, columnId: string): boolean => {
+      const row = visibleRows[rowIndex]
+      const cell = row?.getVisibleCells().find((candidate) => candidate.column.id === columnId)
+      const meta = cell?.column.columnDef.meta?.grid
 
-    if (!onCellCommit) {
-      revertCommit(key, target, previousText, attemptedText, new Error(MISSING_COMMIT_HANDLER))
-      return
-    }
+      if (!row || !cell || meta?.editable !== true) {
+        return false
+      }
 
-    setOverrides((previous) => ({ ...previous, [key]: { value: attemptedText } }))
-    setStatusMessage(null)
+      if (meta.selectable === true || meta.editor === CHECKBOX_EDITOR || consumerRenderedCells.has(columnId)) {
+        return false
+      }
 
-    let pending: void | Promise<void>
+      runCommit({ rowId: row.id, columnId }, "", displayCellText(row.id, cell))
+      return true
+    },
+    [consumerRenderedCells, displayCellText, runCommit, visibleRows],
+  )
 
-    try {
-      pending = onCellCommit({
-        rowId: target.rowId,
-        columnId: target.columnId,
-        row: row.original,
-        previousValue: cell.getValue(),
-        value: attemptedText,
-      })
-    } catch (cause) {
-      revertCommit(key, target, previousText, attemptedText, cause)
-      return
-    }
+  /**
+   * Toggles a checkbox cell. The only editor that commits on interaction;
+   * everything else commits on `Enter`, blur or explicit close.
+   */
+  const toggleCheckboxCell = useCallback(
+    (rowIndex: number, columnId: string): boolean => {
+      const row = visibleRows[rowIndex]
+      const cell = row?.getVisibleCells().find((candidate) => candidate.column.id === columnId)
 
-    if (pending && typeof (pending as Promise<void>).then === "function") {
-      const rejected = (pending as Promise<void>).catch((cause: unknown) => {
-        revertCommit(key, target, previousText, attemptedText, cause)
-      })
+      if (!row || !cell || cell.column.columnDef.meta?.grid?.editor !== CHECKBOX_EDITOR) {
+        return false
+      }
 
-      void rejected
-    }
-  }, [displayCellText, draft, editing, exitEditing, onCellCommit, revertCommit, visibleRows])
+      runCommit({ rowId: row.id, columnId }, cell.getValue() !== true, displayCellText(row.id, cell))
+      return true
+    },
+    [displayCellText, runCommit, visibleRows],
+  )
 
   const cancelEditing = useCallback(() => {
     if (!editing) {
@@ -614,15 +891,57 @@ export function useGridKeyboard<TData>({
         event.preventDefault()
         event.stopPropagation()
         cancelEditing()
+        return
+      }
+
+      // `Tab` out of the editor commits first and then moves, so a fast
+      // operator tabbing across a row leaves committed values behind rather
+      // than abandoned drafts. The move starts from the cell being edited,
+      // which is still in state until the commit below clears it. The commit's
+      // focus restoration is suppressed: it would hand focus back to the cell
+      // just left, overriding the move.
+      if (event.key === "Tab") {
+        event.preventDefault()
+        event.stopPropagation()
+
+        if (!editing) {
+          return
+        }
+
+        const editingRowIndex = visibleRows.findIndex((row) => row.id === editing.rowId)
+
+        commitEditing()
+        restoreFocusRef.current = null
+
+        if (editingRowIndex !== -1) {
+          moveTab(editingRowIndex, editing.columnId, event.shiftKey)
+        }
       }
     },
-    [cancelEditing, commitEditing],
+    [cancelEditing, commitEditing, editing, moveTab, visibleRows],
   )
 
   const handleContainerKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.defaultPrevented) {
         return
+      }
+
+      // Handled before the modifier bail-out: `Cmd/Ctrl+Home/End` must jump
+      // while the grid owns focus rather than yielding to the browser, the
+      // same reason the clipboard pair (story 3) will sit here too.
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !editing) {
+        if (event.key === "Home") {
+          event.preventDefault()
+          moveToEdge(true, true)
+          return
+        }
+
+        if (event.key === "End") {
+          event.preventDefault()
+          moveToEdge(false, true)
+          return
+        }
       }
 
       if (event.metaKey || event.ctrlKey || event.altKey) {
@@ -635,13 +954,35 @@ export function useGridKeyboard<TData>({
 
       const arrowStep = ARROW_STEPS[event.key]
 
-      // `Shift` is the range modifier and plain arrows are not handled here: a
-      // plain arrow is CAP-1's move, and taking it here would duplicate that
-      // story's key table. Only the `Shift` form is claimed, so an unhandled
-      // plain arrow still scrolls the page rather than being silently eaten.
-      if (arrowStep !== undefined && event.shiftKey) {
+      // Plain arrows move the focus and re-anchor the range; `Shift` extends
+      // it instead. Both are claimed, so neither scrolls the page.
+      if (arrowStep !== undefined) {
         event.preventDefault()
-        stepFocus(arrowStep, true)
+        stepFocus(arrowStep, event.shiftKey)
+        return
+      }
+
+      if (event.key === "Tab") {
+        event.preventDefault()
+        const row = visibleRows[clampedRowIndex]
+        const columnId = focusedColumnId ?? row?.getVisibleCells()[0]?.column.id
+
+        if (columnId) {
+          moveTab(clampedRowIndex, columnId, event.shiftKey)
+        }
+
+        return
+      }
+
+      if (event.key === "Home") {
+        event.preventDefault()
+        moveToEdge(true, false)
+        return
+      }
+
+      if (event.key === "End") {
+        event.preventDefault()
+        moveToEdge(false, false)
         return
       }
 
@@ -667,9 +1008,15 @@ export function useGridKeyboard<TData>({
         return
       }
 
-      if (event.key === "Enter" && editing) {
+      if (event.key === "Enter") {
         event.preventDefault()
-        commitEditing()
+
+        if (editing) {
+          commitEditing()
+        } else {
+          beginEditing()
+        }
+
         return
       }
 
@@ -686,19 +1033,71 @@ export function useGridKeyboard<TData>({
       if (event.key === "Escape" && hasRangeSelection) {
         event.preventDefault()
         collapseSelection()
+        return
+      }
+
+      // `Space` is both a toggle and a printable character: on a checkbox it
+      // commits the flip, everywhere else it seeds the editor with `" "`.
+      // Prevented either way, so the page never scrolls out from under the grid.
+      if (event.key === " ") {
+        event.preventDefault()
+
+        if (focusedColumnId && toggleCheckboxCell(clampedRowIndex, focusedColumnId)) {
+          return
+        }
+
+        if (focusedColumnId) {
+          openEditor(clampedRowIndex, focusedColumnId, " ")
+        }
+
+        return
+      }
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault()
+
+        if (focusedColumnId) {
+          clearCell(clampedRowIndex, focusedColumnId)
+        }
+
+        return
+      }
+
+      // Printable characters open the editor seeded with themselves, replacing
+      // the value. On a read-only column this is a no-op — and deliberately
+      // not prevented, so nothing is swallowed that was never going to edit.
+      if (event.key.length === 1 && focusedColumnId) {
+        const row = visibleRows[clampedRowIndex]
+        const cell = row
+          ?.getVisibleCells()
+          .find((candidate) => candidate.column.id === focusedColumnId)
+
+        if (cell?.column.columnDef.meta?.grid?.editable === true) {
+          // Same load-bearing `preventDefault` as `e`: the editor mounts and
+          // takes focus in this keydown, and the opening keystroke must not
+          // land in it a second time next to the seed.
+          event.preventDefault()
+          openEditor(clampedRowIndex, focusedColumnId, event.key)
+        }
       }
     },
     [
       beginEditing,
       cancelEditing,
+      clearCell,
       clampedRowIndex,
       collapseSelection,
       commitEditing,
       editing,
+      focusedColumnId,
       hasRangeSelection,
       moveFocus,
+      moveTab,
+      moveToEdge,
+      openEditor,
       stepFocus,
-      visibleRows.length,
+      toggleCheckboxCell,
+      visibleRows,
     ],
   )
 

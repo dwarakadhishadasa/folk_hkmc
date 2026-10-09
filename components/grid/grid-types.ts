@@ -29,9 +29,14 @@ export type GridColumnAlign = "left" | "right" | "center"
  * `frozen` pins the column to the left edge while the table scrolls sideways;
  * `selectable` marks the column as the row-selection control; `hideable: false`
  * opts a column out of the visibility menu.
+ *
+ * `editor` names the typed editor for the cell and is read by the keyboard
+ * layer only for `"checkbox"` (the `Space` toggle). Every other value waits
+ * for the editor registry; nothing branches on it yet.
  */
 export interface GridColumnMeta {
   editable?: boolean
+  editor?: string
   filter?: "text" | "number"
   align?: GridColumnAlign
   tabular?: boolean

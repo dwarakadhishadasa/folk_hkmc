@@ -19,6 +19,12 @@ export interface GridPreviewRow {
   score: number
   updatedAt: string
   notes: string
+  /**
+   * The checkbox column the keyboard story's `Space` toggle is specified
+   * against. Rendered as plain text until the typed-editor registry lands;
+   * the toggle commits a boolean either way.
+   */
+  flagged: boolean
 }
 
 const columnHelper = createColumnHelper<GridPreviewRow>()
@@ -79,6 +85,15 @@ const PREVIEW_COLUMNS = [
     // Editable and long: this is the column that shows the fixed row height
     // contract truncating on one line rather than wrapping.
     meta: { grid: { editable: true } },
+  }),
+  columnHelper.accessor("flagged", {
+    id: "flagged",
+    header: "Flagged",
+    size: 110,
+    // `editor: "checkbox"` is what the `Space` toggle reads. No `cell`
+    // renderer yet — the typed-editor registry supplies it — so the boolean
+    // reads as text, which is exactly what the toggle spec asserts against.
+    meta: { grid: { editable: true, editor: "checkbox" } },
   }),
 ]
 

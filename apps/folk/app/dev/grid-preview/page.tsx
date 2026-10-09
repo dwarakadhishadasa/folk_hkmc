@@ -52,6 +52,7 @@ function buildPreviewRows(count: number): GridPreviewRow[] {
       score: Math.round(((index * 53) % 1000) / 10),
       updatedAt: `2026-0${(index % 9) + 1}-${String((index % 27) + 1).padStart(2, "0")}`,
       notes: NOTE_FRAGMENTS[index % NOTE_FRAGMENTS.length],
+      flagged: index % 3 === 0,
     })
   }
 
