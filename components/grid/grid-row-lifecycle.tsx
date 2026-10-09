@@ -89,9 +89,17 @@ export function useGridRowLifecycle(): GridRowLifecycleContextValue | null {
 /**
  * The `+ Add record` control.
  *
- * Calls `createRow()` and reports the new row's id back through `onCreated` so
- * the grid can focus it through the keyboard model. Disabled while the create is
- * in flight, so a double click cannot append two blank rows.
+ * Hands `onAdd` the click; the grid's own handler runs `createRow()`, queues the
+ * returned id for the keyboard model and retries the focus against the rendered
+ * window. Nothing about a row is decided here.
+ *
+ * **No local "in flight" state.** `createRow` appends to the consumer's own
+ * state and returns synchronously, so there is nothing to await here and a
+ * `creating` flag could only ever render for the span of a single click. The
+ * double-add that flag was meant to prevent is the consumer's to prevent, and
+ * `canCreate` is where it does: the contacts table disables this control while a
+ * draft is unresolved. Re-entrantly guarding a synchronous callback here would
+ * be a guard that cannot fire.
  */
 export function GridRowAddControl({
   canCreate,
@@ -102,28 +110,21 @@ export function GridRowAddControl({
   /** Appends a row and reports whether focus could be landed on it. */
   onAdd: () => boolean
 }) {
-  const [creating, setCreating] = useState(false)
-
-  const handleAdd = useCallback(() => {
-    setCreating(true)
-
-    try {
-      onAdd()
-    } finally {
-      setCreating(false)
-    }
-  }, [onAdd])
-
   return (
     <Button
       type="button"
       variant="outline"
       size="sm"
       className="h-7 gap-1.5 px-2 text-[13px]"
-      disabled={!canCreate || creating}
+      disabled={!canCreate}
       data-grid-add-record=""
-      aria-label={canCreate ? "Add record" : "Add record is unavailable"}
-      onClick={handleAdd}
+      // No `aria-label`: the button's own text is its accessible name, and a
+      // label that swapped with `canCreate` would rename the control the moment it
+      // became disabled — so a locator written against the enabled state would
+      // stop resolving at exactly the moment the operator most needs it.
+      onClick={() => {
+        onAdd()
+      }}
     >
       <Plus aria-hidden="true" className="size-3.5" />
       Add record

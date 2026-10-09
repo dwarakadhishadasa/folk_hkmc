@@ -1561,6 +1561,44 @@ export function useGridKeyboard<TData>({
   }, [editing, focusCellElement])
 
   /**
+   * Moves DOM focus unless something *outside* the grid deliberately took it.
+   *
+   * `focusCellIfGridHasFocus` is the stricter gate, and it is right for an arrow
+   * press: there the grid is holding focus by construction, so the check only
+   * rules out a stray programmatic call. It is the wrong gate for a row *swap*,
+   * because the swap is exactly what destroyed the focus — the focused `<tr>` is
+   * keyed by row id, so a promoted row unmounts it and `document.activeElement`
+   * is `<body>` by the time this runs. Gating on "the grid still owns focus"
+   * there means the guard is always false exactly when it is needed, and the
+   * operator's next keystroke dies on `<body>`.
+   *
+   * So this reuses the condition `focusCellElement`'s own fallback already uses
+   * for that situation: the grid, an element inside it, or `<body>` — the state a
+   * focus-unmount leaves behind. A focus genuinely parked in a toolbar control is
+   * still respected, so this never steals the caret from a search box.
+   */
+  const focusCellIfGridOwnsFocusOrLostIt = useCallback(
+    (key: string) => {
+      const container = containerRef.current
+
+      if (!container) {
+        return
+      }
+
+      const active = document.activeElement
+      const gridOwnsFocus =
+        active === container ||
+        active === document.body ||
+        (active instanceof HTMLElement && container.contains(active))
+
+      if (gridOwnsFocus) {
+        focusCellElement(key)
+      }
+    },
+    [containerRef, focusCellElement],
+  )
+
+  /**
    * Keeps the focused coordinate pointing at a row when the row *underneath it*
    * is replaced.
    *
@@ -1569,11 +1607,12 @@ export function useGridKeyboard<TData>({
    * consumer swaps it in — so the focused cell unmounts and DOM focus dies on
    * `<body>`, which would leave the grid unable to receive the next keystroke.
    *
-   * Keyed on the row *id*, not the index, and gated on the grid having owned
-   * focus (or just lost it to that unmount) for the same reason every other focus
-   * move in this hook is: a grid that steals focus from a toolbar control while
-   * the operator is typing in a search box is worse than one that does not move
-   * it at all.
+   * Keyed on the row *id*, not the index: the coordinate is a visible-row index,
+   * so after the swap it already names the right position and only the id it
+   * points at has changed. The gate is `focusCellIfGridOwnsFocusOrLostIt` and
+   * not `focusCellIfGridHasFocus` for the reason documented there — this is the
+   * one move in the hook that has to re-acquire focus the swap destroyed, and
+   * the strict gate can never see that state.
    */
   const focusedRowIdRef = useRef<string | null>(null)
 
@@ -1586,8 +1625,8 @@ export function useGridKeyboard<TData>({
       return
     }
 
-    focusCellIfGridHasFocus(gridCellKey(currentId as string, focusedColumnId))
-  }, [clampedRowIndex, focusCellIfGridHasFocus, focusedColumnId, visibleRows])
+    focusCellIfGridOwnsFocusOrLostIt(gridCellKey(currentId as string, focusedColumnId))
+  }, [clampedRowIndex, focusCellIfGridOwnsFocusOrLostIt, focusedColumnId, visibleRows])
 
   /**
    * Moves the whole focus model onto `rowId`: its first editable column, the

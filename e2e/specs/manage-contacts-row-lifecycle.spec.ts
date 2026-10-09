@@ -4,7 +4,11 @@
  * | Test | Scenario | Claim under test |
  * | ---- | -------- | ---------------- |
  * | add | `+ Add record` then immediately type | the new row's **first editable cell** holds DOM focus, and a printable character seeds that cell's editor rather than being swallowed by the button that was clicked |
+ * | add (hidden) | `+ Add record` under a text filter | a draft no filter can match is *reported* through the status line rather than dropped |
+ * | add (disabled) | `+ Add record` while a draft is unresolved | the control renders disabled, not hidden |
+ * | opt-in | a `Grid` with no `rowLifecycle` | no add control and no delete affordance anywhere — the slot is genuinely opt-in |
  * | invalid | a draft committed with a required field blank | the real handler answers `400 Phone is required.`; the cell reverts, marks destructive, the status line names the server's own reason, and nothing was written |
+ * | promote | a create that answers `201` | the draft is replaced by the server row **in place**, and focus re-keys onto the new row id instead of dying on `<body>` |
  * | confirm | delete confirmation | the dialog names the row and **no** `DELETE` is issued until it is confirmed; cancelling issues none either |
  * | report | per-row delete outcomes | one visible line per deleted row naming the row and the server's message, successes included; a refused delete keeps its row and claims no success |
  * | revert | a failed create | an intercepted `500` reverts the cell and names the failure, and writes nothing |
@@ -28,7 +32,14 @@
  *
  * A draft row's cells are all blank, so any active global filter hides it — and
  * the grid reports that rather than losing focus silently. Filtering first would
- * test the filter, not the lifecycle.
+ * test the filter, not the lifecycle. The one case that *does* filter is the one
+ * asserting the report: the filter is the input that provokes the failure.
+ *
+ * ## Why the opt-in case uses the preview harness
+ *
+ * "A grid with no `rowLifecycle` offers nothing" has no negative on the contacts
+ * grid — it always supplies one. `/dev/grid-preview` renders the same primitive
+ * without it, which is the only place the negative is reachable at all.
  *
  * ## Why the optimistic assertions are held open
  *
@@ -77,9 +88,11 @@ import {
   deleteConfirmDialog,
   deleteReportLines,
   deleteReportPanel,
+  filterGlobally,
   gridStatusLine,
   manageContactsUrl,
   openContactsGrid,
+  openPreviewGrid,
   renderedRows,
   rowById,
   rowDeleteButton,
@@ -279,6 +292,12 @@ test.describe("row lifecycle", () => {
       // Focus lands through the keyboard model on the row's first *editable*
       // column — `name`, which is also the frozen identity column — and on the
       // cell, not on the grid frame and not on the editor.
+      //
+      // The row was appended to a 260-row set, so its cell is *outside* the
+      // rendered window until `scrollToIndex` has been acted on by a render.
+      // `focusRow` resolving the row and `focusRowCell` landing DOM focus are
+      // therefore two different steps, and this assertion is what proves the
+      // second one happened rather than the grid parking focus on its frame.
       const nameCell = cellIn(draftRow(page), "name")
       await expect(nameCell, "the appended row's first editable cell holds focus").toBeFocused()
       await expect(cellEditor(page), "the editor is not opened for them").toHaveCount(0)
@@ -302,6 +321,61 @@ test.describe("row lifecycle", () => {
     } finally {
       await held.unroute()
     }
+  })
+
+  test("add — a record the active filter hides is reported, not silently dropped", async ({ page }) => {
+    await openContactsGrid(page)
+
+    // A blank draft matches no text filter, so `focusRow` resolves no row and the
+    // retry has nothing to retry against. That is the one add failure that cannot
+    // be retried away, and the contract is that the operator is *told* — a focus
+    // move that quietly does nothing is the failure they would report as "add is
+    // broken".
+    await filterGlobally(page, "preview-fixture")
+    await addRecordButton(page).click()
+
+    await expect(
+      gridStatusLine(page),
+      "the status line names the row the filters hid",
+    ).toHaveText("The new record is hidden by the current filters. Clear them to edit it.")
+  })
+
+  test("add — the control is disabled, never hidden, while a draft is unresolved", async ({ page }) => {
+    await openContactsGrid(page)
+    await expect(addRecordButton(page), "the control starts enabled").toBeEnabled()
+
+    await addRecordButton(page).click()
+
+    // Two drafts would race for the same two `NOT NULL` fields, and the operator
+    // would have no way to tell which one a refusal belonged to. Disabling is the
+    // honest signal; hiding the control would make the grid look like it had no
+    // create affordance at all.
+    await expect(
+      addRecordButton(page),
+      "a disabled control stays on screen rather than disappearing",
+    ).toBeDisabled()
+    await expect(addRecordButton(page), "and it is still the same control").toBeVisible()
+  })
+
+  test("opt-in — a grid without rowLifecycle has neither affordance", async ({ page }) => {
+    // The preview harness renders the same `Grid` primitive with no
+    // `rowLifecycle`, which is the only honest way to prove the slot is opt-in:
+    // the contacts grid can never show the negative.
+    await openPreviewGrid(page)
+
+    await expect(
+      page.getByRole("button", { name: /Add record/ }),
+      "no add control is injected into a grid that did not ask for one",
+    ).toHaveCount(0)
+    await expect(
+      page.getByRole("button", { name: /^Delete / }),
+      "no delete affordance exists either",
+    ).toHaveCount(0)
+    await expect(
+      page.locator("[data-grid-add-record]"),
+      "and the add control's own marker is absent, not merely unnamed",
+    ).toHaveCount(0)
+    await expect(renderedRows(page).first(), "the grid itself did render").toBeVisible()
   })
 
   test("invalid — a draft with a required field blank is refused, names the reason, and writes nothing", async ({
@@ -366,6 +440,52 @@ test.describe("row lifecycle", () => {
         page.getByText(name, { exact: true }).first(),
         "the created record survives a reload",
       ).toBeVisible()
+    } finally {
+      created.push(...(await idsForName(name)))
+      await cleanupRowLifecycleContacts(created)
+    }
+  })
+
+  test("promote — a created record takes the server's id and keeps the keyboard position", async ({
+    page,
+  }) => {
+    const name = ownedName(4)
+    const phone = ownedPhone(4)
+    const created: string[] = []
+
+    try {
+      await openContactsGrid(page)
+      await addRecordButton(page).click()
+
+      await typeIntoCell(page, name)
+      await page.keyboard.press("Enter")
+      await expect(gridStatusLine(page), "the name alone is refused").toHaveText("Phone is required.")
+
+      await cellIn(draftRow(page), "phone").click()
+      await typeIntoCell(page, phone)
+      await page.keyboard.press("Enter")
+
+      // Promotion is observable from the DOM: the row keeps its position but takes
+      // the server's id, and the draft prefix is the consumer's own marker for "not
+      // a record yet". Reading it is what distinguishes "the create landed" from
+      // "the row merely looks the same".
+      await expect
+        .poll(
+          async () => (await draftRow(page).getAttribute("data-grid-row")) ?? "",
+          { message: "the draft row was never promoted to a server row" },
+        )
+        .not.toMatch(/^draft-/)
+
+      // The focused `<tr>` is keyed by row id, so the promotion unmounts the cell
+      // the operator was on and DOM focus would die on `<body>` — leaving the grid
+      // unable to receive the very next keystroke. This is the assertion that the
+      // create-promotion re-key puts it back, on the new id.
+      await expect(
+        cellIn(draftRow(page), "phone"),
+        "focus re-keys onto the promoted row rather than dying on <body>",
+      ).toBeFocused()
+
+      created.push(...(await idsForName(name)))
     } finally {
       created.push(...(await idsForName(name)))
       await cleanupRowLifecycleContacts(created)

@@ -509,7 +509,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
    * server id, so the response *is* how the row stops being a draft. A `200`
    * with no `contact` is treated as the failure it is rather than promoted.
    */
-  const createContact = useCallback(async (draft: ManageContact, patch: ManageContactPatch) => {
+  const createContact = useCallback(async (patch: ManageContactPatch) => {
     let response: Response
 
     try {
@@ -607,7 +607,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
           ),
         }))
 
-        const written = await createContact(draft, patch)
+        const written = await createContact(patch)
 
         // Promoted in place: the draft row is replaced by the row the server
         // made, keeping its position, so the operator's focus — which the grid
