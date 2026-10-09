@@ -52,12 +52,15 @@ Editors render **anchored to their cell**, via `Popover` in a portal. A cell mus
 
 ## Where each is demonstrated
 
-Four of the eleven editors have **no contact column**: `currency`, `multiselect`, `url`, `email` (`existing-state.md`). `SPEC-manage-dashboard-grid.md:88` forbids a schema change to add them.
+Six of the eleven editors have **no writable contact column**: `currency`,
+`number`, `checkbox`, `url`, `email`, `user` (`existing-state.md`).
+`SPEC-manage-dashboard-grid.md:88` forbids a schema change to add them.
 
 So:
 
-- **`/manage` contacts** demonstrates what real data supports — `text` (`name`, `phone`), `longtext` (`notes`), `checkbox` (`favorite`), `date` (`lastContactedOn`), `select` (`status`), `user` (`collectedBy`), `number` (attendance counts).
-- **`/dev/grid-preview`** — already exists, already 500 deterministic synthetic rows (`apps/folk/app/dev/grid-preview/page.tsx:22`) — gains columns for `currency`, `multiselect`, `url`, `email`.
+- **`/manage` contacts** demonstrates what real data supports — `text` (`name`, `phone`), `longtext` (`notes`), `select` (`source`: options are the seeded `source` values — "Pass Distribution", "Public Registration", "Old" modulo case; the option strings match the seeded case exactly, verified against the local stack, and unknown values are rejected), `multiselect` (`booksRead`, options from `payload.booksReadOptions`), `date` (`initialContact`, `dateOfBirth`, via the shadcn `Calendar` in a `Popover`; both are writable free-text strings server-side so no server change is needed). Wiring `select` to `source` requires plumbing the existing DB column through the manage stack: `ManageContact.source`, a `"source"` entry in `MANAGE_CONTACT_PATCH_KEYS` plus `CONTACT_COLUMN_BY_PATCH_KEY`, the read mapping, and a new table column. That is a one-key write-surface growth on an existing column, explicitly authorized — not a schema change.
+- **`/dev/grid-preview`** — already exists, already 500 deterministic synthetic rows (`apps/folk/app/dev/grid-preview/page.tsx:22`) — gains columns for `currency`, `number`, `checkbox`, `url`, `email`, `user`.
+- **`favorite` keeps its star.** It stays a `display` column with the star button; `checkbox` is demonstrated on preview only. Converting it would break the four green spec sites that assert the star (`e2e/fixtures/manage-grid.ts:214`, `manage-contacts-bulk.spec.ts:93,141,328,335`, `manage-contacts-selection.spec.ts:50,193`, `manage-contacts-bulk.spec.ts:108`) and the 19-row Covered matrix.
 
 This is the honest choice: the alternative is four stub editors or a schema change, and a stub that renders is exactly what `capability-tiers.md:7` prohibits (*"Do not stub a lower tier to claim completion of a higher one"*). The preview route is the existing harness for exactly this — `grid-preview.tsx:94-99` already holds the five CAP-9 panel variants for the same reason.
 

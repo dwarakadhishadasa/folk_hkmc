@@ -52,7 +52,7 @@ The last line matters: `sonner.tsx` depends on the provider this story mounts. I
 From the supplied screencast: an inline select popover anchored to a cell with a "Find an option" filter, a `Drag to resize / Double-click to wrap` resize affordance, colored status pills, and a `+ Add…` row control.
 
 - select popover — absent
-- colored pills — absent; `status` today is a plain text accessor
+- colored pills — absent; there is no `status` column (the catalog's `status` reference was an error; `select` binds `source`)
 - `+ Add…` — absent
 - resize affordance — **present** (`grid-header-cell.tsx`), tooltip text differs
 
@@ -64,16 +64,16 @@ From the supplied screencast: an inline select popover anchored to a cell with a
 |---|---|---|
 | text | `name`, `phone` | already editable |
 | long text | `notes` | already editable; gains the expandable popover |
-| number | `totalAttendanceCount` | read-only today; `tabular-nums`, right-aligned |
+| number | — | no writable numeric contact field (`totalAttendanceCount` is view-derived and read-only); preview |
 | currency | — | **no contact column carries a monetary value** |
-| checkbox | `favorite` | exists as a `display` column with a star button; becomes a toggle |
-| single select | `status` | text accessor today |
-| multi select | — | no multi-valued contact field |
-| date | `lastContactedOn` | read-only today |
+| checkbox | — | `favorite` keeps its star `display` column (green spec sites assert it); preview |
+| single select | `source` | existing DB column, newly plumbed through the manage stack; options match seeded case |
+| multi select | `booksRead` | writable `string[]`, options from `payload.booksReadOptions` |
+| date | `initialContact`, `dateOfBirth` | writable free-text date strings; shadcn `Calendar` in a `Popover` |
 | URL | — | no contact column holds a URL |
 | email | — | `phone` is a phone, not an email |
-| user | `collectedBy` | `accessorFn` over `payload.staffNames` |
+| user | — | `collectedBy` is a derived read-only accessor; preview |
 
-**Four of the ten editors have no column to exercise them on.** Currency, multi-select, URL and email cannot be demonstrated against real contact data.
+**Six of the eleven editors have no writable column to exercise them on.** Currency, number, checkbox, URL, email and user cannot be demonstrated against real contact data without a schema change or a write-surface change the upstream spec forbids.
 
 Two ways out, and the choice belongs to the human: add the columns to the contact model (a schema change, and `SPEC-manage-dashboard-grid.md:88` forbids schema changes), or exercise them on the `/dev/grid-preview` harness that already exists at `apps/folk/app/dev/grid-preview/page.tsx` with 500 synthetic rows. `editor-catalog.md` takes the second and says why.

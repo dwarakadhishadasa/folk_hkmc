@@ -220,8 +220,8 @@ status: open
 
 ### DW-27: A column marked `meta.grid.editable` that also supplies a `cell` widget renderer silently loses its optimistic display, because the widget replaces the `cell.text` that carries the override
 origin: spec-deferred story-2-renderCellNode-fix
-location: components/grid/grid.tsx:250
-source_spec: `_bmad-output/specs/spec-manage-dashboard-grid/stories/2-refactor-manage-contacts-table-onto-the-grid-with-inline-editing-and-bulk-actions.md`
+location: components/grid/grid-row.tsx
+source_spec: `_bmad-output/specs/spec-grid-keyboard-editors-and-theme/stories/4-typed-editors-the-editor-registry-and-dw-27.md`
 severity: medium
-reason: Unreachable in the current tree: all three `editable` columns in `manage-contacts-table.tsx` (`name`, `phone`, `notes`) are plain accessors with no `cell`, and the two widget columns (`select`, `favorite`) are `display` columns that are not editable. It is a trap for stories 3 and 5, which copy this column model. It typechecks, renders, and loses CAP-5 with no error, so the constraint is recorded in `docs/manage-grid-pattern.md` now; a guard in the primitive was deferred rather than added, because `resolveConsumerRenderers` is table-agnostic by contract and has no business knowing which columns are editable.
-status: open
+reason: Resolved in the primitive rather than documented around. `GridRow` now renders an editor ahead of `cell.render`, and hands the editor `cell.text` — the display value with the optimistic override already applied — through `GridEditorContext.text`; `renderDisplay` returning `undefined` falls back to that text, and `getValue()` is documented and used for seeding a draft only. So the trap no longer exists for any editor column, and `components/grid/grid-editors.tsx` supplies the closed-state widgets (checkbox, select, multiselect, date, currency, url, user) that would otherwise have walked into it. `resolveConsumerRenderers` stayed table-agnostic: the compensation for a consumer that authors its own cell node is the *exemption* applied where the write is decided — `clearCell` and `pasteText` skip `consumerRenderedCells` only for columns with no `editor`. `docs/manage-grid-pattern.md` §2 records the editor-aware rule, including that a closed-state display must not be a `<button>`.
+status: resolved

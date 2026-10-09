@@ -131,10 +131,17 @@
     it cannot fit in 32px.
     checkbox is the only editor that commits on interaction; everything else
     commits on Enter, blur, or explicit close.
-    Four editors have no contact column (currency, multiselect, url, email) and
-    the upstream spec forbids a schema change. They are demonstrated on
-    /dev/grid-preview, which already exists with 500 deterministic rows. Do not
-    stub them, and do not add a schema change.
+    Six editors have no writable contact column (currency, number, checkbox,
+    url, email, user: number has no writable numeric field, checkbox keeps the
+    favorite star, user is a derived read-only accessor) and the upstream spec forbids a schema change. They are
+    demonstrated on /dev/grid-preview, which already exists with 500
+    deterministic rows. Do not stub them, and do not add a schema change.
+    select is demonstrated on the contacts table via the source column
+    (existing DB column plumbed through ManageContact, MANAGE_CONTACT_PATCH_KEYS
+    and the column map; option strings match the seeded source case exactly).
+    multiselect is demonstrated on booksRead with payload.booksReadOptions.
+    date is demonstrated on initialContact and dateOfBirth with the shadcn
+    Calendar in a Popover. favorite keeps its star display column.
     Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
     Specs per editor type: commit, validation rejection, and — for every type —
     that an in-flight edit shows the new value before the write resolves.
