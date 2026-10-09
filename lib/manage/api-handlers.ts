@@ -10,7 +10,9 @@ import {
 import {
   MANAGE_PHOTO_CONTENT_TYPES,
   MANAGE_PHOTO_MAX_BYTES,
+  createManageContact,
   createManageContactPhotoUrl,
+  deleteManageContact,
   updateManageContact,
   uploadManageContactPhoto,
 } from "@/lib/supabase/manage"
@@ -255,6 +257,85 @@ export async function handleManageContactUpdate(request: Request): Promise<Respo
     const contact = await updateManageContact({ staff, contactId, patch })
 
     return Response.json({ contact }, { status: 200 })
+  } catch (error) {
+    return badRequestResponse(error) ?? authzErrorResponse(error)
+  }
+}
+
+/**
+ * `POST /api/manage/contacts` — create one contact.
+ *
+ * The body is the same shape the single-row `PATCH` takes, and it goes through
+ * the same `parseContactPatch`, so the allow-list, the length bounds and the
+ * required-field wording are literally the same code the update route runs. A
+ * create with a blank required field is therefore refused with
+ * `"Name is required."` / `"Phone is required."` — not a second, drifting set
+ * of rules, and not a client-side pre-check that would have to be kept in step.
+ *
+ * The authorization decision is the update route's, verbatim: `getStaffContext()`
+ * then `requireRole(staff, ["Admin", "Preacher"])`. Nothing new.
+ */
+export async function handleManageContactCreate(request: Request): Promise<Response> {
+  try {
+    const staff = await getStaffContext()
+    requireRole(staff, ["Admin", "Preacher"])
+
+    let payload: unknown
+    try {
+      payload = await request.json()
+    } catch {
+      throw new AuthzBadRequest("A JSON object body is required.")
+    }
+
+    const patch = parseContactPatch(payload)
+    const contact = await createManageContact({ staff, patch })
+
+    // `201`, not `200`: a resource was created, and the status is what tells a
+    // client it should replace its placeholder id rather than patch it.
+    return Response.json({ contact }, { status: 201 })
+  } catch (error) {
+    return badRequestResponse(error) ?? authzErrorResponse(error)
+  }
+}
+
+/**
+ * `DELETE /api/manage/contacts` — remove one contact.
+ *
+ * `contactId` arrives in the body rather than the query string so it travels
+ * through the same `normalizeContactId` and the same 400 wording the update
+ * route uses for a malformed id. `DELETE` with a JSON body is the boring
+ * choice here and it is deliberate: a second id channel would be a second
+ * validation path.
+ *
+ * Single-row, so the per-row failure semantics are the response's own status —
+ * there is no batch to be partial about. `handleManageContactBulkUpdate` keeps
+ * that concern, and CAP-4's per-row reporting is the client's job.
+ */
+export async function handleManageContactDelete(request: Request): Promise<Response> {
+  try {
+    const staff = await getStaffContext()
+    requireRole(staff, ["Admin", "Preacher"])
+
+    let payload: unknown
+    try {
+      payload = await request.json()
+    } catch {
+      throw new AuthzBadRequest("A JSON object body is required.")
+    }
+
+    const record =
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : null
+    const contactId = normalizeContactId(record?.contactId)
+
+    if (!contactId) {
+      throw new AuthzBadRequest("contactId must be a UUID.")
+    }
+
+    const deleted = await deleteManageContact({ staff, contactId })
+
+    return Response.json({ deleted }, { status: 200 })
   } catch (error) {
     return badRequestResponse(error) ?? authzErrorResponse(error)
   }

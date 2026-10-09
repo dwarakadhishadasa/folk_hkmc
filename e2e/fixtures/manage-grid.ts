@@ -23,6 +23,9 @@
  * | `[data-grid-cell-selected]`             | `grid-row.tsx`, cell range only |
  * | `[data-grid-column="<columnId>"]`       | `grid-header-cell.tsx`        |
  * | `[data-bulk-selection-count]`           | `manage-contacts-table.tsx`   |
+ * | `[data-grid-add-record]`               | `grid-row-lifecycle.tsx`      |
+ * | `[data-grid-delete-row="<rowId>"]`     | `grid-row-lifecycle.tsx`      |
+ * | region named `Delete results`          | `grid-row-lifecycle.tsx`      |
  *
  * `~` is `GRID_CELL_KEY_SEPARATOR` from `use-grid-keyboard.ts`; it is spelled
  * here once so a selector built from a row id and a column id cannot drift.
@@ -219,7 +222,58 @@ export function bulkReportRows(page: Page): Locator {
 
 /** A row's favorite toggle, addressed by its accessible name. */
 export function favoriteStar(page: Page, contactId: string): Locator {
-  return rowById(page, contactId).getByRole("button")
+  // **Scoped by name, deliberately.** The row lifecycle added a second button to
+  // every row — the delete control in its own `actions` column — so an unscoped
+  // `getByRole("button")` here would match two elements and fail in strict mode
+  // across seven assertion sites rather than one. The star's accessible name is
+  // stable (`Add <name> to favorites` / `Remove <name> from favorites`), so
+  // naming it is a *narrowing* of the locator, not a loosening: every assertion
+  // still resolves to exactly the same element it did before.
+  return rowById(page, contactId).getByRole("button", { name: /to favorites$/ })
+}
+
+/** The grid's contextual `+ Add record` control. Disabled, never hidden. */
+export function addRecordButton(page: Page): Locator {
+  return page.getByRole("button", { name: /Add record/ })
+}
+
+/** A row's delete control, addressed by row id. */
+export function rowDeleteButton(page: Page, contactId: string): Locator {
+  return rowById(page, contactId).getByRole("button", { name: /^Delete / })
+}
+
+/** The delete confirmation dialog. Present only while a delete is pending. */
+export function deleteConfirmDialog(page: Page): Locator {
+  return page.getByRole("alertdialog")
+}
+
+/** The confirmation's own confirm button. */
+export function deleteConfirmButton(page: Page): Locator {
+  return deleteConfirmDialog(page).getByRole("button", { name: "Delete" })
+}
+
+/** The confirmation's cancel button. */
+export function deleteCancelButton(page: Page): Locator {
+  return deleteConfirmDialog(page).getByRole("button", { name: "Cancel" })
+}
+
+/**
+ * The per-row delete report. One visible line per deleted row — successes
+ * included — because a collapsed toast fails CAP-4's success condition even when
+ * every row succeeded.
+ */
+export function deleteReportPanel(page: Page): Locator {
+  return page.getByRole("region", { name: "Delete results" })
+}
+
+/** One line per reported row, in order. */
+export function deleteReportRows(page: Page): Locator {
+  return deleteReportPanel(page).locator("li")
+}
+
+/** The text of every line in the delete report, in order. */
+export async function deleteReportLines(page: Page): Promise<string[]> {
+  return deleteReportRows(page).allInnerTexts()
 }
 
 /**

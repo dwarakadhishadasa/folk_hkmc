@@ -299,6 +299,116 @@ export async function contactsByLocationName(
   return [...groups.values()].sort((a, b) => b.contacts.length - a.contacts.length)
 }
 
+/**
+ * The tag `manage-contacts-row-lifecycle.spec.ts` puts on a contact it created
+ * itself.
+ *
+ * Deliberately **not** `BULK_TAG`: the generated set's invariants (one row with a
+ * blank phone, every row assigned to the program's Preacher or Admin, every
+ * name distinct) are asserted by `bulk-fixtures.spec.ts` and re-asserted by the
+ * generator on the next run, so a spec's leftover row must not land inside that
+ * set. Its own tag gives `cleanupRowLifecycleContacts` the same "refuse anything
+ * you did not create" guarantee `cleanupTaggedContacts` gives.
+ */
+export const ROW_LIFECYCLE_TAG = "preview-fixture-rowlife-"
+
+// ---------------------------------------------------------------------------
+// Row-lifecycle fixtures
+// ---------------------------------------------------------------------------
+
+/**
+ * A phone that is unique per program and cannot collide with the generator's
+ * `PHONE_PREFIX` range or the seeder's `9000000001-4`.
+ *
+ * `contacts.phone` is `NOT NULL` and `UNIQUE (phone, program_id)`, so a spec
+ * that creates a record needs a phone it owns, and a second spec in the same run
+ * needs a different one.
+ */
+export function rowLifecyclePhone(runId: string, index: number): string {
+  const suffix = `${runId.replace(/[^0-9a-z]/gi, "").slice(-6)}${String(index).padStart(2, "0")}`
+  return `7${suffix}`.slice(0, 15)
+}
+
+/**
+ * Insert one contact this suite owns, bypassing the app.
+ *
+ * Used by the delete cases, which need a row that exists and can therefore be
+ * removed — deleting a row the suite did not create would break the shared
+ * fixtures every other spec reads.
+ */
+export async function createRowLifecycleContact(params: {
+  name: string
+  phone: string
+  program?: string
+  assignedPreacherId?: string | null
+}): Promise<{ id: string; name: string }> {
+  const program = params.program ?? e2eProgramId()
+  const assignedPreacherId =
+    params.assignedPreacherId === undefined ? await adminId(program) : params.assignedPreacherId
+
+  const { data, error } = await bulkFixtureClient()
+    .from("contacts")
+    .insert({
+      program_id: program,
+      name: params.name,
+      phone: params.phone,
+      location_ids: [],
+      assigned_preacher_id: assignedPreacherId,
+      collected_by_id: null,
+      notes: null,
+      is_favorite: false,
+      books_read: [],
+      source: null,
+    })
+    .select("id,name")
+    .single()
+
+  if (error) throw new Error(`Creating the row-lifecycle contact failed: ${error.message}`)
+  return { id: data.id as string, name: data.name as string }
+}
+
+/**
+ * Delete the contacts a spec created itself, in the same test.
+ *
+ * Same contract as `cleanupTaggedContacts`, different tag: ids are **checked
+ * against the tag before anything is deleted**, and the helper throws naming the
+ * offending ids rather than removing a row another spec owns. A missing id is
+ * not an error — a `finally` re-runs after a successful delete.
+ *
+ * Returns the ids actually deleted, so a caller can assert the cleanup did
+ * something rather than silently matching nothing.
+ */
+export async function cleanupRowLifecycleContacts(ids: readonly string[]): Promise<string[]> {
+  if (ids.length === 0) return []
+
+  const db = bulkFixtureClient()
+
+  const { data: rows, error: readError } = await db.from("contacts").select("id,name").in("id", [...ids])
+  if (readError) throw new Error(`Reading the ${ids.length} contact(s) to clean up failed: ${readError.message}`)
+
+  const found = new Map((rows ?? []).map((row) => [row.id as string, row.name as string]))
+  const untagged = ids
+    .filter((id) => {
+      const name = found.get(id)
+      return name !== undefined && !name.startsWith(ROW_LIFECYCLE_TAG)
+    })
+    .map((id) => `${id} (${found.get(id)})`)
+
+  if (untagged.length) {
+    throw new Error(
+      `cleanupRowLifecycleContacts refuses to delete ${untagged.length} untagged contact(s): ${untagged.join(", ")}. ` +
+        `It only removes rows whose name starts with "${ROW_LIFECYCLE_TAG}".`,
+    )
+  }
+
+  const present = ids.filter((id) => found.has(id))
+  if (present.length === 0) return []
+
+  const { data, error } = await db.from("contacts").delete().in("id", present).select("id")
+  if (error) throw new Error(`Cleaning up ${present.length} row-lifecycle contact(s) failed: ${error.message}`)
+  return (data as Array<{ id: string }> | null)?.map((row) => row.id) ?? []
+}
+
 // ---------------------------------------------------------------------------
 // Cleanup
 // ---------------------------------------------------------------------------

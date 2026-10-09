@@ -22,6 +22,7 @@ import type {
   ManageStatusQuoPoint,
 } from "@/components/manage/manage-types"
 import { AuthzError, writeAuditEvent, type StaffContext } from "@/lib/authz"
+import type { ProgramId } from "@hkmc/data-contracts"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
@@ -865,16 +866,24 @@ async function assertProgramLocations(programId: string, locationIds: string[]):
   }
 }
 
-export async function updateManageContact(params: {
-  staff: StaffContext
-  contactId: string
-  patch: ManageContactPatch
-}): Promise<ManageContactWriteResult> {
-  const { staff, contactId, patch } = params
-  await assertManageContactInScope(staff, contactId)
-
-  const updatePayload: Record<string, unknown> = {}
-  const writtenKeys: string[] = []
+/**
+ * Turns a validated patch into a PostgREST column payload.
+ *
+ * Extracted rather than inlined so create and update share one per-key
+ * translation. `CONTACT_COLUMN_BY_PATCH_KEY` is the single map from a patch key
+ * to a column, and a second copy of this switch is a second place a new patch
+ * key could be half-added — the failure mode the exhaustive
+ * `Record<ManageContactPatchKey, string>` type exists to prevent.
+ *
+ * Returns the columns written *and* the patch keys they came from, because the
+ * audit event's `metadata.fields` names the latter.
+ */
+async function buildContactWritePayload(
+  programId: ProgramId,
+  patch: ManageContactPatch,
+): Promise<{ payload: Record<string, unknown>; writtenKeys: ManageContactPatchKey[] }> {
+  const payload: Record<string, unknown> = {}
+  const writtenKeys: ManageContactPatchKey[] = []
 
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) {
@@ -889,43 +898,43 @@ export async function updateManageContact(params: {
 
     switch (patchKey) {
       case "name":
-        updatePayload[column] = requireNonEmptyString(value, "Name")
+        payload[column] = requireNonEmptyString(value, "Name")
         break
       case "phone":
-        updatePayload[column] = requireNonEmptyString(value, "Phone")
+        payload[column] = requireNonEmptyString(value, "Phone")
         break
       case "isFavorite":
-        updatePayload[column] = optionalBoolean(value, "Favorite")
+        payload[column] = optionalBoolean(value, "Favorite")
         break
       case "booksRead":
-        updatePayload[column] = optionalStringArray(value, "Books Read")
+        payload[column] = optionalStringArray(value, "Books Read")
         break
-      case "locationIds": {
-        const locationIds = optionalStringArray(value, "Location")
-        await assertProgramLocations(staff.programId, locationIds)
-        updatePayload[column] = locationIds
+      case "locationIds":
+        payload[column] = await assertProgramLocationsThen(
+          programId,
+          optionalStringArray(value, "Location"),
+        )
         break
-      }
       case "college":
-        updatePayload[column] = optionalString(value, "College")
+        payload[column] = optionalString(value, "College")
         break
       case "company":
-        updatePayload[column] = optionalString(value, "Company")
+        payload[column] = optionalString(value, "Company")
         break
       case "rounds":
-        updatePayload[column] = optionalString(value, "Rounds")
+        payload[column] = optionalString(value, "Rounds")
         break
       case "source":
-        updatePayload[column] = optionalString(value, "Source")
+        payload[column] = optionalString(value, "Source")
         break
       case "notes":
-        updatePayload[column] = optionalString(value, "Notes")
+        payload[column] = optionalString(value, "Notes")
         break
       case "initialContact":
-        updatePayload[column] = optionalString(value, "Initial Contact")
+        payload[column] = optionalString(value, "Initial Contact")
         break
       case "dateOfBirth":
-        updatePayload[column] = optionalString(value, "Date of Birth")
+        payload[column] = optionalString(value, "Date of Birth")
         break
     }
 
@@ -936,10 +945,70 @@ export async function updateManageContact(params: {
     throw new AuthzError(400, "empty_patch", "No editable fields were supplied.")
   }
 
+  return { payload, writtenKeys }
+}
+
+/**
+ * `assertProgramLocations` returning the ids it validated, so the caller can
+ * assign them without a second statement.
+ */
+async function assertProgramLocationsThen(
+  programId: ProgramId,
+  locationIds: string[],
+): Promise<string[]> {
+  await assertProgramLocations(programId, locationIds)
+  return locationIds
+}
+
+/** The write result's shape, read out of a returned `contacts` row. */
+function toContactWriteResult(row: ContactRow): ManageContactWriteResult {
+  return {
+    id: row.id,
+    name: text(row.name) ?? "Unknown",
+    phone: text(row.phone) ?? "",
+    college: text(row.college),
+    company: text(row.company),
+    rounds: text(row.rounds),
+    source: text(row.source),
+    booksRead: textArray(row.books_read),
+    notes: text(row.notes),
+    initialContact: text(row.initial_contact),
+    dateOfBirth: text(row.date_of_birth),
+    isFavorite: row.is_favorite === true,
+    locationIds: textArray(row.location_ids),
+  }
+}
+
+/**
+ * Postgres unique-violation and foreign-key-violation codes.
+ *
+ * Named because the generic 500 would tell an operator nothing: the difference
+ * between "someone else already has that phone number" and "this row has
+ * attendance recorded against it" is the difference between fixing a typo and
+ * giving up.
+ */
+const PG_UNIQUE_VIOLATION = "23505"
+const PG_FOREIGN_KEY_VIOLATION = "23503"
+
+function pgErrorCode(error: { code?: unknown } | null): string | null {
+  const code = error?.code
+  return typeof code === "string" ? code : null
+}
+
+export async function updateManageContact(params: {
+  staff: StaffContext
+  contactId: string
+  patch: ManageContactPatch
+}): Promise<ManageContactWriteResult> {
+  const { staff, contactId, patch } = params
+  await assertManageContactInScope(staff, contactId)
+
+  const { payload, writtenKeys } = await buildContactWritePayload(staff.programId, patch)
+
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin
     .from("contacts")
-    .update(updatePayload)
+    .update(payload)
     .eq("id", contactId)
     .eq("program_id", staff.programId)
     .select(CONTACT_COLUMNS)
@@ -962,21 +1031,125 @@ export async function updateManageContact(params: {
     metadata: { fields: writtenKeys },
   })
 
-  return {
-    id: row.id,
-    name: text(row.name) ?? "Unknown",
-    phone: text(row.phone) ?? "",
-    college: text(row.college),
-    company: text(row.company),
-    rounds: text(row.rounds),
-    source: text(row.source),
-    booksRead: textArray(row.books_read),
-    notes: text(row.notes),
-    initialContact: text(row.initial_contact),
-    dateOfBirth: text(row.date_of_birth),
-    isFavorite: row.is_favorite === true,
-    locationIds: textArray(row.location_ids),
+  return toContactWriteResult(row)
+}
+
+/**
+ * Creates a contact owned by the staff member who made it.
+ *
+ * `assigned_preacher_id` is set to the caller rather than left null because the
+ * scoped SELECT policy on `contacts` resolves a Preacher's rows by that column:
+ * a newly created row with no assignee would be invisible to the person who
+ * just created it, which reads as a silent failure. RLS remains the enforcement
+ * point — this is a default, not a permission.
+ *
+ * `phone` is `UNIQUE (phone, program_id)` and `NOT NULL`, so the unique
+ * violation is a reachable operator error rather than a theoretical one; it is
+ * named instead of being flattened into a 500.
+ */
+export async function createManageContact(params: {
+  staff: StaffContext
+  patch: ManageContactPatch
+}): Promise<ManageContactWriteResult> {
+  const { staff, patch } = params
+  const { payload, writtenKeys } = await buildContactWritePayload(staff.programId, patch)
+
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin
+    .from("contacts")
+    .insert({
+      ...payload,
+      program_id: staff.programId,
+      assigned_preacher_id: staff.userId,
+      collected_by_id: staff.supabaseUserId,
+    })
+    .select(CONTACT_COLUMNS)
+    .single()
+
+  if (error) {
+    if (pgErrorCode(error) === PG_UNIQUE_VIOLATION) {
+      throw new AuthzError(
+        409,
+        "manage_contact_duplicate",
+        "Another contact in this program already has that phone number.",
+      )
+    }
+
+    throw new AuthzError(500, "manage_contact_create_failed", "Unable to create the contact.")
   }
+
+  const row = data as unknown as ContactRow
+
+  await writeAuditEvent({
+    programId: staff.programId,
+    actorSupabaseUserId: staff.supabaseUserId,
+    actorRole: staff.role,
+    action: "manage.contact.create",
+    targetId: row.id,
+    source: AUDIT_SOURCE,
+    syncState: "ok",
+    metadata: { fields: writtenKeys },
+  })
+
+  return toContactWriteResult(row)
+}
+
+/**
+ * Deletes one contact.
+ *
+ * The scope assertion is the same `assertManageContactInScope` the update path
+ * uses, so "can this staff member touch this row" is decided in exactly one
+ * place and a delete cannot be broader than an edit.
+ *
+ * There is deliberately no cascade. `attendance.contact_id` references
+ * `contacts(id)` without `ON DELETE CASCADE`, so a contact with recorded
+ * attendance is refused with a named reason instead of silently taking its
+ * attendance history with it — which is the outcome an operator would never
+ * choose and cannot undo.
+ */
+export async function deleteManageContact(params: {
+  staff: StaffContext
+  contactId: string
+}): Promise<{ id: string }> {
+  const { staff, contactId } = params
+  await assertManageContactInScope(staff, contactId)
+
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin
+    .from("contacts")
+    .delete()
+    .eq("id", contactId)
+    .eq("program_id", staff.programId)
+    .select("id")
+    .maybeSingle()
+
+  if (error) {
+    if (pgErrorCode(error) === PG_FOREIGN_KEY_VIOLATION) {
+      throw new AuthzError(
+        409,
+        "manage_contact_has_attendance",
+        "This contact has attendance recorded against it and cannot be deleted.",
+      )
+    }
+
+    throw new AuthzError(500, "manage_contact_delete_failed", "Unable to delete the contact.")
+  }
+
+  if (!data) {
+    throw new AuthzError(404, "contact_not_found", "Contact not found in this program.")
+  }
+
+  await writeAuditEvent({
+    programId: staff.programId,
+    actorSupabaseUserId: staff.supabaseUserId,
+    actorRole: staff.role,
+    action: "manage.contact.delete",
+    targetId: contactId,
+    source: AUDIT_SOURCE,
+    syncState: "ok",
+  })
+
+  return { id: data.id }
 }
 
 const PHOTO_EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {

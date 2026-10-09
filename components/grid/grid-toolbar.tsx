@@ -44,6 +44,12 @@ export interface GridToolbarProps {
   /** Ids of the pinned columns, so none can be hidden out from under itself. */
   frozenColumnIds: readonly string[]
   /**
+   * The grid's own row-lifecycle affordance, rendered immediately before
+   * `toolbarExtra` so a consumer's bulk-action chrome sits beside it rather than
+   * in a second band above the table.
+   */
+  rowAction?: ReactNode
+  /**
    * Consumer chrome rendered between the density control and the row count.
    * A selection-aware action surface belongs in the grid's own chrome rather
    * than in a second band above it, so the two never disagree about layout.
@@ -70,6 +76,7 @@ export function GridToolbar({
   visibleCount,
   totalCount,
   frozenColumnIds,
+  rowAction,
   toolbarExtra,
 }: GridToolbarProps) {
   const [searchFocused, setSearchFocused] = useState(false)
@@ -155,6 +162,8 @@ export function GridToolbar({
           <SelectItem value="dense">Dense rows</SelectItem>
         </SelectContent>
       </Select>
+
+      {rowAction}
 
       {toolbarExtra}
 

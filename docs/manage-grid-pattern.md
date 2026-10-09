@@ -271,7 +271,106 @@ The success condition is **per-row reporting**:
 - Selection is cleared **after** a run completes, never during it, so the operator can read the
   outcomes and then select again.
 
-## 6. URL state contract
+## 6. Row lifecycle
+
+CAP-6. Opt into it by passing `rowLifecycle` to `Grid`; leave it off and the grid
+has **no** add control, no delete affordance, no confirmation and no report. The
+primitive never assumes a table can create or destroy a row.
+
+```tsx
+const rowLifecycle: GridRowLifecycle<T> = {
+  createRow: () => { /* append a blank row to *your* state; return { id, row } */ },
+  getRowLabel: (row) => row.name,
+  onDeleteRow: async (row) => { /* the delete write; reject with a message to fail the row */ },
+  canCreate: true,
+}
+
+<Grid
+  rows={rows}
+  rowLifecycle={rowLifecycle}
+  onRowRemoved={(rowId) => { /* drop the row the server confirmed */ }}
+  …
+/>
+```
+
+Four members and nothing else — no row shape, no validation rule, no "save"
+concept. The primitive renders the affordance, the confirmation and the report;
+the table owns the row and every byte that crosses the network.
+
+### Adding a record
+
+- **The draft row is an ordinary row in your own state.** The grid cannot append
+  to a `rows` prop it does not own, and a second row set inside the primitive
+  would be a second source of truth for what the operator is looking at.
+- **A cell commit on a draft row *is* the create.** It goes through your existing
+  `onCellCommit` and nowhere else, so the create inherits the optimistic
+  override, the destructive revert and the status line for free. **Do not add a
+  second mutation channel for it.**
+- **`createRow` returns a client-generated id** the grid can focus. The database
+  owns `id`; a row that exists only on screen needs something that cannot collide
+  with one, and the grid addresses the draft by that id until the server replaces
+  it.
+- **Focus lands through the keyboard model**, on the row's first `editable`
+  column, exactly as `focusRow` moves it for an arrow press. There is no
+  ref-and-scroll, and no second rule for "added" rows.
+- **Accumulate the draft's values before the request, not after it succeeds.**
+  Two `NOT NULL` fields cannot both be satisfied by one commit, so the handler
+  refuses the first field and the second commit has to carry the first field's
+  value along. Rolling back on failure instead makes a two-field record
+  impossible to create. The cost is that a *refused* draft's cell shows the
+  pre-commit text for one step while the row holds what was typed; the promotion
+  corrects it.
+- **Required-field rules stay server-side.** `parseContactPatch` names the field
+  that is missing; the client reads that wording and throws it into the revert
+  path. A client-side pre-check is a second copy that drifts.
+
+### Deleting a record
+
+- **The control is a column you render**, not one the grid injects:
+
+  ```tsx
+  cell: ({ row }) => <GridRowDeleteControl rowId={row.id} label={row.original.name} />
+  ```
+
+  A separate row-action column rather than a second control inside an existing
+  one, so a column that renders a value and a column that acts on a row stay
+  distinguishable in the header, in the visibility menu and in a spec.
+- **Confirmation before action**, naming the row. Nothing is written until it is
+  confirmed.
+- **One visible outcome line per row**, successes included. A collapsed toast
+  fails the capability even when every row succeeded — the same rule §5 states
+  for the bulk action.
+- **Only a confirmed delete is applied locally.** `onRowRemoved` fires for the
+  rows the server confirmed and for nothing else, so a refused row keeps the
+  value the operator can already see.
+- **Drop the row's id from `rowSelection` too.** The selection is keyed by the
+  same id, and a surviving entry makes the header count a row that is gone.
+
+### Routes
+
+| Method | Path | Handler |
+|---|---|---|
+| `POST` | `/api/manage/contacts` | `handleManageContactCreate` |
+| `PATCH` | `/api/manage/contacts` | `handleManageContactUpdate` |
+| `PATCH` | `/api/manage/contacts/bulk` | `handleManageContactBulkUpdate` |
+| `DELETE` | `/api/manage/contacts` | `handleManageContactDelete` |
+
+Both new handlers go through `lib/manage/api-handlers.ts` with the same
+`getStaffContext()` + `requireRole(staff, ["Admin", "Preacher"])` the single-row
+update uses, and the create reuses `parseContactPatch` verbatim — the allow-list,
+the length bounds and the required-field wording are literally the same code the
+update route runs. The route file is the byte-identical pair across `apps/folk`
+and `apps/gita-life`; `md5sum` it after editing.
+
+`DELETE` takes `contactId` in the **body**, not the query string, so it travels
+through the same `normalizeContactId` and the same 400 wording as the update. A
+second id channel would be a second validation path.
+
+There is **no cascade**. `attendance.contact_id` references `contacts(id)`
+without `ON DELETE CASCADE`, so a contact with recorded attendance is refused
+with `409` and a named reason rather than silently taking its history with it.
+
+## 7. URL state contract
 
 Sort, filters, column order, visibility and size live in the URL, via `useGridViewState` as shipped.
 Do not extend `GRID_PARAM_KEYS` / `GRID_PARAM_PREFIXES`, and do not add state the codec does not
@@ -290,7 +389,7 @@ name — density and row selection are the two deliberate exceptions, and both a
 what keeps `?mode=admin|preacher` byte-identical across every write. Never add a URL write that
 strips it.
 
-## 7. Porting checklist
+## 8. Porting checklist
 
 - [ ] Refactored in place; the caller and the prop signature did not change.
 - [ ] `sort`, `q`, `f.*`, `cols`, `hide`, `size.*` round-trip; `?mode=` survives.
@@ -305,12 +404,17 @@ strips it.
 - [ ] Selection held in `useState`, passed as `state.rowSelection`, with `onRowSelectionChange`; not
       in the URL.
 - [ ] Bulk action reports every row individually and applies only confirmed writes.
+- [ ] `rowLifecycle` supplied with a row factory, a row label and a delete write — or deliberately
+      omitted, in which case there is no add control and no delete affordance anywhere.
+- [ ] A cell commit on a draft row is the create, routed through the same `onCellCommit`; no second
+      mutation channel.
+- [ ] Delete confirms before acting, names the row, and reports one outcome line per row.
 - [ ] No `useMemo` sort or filter of the row set, no `components/ui/table`, no second table.
 - [ ] Nothing under `components/grid/` imports `@/components/manage/*` or names `/api/manage`. The
       primitives are consumed by four tables; anything table-specific in them stops them being
       primitives.
 
-## 8. Report divergence
+## 9. Report divergence
 
 **A port that cannot follow this document says so in its story, rather than quietly absorbing the
 difference.** Record what did not carry over, what was forced, and what later tables should expect
@@ -325,4 +429,10 @@ Known gaps at the time of writing:
   per-column filter popovers, which compose with the global filter instead of replacing it.
 - The favorite star is the only row action. A row-action *menu* is the obvious next primitive if
   more than one per-row action appears.
+- `favoriteStar` in `e2e/fixtures/manage-grid.ts` used to resolve `getByRole("button")` **inside the
+  row, unscoped**, which is why a closed-state editor display must not be a `<button>`. The row
+  lifecycle added a second button per row (the delete control in its own `actions` column), so that
+  locator is now scoped by accessible name (`/to favorites$/`). That is a narrowing, not a
+  loosening: every assertion still resolves to the same element. **A third per-row button means the
+  naming discipline has to hold.**
 - `docs/` is excluded from ESLint, so this document is not linted. Keep it honest by hand.

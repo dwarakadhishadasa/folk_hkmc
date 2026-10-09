@@ -26,6 +26,10 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import { GridHeaderCell } from "@/components/grid/grid-header-cell"
 import { GridPanel, gridPanelKey } from "@/components/grid/grid-panel"
 import { GridRow, GRID_BASE_FONT_CLASS, GRID_ROW_HEIGHT } from "@/components/grid/grid-row"
+import {
+  GridRowAddControl,
+  GridRowLifecycleProvider,
+} from "@/components/grid/grid-row-lifecycle"
 import { GridToolbar, type GridToolbarColumn } from "@/components/grid/grid-toolbar"
 import type {
   GridCellCommitHandler,
@@ -33,6 +37,7 @@ import type {
   GridEditErrorHandler,
   GridFrozenColumn,
   GridPanelState,
+  GridRowLifecycle,
   GridTransientHandle,
 } from "@/components/grid/grid-types"
 import { useGridKeyboard } from "@/components/grid/use-grid-keyboard"
@@ -347,6 +352,18 @@ export interface GridProps<TData extends RowData> {
   emptyContent?: ReactNode
   /** Consumer chrome rendered in the toolbar, after the density control. */
   toolbarExtra?: ReactNode
+  /**
+   * CAP-6 row lifecycle, opted into by supplying it. Omit it and the grid has
+   * no add affordance, no delete affordance, no confirmation and no report —
+   * the primitive never assumes a table can create or destroy a row.
+   *
+   * The four members are documented on `GridRowLifecycle`. In short: the
+   * consumer owns the row factory and the delete write, and the grid owns the
+   * affordance, the confirmation and the per-row report.
+   */
+  rowLifecycle?: GridRowLifecycle<TData>
+  /** Called only for a row the server confirmed, so the consumer can drop it. */
+  onRowRemoved?: (rowId: string) => void
   /** Forces a CAP-9 variant, for the review harness. Derived from rows otherwise. */
   panel?: GridPanelState
   className?: string
@@ -384,6 +401,8 @@ export function Grid<TData extends RowData>({
   onClearFilters,
   emptyContent,
   toolbarExtra,
+  rowLifecycle,
+  onRowRemoved,
   panel,
   className,
 }: GridProps<TData>) {
@@ -615,12 +634,41 @@ export function Grid<TData extends RowData>({
     overscan: GRID_OVERSCAN,
   })
 
+  const virtualRows = isReady ? virtualizer.getVirtualItems() : []
+
   const scrollToIndex = useCallback(
     (index: number) => {
       virtualizer.scrollToIndex(index, { align: "auto" })
     },
     [virtualizer],
   )
+
+  /**
+   * The row a new record was just appended into, waiting for the window to
+   * reveal it.
+   *
+   * `scrollToIndex` only moves the scroll offset; the virtual *range* is
+   * recomputed on the render after it, so a cell focused synchronously straight
+   * after a scroll does not exist yet and `focusCellElement` parks focus on the
+   * container. Retrying against `virtualRows` — which is the value that proves
+   * the window actually moved — is what makes the focus land on a cell rather
+   * than on the grid frame.
+   */
+  const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(null)
+
+  const handleAddRow = useCallback(() => {
+    if (!rowLifecycle) {
+      return false
+    }
+
+    const { id } = rowLifecycle.createRow()
+
+    // Queued rather than applied inline: the row is in the consumer's state, not
+    // yet in this render's row model, so an immediate `focusRow` would resolve
+    // no row. The effect below retries once the consumer's append has landed.
+    setPendingFocusRowId(id)
+    return true
+  }, [rowLifecycle])
 
   const keyboard = useGridKeyboard<TData>({
     table,
@@ -637,6 +685,30 @@ export function Grid<TData extends RowData>({
   useEffect(() => {
     virtualizer.measure()
   }, [density, virtualizer])
+
+  /**
+   * Lands the focus queued by `+ Add record`, once the row is both in the row
+   * model and inside the rendered window.
+   *
+   * A false result means the row is not visible yet — a freshly appended row on a
+   * scrolled grid, or a draft row a text filter removed. Both are retried when
+   * `virtualRows` next changes, and neither is reported as success: focus that
+   * silently failed to move is the one failure an operator cannot see.
+   */
+  useEffect(() => {
+    if (pendingFocusRowId === null) {
+      return
+    }
+
+    if (keyboard.focusRow(pendingFocusRowId)) {
+      setPendingFocusRowId(null)
+      return
+    }
+
+    keyboard.setStatusMessage(
+      "The new record is hidden by the current filters. Clear them to edit it.",
+    )
+  }, [keyboard, pendingFocusRowId, virtualRows])
 
   useEffect(() => {
     const onWindowBlur = () => {
@@ -714,12 +786,20 @@ export function Grid<TData extends RowData>({
 
   const rowHeight = GRID_ROW_HEIGHT[density]
   const totalSize = table.getTotalSize()
-  const virtualRows = isReady ? virtualizer.getVirtualItems() : []
   const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
   const paddingBottom =
     virtualRows.length > 0 ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0
 
-  return (
+  /**
+   * The grid's own contents, wrapped in the row-lifecycle provider only when a
+   * `rowLifecycle` was supplied.
+   *
+   * The wrapper is conditional rather than always-present with a null
+   * lifecycle, because `useGridRowLifecycle()` returning null *is* the "this
+   * grid cannot create or destroy rows" answer — a provider that always
+   * existed would make an inert affordance indistinguishable from an absent one.
+   */
+  const grid = (
     <div
       data-grid-root=""
       className={cn("bg-card overflow-hidden rounded-md border border-border", className)}
@@ -738,6 +818,14 @@ export function Grid<TData extends RowData>({
         visibleCount={rowModel.length}
         totalCount={rows.length}
         frozenColumnIds={frozenColumnIds}
+        rowAction={
+          rowLifecycle ? (
+            <GridRowAddControl
+              canCreate={rowLifecycle.canCreate !== false}
+              onAdd={handleAddRow}
+            />
+          ) : undefined
+        }
         toolbarExtra={toolbarExtra}
       />
 
@@ -877,5 +965,22 @@ export function Grid<TData extends RowData>({
         </table>
       </div>
     </div>
+  )
+
+  if (!rowLifecycle) {
+    return grid
+  }
+
+  return (
+    <GridRowLifecycleProvider<TData>
+      lifecycle={rowLifecycle}
+      rows={rows}
+      getRowId={getRowId}
+      onRowRemoved={(rowId) => {
+        onRowRemoved?.(rowId)
+      }}
+    >
+      {grid}
+    </GridRowLifecycleProvider>
   )
 }

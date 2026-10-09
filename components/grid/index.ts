@@ -39,7 +39,9 @@ export type {
   GridEditError,
   GridEditErrorHandler,
   GridFrozenColumn,
+  GridNewRow,
   GridPanelState,
+  GridRowLifecycle,
   GridSelectionCoordinate,
   GridTransientHandle,
 } from "@/components/grid/grid-types"
@@ -67,4 +69,12 @@ export {
   serializeGridViewState,
   type GridViewState,
 } from "@/components/grid/grid-view-state"
+export {
+  GridRowAddControl,
+  GridRowDeleteControl,
+  GridRowDeleteReport,
+  GridRowLifecycleProvider,
+  useGridRowLifecycle,
+  type GridRowDeleteOutcome,
+} from "@/components/grid/grid-row-lifecycle"
 export { GridPreview, type GridPreviewRow } from "@/components/grid/grid-preview"

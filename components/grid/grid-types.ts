@@ -100,6 +100,52 @@ export type GridPanelState =
   | { kind: "empty"; reason: "no-records" | "no-matches" }
 
 /**
+ * A newly created row, as the consumer hands it back.
+ *
+ * `id` is separate because the grid has to address the row it is about to
+ * render — that is what focus is moved to — while the row *value* is the
+ * consumer's business. A consumer that creates against a server returns the
+ * server's id, so focus lands on the row that actually exists rather than on a
+ * client-only placeholder.
+ */
+export interface GridNewRow<TData> {
+  id: string
+  row: TData
+}
+
+/**
+ * The row lifecycle, opted into by supplying it.
+ *
+ * Four things and no more, because the primitive must never grow an opinion
+ * about what a row is:
+ *
+ * - `createRow` builds the blank row and appends it to the **consumer's** row
+ *   state. The grid cannot append to a prop it does not own.
+ * - `getRowLabel` names a row in the delete confirmation and in each outcome
+ *   line. The grid has no way to derive a human name from an arbitrary `TData`.
+ * - `onDeleteRow` is the delete write. It resolves once the row is gone and
+ *   rejects with a message when it is not, which is what makes a per-row
+ *   outcome possible rather than a collapsed toast.
+ * - `canCreate` renders the add control disabled rather than hiding it, so an
+ *   operator who cannot add is told the control exists and is unavailable.
+ *
+ * Deliberately absent: a row shape, a validation rule, a "save" concept, and
+ * any knowledge of what a create is. A typed editor supplies parsing and
+ * validation and gets the one commit path; this slot supplies the affordance
+ * and the write, and nothing else.
+ */
+export interface GridRowLifecycle<TData> {
+  /** Builds a blank row, adds it to consumer state, and returns its id. */
+  createRow: () => GridNewRow<TData>
+  /** The row's human name, for the confirmation and each outcome line. */
+  getRowLabel: (row: TData) => string
+  /** The delete write. Rejecting surfaces as that row's failure. */
+  onDeleteRow: (row: TData) => Promise<void>
+  /** Whether the add control is offered. Defaults to true. */
+  canCreate?: boolean
+}
+
+/**
  * One cell write. `rowId` comes from the consumer's `getRowId`, so it must be
  * stable and URL-safe — an array index would address the wrong row the moment
  * the set is sorted or filtered.

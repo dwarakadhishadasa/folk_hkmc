@@ -165,6 +165,29 @@ export interface GridKeyboardApi<TData> {
    * pointer — which is what the modifier means everywhere else on screen.
    */
   focusCell: (rowId: string, columnId: string, extend?: boolean) => void
+  /**
+   * Moves the whole focus model onto `rowId`: the first editable column of that
+   * row, the range anchor with it, the virtualizer scrolled to it and the DOM
+   * focus landed.
+   *
+   * Every step is the same one an arrow press takes (`stepFocus`), which is the
+   * point. A new row therefore arrives focused the way an operator reaching it
+   * with the keyboard would find it — not through a ref the primitive had to be
+   * handed, and not with a different set of rules for "added" rows.
+   *
+   * Returns false when the row is not in the current row model at all, which is
+   * reachable: a draft row with every field blank disappears under a text
+   * filter. The caller reports that rather than dropping focus silently.
+   */
+  focusRow: (rowId: string) => boolean
+  /**
+   * Writes the grid's `aria-live` status line directly.
+   *
+   * For messages that are not about a cell — a row lifecycle action the keyboard
+   * model could not carry out, say. Anything about a cell goes through the
+   * commit path so it keeps its revert.
+   */
+  setStatusMessage: (message: string | null) => void
   isRowFocused: (row: Row<TData>) => boolean
   isRowEditing: (row: Row<TData>) => boolean
   /** DOM id of the focused row, referenced by the container's activedescendant. */
@@ -771,6 +794,25 @@ export function useGridKeyboard<TData>({
   )
 
   /**
+   * The row's first editable visible column, or its first visible column when it
+   * has none.
+   *
+   * The same rule `beginEditing` applies to a cold grid, reused here so "the row
+   * the operator just added" and "the cell `e` would open" cannot disagree.
+   */
+  const firstEditableColumnId = useCallback(
+    (row: Row<TData>): string | undefined => {
+      const cells = row.getVisibleCells()
+
+      return (
+        cells.find((cell) => cell.column.columnDef.meta?.grid?.editable === true)?.column.id ??
+        cells[0]?.column.id
+      )
+    },
+    [],
+  )
+
+  /**
    * The one opener. `Enter`, `e`, a click on a display widget and the
    * printable-character branch all land here, so the seeding rules cannot drift
    * apart: `Enter` and `e` seed the cell's display text for in-place editing, a
@@ -847,15 +889,12 @@ export function useGridKeyboard<TData>({
 
     // With no column focused, `e` starts the first editable cell so the key is
     // useful from a cold grid.
-    const cells = row.getVisibleCells()
-    const target = cells.find(
-      (cell) => cell.column.columnDef.meta?.grid?.editable === true,
-    )
+    const targetColumnId = firstEditableColumnId(row)
 
-    if (target) {
-      openEditor(clampedRowIndex, target.column.id)
+    if (targetColumnId) {
+      openEditor(clampedRowIndex, targetColumnId)
     }
-  }, [clampedRowIndex, focusedColumnId, openEditor, visibleRows])
+  }, [clampedRowIndex, firstEditableColumnId, focusedColumnId, openEditor, visibleRows])
 
   /**
    * Builds what one editor instance is handed.
@@ -1504,6 +1543,80 @@ export function useGridKeyboard<TData>({
     }
   }, [editing, focusCellElement])
 
+  /**
+   * Keeps the focused coordinate pointing at a row when the row *underneath it*
+   * is replaced.
+   *
+   * Reachable because a created record is promoted: the grid's focus is on the
+   * draft row, the server answers with a row that has its own id, and the
+   * consumer swaps it in — so the focused cell unmounts and DOM focus dies on
+   * `<body>`, which would leave the grid unable to receive the next keystroke.
+   *
+   * Keyed on the row *id*, not the index, and gated on the grid having owned
+   * focus (or just lost it to that unmount) for the same reason every other focus
+   * move in this hook is: a grid that steals focus from a toolbar control while
+   * the operator is typing in a search box is worse than one that does not move
+   * it at all.
+   */
+  const focusedRowIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const currentId = visibleRows[clampedRowIndex]?.id ?? null
+    const previousId = focusedRowIdRef.current
+    focusedRowIdRef.current = currentId
+
+    if (previousId === null || previousId === currentId || focusedColumnId === null) {
+      return
+    }
+
+    focusCellIfGridHasFocus(gridCellKey(currentId as string, focusedColumnId))
+  }, [clampedRowIndex, focusCellIfGridHasFocus, focusedColumnId, visibleRows])
+
+  /**
+   * Moves the whole focus model onto `rowId`: its first editable column, the
+   * range anchor with it, the virtualizer scrolled to it and DOM focus landed.
+   *
+   * Every step is the one an arrow press takes (`stepFocus`), which is the point.
+   * A new row therefore arrives focused the way an operator reaching it with the
+   * keyboard would find it — not through a ref the primitive had to be handed,
+   * and not under a second set of rules for "added" rows.
+   *
+   * Returns false when the row is not in the current row model, which is
+   * reachable: a draft row with every field blank disappears under a text filter.
+   * The caller reports that rather than dropping focus silently.
+   */
+  const focusRow = useCallback(
+    (rowId: string): boolean => {
+      const index = visibleRows.findIndex((row) => row.id === rowId)
+
+      if (index === -1) {
+        return false
+      }
+
+      const row = visibleRows[index]
+      const columnId = firstEditableColumnId(row)
+
+      if (!row || !columnId) {
+        return false
+      }
+
+      setSelectionAnchor({ rowIndex: index, columnId })
+      setFocusedRowIndex(index)
+      setFocusedColumnId(columnId)
+      scrollToIndex(index)
+
+      // Deliberately `focusCellElement`, not `focusCellIfGridHasFocus`: the
+      // operator pressed a button in the grid's chrome, so focus is on that
+      // button rather than inside the grid, and "only move DOM focus when the
+      // grid already owns it" would leave the new row unfocused. Add is an
+      // explicit request to go there.
+      focusCellElement(gridCellKey(row.id, columnId))
+      revealCell(index, columnId)
+      return true
+    },
+    [firstEditableColumnId, focusCellElement, revealCell, scrollToIndex, visibleRows],
+  )
+
   const focusCell = useCallback(
     (rowId: string, columnId: string, extend = false) => {
       const index = visibleRows.findIndex((row) => row.id === rowId)
@@ -1601,6 +1714,8 @@ export function useGridKeyboard<TData>({
     focusedRowIndex: clampedRowIndex,
     statusMessage,
     focusCell,
+    focusRow,
+    setStatusMessage,
     isRowFocused,
     isRowEditing,
     focusedRowDomId: clampedRowIndex >= 0 ? focusedRowDomId : undefined,
