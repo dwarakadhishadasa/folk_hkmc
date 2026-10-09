@@ -50,6 +50,8 @@ scrolled away.
 | Key | Effect |
 | --- | --- |
 | `editable: true` | Gates the `e` key. Also the only thing that should be in `PATCH_KEY_BY_COLUMN`. |
+| `editor: <GridEditorKey>` | Names the typed editor the cell renders and parses with. Resolved through the registry in `components/grid/grid-editors.tsx`. |
+| `editorOptions` | Presentation-only configuration for that editor: `options`, `users`, `currency`, `locale`. |
 | `filter: "text" \| "number"` | Chooses the per-column filter control and supplies its `filterFn` |
 | `align`, `tabular` | Reaches the cell directly |
 | `frozen: true` | Joins the pinned run |
@@ -93,6 +95,38 @@ is where the optimistic override lives — so an editable column with a widget s
 *old* value for the whole round trip, with no error anywhere. Nothing warns you: the
 column typechecks, it renders, and it silently loses CAP-5. An editable column must be a
 plain accessor; put the widget in `header`, or in a separate non-editable column.
+
+### `meta.grid.editor` is the third way, and it is not a widget
+
+`editor` replaces that prohibition rather than being an exception to it. An editor column
+**still supplies no `cell`**; the editor is resolved by key inside the primitive, and the
+cell renders it *after* the override has been applied. `editorOptions` carries the option
+list, the user list and the currency code — presentation only, like every other
+`meta.grid` key, and never a value.
+
+The rule that is actually load-bearing, and the reason DW-27 is closed rather than
+documented:
+
+> **A closed-state editor display must render `ctx.text`, never `ctx.getValue()`.**
+
+`ctx.text` is the cell's display value with the optimistic override already on it.
+`getValue()` is the stored value, for seeding a draft and nothing else. An editor that
+re-reads the stored value shows the *prior* value for the whole round trip — the exact
+defect the default-renderer mistake produced, one layer down. `grid-row.tsx` already
+hands the editor the overridden text and falls back to it when `renderDisplay` returns
+`undefined`, so an editor that omits a display widget cannot get this wrong; only one that
+writes a widget can.
+
+Two more conventions inside an editor display:
+
+- **It must not be a `<button>`.** `e2e/fixtures/manage-grid.ts` resolves the favorite star
+  as `getByRole("button")` *inside the row, unscoped*, and four green assertions rely on it
+  being the only one. A button in every `select` / `multiselect` / `date` / `user` cell makes
+  those ambiguous. The grid's own editors use a `<span role="presentation">`: the cell is
+  already the focusable, keyboard-reachable thing, and `e` opens its editor.
+- **It must not grow the cell.** `GridRow` enforces fixed row heights, so anything with a
+  list, a search, a calendar or a multi-line body opens in a `Popover` portal. `notes` is a
+  popover precisely because a textarea cannot fit in 32px.
 
 **One consequence to expect on your table: tooltips.** While the default renderer was winning,
 `cell.render` was defined for every accessor column, and `GridRow` skips `title` whenever `render`
@@ -264,6 +298,8 @@ strips it.
       pinned column is hideable or reorderable.
 - [ ] `select` first, row action last.
 - [ ] Editable columns appear in `meta.grid.editable` **and** `PATCH_KEY_BY_COLUMN`.
+- [ ] Editable columns name an `meta.grid.editor` where a typed control fits, and still
+      supply no `cell` widget of their own.
 - [ ] Every commit rejects with an `Error` carrying the server's message.
 - [ ] One fetch helper, `readError` on every body, named network failure.
 - [ ] Selection held in `useState`, passed as `state.rowSelection`, with `onRowSelectionChange`; not

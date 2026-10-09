@@ -13,6 +13,8 @@ import type {
   GridEditErrorHandler,
   GridSelectionCoordinate,
 } from "@/components/grid/grid-types"
+import type { GridEditorContext, GridEditorDefinition } from "@/components/grid/grid-editor-types"
+import { resolveGridEditor } from "@/components/grid/grid-editors"
 
 /** Displayed in place of an empty value, matching the existing table convention. */
 export const GRID_EMPTY_TEXT = "\u2014"
@@ -142,6 +144,12 @@ export interface UseGridKeyboardOptions<TData> {
    * `Grid` resolves it from the definitions it was handed and passes it down.
    */
   consumerRenderedCells: ReadonlySet<string>
+  /**
+   * Column id to header label, so a validation message can name the field an
+   * operator sees rather than its column id. Optional: a caller without one gets
+   * the column id, which is what the fallback below uses.
+   */
+  columnLabelById?: ReadonlyMap<string, string>
 }
 
 export interface GridKeyboardApi<TData> {
@@ -161,7 +169,7 @@ export interface GridKeyboardApi<TData> {
   isRowEditing: (row: Row<TData>) => boolean
   /** DOM id of the focused row, referenced by the container's activedescendant. */
   focusedRowDomId: string | undefined
-  getCellView: (row: Row<TData>, cell: Cell<TData, unknown>) => GridCellView
+  getCellView: (row: Row<TData>, cell: Cell<TData, unknown>) => GridCellView<TData>
   containerProps: {
     onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
     onPaste: (event: ClipboardEvent<HTMLDivElement>) => void
@@ -183,6 +191,7 @@ export function useGridKeyboard<TData>({
   onCellCommit,
   onEditError,
   consumerRenderedCells,
+  columnLabelById,
 }: UseGridKeyboardOptions<TData>): GridKeyboardApi<TData> {
   const domId = useId()
   const focusedRowDomId = `${domId}-focused-row`
@@ -661,62 +670,15 @@ export function useGridKeyboard<TData>({
   }, [])
 
   /**
-   * The one opener. `Enter`, `e` and the printable-character branch all land
-   * here, so the seeding rules cannot drift apart: `Enter` and `e` seed the
-   * cell's display text for in-place editing, a printable character seeds
-   * itself to replace the value. Returns false on a non-editable cell, which
-   * the callers treat as a no-op rather than an error.
+   * The draft key handler, read through a ref.
+   *
+   * `handleDraftKeyDown` needs `commitEditing`, `commitEditing` needs the editor
+   * commit route, and the editor context hands `handleDraftKeyDown` to the
+   * controls — a cycle no amount of reordering resolves, because every edge is
+   * real. A ref breaks it without a stale closure: the value is reassigned after
+   * every render and read only from an event handler.
    */
-  const openEditor = useCallback(
-    (rowIndex: number, columnId: string, seed?: string): boolean => {
-      const row = visibleRows[rowIndex]
-
-      if (!row) {
-        return false
-      }
-
-      const cell = row
-        .getVisibleCells()
-        .find((candidate) => candidate.column.id === columnId)
-
-      if (!cell || cell.column.columnDef.meta?.grid?.editable !== true) {
-        return false
-      }
-
-      setFocusedRowIndex(rowIndex)
-      setFocusedColumnId(columnId)
-      setEditing({ rowId: row.id, columnId })
-      setDraft(seed ?? displayCellText(row.id, cell))
-      return true
-    },
-    [displayCellText, visibleRows],
-  )
-
-  const beginEditing = useCallback(() => {
-    const row = visibleRows[clampedRowIndex]
-
-    if (!row) {
-      return
-    }
-
-    if (focusedColumnId) {
-      // With a column focused, that column decides: `e` on a non-editable cell
-      // is a no-op, not a jump to a different cell.
-      openEditor(clampedRowIndex, focusedColumnId)
-      return
-    }
-
-    // With no column focused, `e` starts the first editable cell so the key is
-    // useful from a cold grid.
-    const cells = row.getVisibleCells()
-    const target = cells.find(
-      (cell) => cell.column.columnDef.meta?.grid?.editable === true,
-    )
-
-    if (target) {
-      openEditor(clampedRowIndex, target.column.id)
-    }
-  }, [clampedRowIndex, focusedColumnId, openEditor, visibleRows])
+  const draftKeyDownRef = useRef<(event: KeyboardEvent<HTMLInputElement>) => void>(() => undefined)
 
   const revertCommit = useCallback(
     (
@@ -808,6 +770,213 @@ export function useGridKeyboard<TData>({
     [exitEditing, onCellCommit, revertCommit, visibleRows],
   )
 
+  /**
+   * The one opener. `Enter`, `e`, a click on a display widget and the
+   * printable-character branch all land here, so the seeding rules cannot drift
+   * apart: `Enter` and `e` seed the cell's display text for in-place editing, a
+   * printable character seeds itself to replace the value, and an editor whose
+   * `draftSeed` differs gets its own representation (a date cell edits
+   * `2026-03-05`, not `5 Mar 2026`). Returns false on a non-editable cell, which
+   * the callers treat as a no-op rather than an error.
+   */
+  const openEditor = useCallback(
+    (rowIndex: number, columnId: string, seed?: string): boolean => {
+      const row = visibleRows[rowIndex]
+
+      if (!row) {
+        return false
+      }
+
+      const cell = row
+        .getVisibleCells()
+        .find((candidate) => candidate.column.id === columnId)
+
+      if (!cell || cell.column.columnDef.meta?.grid?.editable !== true) {
+        return false
+      }
+
+      setFocusedRowIndex(rowIndex)
+      setFocusedColumnId(columnId)
+
+      const definition = resolveGridEditor(cell.column.columnDef.meta?.grid?.editor)
+
+      // `checkbox` is the one editor whose control *is* the cell, so opening it
+      // flips the value instead of mounting a draft. That is what makes `e` and
+      // `Enter` on a checkbox behave the same as clicking it, and it is why no
+      // textbox ever appears over a boolean.
+      if (definition?.commitsOnInteraction === true) {
+        runCommit(
+          { rowId: row.id, columnId },
+          cell.getValue() !== true,
+          displayCellText(row.id, cell),
+        )
+        return true
+      }
+
+      setEditing({ rowId: row.id, columnId })
+
+      const text = displayCellText(row.id, cell)
+      setDraft(seed ?? definition?.draftSeed?.(text, cell.getValue()) ?? text)
+      return true
+    },
+    [displayCellText, runCommit, visibleRows],
+  )
+
+  const cancelEditing = useCallback(() => {
+    if (!editing) {
+      return
+    }
+
+    restoreFocusRef.current = gridCellKey(editing.rowId, editing.columnId)
+    exitEditing()
+  }, [editing, exitEditing])
+
+  const beginEditing = useCallback(() => {
+    const row = visibleRows[clampedRowIndex]
+
+    if (!row) {
+      return
+    }
+
+    if (focusedColumnId) {
+      // With a column focused, that column decides: `e` on a non-editable cell
+      // is a no-op, not a jump to a different cell.
+      openEditor(clampedRowIndex, focusedColumnId)
+      return
+    }
+
+    // With no column focused, `e` starts the first editable cell so the key is
+    // useful from a cold grid.
+    const cells = row.getVisibleCells()
+    const target = cells.find(
+      (cell) => cell.column.columnDef.meta?.grid?.editable === true,
+    )
+
+    if (target) {
+      openEditor(clampedRowIndex, target.column.id)
+    }
+  }, [clampedRowIndex, focusedColumnId, openEditor, visibleRows])
+
+  /**
+   * Builds what one editor instance is handed.
+   *
+   * Every closure here terminates in `runCommit`, which is the point: an editor
+   * supplies input parsing and validation and nothing else. Nothing in
+   * `grid-editors.tsx` knows a route exists, so there is exactly one mutation
+   * channel for a cell write however the value was produced — a typed
+   * character, a picked option, `Delete`, or a paste.
+   *
+   * `text` is the DW-27 contract in one field: the cell's display value with
+   * the optimistic override already applied. A `renderDisplay` that reads
+   * `getValue()` instead shows the prior value for the whole round trip.
+   */
+  const buildEditorContext = useCallback(
+    (
+      cell: Cell<TData, unknown>,
+      definition: GridEditorDefinition<unknown>,
+      draftOverride?: string,
+    ): GridEditorContext<TData> => {
+      const row = cell.row
+      const columnId = cell.column.id
+      const target: GridCellCoordinate = { rowId: row.id, columnId }
+      const key = gridCellKey(row.id, columnId)
+      const raw = displayCellText(row.id, cell)
+      const meta = cell.column.columnDef.meta?.grid
+      const currentDraft = draftOverride ?? draft
+
+      const commitValue = (value: unknown) => {
+        runCommit(target, value, raw)
+      }
+
+      const ctx: GridEditorContext<TData> = {
+        rowId: row.id,
+        columnId,
+        row: row.original,
+        text: raw.length > 0 ? raw : GRID_EMPTY_TEXT,
+        getValue: () => cell.getValue(),
+        draft: currentDraft,
+        setDraft,
+        onDraftKeyDown: (event) => draftKeyDownRef.current(event),
+        commitDraft: (draftArgument?: string) => {
+          const source = draftArgument ?? currentDraft
+          let parsed: unknown
+
+          try {
+            parsed = definition.parse(source, ctx)
+          } catch (cause) {
+            // A rejected draft is a rejected write, exactly: the cell returns to
+            // the value on screen, marks destructive, and the message lands in the
+            // same status line. That reuse is the whole validation story — an
+            // editor has no error slot of its own to keep in step.
+            restoreFocusRef.current = key
+            exitEditing()
+            revertCommit(key, target, raw, source, cause)
+            return
+          }
+
+          commitValue(parsed)
+        },
+        commitValue,
+        open: () => {
+          const index = visibleRows.findIndex((candidate) => candidate.id === row.id)
+
+          if (index !== -1) {
+            openEditor(index, columnId)
+          }
+        },
+        close: cancelEditing,
+        editing: editing?.rowId === row.id && editing.columnId === columnId,
+        options: meta?.editorOptions ?? {},
+        label: columnLabelById?.get(columnId) ?? columnId,
+      }
+
+      return ctx
+    },
+    [
+      cancelEditing,
+      columnLabelById,
+      displayCellText,
+      draft,
+      editing,
+      exitEditing,
+      openEditor,
+      revertCommit,
+      runCommit,
+      setDraft,
+      visibleRows,
+    ],
+  )
+
+  /**
+   * The one route from a cell to a write.
+   *
+   * A draft is parsed by the column's editor when it has one, so `Delete` and a
+   * paste are validated exactly like typing is; a value that is already typed
+   * goes straight through. Both end at `runCommit`, and a `parse` that throws
+   * ends at `revertCommit` — the same two exits every write already had.
+   */
+  const commitCellInput = useCallback(
+    (
+      target: GridCellCoordinate,
+      cell: Cell<TData, unknown>,
+      input: { kind: "value"; value: unknown } | { kind: "draft"; draft: string },
+    ) => {
+      const definition = resolveGridEditor(cell.column.columnDef.meta?.grid?.editor)
+
+      if (!definition || input.kind === "value") {
+        runCommit(
+          target,
+          input.kind === "value" ? input.value : input.draft,
+          displayCellText(target.rowId, cell),
+        )
+        return
+      }
+
+      buildEditorContext(cell, definition, input.draft).commitDraft(input.draft)
+    },
+    [buildEditorContext, displayCellText, runCommit],
+  )
+
   const commitEditing = useCallback(() => {
     if (!editing) {
       return
@@ -822,14 +991,21 @@ export function useGridKeyboard<TData>({
       return
     }
 
-    runCommit(target, draft, displayCellText(target.rowId, cell))
-  }, [displayCellText, draft, editing, exitEditing, runCommit, visibleRows])
+    commitCellInput(target, cell, { kind: "draft", draft })
+  }, [commitCellInput, draft, editing, exitEditing, visibleRows])
 
   /**
    * Clears a cell through the normal commit path. Skipped — silently — on the
    * select column and any column whose control owns its own activation:
    * clearing a selection checkbox is not a cell write, and neither is clearing
    * a checkbox cell, whose empty state is `false` rather than `""`.
+   *
+   * A column carrying an `editor` is **exempt** from the consumer-renderer
+   * skip. `consumerRenderedCells` exists to protect a column that authors its
+   * own cell node from the grid printing a competing value, but an editor column
+   * authors its node inside the grid, so exempting it is what keeps the column
+   * writable at all. `resolveConsumerRenderers` stays table-agnostic; the
+   * compensation is applied here, where the write is decided.
    */
   const clearCell = useCallback(
     (rowIndex: number, columnId: string): boolean => {
@@ -841,19 +1017,23 @@ export function useGridKeyboard<TData>({
         return false
       }
 
-      if (meta.selectable === true || meta.editor === CHECKBOX_EDITOR || consumerRenderedCells.has(columnId)) {
+      if (
+        meta.selectable === true ||
+        meta.editor === CHECKBOX_EDITOR ||
+        (meta.editor === undefined && consumerRenderedCells.has(columnId))
+      ) {
         return false
       }
 
-      runCommit({ rowId: row.id, columnId }, "", displayCellText(row.id, cell))
+      commitCellInput({ rowId: row.id, columnId }, cell, { kind: "draft", draft: "" })
       return true
     },
-    [consumerRenderedCells, displayCellText, runCommit, visibleRows],
+    [commitCellInput, consumerRenderedCells, visibleRows],
   )
 
   /**
    * Toggles a checkbox cell. The only editor that commits on interaction;
-   * everything else commits on `Enter`, blur or explicit close.
+   * everything else commits on `Enter`, an explicit pick or an explicit close.
    */
   const toggleCheckboxCell = useCallback(
     (rowIndex: number, columnId: string): boolean => {
@@ -864,20 +1044,15 @@ export function useGridKeyboard<TData>({
         return false
       }
 
-      runCommit({ rowId: row.id, columnId }, cell.getValue() !== true, displayCellText(row.id, cell))
+      commitCellInput(
+        { rowId: row.id, columnId },
+        cell,
+        { kind: "value", value: cell.getValue() !== true },
+      )
       return true
     },
-    [displayCellText, runCommit, visibleRows],
+    [commitCellInput, visibleRows],
   )
-
-  const cancelEditing = useCallback(() => {
-    if (!editing) {
-      return
-    }
-
-    restoreFocusRef.current = gridCellKey(editing.rowId, editing.columnId)
-    exitEditing()
-  }, [editing, exitEditing])
 
 
   /**
@@ -1017,13 +1192,13 @@ export function useGridKeyboard<TData>({
             meta?.editable !== true ||
             meta.selectable === true ||
             meta.editor === CHECKBOX_EDITOR ||
-            consumerRenderedCells.has(columnId)
+            (meta.editor === undefined && consumerRenderedCells.has(columnId))
           ) {
             skipped += 1
             return
           }
 
-          runCommit({ rowId: row.id, columnId }, field, displayCellText(row.id, cell))
+          commitCellInput({ rowId: row.id, columnId }, cell, { kind: "draft", draft: field })
           committed += 1
         })
       })
@@ -1043,10 +1218,9 @@ export function useGridKeyboard<TData>({
     [
       clampedRowIndex,
       columnIndexById,
+      commitCellInput,
       consumerRenderedCells,
-      displayCellText,
       focusedColumnId,
-      runCommit,
       visibleColumnIds,
       visibleRows,
     ],
@@ -1119,6 +1293,15 @@ export function useGridKeyboard<TData>({
     },
     [cancelEditing, commitEditing, editing, moveTab, visibleRows],
   )
+
+  // Synced after every render rather than assigned during one: updating a ref
+  // during render is what `react-hooks/refs` forbids, and the editor context has
+  // to hand this handler out before it is declared (see `draftKeyDownRef`). An
+  // effect is safe here because no editor exists until the operator acts, which
+  // is long after mount.
+  useEffect(() => {
+    draftKeyDownRef.current = handleDraftKeyDown
+  })
 
   const handleContainerKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -1355,7 +1538,7 @@ export function useGridKeyboard<TData>({
   )
 
   const getCellView = useCallback(
-    (row: Row<TData>, cell: Cell<TData, unknown>): GridCellView => {
+    (row: Row<TData>, cell: Cell<TData, unknown>): GridCellView<TData> => {
       const key = gridCellKey(row.id, cell.column.id)
       const override = overrides[key]
       const text = override?.value ?? rowCellText(cell)
@@ -1363,6 +1546,8 @@ export function useGridKeyboard<TData>({
       const isEditingCell = editing?.rowId === row.id && editing.columnId === cell.column.id
       const rowIndex = selectedRowIndexes?.get(row.id)
       const columnIndex = columnIndexById.get(cell.column.id)
+
+      const definition = resolveGridEditor(meta?.editor)
 
       const isSelected =
         selectionBounds !== null &&
@@ -1383,18 +1568,27 @@ export function useGridKeyboard<TData>({
         isSelected,
         editing: isEditingCell,
         draft: isEditingCell ? draft : "",
+        // Built here rather than in `grid-row.tsx` because every closure in the
+        // context terminates in `runCommit`; the row only renders what it is
+        // handed.
+        editor: definition
+          ? {
+              definition,
+              context: buildEditorContext(cell, definition, isEditingCell ? draft : ""),
+            }
+          : undefined,
         error: override?.error,
         onDraftChange: setDraft,
-        onDraftKeyDown: handleDraftKeyDown,
+        onDraftKeyDown: (event) => draftKeyDownRef.current(event),
       }
     },
     [
+      buildEditorContext,
       columnIndexById,
       consumerRenderedCells,
       draft,
       editing,
       focusedColumnId,
-      handleDraftKeyDown,
       isRowFocused,
       overrides,
       rowCellText,

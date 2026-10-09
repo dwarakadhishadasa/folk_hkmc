@@ -26,8 +26,15 @@
  * printable character everywhere else. Making it inert everywhere would be
  * worse — an operator typing a space into a text cell would get nothing — so
  * the spec pins both behaviours separately. The checkbox column is `flagged`,
- * which carries `editor: "checkbox"` and renders its boolean as text until
- * the typed-editor registry lands; the toggle is asserted on that text.
+ * which carries `editor: "checkbox"`.
+ *
+ * ## `flagged` stopped rendering as text when the editor registry landed
+ *
+ * `flagged` used to read `"true"` / `"false"` because the registry did not exist
+ * yet, and keys 6 and 7 asserted on that text. The `checkbox` editor's display is
+ * a real checkbox — "a checked box" in `editor-catalog.md` — so both keys now
+ * assert on `aria-checked` instead. The behaviour under test is unchanged; only
+ * the surface it is read through is.
  */
 
 import { expect, test, type Page } from "@playwright/test"
@@ -54,6 +61,11 @@ function cellEditor(page: Page) {
 
 /** The preview row whose writes always reject. See `GRID_PREVIEW_FAILING_REF`. */
 const FAILING_REF = "REF-0250"
+
+/** `flagged` as a checkbox, so its state is read from `aria-checked`. */
+function flaggedBox(page: Page, rowIndex: number) {
+  return cellAt(page, rowIndex, "flagged").getByRole("checkbox")
+}
 
 test.describe("grid keyboard completion", () => {
   test("key 1 — arrows move focus a cell at a time without editing", async ({ page }) => {
@@ -182,22 +194,28 @@ test.describe("grid keyboard completion", () => {
   test("key 6 — Space on a checkbox cell toggles through the commit path", async ({ page }) => {
     await openPreviewGrid(page)
 
-    // Row 1 is `row-2`: `flagged` is `index % 3 === 0`, so it starts `false`.
-    await expect(cellAt(page, 1, "flagged")).toHaveText("false")
+    // Row 1 is `row-2`: `flagged` is `index % 3 === 0`, so it starts unchecked.
+    await expect(flaggedBox(page, 1), "the cell starts unchecked").toHaveAttribute(
+      "aria-checked",
+      "false",
+    )
     await focusPreviewCellAt(page, 1, "flagged")
 
     await page.keyboard.press("Space")
-    await expect(
-      cellAt(page, 1, "flagged"),
-      "Space flips the checkbox value",
-    ).toHaveText("true")
+    await expect(flaggedBox(page, 1), "Space flips the checkbox value").toHaveAttribute(
+      "aria-checked",
+      "true",
+    )
 
     // No editor for a toggle: the checkbox is the one editor that commits on
     // interaction rather than opening anything.
     await expect(cellEditor(page), "a toggle must not open the editor").toHaveCount(0)
 
     await page.keyboard.press("Space")
-    await expect(cellAt(page, 1, "flagged"), "Space flips it back").toHaveText("false")
+    await expect(flaggedBox(page, 1), "Space flips it back").toHaveAttribute(
+      "aria-checked",
+      "false",
+    )
   })
 
   test("key 7 — Delete clears through the revertable path and skips what it must", async ({ page }) => {
@@ -220,12 +238,15 @@ test.describe("grid keyboard completion", () => {
       refText ?? "",
     )
 
-    const flaggedText = await cellAt(page, 2, "flagged").textContent()
+    // Read the state rather than naming it: `flagged` is `index % 3 === 0`, so
+    // which rows are checked depends on where the row lands.
+    const flaggedBefore = await flaggedBox(page, 2).getAttribute("aria-checked")
     await focusPreviewCellAt(page, 2, "flagged")
     await page.keyboard.press("Backspace")
-    await expect(cellAt(page, 2, "flagged"), "Delete on a checkbox cell is a no-op").toHaveText(
-      flaggedText ?? "",
-    )
+    await expect(
+      flaggedBox(page, 2),
+      "Delete on a checkbox cell is a no-op: a boolean's empty state is false, not blank",
+    ).toHaveAttribute("aria-checked", flaggedBefore ?? "")
 
     // Revert path: the failing row rejects the clear, so the original value
     // returns with the destructive marker and the harness message.

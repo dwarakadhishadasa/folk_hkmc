@@ -9,6 +9,13 @@ export {
   type GridColumnDef,
   type GridProps,
 } from "@/components/grid/grid"
+export { GRID_EDITOR_KEYS, resolveGridEditor } from "@/components/grid/grid-editors"
+export type {
+  GridEditorContext,
+  GridEditorDefinition,
+  GridEditorKey,
+  GridEditorOptions,
+} from "@/components/grid/grid-editor-types"
 export { GridHeaderCell, type GridHeaderCellProps } from "@/components/grid/grid-header-cell"
 export { GridPanel, gridPanelKey, type GridPanelProps } from "@/components/grid/grid-panel"
 export {
@@ -23,6 +30,7 @@ export type {
   GridCellCommit,
   GridCellCommitHandler,
   GridCellCoordinate,
+  GridCellEditorView,
   GridCellSelection,
   GridCellView,
   GridColumnAlign,

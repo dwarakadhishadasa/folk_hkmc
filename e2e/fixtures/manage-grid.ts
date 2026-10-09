@@ -89,9 +89,17 @@ export async function openPreviewGrid(page: Page): Promise<void> {
   await expect(page.locator('tbody[data-grid-panel="ready"]')).toBeAttached()
 }
 
-/** Point the preview grid at one cell, with the grid container holding focus. */
+/**
+ * Point the preview grid at one cell, with the grid container holding focus.
+ *
+ * The click lands on the cell's padding corner rather than its centre. That is
+ * not pedantry: since the typed-editor registry landed, some cells *are* their own
+ * control — `flagged` is a checkbox, `website` is a link — so a centre click is an
+ * edit or a navigation, not a focus. The corner is inside the `<td>` either way,
+ * so `onPointerDown` still moves the cell focus exactly as before.
+ */
 export async function focusPreviewCellAt(page: Page, rowIndex: number, columnId: string): Promise<void> {
-  await cellAt(page, rowIndex, columnId).click()
+  await cellAt(page, rowIndex, columnId).click({ position: { x: 2, y: 2 } })
   await previewScroll(page).focus()
 }
 

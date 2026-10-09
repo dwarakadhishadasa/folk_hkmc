@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 
 import { GridPreview } from "@/components/grid/grid-preview"
-import type { GridPreviewRow } from "@/components/grid/grid-preview"
+import type { GridPreviewRow, GridPreviewUser } from "@/components/grid/grid-preview"
 
 /**
  * `useSearchParams` in the mounted client component triggers a prerender bailout,
@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic"
  * Declared here rather than imported from the client module: every runtime
  * export of a `"use client"` file becomes a client reference when a server
  * component imports it, so `500` would arrive as an opaque object and
- * `buildPreviewRows` would quietly produce nothing.
+ * `buildPreviewRows` would quietly produce nothing. The same is true of
+ * `PREVIEW_USERS`, which is why it is passed as a prop rather than imported.
  */
 const PREVIEW_ROW_COUNT = 500
 
@@ -30,6 +31,21 @@ const NOTE_FRAGMENTS = [
   "Routine check, nothing outstanding.",
   "Flagged for a second pass before quarter close, pending sign-off from the regional desk.",
 ]
+
+/**
+ * The people the `user` editor can pick, and the ids the rows point at.
+ *
+ * Declared as data rather than derived from the rows on purpose: an editor that
+ * computed its own option list out of the values it is editing could not reject
+ * anything, which would make its validation vacuous.
+ */
+const PREVIEW_USERS: readonly GridPreviewUser[] = [
+  { id: "preview-user-1", name: "A. Bane" },
+  { id: "preview-user-2", name: "R. Iyer" },
+  { id: "preview-user-3", name: "M. Nair" },
+]
+
+const PREVIEW_DOMAINS = ["example.org", "example.net", "example.com"]
 
 /**
  * Deterministic so a reload shows the same set and the review is reproducible.
@@ -53,6 +69,13 @@ function buildPreviewRows(count: number): GridPreviewRow[] {
       updatedAt: `2026-0${(index % 9) + 1}-${String((index % 27) + 1).padStart(2, "0")}`,
       notes: NOTE_FRAGMENTS[index % NOTE_FRAGMENTS.length],
       flagged: index % 3 === 0,
+      // Minor units, which is what the `currency` editor parses to and stores.
+      amount: (index * 137) % 500_000,
+      quantity: (index * 17) % 240,
+      website: `https://${REGIONS[index % REGIONS.length]}.example.org/${index}`,
+      emailAddress: `${first.toLowerCase()}.${second.toLowerCase()}@${PREVIEW_DOMAINS[index % PREVIEW_DOMAINS.length]}`,
+      // One row in four has no assignee, so the empty state is reachable.
+      assignee: index % 4 === 0 ? null : (PREVIEW_USERS[index % PREVIEW_USERS.length]?.id ?? null),
     })
   }
 
@@ -80,7 +103,7 @@ export default function GridPreviewPage() {
         </p>
       </header>
 
-      <GridPreview rows={buildPreviewRows(PREVIEW_ROW_COUNT)} />
+      <GridPreview rows={buildPreviewRows(PREVIEW_ROW_COUNT)} users={PREVIEW_USERS} />
     </main>
   )
 }

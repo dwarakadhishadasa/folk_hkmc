@@ -64,6 +64,7 @@ const CONTACT_COLUMNS = [
   "college",
   "company",
   "rounds",
+  "source",
   "books_read",
   "notes",
   "initial_contact",
@@ -88,6 +89,7 @@ const CONTACT_COLUMN_BY_PATCH_KEY: Record<ManageContactPatchKey, string> = {
   college: "college",
   company: "company",
   rounds: "rounds",
+  source: "source",
   booksRead: "books_read",
   notes: "notes",
   initialContact: "initial_contact",
@@ -103,6 +105,7 @@ type ContactRow = {
   college: string | null
   company: string | null
   rounds: string | null
+  source: string | null
   books_read: string[] | null
   notes: string | null
   initial_contact: string | null
@@ -562,6 +565,7 @@ export async function loadManagePortalData(params: {
       college: text(row.college),
       company: text(row.company),
       rounds: text(row.rounds),
+      source: text(row.source),
       booksRead: textArray(row.books_read),
       notes: text(row.notes),
       initialContact: text(row.initial_contact),
@@ -911,6 +915,9 @@ export async function updateManageContact(params: {
       case "rounds":
         updatePayload[column] = optionalString(value, "Rounds")
         break
+      case "source":
+        updatePayload[column] = optionalString(value, "Source")
+        break
       case "notes":
         updatePayload[column] = optionalString(value, "Notes")
         break
@@ -962,6 +969,7 @@ export async function updateManageContact(params: {
     college: text(row.college),
     company: text(row.company),
     rounds: text(row.rounds),
+    source: text(row.source),
     booksRead: textArray(row.books_read),
     notes: text(row.notes),
     initialContact: text(row.initial_contact),

@@ -629,6 +629,9 @@ export function Grid<TData extends RowData>({
     onCellCommit,
     onEditError,
     consumerRenderedCells: consumerRenderers.cells,
+    // So a typed editor's validation message names the field the operator sees
+    // ("Source") rather than its column id.
+    columnLabelById: labelById,
   })
 
   useEffect(() => {

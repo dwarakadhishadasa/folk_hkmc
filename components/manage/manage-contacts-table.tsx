@@ -47,6 +47,10 @@ const SELECT_COLUMN_ID = "select"
 const NAME_COLUMN_ID = "name"
 const PHONE_COLUMN_ID = "phone"
 const LOCATION_COLUMN_ID = "location"
+const SOURCE_COLUMN_ID = "source"
+const BOOKS_READ_COLUMN_ID = "booksRead"
+const INITIAL_CONTACT_COLUMN_ID = "initialContact"
+const DATE_OF_BIRTH_COLUMN_ID = "dateOfBirth"
 const TOTAL_COLUMN_ID = "totalAttendanceCount"
 const PAST_60_COLUMN_ID = "past60DayAttendanceCount"
 const LAST_CONTACTED_COLUMN_ID = "lastContactedOn"
@@ -67,6 +71,10 @@ const COLUMN_IDS: readonly string[] = [
   NAME_COLUMN_ID,
   PHONE_COLUMN_ID,
   LOCATION_COLUMN_ID,
+  SOURCE_COLUMN_ID,
+  BOOKS_READ_COLUMN_ID,
+  INITIAL_CONTACT_COLUMN_ID,
+  DATE_OF_BIRTH_COLUMN_ID,
   TOTAL_COLUMN_ID,
   PAST_60_COLUMN_ID,
   LAST_CONTACTED_COLUMN_ID,
@@ -79,6 +87,10 @@ const COLUMN_LABELS: Record<string, string> = {
   [NAME_COLUMN_ID]: "Name",
   [PHONE_COLUMN_ID]: "Phone",
   [LOCATION_COLUMN_ID]: "Location",
+  [SOURCE_COLUMN_ID]: "Source",
+  [BOOKS_READ_COLUMN_ID]: "Books Read",
+  [INITIAL_CONTACT_COLUMN_ID]: "Initial Contact",
+  [DATE_OF_BIRTH_COLUMN_ID]: "Date of Birth",
   [TOTAL_COLUMN_ID]: "Total Attendance",
   [PAST_60_COLUMN_ID]: "Past 60 Days",
   [LAST_CONTACTED_COLUMN_ID]: "Last Contacted On",
@@ -86,6 +98,25 @@ const COLUMN_LABELS: Record<string, string> = {
   [COLLECTED_BY_COLUMN_ID]: "Collected By",
   [FAVORITE_COLUMN_ID]: "Favorite",
 }
+
+/**
+ * The `source` values the local fixtures write, verbatim.
+ *
+ * A `select` editor rejects a value that is not one of its options, so the
+ * option list has to be a superset of what the rows actually hold or every
+ * existing row renders as "not an option" and a no-op commit is refused.
+ * `scripts/seed-preview-fixtures.mjs` writes the first and
+ * `scripts/bulk-contact-fixtures.mjs` writes the second; the values are unioned
+ * with whatever the payload itself carries so a hand-written row is covered too.
+ *
+ * The catalog's "Pass Distribution" / "Public Registration" / "Old" were
+ * Airtable-era values: no migration, seeder or fixture in this repository writes
+ * them, and offering them would put three dead options in front of every
+ * operator. Verified against the running local stack at this story's baseline:
+ * `preview-fixture` on 4 rows and `preview-fixture-bulk` on 250, and nothing
+ * else.
+ */
+const KNOWN_SOURCE_VALUES = ["preview-fixture", "preview-fixture-bulk"] as const
 
 /**
  * The only columns an inline edit may write, mapped to their patch key.
@@ -97,6 +128,10 @@ const COLUMN_LABELS: Record<string, string> = {
 const PATCH_KEY_BY_COLUMN: Partial<Record<string, ManageContactPatchKey>> = {
   [NAME_COLUMN_ID]: "name",
   [PHONE_COLUMN_ID]: "phone",
+  [SOURCE_COLUMN_ID]: "source",
+  [BOOKS_READ_COLUMN_ID]: "booksRead",
+  [INITIAL_CONTACT_COLUMN_ID]: "initialContact",
+  [DATE_OF_BIRTH_COLUMN_ID]: "dateOfBirth",
   [NOTES_COLUMN_ID]: "notes",
 }
 
@@ -252,6 +287,25 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
     () => new Map(payload.locations.map((location) => [location.id, location.name])),
     [payload.locations],
   )
+
+  /**
+   * The `select` editor's option list for `source`.
+   *
+   * The seeded values first, in a fixed order, then whatever else the rows
+   * carry — so the list is a superset of every stored value and an existing row
+   * is never "not an option".
+   */
+  const sourceOptions = useMemo(() => {
+    const options = new Set<string>(KNOWN_SOURCE_VALUES)
+
+    for (const contact of contacts) {
+      if (typeof contact.source === "string" && contact.source.length > 0) {
+        options.add(contact.source)
+      }
+    }
+
+    return [...options]
+  }, [contacts])
 
   const applyWrite = useCallback((written: ManageContactWriteResult) => {
     setContacts((current) => ({
@@ -512,14 +566,22 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         size: 200,
         // Pinned: scrolling right must never lose the row's identity. `hideable:
         // false` because a column that cannot scroll away cannot be hidden either.
-        meta: { grid: { frozen: true, editable: true, filter: "text", hideable: false } },
+        meta: {
+          grid: {
+            frozen: true,
+            editable: true,
+            editor: "text",
+            filter: "text",
+            hideable: false,
+          },
+        },
       }),
 
       columnHelper.accessor("phone", {
         id: PHONE_COLUMN_ID,
         header: COLUMN_LABELS[PHONE_COLUMN_ID],
         size: 140,
-        meta: { grid: { editable: true, filter: "text" } },
+        meta: { grid: { editable: true, editor: "text", filter: "text" } },
       }),
 
       // Joined rather than an array so both the per-column text filter and the
@@ -533,6 +595,49 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
           meta: { grid: { filter: "text" } },
         },
       ),
+
+      // `select`: a free-text column that only ever holds one of a known set.
+      // The option list is a superset of what the rows carry, so an existing
+      // value is always selectable and a no-op commit is never refused.
+      columnHelper.accessor("source", {
+        id: SOURCE_COLUMN_ID,
+        header: COLUMN_LABELS[SOURCE_COLUMN_ID],
+        size: 180,
+        meta: { grid: { editable: true, editor: "select", editorOptions: { options: sourceOptions } } },
+      }),
+
+      // `multiselect`: already a `string[]` on the row and already writable
+      // server-side, so this needs no plumbing at all — only the option list,
+      // which the payload resolved.
+      columnHelper.accessor("booksRead", {
+        id: BOOKS_READ_COLUMN_ID,
+        header: COLUMN_LABELS[BOOKS_READ_COLUMN_ID],
+        size: 200,
+        meta: {
+          grid: {
+            editable: true,
+            editor: "multiselect",
+            filter: "text",
+            editorOptions: { options: payload.booksReadOptions },
+          },
+        },
+      }),
+
+      // `date`: both are writable free-text strings the server already accepts as
+      // `YYYY-MM-DD`, so the calendar needs no server change at all.
+      columnHelper.accessor("initialContact", {
+        id: INITIAL_CONTACT_COLUMN_ID,
+        header: COLUMN_LABELS[INITIAL_CONTACT_COLUMN_ID],
+        size: 150,
+        meta: { grid: { editable: true, editor: "date" } },
+      }),
+
+      columnHelper.accessor("dateOfBirth", {
+        id: DATE_OF_BIRTH_COLUMN_ID,
+        header: COLUMN_LABELS[DATE_OF_BIRTH_COLUMN_ID],
+        size: 140,
+        meta: { grid: { editable: true, editor: "date" } },
+      }),
 
       columnHelper.accessor("totalAttendanceCount", {
         id: TOTAL_COLUMN_ID,
@@ -562,7 +667,10 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         id: NOTES_COLUMN_ID,
         header: COLUMN_LABELS[NOTES_COLUMN_ID],
         size: 240,
-        meta: { grid: { editable: true } },
+        // `longtext`: the control is a popover precisely because a textarea
+        // cannot fit a 32px row without pushing the virtualized list out of
+        // alignment.
+        meta: { grid: { editable: true, editor: "longtext" } },
       }),
 
       columnHelper.accessor(
@@ -611,7 +719,15 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         meta: { grid: { align: "center" } },
       }),
     ]
-  }, [locationNameById, payload.staffNames, pendingContactId, setVisibleSelection, toggleFavorite])
+  }, [
+    locationNameById,
+    payload.booksReadOptions,
+    payload.staffNames,
+    pendingContactId,
+    setVisibleSelection,
+    sourceOptions,
+    toggleFavorite,
+  ])
 
   const selectedCount = useMemo(
     () =>

@@ -15,6 +15,13 @@
 import type { KeyboardEvent, ReactNode } from "react"
 import type { RowData } from "@tanstack/react-table"
 
+import type {
+  GridEditorContext,
+  GridEditorDefinition,
+  GridEditorKey,
+  GridEditorOptions,
+} from "@/components/grid/grid-editor-types"
+
 export type GridDensity = "default" | "dense"
 
 export type GridColumnAlign = "left" | "right" | "center"
@@ -30,13 +37,21 @@ export type GridColumnAlign = "left" | "right" | "center"
  * `selectable` marks the column as the row-selection control; `hideable: false`
  * opts a column out of the visibility menu.
  *
- * `editor` names the typed editor for the cell and is read by the keyboard
- * layer only for `"checkbox"` (the `Space` toggle). Every other value waits
- * for the editor registry; nothing branches on it yet.
+ * `editor` names the typed editor for the cell and is resolved against the
+ * registry in `grid-editors.tsx`. It is a closed union rather than `string`, so
+ * an unknown editor is a compile error at the column definition instead of a
+ * blank cell at runtime; the keyboard layer additionally reads it for
+ * `"checkbox"` (the `Space` toggle) and to exempt an editor column from the
+ * consumer-renderer skip.
+ *
+ * `editorOptions` is presentation-only configuration for that editor — the
+ * allowed options, the known users, a currency code. Like every other key here
+ * it describes how the cell is edited and never carries a value.
  */
 export interface GridColumnMeta {
   editable?: boolean
-  editor?: string
+  editor?: GridEditorKey
+  editorOptions?: GridEditorOptions
   filter?: "text" | "number"
   align?: GridColumnAlign
   tabular?: boolean
@@ -180,10 +195,26 @@ export interface GridCellSelection {
 }
 
 /**
+ * A resolved editor, carried by a cell view.
+ *
+ * The definition and its context travel together because they are two halves of
+ * one thing: the definition is what renders, the context is what it renders
+ * *with*. Splitting them across two optional fields would let them disagree — a
+ * context with no definition, or a definition holding another cell's row.
+ */
+export interface GridCellEditorView<TData = unknown> {
+  definition: GridEditorDefinition<unknown>
+  context: GridEditorContext<TData>
+}
+
+/**
  * Everything `GridRow` needs to render one cell, resolved by the keyboard hook
  * so that row rendering stays free of edit-state plumbing.
+ *
+ * Generic only so the editor context can carry the row; `TData` defaults to
+ * `unknown` so a caller that never renders an editor does not have to name it.
  */
-export interface GridCellView {
+export interface GridCellView<TData = unknown> {
   columnId: string
   /** Already-resolved display text, including the empty-value placeholder. */
   text: string
@@ -204,6 +235,19 @@ export interface GridCellView {
   isSelected: boolean
   editing: boolean
   draft: string
+  /**
+   * The resolved editor, or `undefined` for a column with no
+   * `meta.grid.editor`.
+   *
+   * Built by the keyboard hook rather than by `grid-row.tsx` because every
+   * closure in the context terminates in `runCommit`, and that is the one write
+   * path: an editor has no route, no `fetch` and no second mutation channel.
+   *
+   * Its presence is also the DW-27 resolution: `text` above already carries the
+   * optimistic override, and the editor receives that rather than the stored
+   * value, so a display widget cannot show the prior value for the round trip.
+   */
+  editor?: GridCellEditorView<TData>
   /** Set when the last commit for this cell was rejected. */
   error?: string
   onDraftChange: (value: string) => void

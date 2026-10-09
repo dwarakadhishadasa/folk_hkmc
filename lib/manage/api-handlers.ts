@@ -180,6 +180,12 @@ function parseContactPatch(payload: unknown): ManageContactPatch {
       case "rounds":
         patch.rounds = boundedText(value, "Rounds", MAX_TEXT_LENGTH)
         break
+      // Bounded like `notes` rather than pattern-matched: `source` is free text
+      // in the database, and the grid's `select` editor already refuses to
+      // commit a value that is not one of the options it was given.
+      case "source":
+        patch.source = boundedText(value, "Source", MAX_TEXT_LENGTH)
+        break
       case "notes":
         patch.notes = boundedText(value, "Notes", MAX_TEXT_LENGTH)
         break

@@ -46,6 +46,13 @@ export interface ManageContact {
   college: string | null
   company: string | null
   rounds: string | null
+  /**
+   * Where the contact came from. A pre-existing `contacts` column, plumbed
+   * through the manage stack so the grid's `select` editor has a real field to
+   * write. One key of write-surface growth on an existing column, not a schema
+   * change.
+   */
+  source: string | null
   booksRead: string[]
   notes: string | null
   initialContact: string | null
@@ -151,6 +158,7 @@ export const MANAGE_CONTACT_PATCH_KEYS = [
   "college",
   "company",
   "rounds",
+  "source",
   "booksRead",
   "notes",
   "initialContact",
@@ -175,6 +183,7 @@ export interface ManageContactWriteResult {
   college: string | null
   company: string | null
   rounds: string | null
+  source: string | null
   booksRead: string[]
   notes: string | null
   initialContact: string | null

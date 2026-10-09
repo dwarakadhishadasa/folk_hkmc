@@ -70,9 +70,54 @@ function GridCellEditor({
   )
 }
 
+/**
+ * One cell's contents, for a column that opted into a typed editor.
+ *
+ * **This is the DW-27 fix site.** A cell has two possible renderers beyond the
+ * plain text — the consumer's own `cell` widget and a typed editor's
+ * `renderDisplay` — and `cell.text` is where the optimistic override, the `—`
+ * placeholder and the `title` tooltip all live. A renderer that re-reads the
+ * stored value instead of the text it was handed therefore shows the *prior*
+ * value for the whole round trip, with nothing in the console and no failing
+ * type check.
+ *
+ * So the rule here is one line: **the editor receives `cell.text`, and whatever
+ * it returns is what renders; `undefined` falls back to `cell.text`.** An editor
+ * is free to return `undefined` (a plain text column) and free to return a
+ * widget (a checkbox, a pill) — but a widget that ignores the override is the
+ * defect, and it is a defect in the editor, not here.
+ *
+ * The editor's renderer wins over `cell.render` rather than losing to it: a
+ * column that opts into an editor is asking the grid to draw the cell, so a
+ * consumer `cell` on the same column is not a competing claim.
+ */
+function GridCellContents<TData>({
+  cell,
+  editor,
+}: {
+  cell: GridCellView<TData>
+  editor: NonNullable<GridCellView<TData>["editor"]>
+}) {
+  if (cell.editing) {
+    // The open control, rendered here rather than by the consumer because the
+    // grid owns the draft, the commit and the revert.
+    return editor.definition.renderEditor(editor.context)
+  }
+
+  const display = editor.definition.renderDisplay?.(editor.context)
+
+  if (display !== undefined) {
+    return display
+  }
+
+  // An editor that renders no widget of its own falls back to the overridden
+  // text, exactly like a column with no editor at all.
+  return cell.text
+}
+
 export interface GridRowProps<TData> {
   row: Row<TData>
-  cells: GridCellView[]
+  cells: GridCellView<TData>[]
   /** The leading pinned run, in display order; empty when nothing is frozen. */
   frozenColumns: readonly GridFrozenColumn[]
   density: GridDensity
@@ -170,7 +215,9 @@ export function GridRow<TData>({
             )}
             style={stickyLeft === undefined ? undefined : { left: stickyLeft }}
           >
-            {cell.editing ? (
+            {cell.editor ? (
+              <GridCellContents cell={cell} editor={cell.editor} />
+            ) : cell.editing ? (
               <GridCellEditor
                 draft={cell.draft}
                 onDraftChange={cell.onDraftChange}
