@@ -130,7 +130,7 @@ export function ManageAttendanceView({ payload }: { payload: ManagePortalPayload
                       className={
                         active
                           ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
-                          : "rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-black/5"
+                          : "rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
                       }
                     >
                       {location.name}
@@ -142,7 +142,7 @@ export function ManageAttendanceView({ payload }: { payload: ManagePortalPayload
                 <button
                   type="button"
                   onClick={() => setSelectedLocations([])}
-                  className="rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-black/5"
+                  className="rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
                 >
                   Clear
                 </button>

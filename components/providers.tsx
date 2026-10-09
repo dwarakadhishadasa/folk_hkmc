@@ -8,17 +8,22 @@ import { NavigationFeedbackProvider } from "@/components/navigation-feedback-pro
 import { ServiceWorkerRegister } from "@/components/service-worker-register"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { PageTransitionController } from "@/components/page-transition-controller"
+import { ThemeProvider } from "@/components/theme-provider"
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  // Outermost by contract: `next-themes` sets the class on `<html>` during
+  // hydration, so anything that reads a token before it runs sees the wrong theme.
   return (
-    <NavigationFeedbackProvider>
-      <AuthProvider>
-        <AuthHashCallback />
-        <ServiceWorkerRegister />
-        <OfflineIndicator />
-        {children}
-        <PageTransitionController />
-      </AuthProvider>
-    </NavigationFeedbackProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <NavigationFeedbackProvider>
+        <AuthProvider>
+          <AuthHashCallback />
+          <ServiceWorkerRegister />
+          <OfflineIndicator />
+          {children}
+          <PageTransitionController />
+        </AuthProvider>
+      </NavigationFeedbackProvider>
+    </ThemeProvider>
   )
 }

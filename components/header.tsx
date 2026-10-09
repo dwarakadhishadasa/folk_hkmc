@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { RouteProgressBar } from "@/components/route-progress-bar"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/auth-context"
@@ -240,6 +241,13 @@ export function Header() {
                 priority
               />
             </div>
+            {/* In this branch too: mounting the toggle only after hydration would
+                pop it into the header of the page the theme story grades.
+                `ThemeToggle` renders `null` before mount, so this costs nothing
+                and keeps the tree stable across the swap. */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>
@@ -289,6 +297,7 @@ export function Header() {
               </nav>
             )}
             <div className="flex items-center gap-2 sm:gap-3">
+              <ThemeToggle />
               {isLoggedIn ? (
                 <>
                   <span className="hidden text-xs capitalize text-[var(--header-muted-text)] lg:inline">

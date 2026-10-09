@@ -142,7 +142,7 @@ function PeriodControls({
   return (
     <>
       <Select value={year || undefined} onValueChange={handleYearChange}>
-        <SelectTrigger size="sm" className="w-[110px] bg-white/95" aria-label="Year">
+        <SelectTrigger size="sm" className="w-[110px] bg-popover" aria-label="Year">
           <SelectValue placeholder="Year" />
         </SelectTrigger>
         <SelectContent>
@@ -155,7 +155,7 @@ function PeriodControls({
       </Select>
 
       <Select value={month} onValueChange={handleMonthChange}>
-        <SelectTrigger size="sm" className="w-[140px] bg-white/95" aria-label="Month">
+        <SelectTrigger size="sm" className="w-[140px] bg-popover" aria-label="Month">
           <SelectValue placeholder="Month" />
         </SelectTrigger>
         <SelectContent>

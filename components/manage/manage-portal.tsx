@@ -81,7 +81,7 @@ export function ManagePortal({
                 className={
                   scope.mode === "admin"
                     ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
-                    : "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-black/5"
+                    : "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
                 }
               >
                 All preachers
@@ -93,7 +93,7 @@ export function ManagePortal({
                 className={
                   scope.mode === "preacher"
                     ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
-                    : "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-black/5"
+                    : "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
                 }
               >
                 Own scope

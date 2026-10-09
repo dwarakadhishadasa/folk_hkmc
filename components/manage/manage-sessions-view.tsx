@@ -89,7 +89,7 @@ export function ManageSessionsView({ payload }: { payload: ManagePortalPayload }
                       {session.attendees.map((attendee) => (
                         <span
                           key={`${session.id}-${attendee.contactId}`}
-                          className="rounded-full bg-black/5 px-3 py-1 text-xs font-medium text-[var(--program-text)]"
+                          className="rounded-full bg-foreground/5 px-3 py-1 text-xs font-medium text-[var(--program-text)]"
                         >
                           {attendee.name}
                         </span>

@@ -13,7 +13,7 @@
  */
 
 import { spawnSync } from "node:child_process"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import { expect, test } from "@playwright/test"
 import { listAuthUsersMatching } from "../fixtures/auth-users"
@@ -85,6 +85,113 @@ test("the run-artifact directories are ignored, and only at the repo root", () =
   // — are covered where they are produced, in `smoke.spec.ts`.
   expect(ignored("e2e/.auth/admin.json"), "/e2e/.auth/ holds live Supabase session tokens").toBe(true)
 })
+
+test("the grid stays token-clean: no raw colour and no theme toggle under components/grid/", () => {
+  // The theme story is a token question, not a rewrite, and this is what keeps
+  // it one. A raw hex, an `rgb()`, a `white`/`black` literal or a `dark:`
+  // variant under `components/grid/` would bypass the `.dark` block entirely,
+  // so it is asserted as *zero* rather than as a list someone has to maintain.
+  //
+  // `components/grid/` is also where a theme toggle must not appear: the switch
+  // is an app-level control the grid consumes by being legible, not by owning
+  // it. The grid ships to four tables and to the preview harness; a control in
+  // the primitive would be a control in all five.
+  const dir = path.join(repoRoot, "components", "grid")
+  const files = readdirSync(dir).filter((name) => name.endsWith(".ts") || name.endsWith(".tsx"))
+
+  expect(files.length, "the grid primitive has gone missing").toBeGreaterThan(0)
+
+  for (const name of files) {
+    const text = readFileSync(path.join(dir, name), "utf8")
+
+    expect(text, `components/grid/${name} carries a raw colour or a dark: variant`).not.toMatch(
+      /#[0-9a-fA-F]{3,8}\b|rgb\(|rgba\(|\bwhite\b|\bblack\b|dark:/,
+    )
+    expect(text, `components/grid/${name} owns a theme toggle`).not.toMatch(
+      /theme-toggle|ThemeToggle/,
+    )
+  }
+})
+
+test("both apps' <html> open tags match and carry suppressHydrationWarning", () => {
+  // **At the open tag, never as a whole-file md5.** `theme-contract.md`'s "Two-app
+  // parity" section records why: the two `layout.tsx` files differ by intent —
+  // branding, `themeColor`, icon paths — so they have never been byte-identical
+  // and never will be. `<html>` is the one line the theme story edits in both,
+  // and its absence shows up only as a console hydration mismatch on every load,
+  // which is exactly the kind of defect that survives to production.
+  const tags = ["folk", "gita-life"].map((app) => {
+    const source = readFileSync(path.join(repoRoot, "apps", app, "app", "layout.tsx"), "utf8")
+    const tag = source.match(/<html[^>]*>/)?.[0]
+
+    expect(tag, `apps/${app}/app/layout.tsx has no <html> open tag`).toBeDefined()
+
+    return tag as string
+  })
+
+  expect(tags[0], "the two apps' <html> tags must stay mirrored").toContain("suppressHydrationWarning")
+  expect(tags[1], "the two apps' <html> tags must stay mirrored").toContain("suppressHydrationWarning")
+  expect(tags[0], `apps/gita-life's <html> drifted from apps/folk's`).toBe(tags[1])
+})
+
+test("the two apps' .dark token blocks are identical", () => {
+  // The story edits `.dark` in both `globals.css` files and the Verification
+  // section checks it with a shell `diff`. A one-app token edit would otherwise
+  // ship silently: the suite would go on measuring the app that was updated, and
+  // the other app would quietly keep the old value. This is the same `sed`-shaped
+  // extraction the diff runs — `/^\.dark {/,/^}/p` — so the guard and the manual
+  // check cannot disagree about what "the `.dark` block" means.
+  const blocks = ["folk", "gita-life"].map((app) => {
+    const source = readFileSync(path.join(repoRoot, "apps", app, "app", "globals.css"), "utf8")
+    const block = source.match(/^\.dark \{[\s\S]*?^\}/m)?.[0]
+
+    expect(block, `apps/${app}/app/globals.css has no .dark block`).toBeDefined()
+
+    return block as string
+  })
+
+  expect(
+    blocks[0],
+    "apps/gita-life's .dark block drifted from apps/folk's; the two must stay byte-identical",
+  ).toBe(blocks[1])
+})
+
+test("the /manage surfaces carry no hardcoded colour", () => {
+  // The theme story cleared twelve hardcoded sites under `/manage` — the ones
+  // this replaces — and the story's Verification section checks the cleanup with
+  // a manual grep. Reverting any one of them would fail no test otherwise, and
+  // the regression is invisible in light mode: `bg-black/5` on a dark surface and
+  // `bg-white/95` on a dark surface both "work" right up until a user toggles.
+  const roots = [
+    path.join(repoRoot, "components", "manage"),
+    path.join(repoRoot, "apps", "folk", "app", "manage"),
+    path.join(repoRoot, "apps", "gita-life", "app", "manage"),
+  ]
+  const forbidden = /bg-black\/5|bg-white\/95|bg-\[#FFF9F0\]/
+
+  expect(
+    roots.filter((root) => existsSync(root)),
+    "a /manage tree has moved; this guard is guarding nothing",
+  ).toHaveLength(roots.length)
+
+  for (const root of roots) {
+    for (const name of sourceFilesUnder(root)) {
+      expect(readFileSync(path.join(root, name), "utf8"), `${root}/${name} reintroduced a raw colour`).not.toMatch(
+        forbidden,
+      )
+    }
+  }
+})
+
+/** Every `.ts`/`.tsx` file under `root`, recursively, as paths relative to `root`. */
+function sourceFilesUnder(root: string): string[] {
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.isDirectory()) return sourceFilesUnder(path.join(root, entry.name))
+    if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) return []
+
+    return [entry.name]
+  })
+}
 
 function ignored(relativePath: string): boolean {
   return spawnSync("git", ["check-ignore", "-q", relativePath], { cwd: repoRoot, stdio: "ignore" }).status === 0

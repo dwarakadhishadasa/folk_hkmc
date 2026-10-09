@@ -341,8 +341,8 @@ export function ManageFavoritesView({ payload }: { payload: ManagePortalPayload 
                   aria-current={contact.id === selectedContactId ? "true" : undefined}
                   className={
                     contact.id === selectedContactId
-                      ? "w-full border-l-4 border-[var(--program-primary)] bg-black/5 px-4 py-3 text-left"
-                      : "w-full border-l-4 border-transparent px-4 py-3 text-left transition-colors hover:bg-black/5"
+                      ? "w-full border-l-4 border-[var(--program-primary)] bg-foreground/5 px-4 py-3 text-left"
+                      : "w-full border-l-4 border-transparent px-4 py-3 text-left transition-colors hover:bg-foreground/5"
                   }
                 >
                   <p className="font-medium text-[var(--program-text)]">{contact.name}</p>
@@ -373,7 +373,7 @@ export function ManageFavoritesView({ payload }: { payload: ManagePortalPayload 
 
           <div className="grid grid-cols-1 gap-6 p-5 lg:grid-cols-[14rem_minmax(0,1fr)]">
             <div className="space-y-3">
-              <div className="flex h-48 w-full items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-black/5">
+              <div className="flex h-48 w-full items-center justify-center overflow-hidden rounded-lg border border-[var(--border)] bg-foreground/5">
                 {signedUrl ? (
                   <img src={signedUrl} alt={selectedContact.name} className="h-full w-full object-cover" />
                 ) : photoState === "loading" ? (
@@ -483,7 +483,7 @@ export function ManageFavoritesView({ payload }: { payload: ManagePortalPayload 
                           className={
                             active
                               ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
-                              : "rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-black/5"
+                              : "rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
                           }
                         >
                           {book}
@@ -511,7 +511,7 @@ export function ManageFavoritesView({ payload }: { payload: ManagePortalPayload 
                           className={
                             active
                               ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
-                              : "rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-black/5"
+                              : "rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
                           }
                         >
                           {location.name}
