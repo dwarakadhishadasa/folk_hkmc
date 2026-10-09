@@ -38,7 +38,9 @@ The older generated docs described a single root app and no longer reflected the
 
 ## Existing Reference Documentation
 
+- [Testing Architecture and Policy](./architecture/testing.md) - **Read before changing code.** What to run at each level, the feature-to-test registry, which shared files widen the regression blast radius, and how to diagnose a failure. Notes that `pnpm test` runs zero tests and exits 0.
 - [Manage Grid Pattern](./manage-grid-pattern.md) - The contract every `/manage` table follows: column conventions, commit/rollback, selection, bulk semantics, and the URL state contract. Read it before porting a table onto `components/grid/`.
+- [Claiming a Matrix Row](./claiming-a-matrix-row.md) - How to satisfy the six rules that turn a matrix row from Manual to Covered, and what evidence to record.
 - [NestJS Backend Reference](./nestjs-backend.md) - Historical/reference notes for a possible separate backend
 
 ## Getting Started
@@ -56,12 +58,15 @@ For production-like behavior, provide Supabase credentials and `PROGRAM_ID`/`NEX
 ## Common Checks
 
 ```bash
-pnpm typecheck:workspace
-pnpm lint
-pnpm build
+pnpm test:static   # guardrails + typecheck + lint
+pnpm test:e2e      # full Playwright suite (needs the local stack)
 ```
 
-There is no automated application test suite in this repository today. Use manual smoke checks for staff auth, route redirects, contact creation, session creation, attendance registration, live dashboard refresh, admin/volunteer invites, and offline queueing.
+Note that `pnpm test` runs **zero tests** and exits 0 — no package defines a
+`test` script. There is no unit-test runner in this repository; the automated
+suites are the `scripts/` verification gates and the Playwright specs under
+`e2e/specs/`. See [Testing Architecture and Policy](./architecture/testing.md)
+for the feature-to-test registry and the three testing levels.
 
 ## For AI-Assisted Development
 
@@ -72,6 +77,7 @@ Read these first before planning or implementation:
 - `data-models.md` before changing Supabase fields or RLS scoping
 - `component-inventory.md` before adding or replacing UI
 - `development-guide.md` before running local checks
+- `architecture/testing.md` before changing code — what to run, and what "green" actually means here
 
 Important current caveats:
 

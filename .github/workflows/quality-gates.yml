@@ -45,3 +45,37 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+  # Hermetic gates: no stack, no database, no network, no browser. They are the
+  # only automated checks besides `quality-gates` that can run here, and they
+  # cover contracts nothing else asserts (the seeder's non-local refusal, the
+  # program-scoped signin wiring).
+  #
+  # `test:e2e` is deliberately NOT here: it needs Supabase + Mailpit + a seeded
+  # database. See docs/architecture/testing.md §7.
+  hermetic-gates:
+    name: Seeder guard, program readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Seeder refuses non-local targets
+        run: pnpm test:seed-local-guard
+
+      - name: Program-scoped signin wiring
+        run: pnpm test:program-readiness

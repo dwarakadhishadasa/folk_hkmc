@@ -51,3 +51,36 @@ HKMC program-operations monorepo for the FOLK Chennai and Gita Life web apps. Ne
 - `StaffContext.lastSyncedAt` is set to `new Date().toISOString()` in `lib/authz.ts` — nothing reads it from a column. Do not treat it as a sync timestamp.
 
 <!-- /bmad:context -->
+
+## Testing policy (mandatory)
+
+**Read [`docs/architecture/testing.md`](docs/architecture/testing.md) before changing code.** It is the contract: which specs cover which source paths, which shared files widen the blast radius, and how to diagnose a failure. This section is the short version.
+
+### The one trap
+
+`pnpm test` runs **zero tests** and exits 0 — no package defines a `test` script, so `turbo run test` finds nothing. **Never report `pnpm test` as a passing test run.** There is no unit runner; the only surfaces are the `scripts/` gates and the Playwright suite.
+
+### Three levels
+
+| Level | When | Command |
+|---|---|---|
+| **Targeted** | Every change, before reporting done | `pnpm test:static` (guardrails + typecheck + lint, no stack), then the feature script |
+| **Feature** | A shared component changed; finishing a story; claiming a matrix row | `pnpm test:e2e:manage` / `:grid` / `:theme` / `:guards` |
+| **Full** | `lib/authz.ts`, `lib/supabase/*`, `proxy.ts`, `components/header.tsx`, `components/providers.tsx`, a shared `components/ui/*`; before a PR | `pnpm test:e2e` (~5–7 min) |
+
+Escalate one level when the file you touched is in the shared-components table in the guide, or when a targeted run surfaces an unrelated failure.
+
+### Rules
+
+- Always run e2e through `pnpm test:e2e` or a `test:e2e:*` script. **Never `pnpm exec playwright test`** — the readiness gate lives in the script, so a bare invocation runs against an unasserted stack.
+- Filter with a **regex, never a glob**: `pnpm test:e2e grid-` ✓, `pnpm test:e2e "e2e/specs/grid-*.spec.ts"` ✗ (selects 0 tests, still exits 0). Multiple filters are OR'd.
+- `pnpm test:e2e --list <filter>` shows scope with no browser — the cheapest way to see what you are about to run.
+- **One e2e runner at a time.** Every spec shares one seeded database; concurrent runs produce false failures.
+- `pnpm typecheck:workspace` is the type gate — `next.config.mjs` sets `ignoreBuildErrors`, so a green build is not type-safety.
+- **Never weaken a gate to make it pass.** Fix the source; the suite asserts `package.json` and `playwright.config.ts` as text to catch exactly that.
+- CI runs guardrails, typecheck, build, lint — **not** e2e and not the contract gates. A green CI run is not verification of a behavioural change.
+- Known pre-existing failure: `pnpm test:airtable-removal` fails 3 of 30 checks on `dev`/`main` as of `44d9812` (story 7-9 WIP `scripts/migrate-airtable-data.mjs` and a comment at `components/manage/manage-contacts-table.tsx:122` are not in its allowlist). Confirm with `git stash` and report it as pre-existing; do not edit the gate to hide it.
+
+### Reporting
+
+State the **actual commands run** and their **real results** — the exact command, the pass count from that run's output, and any failure you did not cause, named as pre-existing. Do not fabricate a green run: if you could not run something, say what is unverified.

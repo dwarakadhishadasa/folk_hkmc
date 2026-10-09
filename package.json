@@ -45,7 +45,13 @@
     "typecheck": "pnpm typecheck:workspace",
     "typecheck:workspace": "pnpm -r --if-present typecheck",
     "test": "turbo run test",
+    "test:static": "pnpm guardrails && pnpm typecheck:workspace && pnpm lint",
     "test:e2e": "pnpm local:readiness && playwright test",
+    "test:e2e:grid": "pnpm test:e2e grid-",
+    "test:e2e:manage": "pnpm test:e2e manage-contacts",
+    "test:e2e:theme": "pnpm test:e2e theme-switch",
+    "test:e2e:guards": "pnpm test:e2e harness-guards suite-determinism mailpit-reader",
+    "test:e2e:list": "playwright test --list",
     "test:e2e:determinism": "node scripts/verify-suite-determinism.mjs"
   },
   "dependencies": {
