@@ -2,10 +2,10 @@
 title: 'Row lifecycle — add record and delete row'
 type: 'feature'
 created: '2026-10-09'
-status: 'ready-for-dev'
+status: 'done'
 review_loop_iteration: 0
 followup_review_recommended: false
-baseline_revision: 9a43c3b001a608430f864deb2f782e2e9ad7a448
+baseline_revision: b2a0f67b632ea06403e13c79976113e3f9794d4d
 context:
   - _bmad-output/specs/spec-grid-keyboard-editors-and-theme/SPEC.md
   - _bmad-output/specs/spec-grid-keyboard-editors-and-theme/existing-state.md

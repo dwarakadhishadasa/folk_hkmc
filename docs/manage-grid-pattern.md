@@ -311,8 +311,15 @@ the table owns the row and every byte that crosses the network.
   with one, and the grid addresses the draft by that id until the server replaces
   it.
 - **Focus lands through the keyboard model**, on the row's first `editable`
-  column, exactly as `focusRow` moves it for an arrow press. There is no
-  ref-and-scroll, and no second rule for "added" rows.
+  column, exactly as an arrow press moves it. There is no ref-and-scroll, and no
+  second rule for "added" rows. Two keyboard-model calls do it, and the split is
+  load-bearing rather than tidiness: `focusRow` resolves the row and moves the
+  model onto it (anchor, row index, column, `scrollToIndex`), `focusRowCell`
+  lands DOM focus and returns whether it landed. `scrollToIndex` only moves the
+  scroll offset — the virtual range updates on the render *after* it — so a caller
+  that read `focusRow`'s `true` as "the cell is focused" parked focus on the grid
+  frame and stopped retrying. `Grid` retries `focusRowCell` against the rendered
+  window until it lands.
 - **Accumulate the draft's values before the request, not after it succeeds.**
   Two `NOT NULL` fields cannot both be satisfied by one commit, so the handler
   refuses the first field and the second commit has to carry the first field's
@@ -427,12 +434,20 @@ Known gaps at the time of writing:
   `Cmd`/`Ctrl`+`K`; it is still to come.
 - No `Select`-based column filter. The contacts port replaced a sentinel-valued dropdown with
   per-column filter popovers, which compose with the global filter instead of replacing it.
-- The favorite star is the only row action. A row-action *menu* is the obvious next primitive if
-  more than one per-row action appears.
+- The favorite star is no longer the only row action — the row lifecycle's delete control sits in its
+  own `actions` column. A row-action *menu* is the obvious next primitive if more per-row actions
+  appear.
 - `favoriteStar` in `e2e/fixtures/manage-grid.ts` used to resolve `getByRole("button")` **inside the
   row, unscoped**, which is why a closed-state editor display must not be a `<button>`. The row
-  lifecycle added a second button per row (the delete control in its own `actions` column), so that
-  locator is now scoped by accessible name (`/to favorites$/`). That is a narrowing, not a
-  loosening: every assertion still resolves to the same element. **A third per-row button means the
-  naming discipline has to hold.**
+  lifecycle added a second button per row, so that locator is now scoped by accessible name
+  (`/favorites$/`). That is a narrowing, not a loosening: every assertion still resolves to the same
+  element. **Anchor the pattern on the part of the name that does not change with state** — the star
+  reads `Add <name> to favorites` *or* `Remove <name> from favorites`, and an earlier `/to favorites$/`
+  matched only the first form, so every already-favourited row timed out. **A third per-row button
+  means the naming discipline has to hold.**
+- A spec that intercepts a request with `page.route` should call `test.use({ serviceWorkers: "block" })`
+  and register the route **before** navigating. `providers.tsx` registers `/sw.js` on every page, and
+  once that worker controls the page the requests it serves never reach the network stack
+  `page.route` watches — an interception installed after `goto` intermittently did not fire at all,
+  observed as a test that deleted a row for real and then asserted the server had refused it.
 - `docs/` is excluded from ESLint, so this document is not linted. Keep it honest by hand.

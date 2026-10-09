@@ -687,28 +687,67 @@ export function Grid<TData extends RowData>({
   }, [density, virtualizer])
 
   /**
+   * A stable value for "the rendered window moved".
+   *
+   * `virtualRows` cannot be the dependency itself: `getVirtualItems()` returns a
+   * fresh array on every call, so it is a new reference on every render — useless
+   * as evidence that anything changed. Its two ends are what actually decide
+   * whether a row is on screen, so they are what this compares.
+   */
+  const virtualWindowKey = virtualRows.length
+    ? `${virtualRows[0]?.index}:${virtualRows[virtualRows.length - 1]?.index}`
+    : "empty"
+
+  /**
    * Lands the focus queued by `+ Add record`, once the row is both in the row
    * model and inside the rendered window.
    *
-   * A false result means the row is not visible yet — a freshly appended row on a
-   * scrolled grid, or a draft row a text filter removed. Both are retried when
-   * `virtualRows` next changes, and neither is reported as success: focus that
-   * silently failed to move is the one failure an operator cannot see.
+   * Two failures, kept apart because only one of them can be retried:
+   *
+   * - the row is in the model but its cell is not rendered yet — a freshly
+   *   appended row on a scrolled grid. `scrollToIndex` only moves the scroll
+   *   offset; the virtual range updates on the render *after* it. Retried when
+   *   `virtualWindowKey` changes, which is the value that proves it moved.
+   * - the row is not in the row model at all — a blank draft under an active
+   *   text filter. Nothing will ever reveal it, so it is reported through the
+   *   status line rather than retried forever.
+   *
+   * Neither is reported as success. Focus that silently failed to move is the
+   * one failure an operator cannot see.
    */
   useEffect(() => {
     if (pendingFocusRowId === null) {
       return
     }
 
-    if (keyboard.focusRow(pendingFocusRowId)) {
-      setPendingFocusRowId(null)
+    // `focusRow` is idempotent and is what puts the model — anchor, row, column,
+    // scroll — on the row. `focusRowCell` then lands DOM focus, which only
+    // succeeds once the virtualizer has rendered the row.
+    if (!keyboard.focusRow(pendingFocusRowId)) {
+      // Three states resolve here and they need three different answers:
+      //
+      // - the consumer has not appended the row yet. `createRow` runs inside the
+      //   click handler and its state lands on the *next* render, so the first
+      //   effect pass legitimately finds nothing. Retried.
+      // - the row is in `rows` but not in the row model. A blank draft under an
+      //   active text filter, which nothing will ever reveal. Reported.
+      // - otherwise it is simply not there. Same report; both are the operator
+      //   looking at a row that is not on screen.
+      if (rows.some((row, index) => getRowId(row, index) === pendingFocusRowId)) {
+        setPendingFocusRowId(null)
+        keyboard.setStatusMessage(
+          "The new record is hidden by the current filters. Clear them to edit it.",
+        )
+      }
+
       return
     }
 
-    keyboard.setStatusMessage(
-      "The new record is hidden by the current filters. Clear them to edit it.",
-    )
-  }, [keyboard, pendingFocusRowId, virtualRows])
+    if (keyboard.focusRowCell(pendingFocusRowId)) {
+      setPendingFocusRowId(null)
+      keyboard.setStatusMessage(null)
+    }
+  }, [getRowId, keyboard, pendingFocusRowId, rows, virtualWindowKey])
 
   useEffect(() => {
     const onWindowBlur = () => {

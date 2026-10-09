@@ -225,11 +225,19 @@ export function favoriteStar(page: Page, contactId: string): Locator {
   // **Scoped by name, deliberately.** The row lifecycle added a second button to
   // every row — the delete control in its own `actions` column — so an unscoped
   // `getByRole("button")` here would match two elements and fail in strict mode
-  // across seven assertion sites rather than one. The star's accessible name is
-  // stable (`Add <name> to favorites` / `Remove <name> from favorites`), so
-  // naming it is a *narrowing* of the locator, not a loosening: every assertion
-  // still resolves to exactly the same element it did before.
-  return rowById(page, contactId).getByRole("button", { name: /to favorites$/ })
+  // across seven assertion sites rather than one. Naming it is a *narrowing* of
+  // the locator, not a loosening: every assertion still resolves to exactly the
+  // same element it did before.
+  //
+  // **Anchored on `favorites`, not on `to favorites`.** The name has two forms —
+  // `Add <name> to favorites` and `Remove <name> from favorites` — and only the
+  // first ends in `to favorites`. A `/to favorites$/` locator therefore resolved
+  // for every un-favourited row and timed out for every favourited one, which is
+  // one row in five in the bulk fixtures: three bulk specs failed on rows whose
+  // star read "Remove … from favorites". Both forms end in `favorites`, and the
+  // delete control's name (`Delete <name>`) does not, so this is still exactly
+  // one match per row.
+  return rowById(page, contactId).getByRole("button", { name: /favorites$/ })
 }
 
 /** The grid's contextual `+ Add record` control. Disabled, never hidden. */

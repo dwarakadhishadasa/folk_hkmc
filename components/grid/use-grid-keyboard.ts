@@ -173,13 +173,30 @@ export interface GridKeyboardApi<TData> {
    * Every step is the same one an arrow press takes (`stepFocus`), which is the
    * point. A new row therefore arrives focused the way an operator reaching it
    * with the keyboard would find it — not through a ref the primitive had to be
-   * handed, and not with a different set of rules for "added" rows.
+   * handed, and not under a second set of rules for "added" rows.
+   *
+   * Resolves the row and moves the *model* onto it; DOM focus is
+   * `focusRowCell`'s job, and the split is load-bearing rather than tidiness.
+   * `scrollToIndex` only moves the scroll offset — the virtual range updates on
+   * the render *after* it — so a caller that treated "the row resolved" as "the
+   * cell is focused" would park focus on the container and stop retrying. See
+   * `focusRowCell`.
    *
    * Returns false when the row is not in the current row model at all, which is
    * reachable: a draft row with every field blank disappears under a text
    * filter. The caller reports that rather than dropping focus silently.
    */
   focusRow: (rowId: string) => boolean
+  /**
+   * Lands DOM focus on `rowId`'s focused cell, and returns whether it landed.
+   *
+   * Separate from `focusRow` because the answer is genuinely two-valued and only
+   * the second value is retryable. A freshly appended row on a scrolled grid is
+   * in the row model immediately but outside the rendered window, so this
+   * returns false while the row is merely *pending* — the caller retries against
+   * the rendered window, which is the dependency that proves it moved.
+   */
+  focusRowCell: (rowId: string) => boolean
   /**
    * Writes the grid's `aria-live` status line directly.
    *
@@ -1600,21 +1617,81 @@ export function useGridKeyboard<TData>({
         return false
       }
 
-      setSelectionAnchor({ rowIndex: index, columnId })
-      setFocusedRowIndex(index)
-      setFocusedColumnId(columnId)
-      scrollToIndex(index)
+      // Each setter is guarded rather than called unconditionally. This function
+      // is retried on every render until the row is rendered, so an unguarded
+      // `setSelectionAnchor({ … })` would install a fresh object every pass and
+      // the retry would drive the render loop that it is waiting on —
+      // "Maximum update depth exceeded", with the grid blank rather than merely
+      // slow. Equality is the right test because the values are primitives and
+      // the anchor is only compared by value everywhere else.
+      if (focusedRowIndex !== index) {
+        setFocusedRowIndex(index)
+      }
 
-      // Deliberately `focusCellElement`, not `focusCellIfGridHasFocus`: the
-      // operator pressed a button in the grid's chrome, so focus is on that
-      // button rather than inside the grid, and "only move DOM focus when the
-      // grid already owns it" would leave the new row unfocused. Add is an
-      // explicit request to go there.
-      focusCellElement(gridCellKey(row.id, columnId))
+      if (focusedColumnId !== columnId) {
+        setFocusedColumnId(columnId)
+      }
+
+      if (selectionAnchor?.rowIndex !== index || selectionAnchor.columnId !== columnId) {
+        setSelectionAnchor({ rowIndex: index, columnId })
+      }
+
+      scrollToIndex(index)
+      return true
+    },
+    [
+      firstEditableColumnId,
+      focusedColumnId,
+      focusedRowIndex,
+      scrollToIndex,
+      selectionAnchor,
+      visibleRows,
+    ],
+  )
+
+  const focusRowCell = useCallback(
+    (rowId: string): boolean => {
+      const index = visibleRows.findIndex((row) => row.id === rowId)
+
+      if (index === -1) {
+        return false
+      }
+
+      const row = visibleRows[index]
+      const columnId = focusedColumnId ?? firstEditableColumnId(row)
+
+      if (!row || !columnId) {
+        return false
+      }
+
+      const container = containerRef.current
+
+      if (!container) {
+        return false
+      }
+
+      // The rendered-window check, before anything moves. `focusCellElement`
+      // would resolve a missing cell by parking focus on the container, which is
+      // right for an arrow press — a human will press again — and wrong here,
+      // because the caller reads the return value as "landed" and stops
+      // retrying. So this asks the DOM directly and reports honestly.
+      const cell = container.querySelector<HTMLElement>(
+        `[data-grid-cell=${JSON.stringify(gridCellKey(row.id, columnId))}]`,
+      )
+
+      if (!cell) {
+        return false
+      }
+
+      // Deliberately not `focusCellIfGridHasFocus`: the operator pressed a button
+      // in the grid's chrome, so focus is on that button rather than inside the
+      // grid, and "only move DOM focus when the grid already owns it" would
+      // leave the new row unfocused. Add is an explicit request to go there.
+      cell.focus()
       revealCell(index, columnId)
       return true
     },
-    [firstEditableColumnId, focusCellElement, revealCell, scrollToIndex, visibleRows],
+    [containerRef, firstEditableColumnId, focusedColumnId, revealCell, visibleRows],
   )
 
   const focusCell = useCallback(
@@ -1715,6 +1792,7 @@ export function useGridKeyboard<TData>({
     statusMessage,
     focusCell,
     focusRow,
+    focusRowCell,
     setStatusMessage,
     isRowFocused,
     isRowEditing,

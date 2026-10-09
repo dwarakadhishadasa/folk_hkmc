@@ -44,6 +44,20 @@
  * keyboard model, and the first printable character opens the editor through the
  * story-2 type-to-edit branch. Two different mechanisms; a single combined
  * assertion would pass if only one of them worked.
+ *
+ * ## Why the service worker is blocked
+ *
+ * `providers.tsx` registers `/sw.js` on every page, and once that worker
+ * *controls* the page, requests it serves bypass `page.route` entirely —
+ * Playwright cannot intercept what never reaches the network stack it watches.
+ * Whether the worker has claimed the page by the time a spec clicks depends on a
+ * registration race, so an interception set up after `goto` intermittently did
+ * not fire at all: observed as a refused-delete test that deleted the row for
+ * real and then asserted the server had refused it.
+ *
+ * `serviceWorkers: "block"` removes the race rather than papering over it. It
+ * changes nothing else about what is under test — `/manage` is a network-only
+ * path in the worker, and nothing in CAP-6 is about offline behaviour.
  */
 
 import { expect, test, type Page } from "@playwright/test"
@@ -71,6 +85,10 @@ import {
   rowDeleteButton,
 } from "../fixtures/manage-grid"
 
+// See the header: a controlling service worker swallows `page.route`, which made
+// the interception in these tests a race rather than a given.
+test.use({ serviceWorkers: "block" })
+
 /** The in-cell editor the grid mounts for a text column. */
 function cellEditor(page: Page) {
   return page.getByRole("textbox", { name: "Edit cell value" })
@@ -79,6 +97,34 @@ function cellEditor(page: Page) {
 /** The row the grid appended last, which is the draft under test. */
 function draftRow(page: Page) {
   return renderedRows(page).last()
+}
+
+/**
+ * Type `text` into the open editor, appending to the type-to-edit seed.
+ *
+ * The seed is **selected** on mount, so a plain `keyboard.type` would replace it
+ * rather than extend it and the opening character would be lost. `End` collapses
+ * that selection first — the same two steps `grid-keyboard.spec.ts` key 4 takes,
+ * and for the same reason: this exercises the keyboard model's own contract
+ * rather than working around it.
+ */
+async function typeAppendingSeed(page: Page, text: string): Promise<void> {
+  await cellEditor(page).press("End")
+  await page.keyboard.type(text)
+}
+
+/**
+ * Type `text` into a focused cell from scratch, through the type-to-edit branch.
+ *
+ * The first character is what *opens* the editor and becomes its selected seed,
+ * so the rest has to be typed after collapsing that selection. Skipping the
+ * `End` loses the first character, which reads as "the grid dropped a character"
+ * rather than as a broken spec — hence spelled out rather than left implicit.
+ */
+async function typeIntoCell(page: Page, text: string): Promise<void> {
+  await page.keyboard.type(text.slice(0, 1))
+  await expect(cellEditor(page), "typing opened the cell's editor").toBeFocused()
+  await typeAppendingSeed(page, text.slice(1))
 }
 
 /**
@@ -140,6 +186,9 @@ function holdCreateRequests(page: Page) {
   let release: () => void = () => undefined
   let intercepted = 0
 
+  /** Resolves once every handler that parked on `held` has finished fulfilling. */
+  let settled: Promise<void> = Promise.resolve()
+
   const held = new Promise<void>((resolve) => {
     release = resolve
   })
@@ -151,12 +200,19 @@ function holdCreateRequests(page: Page) {
     }
 
     intercepted += 1
-    await held
-    await route.fulfill({
-      status: 500,
-      contentType: "application/json",
-      body: JSON.stringify({ error: "Unable to create the contact." }),
+    // Chained rather than awaited directly, so `unroute` has something to wait
+    // on *after* the release: `held` resolving only means the handlers woke up,
+    // not that they are done with their routes.
+    settled = settled.then(async () => {
+      await held
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Unable to create the contact." }),
+      })
     })
+
+    await settled
   }
 
   page.route(SINGLE_CONTACT_ROUTE, handler)
@@ -167,10 +223,45 @@ function holdCreateRequests(page: Page) {
       return intercepted
     },
     async unroute() {
+      // Release, then let the handlers finish, then unroute. Unrouting while a
+      // handler is still parked on `held` takes its route back and leaves the
+      // handler to fulfil it anyway, which surfaces as `route.fulfill: Route is
+      // already handled!` — an error that masks whatever the test was asserting.
       release()
+      await settled
       await page.unroute(SINGLE_CONTACT_ROUTE, handler)
     },
   }
+}
+
+/**
+ * Make every `DELETE` on the single-contact route answer `409` with the
+ * attendance-conflict wording.
+ *
+ * Registered **before** the page navigates. `providers.tsx` registers
+ * `/sw.js` on every page, and once that worker controls the page the requests
+ * it serves never reach the network stack `page.route` watches — so an
+ * interception installed after `goto` intermittently did not fire at all,
+ * observed as a test that deleted the row for real and then asserted the server
+ * had refused it. Blocking the worker (`test.use` above) removes the race;
+ * registering early removes what is left.
+ */
+async function refuseDeletes(page: Page): Promise<void> {
+  await page.route(SINGLE_CONTACT_ROUTE, async (route) => {
+    if (route.request().method() !== "DELETE") {
+      await route.continue()
+      return
+    }
+
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "This contact has attendance recorded against it and cannot be deleted.",
+        code: "manage_contact_has_attendance",
+      }),
+    })
+  })
 }
 
 test.describe("row lifecycle", () => {
@@ -193,10 +284,14 @@ test.describe("row lifecycle", () => {
       await expect(cellEditor(page), "the editor is not opened for them").toHaveCount(0)
 
       // A printable character opens the editor through the story-2 type-to-edit
-      // branch, seeded with itself. Had focus stayed on the button, this text
+      // branch, seeded with itself. Had focus stayed on the button, this keypress
       // would have gone nowhere.
-      await page.keyboard.type("Ravi")
-      await expect(cellEditor(page), "typing seeds the editor with what was typed").toHaveValue("Ravi")
+      await page.keyboard.type("R")
+      await expect(cellEditor(page), "typing opened the seeded editor").toBeFocused()
+      await expect(cellEditor(page), "the seed is the opening character").toHaveValue("R")
+
+      await typeAppendingSeed(page, "avi")
+      await expect(cellEditor(page), "the seed and the rest together read Ravi").toHaveValue("Ravi")
       await expect(nameCell, "the editor is inside the new row's name cell").toBeVisible()
 
       await page.keyboard.press("Enter")
@@ -220,7 +315,7 @@ test.describe("row lifecycle", () => {
       await openContactsGrid(page)
       await addRecordButton(page).click()
 
-      await page.keyboard.type(name)
+      await typeIntoCell(page, name)
       await page.keyboard.press("Enter")
 
       // The real handler, not an interception: `parseContactPatch` is the one
@@ -244,7 +339,7 @@ test.describe("row lifecycle", () => {
       // second commit carries the first field's value along. Dropping the draft
       // instead would make a two-`NOT NULL` record impossible to create.
       await cellIn(draftRow(page), "phone").click()
-      await page.keyboard.type(phone)
+      await typeIntoCell(page, phone)
       await page.keyboard.press("Enter")
 
       await expect(
@@ -291,8 +386,13 @@ test.describe("row lifecycle", () => {
         if (request.method() === "DELETE") requests.push(request.url())
       })
 
-      await openContactsGrid(page)
-      await page.getByText(name, { exact: true }).first().waitFor()
+      // Filtered to the one row, not merely waited for: the grid is virtualized
+      // over 250+ contacts, and a row inserted at the end of the set sits
+      // outside the rendered window entirely — so `getByText(...).waitFor()`
+      // would burn the whole test timeout on a row that was never going to
+      // render. The filter is what makes the row addressable at all.
+      await openContactsGrid(page, { params: { q: name } })
+      await expect(rowById(page, created.id), "the inserted row is addressable").toBeVisible()
 
       await rowDeleteButton(page, created.id).click()
 
@@ -338,27 +438,18 @@ test.describe("row lifecycle", () => {
       const created = await createRowLifecycleContact({ name, phone })
       ids = [created.id]
 
-      await openContactsGrid(page)
-      await page.getByText(name, { exact: true }).first().waitFor()
-
+      // Filtered to the one row, not merely waited for: the grid is virtualized
+      // over 250+ contacts, and a row inserted at the end of the set sits
+      // outside the rendered window entirely — so `getByText(...).waitFor()`
+      // would burn the whole test timeout on a row that was never going to
+      // render. The filter is what makes the row addressable at all.
       // Forced `409`, which is a reachable real answer: `deleteManageContact`
       // maps the attendance foreign-key violation to exactly this status, and
       // this wording.
-      await page.route(SINGLE_CONTACT_ROUTE, async (route) => {
-        if (route.request().method() !== "DELETE") {
-          await route.continue()
-          return
-        }
+      await refuseDeletes(page)
 
-        await route.fulfill({
-          status: 409,
-          contentType: "application/json",
-          body: JSON.stringify({
-            error: "This contact has attendance recorded against it and cannot be deleted.",
-            code: "manage_contact_has_attendance",
-          }),
-        })
-      })
+      await openContactsGrid(page, { params: { q: name } })
+      await expect(rowById(page, created.id), "the inserted row is addressable").toBeVisible()
 
       await rowDeleteButton(page, created.id).click()
       await deleteConfirmButton(page).click()
@@ -383,23 +474,42 @@ test.describe("row lifecycle", () => {
     }
   })
 
-  test("revert — a failed create reverts the cell, names the failure, and writes nothing", async ({ page }) => {
+  test("revert — a failed create reverts the cell, names the failure, and writes nothing", async ({
+    page,
+  }) => {
     const name = ownedName(3)
     const phone = ownedPhone(3)
     const created: string[] = []
-    const held = holdCreateRequests(page)
+    let held: ReturnType<typeof holdCreateRequests> | null = null
 
     try {
       await openContactsGrid(page)
       await addRecordButton(page).click()
 
-      await page.keyboard.type(name)
+      // The name first, against the **real** handler. Both required fields are
+      // `NOT NULL`, so one commit can never satisfy both: this is refused with
+      // `Phone is required.`, which is what the create path is designed to do and
+      // what makes the second commit carry the first field's value along. Arming
+      // the interception first would fail the *name* commit instead, which tests
+      // a one-field record and not the two-field draft this case is about.
+      await typeIntoCell(page, name)
+      await page.keyboard.press("Enter")
+      await expect(gridStatusLine(page), "the first commit is refused for the missing phone").toHaveText(
+        "Phone is required.",
+      )
+
+      held = holdCreateRequests(page)
+
       await cellIn(draftRow(page), "phone").click()
-      await page.keyboard.type(phone)
+      await typeIntoCell(page, phone)
       await page.keyboard.press("Enter")
 
-      // In flight: the value is on screen while the write is unresolved.
-      await expect(cellIn(draftRow(page), "name")).toHaveText(name)
+      // In flight: the value is on screen while the write is unresolved, so this
+      // is the optimistic display rather than a fast server.
+      await expect(
+        cellIn(draftRow(page), "phone"),
+        "the committed value paints before the write resolves",
+      ).toHaveText(phone)
       expect(held.intercepted, "the interception caught the create write").toBe(1)
 
       await held.release()
@@ -413,14 +523,16 @@ test.describe("row lifecycle", () => {
         "the refused cell is marked destructive",
       ).toHaveClass(/text-destructive/)
 
-      expect(
-        await namesForPhones([phone]),
-        "a failed create wrote nothing",
-      ).toEqual(new Map([[phone, null]]))
+      expect(await namesForPhones([phone]), "a failed create wrote nothing").toEqual(
+        new Map([[phone, null]]),
+      )
+      // By name as well as by phone: the name is what a partially-applied create
+      // would have written, and the phone check alone would miss it.
+      expect(await idsForName(name), "the draft was never persisted under its name").toEqual([])
 
       created.push(...(await idsForName(name)))
     } finally {
-      await held.unroute()
+      await held?.unroute()
       await cleanupRowLifecycleContacts(created)
     }
   })
