@@ -1,18 +1,41 @@
 ---
-status: blocked
-baseline_revision: f7da84095a987ffbf7cc7c62300aeb88a8c60a45
+status: ready-for-dev
+baseline_revision: 09412d1b3c2437d9f7c47a6c12821d8af19c6bc4
 ---
 
 # Light/dark theme switch and grid legibility in both
 
-## Auto Run Result
+## Resolved 2026-10-09 — read this before implementing
 
-Status: blocked
+Two dev attempts (`6-dev-1`, `6-dev-1-g1`) stopped at investigation and raised
+an intent gap, then a scope gap (Q1–Q4 below). Both are now **decided and
+binding**. The answers live in `theme-contract.md` and in this story's
+`invoke_dev_with` entry in `stories.yaml`; those two are the authority. The
+analysis below is preserved as the **evidence** behind the decisions — the
+measured contrast ratios, the exhaustive site lists, and the parity finding all
+still hold and are worth re-reading before you edit.
 
-Blocking condition: intent gap — the authorized fix list is enumerated by
-pattern, and grep shows the pattern both under- and over-matches the classes it
-was written against. Nothing in SPEC.md or theme-contract.md selects between the
-defensible readings.
+Do not re-open Q1–Q4. They are answered.
+
+| # | Question | Decision |
+|---|----------|----------|
+| Q1 | `bg-[#FFF9F0]` full-page wrapper on `apps/*/app/manage/page.tsx:37` | **In scope** → `bg-background`. It is the outermost surface of the graded page; dark mode is visibly broken without it. |
+| Q2 | Seven `hover:bg-black/5` sites vs the contract's stale "three places" | **All seven** → `hover:bg-foreground/5`. The line-list count was stale; the pattern was never a restriction to one file. |
+| Q3 | Three static `bg-black/5` + two `bg-white/95` in `/manage` | **In scope.** The static trio is the same defect in a stronger (non-transient) form → `bg-foreground/5`. The two `SelectTrigger`s → a semantic surface token, no raw colors. |
+| Q4 | `layout.tsx` whole-file md5 parity | **Check the `<html>` open tag, not the file md5.** Whole-file md5s never matched and never will — branding, `themeColor` and icon paths differ by intent. |
+
+Explicitly **out of scope**, do not touch: the gita-life `body` gradient
+(`globals.css:200-205`), the shared header mobile-nav `bg-white/95`
+(`header.tsx:321`), and `text-white` on program-primary headers (that brand
+color is dark in both themes).
+
+### Prior investigation (evidence, no longer blocking)
+
+Blocking condition, as originally raised: intent gap — the authorized fix list is
+enumerated by pattern, and grep shows the pattern both under- and over-matches
+the classes it was written against. Nothing in SPEC.md or theme-contract.md
+selected between the defensible readings. All four readings are now settled
+above.
 
 ### What is unambiguous and ready to build
 
@@ -61,6 +84,7 @@ behavior, not an open question. A sweep at fixed C/H 0.141/25.723 puts L=0.62 at
 4.83:1 and L=0.65 at 5.45:1.
 
 ### Q1 — `bg-[#FFF9F0]` on the `/manage` page wrapper is not in any list
+### DECIDED: in scope → `bg-background` (both apps)
 
 `apps/folk/app/manage/page.tsx:37` and `apps/gita-life/app/manage/page.tsx:37`
 both render:
@@ -84,7 +108,7 @@ provider, the toggle and the two token fixes while leaving this would produce a
 surface that is visibly broken in dark mode — and the story's own e2e assertion
 targets `/manage`.
 
-**Which way does this cut?**
+**Which way does this cut?** *(answered: Reading A — in scope)*
 
 - **Reading A — in scope.** The contract's rule for `/manage` is stated as a
   principle, not a line list: "`hover:bg-black/5` **is a real dark-mode bug**:
@@ -103,6 +127,7 @@ changes a file the story never mentions; Reading B ships a known dark-mode defec
 on the story's own target page.
 
 ### Q2 — `hover:bg-black/5` matches 7 sites across 3 files; the contract names 3 in 1
+### DECIDED: all seven → `hover:bg-foreground/5`
 
 `theme-contract.md:41` scopes the fix to "`hover:bg-black/5` in three places in
 `manage-attendance-view.tsx`". Grep finds **seven**, in three files:
@@ -125,9 +150,10 @@ sub-cases, and they may not want the same answer:
 
 Should all seven `hover:bg-black/5` become `hover:bg-foreground/5` (pattern
 taken literally, which is the natural reading), or only the three named
-(contract's line list taken literally)?
+(contract's line list taken literally)? *(answered: all seven)*
 
 ### Q3 — three static `bg-black/5` and two `bg-white/95` sit beside the named sites
+### DECIDED: all five are in scope; static trio → `bg-foreground/5`, SelectTriggers → semantic surface token
 
 Not matched by the authorized pattern, not in any list, and not explicitly
 excluded:
@@ -147,9 +173,10 @@ nav, which the story **explicitly excludes**; that exclusion was reasoned about
 for the header and is silent here, so whether the same reasoning transfers is a
 judgment call.
 
-Fix with Q2, or leave as out of scope?
+Fix with Q2, or leave as out of scope? *(answered: fix with Q2 — all five in scope)*
 
 ### Q4 — parity: `layout.tsx` md5s do not match, and never did
+### DECIDED: not a gap; verify the `<html>` open tag matches across apps
 
 `theme-contract.md:52` instructs: "after editing, `md5sum` the two `layout.tsx`
 files and confirm they still match, or differ only where they are intended to."
@@ -179,11 +206,16 @@ the token edit is mirrored by construction.
 class changes are authorized, and no raw color may be introduced. Verified clean
 at baseline across all 14 files under `components/grid/`.
 
-### Needed to unblock
+### What was needed to unblock — all answered
 
 1. **Q1** — is `bg-[#FFF9F0]` on `apps/*/app/manage/page.tsx:37` in scope
-   (→ `bg-background`), or out?
+   (→ `bg-background`), or out? → **in scope, `bg-background`, both apps.**
 2. **Q2** — all seven `hover:bg-black/5` sites, or only the three in
-   `manage-attendance-view.tsx`?
+   `manage-attendance-view.tsx`? → **all seven → `hover:bg-foreground/5`.**
 3. **Q3** — the three static `bg-black/5` and the two `bg-white/95` in
-   `/manage`: fix or leave?
+   `/manage`: fix or leave? → **fix. Trio → `bg-foreground/5`; the two
+   `manage-dashboard.tsx` `SelectTrigger`s → a semantic surface token.**
+
+This story is unblocked and ready to implement. The binding implementation
+contract is `theme-contract.md` plus this story's `invoke_dev_with` in
+`stories.yaml`; re-read both in full before touching code.
