@@ -4,7 +4,7 @@ Binding contract for CAP-7. Follows the recipe the user named: <https://ui.shadc
 
 ## The state today
 
-`existing-state.md` records it in full. In short: the theme is **defined and dead**. `next-themes` is installed, `components/theme-provider.tsx` is correct, both `globals.css` files carry a complete 31-token `.dark` block, and nothing mounts the provider or offers a control.
+`existing-state.md` records it in full. In short: the theme is **defined and dead**. `next-themes` is installed, `components/theme-provider.tsx` is correct, both `globals.css` files carry a complete 31-token `.dark` block, and nothing mounts the provider or offers a control. Exception, decided 2026-10-09: the `.dark` values of `--ring` and `--destructive` are too dark for the grid (measured in Chromium against `--card`: ring 2.02:1, destructive 1.88:1) and are authorized to be lightened per the ratios below; the other 29 tokens stand as complete.
 
 One line makes this a live concern rather than cosmetics: `components/ui/sonner.tsx:7` already calls `useTheme()`. Existing code expects a mounted provider and is currently getting a no-op. Mounting the provider fixes that as a side effect.
 
@@ -33,7 +33,8 @@ Per the shadcn recipe, in both apps:
 The two theme-sensitive grid details that do need attention:
 
 - **The frozen run's right border.** `grid-row.tsx` puts `border-r` on the last frozen column only. In dark mode a 1px `border-border` on a dark surface needs to be one step lighter than its surroundings or it disappears. It already resolves through `--border`, so this is a token-value question, not a code change: confirm it reads at both themes rather than assuming.
-- **The focus ring.** `bg-ring/60` and `border-ring` at partial opacity are tuned for a light surface. Confirm legibility in dark; adjust the alpha, not the token.
+- **The focus ring.** The focused cell is `ring-ring ring-1 ring-inset` at **full** opacity (`grid-row.tsx:208`); `bg-ring/60` and `border-ring/40` live on the column resize handle (`grid-header-cell.tsx:244`) and the editor inputs, not the cell ring — the earlier description of a partial-opacity ring was wrong. Alpha is **not** the lever here: on a dark surface lowering alpha moves the color toward the surface and contrast only decreases (measured in Chromium: dark `--ring` 2.02:1 at full opacity, worse at any lower alpha). The authorized fix is to lighten the `.dark` value of `--ring` until the ring measures **>=3:1 against `--card` in both themes** (starting point `oklch(0.55 0.12 260)`, ~3.86:1). Grid classes stay untouched.
+- **The destructive cell.** `text-destructive` measures 4.77:1 in light but **1.88:1 in dark** against `--card` — same cause, same remedy: lighten the `.dark` value of `--destructive` until it measures **>=4.5:1 in both themes** (starting point `oklch(0.6 0.141 25.723)`, ~4.44:1 — tune until >=4.5:1 measures). Token edits stay in the two mirrored `globals.css` files only; no grid class changes, zero raw colors still.
 
 ## What is in scope outside the grid
 

@@ -201,9 +201,16 @@
     THE GRID IS ALREADY TOKEN-CLEAN. grep for raw hex, rgb(, white and black
     under components/grid/ returns zero, and it must stay zero after this
     story. There is nothing to rewrite — do not go looking for hardcoded colors
-    to fix, and do not introduce any. Confirm instead that the focus ring, the
-    frozen-run divider and the destructive cell read at both themes, and adjust
-    alpha rather than tokens where they do not.
+    to fix, and do not introduce any. Confirm by measurement in real Chromium that
+    the focus ring, the frozen-run divider and the destructive cell read at both
+    themes against their own --card (ring >=3:1, destructive >=4.5:1, both
+    themes). Alpha is NOT the lever on a dark surface -- it only decreases
+    contrast there. The authorized fix, decided 2026-10-09, is to lighten the
+    .dark values of --ring and --destructive in BOTH apps' globals.css (kept
+    mirrored), per the ratios and starting points in theme-contract.md; grid
+    classes stay untouched. The gita-life body gradient (globals.css:200-205)
+    and the shared header mobile-nav bg-white/95 (header.tsx:321) are
+    explicitly out of scope and stay as-is.
     In scope outside the grid, /manage only: hover:bg-black/5 is invisible on a
     dark surface and becomes hover:bg-foreground/5. Leave text-white on
     program-primary headers alone — that brand color is dark in both themes.
