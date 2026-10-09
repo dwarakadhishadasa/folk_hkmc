@@ -41,15 +41,18 @@ The two theme-sensitive grid details that do need attention:
 `components/manage/` has hardcoded colors on program-primary headers: `bg-[var(--program-primary)] text-white` in `manage-dashboard.tsx:102`, `manage-attendance-view.tsx:109`, and `hover:bg-black/5` in three places in `manage-attendance-view.tsx`.
 
 - `text-white` on a fixed dark brand color is **correct in both themes** — `--program-primary` is royal blue in `:root` and `--royal-blue-dark` in the dark block. Leave it.
-- `hover:bg-black/5` **is a real dark-mode bug**: black at 5% on a dark surface is invisible. It needs `hover:bg-foreground/5`, which resolves correctly either way.
+- `hover:bg-black/5` **is a real dark-mode bug**: black at 5% on a dark surface is invisible. It needs `hover:bg-foreground/5`, which resolves correctly either way. Decided 2026-10-09: the contract's old "three places" count is stale — all SEVEN sites are in scope (`manage-attendance-view.tsx:133,145`, `manage-favorites-view.tsx:345,486,514`, `manage-portal.tsx:84,96`).
+- The three static `bg-black/5` sites are the same defect (stronger case — not transient) and are in scope → `bg-foreground/5`: `manage-favorites-view.tsx:344` (active chip), `:376` (placeholder), `manage-sessions-view.tsx:92` (pill).
+- The two `bg-white/95` `SelectTrigger`s (`manage-dashboard.tsx:145,158`) are in scope → a semantic surface token, no raw colors.
+- The `bg-[#FFF9F0]` full-page wrapper on `apps/*/app/manage/page.tsx:37` (both apps) is in scope → `bg-background`. It is the outermost surface of the graded page; dark mode is visibly broken without it.
 
-Scope is bounded to `/manage`, the surface this grid lives in. A repo-wide token audit is a separate piece of work and is not smuggled in here.
+Scope is bounded to `/manage`, the surface this grid lives in. Explicitly out: the gita-life `body` gradient (`globals.css:200-205`) and the shared header mobile-nav `bg-white/95` (`header.tsx:321`). A repo-wide token audit is a separate piece of work and is not smuggled in here.
 
 ## Two-app parity
 
 `apps/folk` and `apps/gita-life` `layout.tsx`, `providers.tsx` usage and `globals.css` mirror each other and must stay mirrored. `components/` is shared, so `theme-provider.tsx` and the new `theme-toggle.tsx` are written once.
 
-The repo already has a byte-parity habit for exactly this — the bulk route files are md5-identical across apps. Follow it: after editing, `md5sum` the two `layout.tsx` files and confirm they still match, or differ only where they are intended to.
+The repo already has a byte-parity habit for exactly this — the bulk route files are md5-identical across apps. For `layout.tsx`, whole-file md5s never matched (branding, themeColor, icon paths differ by intent), so after editing confirm the `<html>` open tag matches across apps instead — that is where `suppressHydrationWarning` lands.
 
 ## Verification
 

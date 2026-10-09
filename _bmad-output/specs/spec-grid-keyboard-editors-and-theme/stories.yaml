@@ -211,13 +211,27 @@
     classes stay untouched. The gita-life body gradient (globals.css:200-205)
     and the shared header mobile-nav bg-white/95 (header.tsx:321) are
     explicitly out of scope and stay as-is.
-    In scope outside the grid, /manage only: hover:bg-black/5 is invisible on a
-    dark surface and becomes hover:bg-foreground/5. Leave text-white on
-    program-primary headers alone — that brand color is dark in both themes.
+    In scope outside the grid, /manage only, decided 2026-10-09. The contract's
+    old "three places" count is stale: all SEVEN hover:bg-black/5 sites become
+    hover:bg-foreground/5 (manage-attendance-view.tsx:133,145,
+    manage-favorites-view.tsx:345,486,514, manage-portal.tsx:84,96). The three
+    static bg-black/5 sites become bg-foreground/5 (manage-favorites-view.tsx:344
+    active chip, :376 placeholder, manage-sessions-view.tsx:92 pill). The two
+    bg-white/95 SelectTriggers (manage-dashboard.tsx:145,158) become a semantic
+    surface token (no raw colors). The bg-[#FFF9F0] full-page wrapper on
+    apps/*/app/manage/page.tsx:37 (both apps) becomes bg-background -- it is the
+    outermost surface of the graded page and dark mode is broken without it.
+    Leave text-white on program-primary headers alone — that brand color is dark
+    in both themes. The gita-life body gradient (globals.css:200-205) and the
+    shared header mobile-nav bg-white/95 (header.tsx:321) stay out of scope.
+    Parity check is the <html> open tag matching across apps (whole-file md5s
+    never matched: branding/themeColor/icons differ by intent), not whole-file
+    md5.
     components/ui/sonner.tsx:7 already calls useTheme() and is currently
     getting a no-op; mounting the provider fixes it as a side effect.
-    Keep apps/folk and apps/gita-life layout.tsx mirrored — md5sum them after
-    editing.
+    Keep apps/folk and apps/gita-life layout.tsx mirrored at the <html> open tag
+    (whole-file md5s never matched) — the tag edit lands on the identical
+    <html lang="en"> line in both.
     Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm build,
     pnpm test:e2e. Add a spec that the theme persists across a reload, plus a
     screenshot assertion in both themes.
