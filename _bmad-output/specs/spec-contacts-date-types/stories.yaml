@@ -22,7 +22,14 @@
     run the audit queries in migration-playbook.md section CAP-1 against the
     LOCAL stack. Do not touch production — AGENTS.md forbids it without
     Dwaraka's approval, and this is the story that decides whether production
-    even needs auditing.
+    even needs auditing. EXCEPTION (authorized 2026-10-10, standing): the
+    story file's "Hosted read-only access" section permits this story's
+    sessions to run the CAP-1 SELECTs against hosted through
+    HOSTED_AUDIT_READONLY_URL from gitignored .env.hosted-audit.local only —
+    SELECT on public.contacts only, never print the URL, and re-escalate if
+    the file or connection is absent. That exception exists because the local
+    audit is vacuous (fixtures hold no dates) and OQ-2 can only be answered
+    from hosted data.
 
     The output is a report, not code. Record in the story file, per column:
     total, nulls, exact_iso, prefix_with_trailing, not_a_date, and a SELECT
