@@ -1,6 +1,6 @@
 ---
 status: draft
-stepsCompleted: [1]
+stepsCompleted: [1, 2]
 inputDocuments:
   - _bmad-output/specs/spec-contacts-date-types/SPEC.md
   - _bmad-output/specs/spec-contacts-date-types/existing-state.md
@@ -90,11 +90,34 @@ UX-DR11: Meet the accessibility bar in NFR5, verified partly by the recorded man
 
 ### FR Coverage Map
 
-{{requirements_coverage_map}}
+FR1: Epic 1 — local audit counts + offender ids before any ALTER.
+FR2: Epic 1 — OQ-1 interaction decision, then column and display agree.
+FR3: Epic 1 — one reversible TEXT→DATE migration, null-after-report, no clock in the cast.
+FR4: Epic 1 — `optionalIsoDate` tightened in the same change as the migration.
+FR5: Epic 1 — grid, dashboard chart, Favorites, and existing date e2e rows all still pass.
+FR6: Epic 1 — no RLS/route/authz change, apps mirrored, no invented values.
+FR7: Epic 2 — five-tab header with distinguishable active tab and aligned scope.
+FR8: Epic 2 — one-scroll-container surface, sticky header, hairlines, unclipped final column.
+FR9: Epic 2 — type-keyed renderers with genuinely blank empties.
+FR10: Epic 2 — human labels for linked records, unresolved marker instead of UUIDs.
+FR11: Epic 2 — one toolbar band with filter indication and conditional bulk bar.
+FR12: Epic 2 — validated saves with server-message revert through the single commit path.
+FR13: Epic 2 — single-click active cell, distinct from hover/selection.
+FR14: Epic 2 — Field·operator·value filter modal with per-type operators and absolute-boundary dates (needs Epic 1's DATE type).
+FR15: Epic 2 — dnd-kit drag reorder with pinned-run protection; four-item header menu.
+FR16: Epic 2 — right-side record sheet with filtered-order navigation and full state preservation.
+FR17: Epic 2 — double-click-only edit model with blur-commit and retired keyboard openers.
+FR18: Epic 2 — gesture isolation: no interaction does two things at once.
 
 ## Epic List
 
-{{epics_list}}
+### Epic 1: Trustworthy contact dates
+Operators can rely on every date column meaning what it says and filtering without silent row loss.
+**FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6
+
+### Epic 2: Premium contacts grid
+Coordinators get an enterprise-grade working surface: legible hierarchy, one toolbar, type-correct filtering, drag-arranged columns, and in-place record review.
+**FRs covered:** FR7, FR8, FR9, FR10, FR11, FR12, FR13, FR14, FR15, FR16, FR17, FR18
 
 <!-- Repeat for each epic in epics_list (N = 1, 2, 3...) -->
 
