@@ -1,0 +1,114 @@
+# Story breakdown for SPEC-contacts-date-types.
+# Execution order is list order. Derived from SPEC.md on 2026-10-09.
+#
+# Three stories, grouped by the files each one owns so every story is an
+# independently mergeable PR. Runs BEFORE spec-contacts-premium-grid, whose
+# CAP-12 date-filter operators are written against the DATE type this produces.
+#
+# Environment: the audit and the migration need the local Supabase stack
+# (pnpm dev:local, then scripts/apply-migrations.mjs). The e2e suite needs the
+# same stack and runs 5-7 minutes at one worker.
+
+- id: "1"
+  title: Data audit of the three contacts date columns
+  description: >-
+    Quantify what is actually stored in date_of_birth, initial_contact and
+    last_contacted_on before anything is altered — total, nulls, exact ISO,
+    valid prefix with trailing content, and values that are not dates at all.
+    Read-only; this is CAP-1 and the gate on the migration.
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Read SPEC.md, existing-state.md and migration-playbook.md in full, then
+    run the audit queries in migration-playbook.md section CAP-1 against the
+    LOCAL stack. Do not touch production — AGENTS.md forbids it without
+    Dwaraka's approval, and this is the story that decides whether production
+    even needs auditing.
+
+    The output is a report, not code. Record in the story file, per column:
+    total, nulls, exact_iso, prefix_with_trailing, not_a_date, and a SELECT
+    DISTINCT of the not_a_date values so the remediation is obvious rather
+    than inferred from a count. A long numeric string means
+    migrate-airtable-data.mjs stringified an Airtable number field; words mean
+    the column was free text. They are different problems.
+
+    This number decides OQ-2. A handful of rows: report and null them, recording
+    every id. A large number: block and repair by hand, because a migration
+    that silently empties a column is the same failure as inventing data.
+    Do NOT proceed to the migration in this story regardless of the result.
+
+- id: "2"
+  title: Park last_contacted_on as empty DATE for future use
+  description: >-
+    CAP-2, DECIDED 2026-10-10 by Dwaraka: park, not fix. Remove the
+    insert-time write so new rows store NULL, null existing values only after
+    reporting every id (they record creation while the label claims contact),
+    keep the column as DATE for a future feature, and show `never` in
+    manage-favorites-view.tsx:559 until that feature defines the interaction.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    This story is a DECIDED park, not an open decision — do not re-litigate
+    OQ-1. lib/supabase/data.ts:614-621 writes last_contacted_on at insert from
+    currentProgramDate() and grep finds no update path anywhere in the app.
+
+    Remove the last_contacted_on line from the insert payload (new rows get
+    NULL) while keeping initial_contact's write. Do NOT add an update path.
+    Set manage-favorites-view.tsx:559 to render `never` for NULL as plain text.
+
+    Existing rows hold creation dates posing as contact dates: Dwaraka approved
+    nulling them. Null them only after reporting every id (story 3's migration
+    does the nulling; this story removes the write and fixes the display).
+
+    Verify: pnpm typecheck:workspace, pnpm lint.
+
+- id: "3"
+  title: Migrate the three date columns to DATE and tighten the validator
+  description: >-
+    CAP-3, CAP-4 and CAP-5. Convert the columns to DATE in one reversible
+    migration and bring optionalIsoDate into agreement with the new type, so
+    what the API accepts is exactly what the column can store.
+    DECIDED 2026-10-10: last_contacted_on ends EMPTY (Dwaraka park decision) —
+    its existing values are nulled after reporting, alongside any other
+    unconvertible values.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Read SPEC.md, existing-state.md and migration-playbook.md in full. The
+    migration and the validator MUST land in the same change — see below.
+
+    Story 1's audit is a hard gate. Do not run any ALTER until its numbers
+    have been read and the not_a_date rows are known. One bad value makes the
+    whole cast fail and leaves a partially migrated column with no working
+    read path.
+
+    THE MIGRATION AND THE VALIDATOR ARE ONE CHANGE. lib/manage/api-handlers.ts
+    optionalIsoDate validates only the prefix /^\d{4}-\d{2}-\d{2}/ and
+    deliberately allows trailing content because existing rows hold a full ISO
+    timestamp. A DATE column cannot store one. Land the migration alone and a
+    client sending 2026-02-31T10:00:00Z passes the handler and is then rejected
+    by Postgres with an error the handler never produced — the unreadable
+    failure its own comment warns about. Whichever way OQ-3 is resolved, the
+    same rule must appear in the migration and in the handler.
+
+    DO NOT PUT THE CLOCK IN THE CAST. SUPABASE_DATE_TIME_ZONE is Asia/Kolkata
+    and currentProgramDate() already emits a program-local calendar date, which
+    is exactly what a timezone-naive DATE holds. Adding AT TIME ZONE would shift
+    every date across the day boundary for IST users. This is the single most
+    damaging thing this story could do.
+
+    Values that cannot be converted are set to NULL only after being reported,
+    and every affected id is recorded in this story file. The migration follows
+    the repo convention (YYYYMMDDHHMMSS_name.sql, latest is
+    20261008000000_add_airtable_id_map.sql) and ships a down path. Do not edit
+    scripts/verify-monorepo-guardrails.mjs; verify-airtable-removal.mjs asserts
+    its contents.
+
+    Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails,
+    scripts/apply-migrations.mjs on a fresh local stack, pnpm test:e2e (one
+    runner, 5-7 min, shared seeded database). `git diff lib/supabase/types.ts`
+    MUST be empty — Supabase gen-types emits `string` for both text and date,
+    so an empty diff is the proof that nothing on the client needed to change.
+    If that diff is non-empty, stop and report it: it means the change was not
+    type-only and the ripple is larger than this spec assumed.
+
+    Update matrix-coverage-map.md in the same commit if any row is retired,
+    and never commit a deliberately broken spec to e2e/specs/ — generate
+    failures into a temp dir and remove them in a finally.
