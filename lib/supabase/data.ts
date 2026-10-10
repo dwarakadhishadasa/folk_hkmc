@@ -618,7 +618,6 @@ export async function createContact(data: {
     name: data.name.trim(),
     phone: normalizedPhone,
     initial_contact: createdDate,
-    last_contacted_on: createdDate,
   }
 
   if (typeof data.age === "number") {

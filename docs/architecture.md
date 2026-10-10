@@ -191,6 +191,6 @@ Queued requests replay to the original URL on reconnect or background sync, a `4
 - Do not restore the old localStorage demo auth model; current auth is Supabase-backed.
 - Preserve the `/attendance` route path. It is intentionally not under `/api`.
 - Preserve 10-digit mobile normalization on both client and server.
-- Preserve `Asia/Kolkata` program-day semantics for attendance-day filtering and the `initial_contact` / `last_contacted_on` dates.
+- Preserve `Asia/Kolkata` program-day semantics for attendance-day filtering and the `initial_contact` date. `last_contacted_on` is deliberately not written on create and has no update path (parked pending a future feature), so no program-day write semantics are asserted for it.
 - Any session attendance changes must keep registration, attendance, dashboard polling, session fields, and service worker queue paths aligned.
 - The client/server boundary is enforced locally: `pnpm guardrails` fails on a client graph that reaches a `server-only` module, and `pnpm typecheck:workspace` must pass because the Next build ignores TypeScript errors.

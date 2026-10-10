@@ -46,7 +46,7 @@ Source types: `ContactFields`, `ContactRecord`. Table `public.contacts`.
 | `notes` | text | Staff comments |
 | `source` | text | e.g. `Public Registration`, `Attendance Registration`, `Pass distribution` |
 | `initial_contact` | text | Current Asia/Kolkata program date on create |
-| `last_contacted_on` | text | Current Asia/Kolkata program date on create |
+| `last_contacted_on` | text | Not written on create; no update path — parked by story 2, awaiting the future feature that defines a contact interaction |
 | `address` | text | Street address |
 | `location_ids` | text[] | Location scope; no join table |
 | `assigned_preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL` |

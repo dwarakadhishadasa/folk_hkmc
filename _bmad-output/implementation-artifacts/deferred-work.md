@@ -225,3 +225,107 @@ source_spec: `_bmad-output/specs/spec-grid-keyboard-editors-and-theme/stories/4-
 severity: medium
 reason: Resolved in the primitive rather than documented around. `GridRow` now renders an editor ahead of `cell.render`, and hands the editor `cell.text` — the display value with the optimistic override already applied — through `GridEditorContext.text`; `renderDisplay` returning `undefined` falls back to that text, and `getValue()` is documented and used for seeding a draft only. So the trap no longer exists for any editor column, and `components/grid/grid-editors.tsx` supplies the closed-state widgets (checkbox, select, multiselect, date, currency, url, user) that would otherwise have walked into it. `resolveConsumerRenderers` stayed table-agnostic: the compensation for a consumer that authors its own cell node is the *exemption* applied where the write is decided — `clearCell` and `pasteText` skip `consumerRenderedCells` only for columns with no `editor`. `docs/manage-grid-pattern.md` §2 records the editor-aware rule, including that a closed-state display must not be a `<button>`.
 status: resolved
+
+### DW-28: Nothing asserts that a contact created through `createContact` stores `last_contacted_on` NULL while `initial_contact` holds the program-local date.
+origin: spec-deferred 3cb0531764fc
+location: lib/supabase/data.ts:616
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: medium
+reason: `pnpm test:e2e` passes 165 with one flake and would pass just as green if `last_contacted_on: createdDate` were put back, or if the adjacent `initial_contact: createdDate` line were deleted alongside it. The only spec that creates a contact through the app, `e2e/specs/manage-contacts-row-lifecycle.spec.ts:386-445`, goes through `POST /api/manage/contacts` -> `handleManageContactCreate` -> `createManageContact` (`lib/supabase/manage.ts:1050`), a different writer that never touched this column, so the changed line is never executed by the suite. No spec reaches `/api/contact` or `/api/registration` at all. Settled by adding a spec that creates through `POST /api/contact` and reads both columns back.
+status: open
+
+### DW-29: The Favorites detail panel — the only user-visible consequence of the park — is never opened by any spec, so the `never` rendering is unpinned.
+origin: spec-deferred 7fb5c286b23e
+location: components/manage/manage-favorites-view.tsx:559
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: medium
+reason: No spec navigates to `view=favorites`; the only `/manage?view=` navigation in the suite is `e2e/specs/theme-switch.spec.ts:450` (`view=contacts`), and favorites-adjacent assertions read `aria-pressed` on grid stars (`e2e/fixtures/manage-grid.ts:210-240`). Replacing `?? "never"` with `?? ""`, a dash, or nothing at all would fail no spec. Settled by opening `/manage?view=favorites`, selecting a favourite, and asserting the detail paragraph's text in both the NULL and the stored-value case.
+status: open
+
+### DW-30: `SPEC.md` still carries OQ-1 as an open question and a success signal that promises `last_contacted_on` "now updates when someone is contacted" — the opposite of the park this story implemented.
+origin: spec-deferred 69f9698fe1f3
+location: _bmad-output/specs/spec-contacts-date-types/SPEC.md:80
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: medium
+reason: `SPEC.md:90` reads "OQ-1 — What counts as a contact interaction? ... **This spec assumes attendance** ... Needs your call" and `SPEC.md:80`'s success signal says "`last_contacted_on` now updates when someone is contacted". Story 3 loads `SPEC.md`, so a stale open question there can invite the update path the intent forbids. Settled by Dwaraka closing OQ-1 in `SPEC.md` to the park decision, which is his decision to make rather than an unattended agent's edit to the canonical spec.
+status: open
+
+### DW-31: The grid's "Last Contacted On" cell renders NULL as a blank, where the Favorites panel renders `never` for the same contact.
+origin: spec-deferred 3614cadf54b0
+location: components/manage/manage-contacts-table.tsx:916
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: `components/manage/manage-contacts-table.tsx:916` is a bare `columnHelper.accessor("lastContactedOn", {...})` with no custom cell, so a null value renders empty. Deliberately left alone: a blank cell asserts nothing false, `:188` already defaults blank rows to `lastContactedOn: null`, and the intent named one display line. Settled by Dwaraka deciding whether the two surfaces should agree; the smallest fix is a `cell:` renderer mirroring the panel's `?? "never"`.
+status: open
+
+### DW-32: Re-running the one-shot Airtable import would repopulate `last_contacted_on`, defeating the park and confusing story 3's cast gate.
+origin: spec-deferred dfb52898e5a9
+location: scripts/migrate-airtable-data.mjs:668
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: `scripts/migrate-airtable-data.mjs:668` still builds the column into its insert payload. Latent rather than live — the import has already run, and re-running it would breach `AGENTS.md`'s production rule anyway. Worth knowing before story 3 reads an unexpectedly populated column. Settled by gating the script on one-shot completion or removing the mapping.
+status: open
+
+### DW-33: Sorting the now-mixed-population "Last Contacted On" column puts NULL rows ahead of every `YYYY-MM-DD` value.
+origin: spec-deferred 657707f8e18c
+location: components/manage/manage-contacts-table.tsx:916
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: TanStack's default text sort orders null/undefined first, and after this change the column mixes ~1057 populated rows with NULL for every row created from here on. Cosmetic and non-misleading — no incorrect data is displayed — and the column carries no `meta.grid.filter`, so it is not filterable at all. Settled by an explicit `sortingFn` if the ordering is judged wrong.
+status: open
+
+### DW-34: `SPEC.md:33` is stale in the same way `SPEC.md:80` and `:90` are, and is not named in the existing SPEC.md deferral — the stale surface is wider than recorded.
+origin: spec-deferred 6dee51095b81
+location: _bmad-output/specs/spec-contacts-date-types/SPEC.md:33
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: `SPEC.md:33` asserts in the present tense that "`lib/supabase/data.ts:614-621` writes `last_contacted_on: currentProgramDate()` at **insert** and nothing ever updates it", which this story made false. `SPEC.md:47`'s CAP-3 success criterion still lists `last_contacted_on` among the three columns that become `DATE`, but that one remains correct — story 3 does convert it. Settled by Dwaraka updating `:33` alongside `:80` and `:90` when he closes OQ-1.
+status: open
+
+### DW-35: Two findings this story's log deferred (BH-13, the skipped `AGENTS.md` Full-level e2e escalation, and VO2) never reached the ledger, so BH-13's claimed durability is not real.
+origin: spec-deferred 509c12f23fb3
+location: _bmad-output/implementation-artifacts/deferred-work.md
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: `_bmad-output/implementation-artifacts/deferred-work.md` gained exactly six entries (DW-28 through DW-33), matching the six frontmatter blocks; the first pass's triage log defers eight findings. BH-13's record explicitly claims it is "Recorded so the next story does not repeat the reasoning" about skipping a named verification gate. The ledger is owned by the sweep/orchestrator, which reconciles spec-deferred entries into it — a build must not write it. Settled by the next sweep reconciling the stragglers.
+status: open
+
+### DW-36: The cross-spec deferral VO2 cites the wrong line for the stale prose, and its paired citation is a row that now covers one true and one false claim jointly.
+origin: spec-deferred d4d5e89be67a
+location: _bmad-output/specs/spec-contacts-premium-grid/existing-state.md:224
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: `_bmad-output/specs/spec-contacts-premium-grid/existing-state.md:101` is a grid-column table row (`| lastContactedOn | date | — | read-only, ISO |`), not the stale prose; the text describing the removed insert write is at `:224`, with the schema listing at `:234`. The paired citation `_bmad-output/specs/spec-airtable-to-supabase/data-model-mapping.md:25` is accurate, but that row covers `initial_contact` / `last_contacted_on` jointly under "Asia/Kolkata date on create" — now only half-true — so a fixer could correctly drop the `last_contacted_on` half and wrongly delete `initial_contact`'s still-correct entry. Settled by correcting both specs; each belongs to another spec, not this one.
+status: open
+
+### DW-37: The single flaky e2e failure is classified as load-dependent on one isolated re-run, with no determinism evidence and no second full-suite run.
+origin: spec-deferred 56b5c7292487
+location: e2e/specs/manage-contacts-edit.spec.ts:334
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: `manage-contacts-edit.spec.ts:334` failed inside `filterGlobally` at `e2e/fixtures/manage-grid.ts:385` on `search.pressSequentially(text)`; in isolation `pnpm test:e2e "manage-contacts-edit"` gave 10 passed, exit 0. There is no `pnpm test:e2e:determinism` run, no repeat count and no second full-suite result, so "load-dependent flake, not a regression" is a hypothesis with one supporting data point. The record already concedes it is a judgement rather than a proof, so nothing is overstated — but nothing settles it either. Pre-existing test, untouched by this story. Settled by one `pnpm test:e2e:determinism` run, or by the flake recurring in isolation.
+status: open
+
+### DW-38: The whole local e2e corpus has `last_contacted_on` NULL, so any local assertion about the mixed-population sort order would pass vacuously.
+origin: spec-deferred 54d3c4d642f1
+location: scripts/seed-local-fixtures.mjs
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: Neither `scripts/seed-local-fixtures.mjs` nor `scripts/bulk-contact-fixtures.mjs` writes the column — `grep -rn "last_contacted_on" scripts/` finds it only in the one-shot Airtable importer. So the existing sort-order deferral's "NULL rows sort ahead of every `YYYY-MM-DD`" mixed population exists **only in hosted data**; locally every row takes the NULL path. This qualifies that deferral rather than repeating it: any test written for the ordering must seed a stored value explicitly or it proves nothing. Settled by seeding one row with a stored value in whatever spec eventually covers it.
+status: open
+
+### DW-39: `stories.yaml` still dispatches story 3 from a pre-park description, with no pointer to the warning that new rows already arrive NULL.
+origin: spec-deferred 88e9d976b33d
+location: _bmad-output/specs/spec-contacts-date-types/stories.yaml:57
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: `stories.yaml:57` (story 2's `invoke_dev_with`) states that "`lib/supabase/data.ts:614-621` writes last_contacted_on at insert", which this story made false, and story 3's block nowhere says that after story 2 new rows are already `NULL` and must not be read as "already migrated". The warning lives only in this story file, which story 3 has no pointer to. `invoke_dev_with` is a caller-owned orchestration field that build-auto is forbidden to edit. Settled by the orchestrator refreshing `stories.yaml` before story 3 dispatches.
+status: open
+
+### DW-40: The `never` rendering depends on two mappers this story does not touch, and this change makes the blank case the common case rather than the exception.
+origin: spec-deferred 443315bfc132
+location: lib/supabase/data.ts:234
+source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
+severity: low
+reason: `manage-favorites-view.tsx:559`'s `??` alone would render `""` as an empty gap; the blank case is closed upstream by `normalizeString()` (`lib/supabase/data.ts:234-236`) and `text()` (`lib/supabase/manage.ts:180-187`), which today collapse any non-string or blank to `undefined`/`null`. Nothing pins either. After this change most rows take that path, so a future edit letting either mapper pass blanks through would silently restore the empty-gap rendering AC #3 forbids with no gate firing. Distinct from the Favorites deferral, which is about the panel never being opened. Settled by a unit assertion on both mappers, or by normalising blanks at the display site instead of relying on them.
+status: open
