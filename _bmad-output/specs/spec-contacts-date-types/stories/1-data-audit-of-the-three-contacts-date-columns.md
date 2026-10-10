@@ -2,7 +2,7 @@
 title: 'Data audit of the three contacts date columns'
 type: 'chore'
 created: '2026-10-10'
-status: blocked
+status: done
 review_loop_iteration: 0
 followup_review_recommended: true
 context:
@@ -10,36 +10,42 @@ context:
   - ../existing-state.md
   - ../migration-playbook.md
 warnings: []
-deferred:
-  - summary: >-
-      The hosted half of CAP-1 was authorized and attempted, and the authorized
-      connection string does not connect: it points at the Supavisor transaction
-      pooler on port 6543 with no tenant identifier, so the pooler refuses the
-      connection before authentication. No hosted statement ran and no hosted
-      number was measured, so OQ-2 remains undecided.
-    evidence: |-
-      psql "$HOSTED_AUDIT_READONLY_URL" ... exited 2 with
-      FATAL (ENOIDENTIFIER) no tenant identifier provided (external_id or sni_hostname required)
-      from aws-0-ap-south-1.pooler.supabase.com:6543. A credential-shape-only parse
-      (no values printed) confirms: username carries no "." tenant prefix and the URL
-      carries no query parameters, while host, port, database name and password
-      presence are all correct. Fix is one of: append ?tenant=<external_id>, use the
-      postgres.<project-ref> username form, or point the URL at the direct connection.
-      Correction to a credential file is Dwaraka's, not this story's; this run made no
-      change to .env.hosted-audit.local and did not fall back to any other credential.
-      Full account under "## Hosted audit result" in this file.
-    location: >-
-      .env.hosted-audit.local (HOSTED_AUDIT_READONLY_URL) — connection routing,
-      not the credential itself
-    severity: medium
-baseline_revision: 6d20168f8f31ba5d4f93749f85e258f5a06901cc
+deferred: []
+baseline_revision: 2eb1279510f4fb2692002b58b9769c77f1bd2567
 ---
 
 # Story 1 — Data audit of the three contacts date columns
 
-**Status: blocked — the hosted audit was authorized and attempted, and the connection was refused.** This run re-derived every local number below from the live local database, from scratch, and inherited no figure from any earlier attempt recorded in this file. It then acted on the standing hosted authorization: it loaded `.env.hosted-audit.local` and **attempted a connection with `HOSTED_AUDIT_READONLY_URL`; the pooler refused it** — the URL points at the Supavisor transaction pooler (`…pooler.supabase.com:6543`) with no tenant identifier, so the connection was terminated before authentication and no session was ever established. Per the authorization's own terms, this run **stopped and re-escalated**. It did not fall back to another credential, did not guess a project ref, and did not substitute the local zeros for hosted numbers.
+**Status: done — OQ-2 decided (Proceed) from measured hosted numbers.** The local audit below was re-derived from the live local database, and the hosted half of CAP-1 — refused at the pooler in every loop attempt — was then measured by a manual read-only re-run on 2026-10-10 after Dwaraka fixed the connection string and the audit role (see *Hosted audit result (manual re-run 2026-10-10) — MEASURED*). Hosted `not_a_date` is **zero on all three columns over 1,094 rows**, the offender lists are empty, and the calendar-validity gate passes on every non-null value — so the standing rule maps this to **Proceed**, with the pre-`ALTER` gate already run and read. No `ALTER` was run here; story 3 is ungated but still owns the migration.
 
-**So the state is unchanged from the last attempt in one respect and materially different in another:** the local `not_a_date` counts are still zero because every value is `NULL`, not because every value parsed, and **zero offenders over a population that was never populated is not a green light** — but OQ-2 is now blocked on a *broken credential*, not on a *missing authorization*. The approval exists; the connection string does not work yet. No `ALTER` was run; nothing here authorizes one.
+**What changed since the blocked revision:** the local `not_a_date` zeros below are unchanged (still null-derived, still not a green light on their own) — but OQ-2 no longer rests on them. The deciding measurement now exists and is recorded in this file. No credential was printed, logged, or committed at any step, and no fallback credential was ever used.
+
+## Hosted audit result (manual re-run 2026-10-10, Dwaraka + agent) — MEASURED, OQ-2 DECIDED
+
+**There is now a hosted number, measured — not transcribed.** After the blocked revision, Dwaraka fixed both blockers and the agent re-ran hosted CAP-1 manually under the standing authorization (*Hosted read-only access* below): `SELECT` on `public.contacts` only, URL loaded from gitignored `.env.hosted-audit.local` into a shell variable and never echoed, client-side `PGOPTIONS="-c default_transaction_read_only=true"`, all output passed through a URI-redacting filter. Exit 0 on every invocation. No fallback credential, no other env file, no dashboard session.
+
+### The two fixes that unblocked it
+
+1. **Connection string (fixed by Dwaraka ~16:55).** The URL pointed at the Supavisor transaction pooler `:6543` with no tenant identifier (`FATAL (ENOIDENTIFIER)`), refusing before authentication. The corrected URL connects.
+2. **Audit-role blindness (diagnosed by agent, fixed by Dwaraka).** The first successful connection read `count(*) = 0` — vacuous again. Cause: `supabase/migrations/20261006010000_scoped_rls_policies.sql:173` scopes contacts `FOR SELECT TO authenticated` only, and the audit role is not `authenticated`, so default-deny hid every row (grant worked — no permission error — but zero rows visible). Dwaraka granted the role `BYPASSRLS` as owner. This preserves read-only (the grant is `SELECT`-only and every invocation ran under `default_transaction_read_only`), changes no policy and no migration, and the loop session's own retry would have measured the same numbers through the same role.
+
+### What was measured
+
+Server `server_version_num` **170006** (PostgreSQL 17.6 — `pg_input_is_valid` available). Column types confirmed `text`/`text`/`text` via `pg_typeof` over `public.contacts` itself (no other table read).
+
+| Column | `total` | `nulls` | `exact_iso` | `prefix_with_trailing` | `not_a_date` |
+|---|---|---|---|---|---|
+| `date_of_birth` | 1094 | **974** | 120 | 0 | **0** |
+| `initial_contact` | 1094 | 44 | 1050 | 0 | **0** |
+| `last_contacted_on` | 1094 | 37 | 1057 | 0 | **0** |
+
+Offender-by-id (`migration-playbook.md:39-43` per column): **0 rows each** — no ids to record. `SELECT DISTINCT` of `not_a_date` (with deterministic `ORDER BY`, no `LIMIT`): **0 rows each**. Calendar-validity gate (`pg_input_is_valid(left(col,10),'date')` over every non-null value, the predicate this report recommends to story 3): `dob_uncastable 0`, `ic_uncastable 0`, `lco_uncastable 0`.
+
+### OQ-2 verdict: Proceed
+
+The standing rule maps hosted `not_a_date = 0` with an empty DISTINCT to **Proceed, with the pre-`ALTER` gate run and read first** — and the gate is already run and read (0 uncastable). Nothing to null, no ids to report, no block. The `text()`-vs-free-text distinction is moot with zero offenders. Notes for story 3: `date_of_birth` is 89% null — nulls need no conversion and backfilling is a non-goal (`SPEC.md:72`); the calendar predicate and the `data_type`-before-`~` requirement from this report still apply at migration time.
+
+Raw measurement: `/tmp/opencode/hosted-probe.sql`, `/tmp/opencode/hosted-cap1.sql`, `/tmp/opencode/hosted-cap1-manual-output2.txt` — temp paths outside the repo, not surviving a reboot; canonical query text remains `migration-playbook.md:18-55` plus the calendar predicate pasted in this file.
 
 ## Audit result (CAP-1 — local stack, read-only)
 
@@ -560,11 +566,13 @@ The deciding input is defined precisely, and it is a measurement, not a judgemen
 2. **Audit a restored Airtable dump seeded locally**, if such a dump exists. Keeps production untouched, but depends on dump availability.
 3. **Proceed to the migration treating the cast as unproven**, using a `USING` clause that regex-guards and NULLs the remainder rather than `left(...)::date` throwing on the first bad value. Weaker than the spec intends and it changes CAP-3's contract, but it fails safe rather than failing partway. It would also need the calendar-validity predicate recorded above, since a regex guard alone would still pass `2023-02-30` into a throwing cast.
 
-## Blocking condition
+## Blocking condition — RESOLVED 2026-10-10
 
 **The audit cannot be completed on the local stack, and the hosted audit cannot be completed because the authorized connection string does not connect.** The population under audit — Airtable-imported contacts — exists only in the hosted project. `SPEC.md:67`, `SPEC.md:84` and `existing-state.md:126-129` all anticipated the first half of this; it has actually happened.
 
 The second half is new to this attempt and is narrower. `AGENTS.md`'s requirement for explicit approval **has been satisfied** — Dwaraka's standing authorization is recorded above and this run acted on it rather than treating it as absent. What blocks the audit is now purely mechanical: the URL in `.env.hosted-audit.local` is missing the tenant identifier the Supavisor requires, and correcting it is a change to a credential file that is Dwaraka's to make, not this story's.
+
+**Resolution (2026-10-10, manual re-run):** Dwaraka fixed the connection string and granted the audit role `BYPASSRLS` (the RLS-blindness diagnosed above), and the hosted CAP-1 was measured in full — see *Hosted audit result (manual re-run 2026-10-10)*. This section is retained as the record of what blocked every loop attempt; it no longer blocks story 3.
 
 ## Note on the prior resolution recorded in this file
 
@@ -612,7 +620,7 @@ The two are treated differently on purpose: **a decision is a fact about intent 
 - **No ids nulled** — and none to null. There are no offending rows on the local stack, and no hosted count is known.
 - **No file other than this one was modified.** No script, no migration, no source file, no gate, no `.env*`.
 - **No e2e run.** This story changed no source file, so no e2e spec covers it. Reporting e2e as "passed" would be false: it was not run.
-- **No decision made between the unblock options**, and **no OQ-2 verdict reached.** Fixing the connection string is Dwaraka's; choosing among (a)/(b)/(c) is Dwaraka's.
+- **No decision made between the unblock options** — superseded 2026-10-10: unblock option 0/1 (fix the connection, audit hosted) is what happened, and **the OQ-2 verdict is reached: Proceed** (see *Hosted audit result (manual re-run 2026-10-10)*). Fixing the connection string was Dwaraka's; choosing among (a)/(b)/(c) is now decided by measurement as (a)-with-nothing-to-null.
 - **Nothing committed, pushed, or stashed.**
 
 ## Verification actually performed
@@ -630,8 +638,12 @@ Commands run by **this** attempt, and their real results. Every row states what 
 | `pnpm test:airtable-removal` | **Exit 1 — 3 of 30 checks fail. PRE-EXISTING, not caused by this story, and not fixed by this story** (`AGENTS.md` forbids editing the gate). Confirmed pre-existing **without stashing**: this story modified exactly one file, a markdown report under `_bmad-output/`, so it cannot be the cause of a source-scanning gate; `git status --porcelain` confirms nothing else is dirty. The failing three are the documented set: `no Airtable service reference, env read, or package import in source`, `every remaining Airtable mention is one of the accounted-for ones`, `/manage has no Airtable URL, redirect, or fallback card`. **27 pass, 3 fail.** |
 | `pnpm test` | **Not run, and deliberately not reported as a pass.** It runs **zero tests** and exits 0 — no workspace package defines a `test` script — so per `AGENTS.md` it must never be presented as a passing test run. |
 | e2e (`pnpm test:e2e*`) | **Not run.** No source file changed, so no spec covers this story. Nothing to verify; not a gap in coverage, and not a claim that e2e passed. |
+| Manual hosted probe 2026-10-10 (`hosted-probe.sql`: `SHOW server_version_num`, `pg_typeof` ×3 over `public.contacts`, `count(*)`) | **Exit 0.** PG 17.6 (`170006`), all three columns `text`, **1,094 visible rows** — the `BYPASSRLS` fix confirmed working. Read-only txn, URL never printed. |
+| Manual hosted CAP-1 2026-10-10 (`hosted-cap1.sql`: counts + offenders + ordered DISTINCTs + calendar gate, `public.contacts` only) | **Exit 0.** `not_a_date` **0/0/0**, offenders 0 rows, DISTINCTs empty, uncastable 0/0/0. **OQ-2: Proceed.** Read-only txn, URL never printed, no fallback credential, no writes. Raw output `/tmp/opencode/hosted-cap1-manual-output2.txt` (temp). |
 
 **Net:** 1 of 2 behavioural checks green (`test:static`), 1 red on 3 pre-existing failures unrelated to this story, 2 deliberately not run (`pnpm test`, e2e), and 1 blocked before it could measure anything (the hosted audit).
+
+**Net after the 2026-10-10 manual re-run:** the hosted audit is measured — `not_a_date` 0/0/0 over 1,094 hosted rows, OQ-2 **Proceed**. The loop run was stopped (`stopped: True`) and this file carries the verdict, so the story is `done` with no source file changed and no migration started.
 
 ### What this attempt did *not* verify, stated plainly
 
@@ -873,65 +885,3 @@ _Revision 2 of this file (same run as below, review follow-up), all corrections 
 _Unchanged and still correct as recorded previously: the finding that `exact_iso` cannot establish calendar validity, the finding that the API's prefix-only validator is a second route by which a non-date reaches these columns, and the observation that the three nulls are specific to these columns while adjacent columns are populated._
 
 
-## Auto Run Result
-
-**Status: blocked.** The local CAP-1 audit ran and is recorded above. The hosted audit was authorized, attempted, and **could not connect** — the pooler refused before authentication. **OQ-2 remains undecided: no hosted number exists.** Story 3 stays gated; no `ALTER` was run and nothing here authorizes one.
-
-### Summary of implemented change
-
-**No code.** One report file was written, corrected, reviewed and corrected again.
-
-1. **Local CAP-1, re-run from scratch.** The playbook's queries (`migration-playbook.md:18-33`, `:39-43`, `:49-53`) were issued verbatim against the local stack in a single `psql -f`, 33 result sets. Per column: `total` 261, `nulls` **261**, `exact_iso` 0, `prefix_with_trailing` 0, `not_a_date` 0 — for all three of `date_of_birth`, `initial_contact`, `last_contacted_on`. Offender-by-id: 0 rows each. `SELECT DISTINCT` of `not_a_date`: 0 rows each. The zeros are **null-derived**, not parse-derived: no Airtable-imported row exists on this stack (`source` is 250 `preview-fixture-bulk` + 7 null + 4 `preview-fixture`; `public.airtable_id_map` is empty), so zero offenders over an unpopulated population is **not a green light**.
-2. **The standing hosted authorization was exercised.** `.env.hosted-audit.local` was read, `HOSTED_AUDIT_READONLY_URL` loaded, the full CAP-1 script prepared, and one connection attempted. It failed: `FATAL (ENOIDENTIFIER) no tenant identifier provided` from the Supavisor transaction pooler on `:6543` — the URL supplies neither a `postgres.<ref>` username nor a `tenant` parameter. **Zero statements reached the hosted server.** No fallback credential, no inferred project ref, no substituted local numbers, and **no credential value printed, logged, written or committed** — the diagnosis reports property names and presence flags only.
-3. **OQ-2 left undecided, with its decision rule written down.** A table maps hosted `not_a_date` count **and the character of the DISTINCT values** to a verdict: zero → proceed; a handful of long numeric strings → `text()` stringified an Airtable *number* field, fix the writer; a handful of words → free-text field, fix the Airtable base; many → **BLOCK**, do not null. **Nothing was nulled under any count.**
-4. **Three findings recorded for story 3, each verified live:** CAP-1's regex buckets do not establish calendar validity; `to_date(...) IS NULL` raises rather than returning `NULL` and silently coerces `35000` to `35000-01-01`; `pg_input_is_valid(left(col,10),'date')` mirrors the cast exactly and is the recommended predicate. The playbook's own **nulling** statement (`:74-76`) and its **`SELECT DISTINCT`** (`LIMIT 20`, unordered) are both flagged as hazards.
-
-### Files changed
-
-- `_bmad-output/specs/spec-contacts-date-types/stories/1-data-audit-of-the-three-contacts-date-columns.md` — the audit report, the hosted-attempt record, the OQ-2 decision table, two review passes' triage logs, and this result. **The only file authored by this run.**
-- `_bmad-output/specs/spec-contacts-date-types/stories.yaml` — **not authored here.** The hosted-access exception paragraph was staged in the index before this run began; it is disclosed in the report rather than claimed as this run's work.
-
-### Review findings breakdown
-
-Two review passes ran over this file.
-
-**Pass 2 (this run), 43 rows over 4 layers** — blind-hunter 13, edge-case-hunter 20, verification-gap 0 (+1 negative-result row), intent-alignment 10; one cross-layer duplicate counted once. Verdicts: high 3, medium 13, low 27, false 0, maybe-false 0.
-
-**Patches applied (9 rows, 4 root causes):**
-- *Claims that overstate what a check proved* (5 rows) — `btrim(col)` does **not** exclude `'\t'`/`'\n'` (verified: both return `f`); query widened to `btrim(col, E' \t\n\r\f\v')` and re-run; the triage verdict sequence corrected to `f,t,t,f,t`; the `phone` grep re-run per file (12 / 7 / **0**); the self-contradicting lede rewritten; the non-reconciling `- verdicts:` tally recounted.
-- *Ledger state asserted but not reproducible* (1 row) — `deferred-work.md` tops out at **DW-27**, its git state is clean, and `80a8bce` touches only the epics file. The DW-28/29/30 deferred entry is **removed**; triage rows (d)/(e) marked `[withdrawn]` with the disconfirming evidence rather than deleted.
-- *The playbook's own predicates under scrutiny* (2 rows) — the shape-only nulling statement at `:74-76` and the unordered `LIMIT 20` DISTINCT at `:49-53`, both recorded as hazards with the required substitution.
-- *Hosted-surface assumptions never observed* (2 rows) — `server_version_num` (PG 16+ needed for `pg_input_is_valid`) and the hosted column type (`date ~ text` errors — verified live), both added to what was **not** verified.
-
-**Deferred (1):** the hosted connection string points at the Supavisor pooler with no tenant identifier. Pre-existing, not this story's to fix — correcting a credential file is Dwaraka's. The single `deferred:` entry.
-
-**Rejected (33 rows), each with its reason recorded.** The four recurring rejections: frontmatter `status` versus the body (**4 layers, identical grounds** — workflow-owned and transient, the terminal HALT writes `blocked`); the report-only deliverable having no committed test (**refuted by the intent itself** — "the output is a report, not code"); grep-absence not proving a column is never written (**refuted by the before/after re-read**, a direct measurement); and findings already answered inside the report itself.
-
-### Follow-up review recommendation: `true`
-
-Patched this pass: **1 `high`, 4 `medium`, 4 `low`**. On a first pass, a patched `high` sets the flag on its own.
-
-**The specific unverified risk a follow-up should look at.** The `high` patch removed the DW-28/29/30 `deferred:` entry after three independent checks said those entries do not exist, and marked triage rows (d)/(e) `[withdrawn]`. That correction was verified here against `deferred-work.md`, `git status` and `git show --stat 80a8bce` — but **the ledger itself was not re-read as a whole**. If a later run finds entries that were restored or added under those numbers elsewhere in the ledger, this file's withdrawal would be wrong in the opposite direction. A follow-up should re-read the ledger's tail and confirm the withdrawal still holds, rather than trusting the withdrawal itself.
-
-Nothing measured was altered by any patch — all nine corrected statements about checks, not the checks' results, and the headline numbers were re-confirmed by an independent query after the patches landed.
-
-### Verification performed
-
-| Command | Result |
-|---|---|
-| `pnpm supabase:status` | Exit 0. Local URL read from output, not assumed: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`. CLI 2.98.2 (pinned per `package.json:23`, `:27`). |
-| `psql … -f audit.sql` (CAP-1, local) | **Exit 0.** 33 result sets, all five measures plus offender list and DISTINCT per column, PostgreSQL 17.6. Every figure in the report is this invocation's output. |
-| `psql … -f audit.sql` — hosted variant | **Exit 2 — connection refused.** `ENOIDENTIFIER`, no tenant identifier, pooler `:6543`. **Zero statements delivered.** |
-| `git check-ignore -v .env.hosted-audit.local` | Exit 0 → `.gitignore:33` (`.env*.local`). Genuinely gitignored. |
-| `pnpm test:static` | **Exit 0.** Guardrails passed. Typecheck 6/6 packages Done. Lint **0 errors, 12 warnings**, all pre-existing in files this run did not touch. |
-| Independent re-check after patches | `SELECT count(*), … FROM contacts` → `261 \| 261 \| 0 \| 0`, confirming the report's headline numbers. `btrim(E'\t')=''` → `f`. `'…'::date ~ '^\d{4}'` → `ERROR: operator does not exist: date ~ unknown`. |
-| `pnpm test:airtable-removal` | **Exit 1 — 3 of 30 fail (27 pass). PRE-EXISTING**, the documented set; this run changed one markdown file, so it cannot be the cause of a source-scanning gate. Gate not edited. |
-| `pnpm test` | **Not run, and not reported as a pass.** Runs zero tests and exits 0. |
-| e2e | **Not run.** No source file changed, so no spec covers this story. Not a claim that e2e passed. |
-
-### Residual risks
-
-- **The one measurement that decides OQ-2 has never been taken.** Everything above is the absence of data, not the presence of good data.
-- **A refused connection is not evidence of clean hosted data.** It proves nothing in either direction — it fails at the pooler, before authentication. The password's validity is untested and may need re-checking once the URL is fixed.
-- **Nothing in the repository re-derives these numbers.** No committed script or test encodes CAP-1; the SQL lives at `/tmp/opencode/audit.sql` and `/tmp/opencode/hosted-audit.sql`, outside the repo and not surviving a reboot. The canonical query text is `migration-playbook.md:18-55`, and the non-playbook statements are pasted into the report.
-- **Toolchain drift.** The Supabase CLI is pinned to 2.98.2 and reports 2.120.0 available; a different-version stack could differ in `pg_input_is_valid` availability or schema defaults, and since nothing re-derives the numbers automatically, drift would make the report quietly wrong rather than trip a check.
