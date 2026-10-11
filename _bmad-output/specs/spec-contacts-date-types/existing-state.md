@@ -4,14 +4,15 @@ Every claim was read out of the tree. File:line references are the evidence.
 
 **Baseline:** `feat/grid-keyboard-editors-and-theme` at `9a43c3b`.
 
-## The three columns
+## The four columns
 
 `supabase/migrations/20261004000000_create_core_tables.sql`:
 
 ```sql
-date_of_birth      TEXT,   -- :11
-initial_contact    TEXT,   -- :17
-last_contacted_on  TEXT,   -- :18
+date_of_birth      TEXT,   -- contacts :11
+initial_contact    TEXT,   -- contacts :17
+last_contacted_on  TEXT,   -- contacts :18
+session_date       TEXT,   -- sessions :48
 ```
 
 No `date`, no `timestamp`. The neighbouring timestamp columns are real types — `created_at TIMESTAMPTZ DEFAULT now()` (`:20`) — so this is a deliberate-looking TEXT choice in the original import, not a database default.
@@ -69,11 +70,17 @@ last_contacted_on:  string | null
 
 Supabase `gen-types` emits `string` for **both** `text` and `date`. So after the migration, regenerating `lib/supabase/types.ts` produces a **byte-identical** file, and `git diff lib/supabase/types.ts` is a free correctness check. The ripple is entirely in validation and migration.
 
-Hand-written surfaces that keep the same `string | null` shape and need no change: `lib/supabase/manage.ts:113`, `lib/supabase/data.ts:177`/`:183`/`:109`, `components/manage/manage-types.ts:59`, `manage-contacts-table.tsx:916`.
+Hand-written surfaces that keep the same `string | null` shape and need no change: `lib/supabase/manage.ts:113`, `lib/supabase/data.ts:177`/`:183`/`:109`, `components/manage/manage-types.ts:59`, `manage-contacts-table.tsx:916`. Sessions keeps the same shape too: `lib/supabase/types.ts:361`/`:377`/`:393`, `lib/supabase/manage.ts:125`, `lib/supabase/data.ts:206`, `components/manage/manage-types.ts:83`/`:97`, `components/sessions-manager.tsx:16` — all `string | null`, already correct for `date`.
+
+## The sessions write path has no validator
+
+`apps/folk/app/api/sessions/route.ts:129` (and the `apps/gita-life` equivalent) builds `startsAt = new Date()` and passes `sessionDate: startsAt.toISOString()` — a full timestamp — into `createSession`, which writes it straight to `session_date` (`lib/supabase/data.ts:879-887`) with no check. So unlike contacts, where trailing content is legacy import data, sessions produces trailing content on every create today. The migration must truncate it the same way, and the POST must be sliced to ten characters in the same change, or the app's own write breaks the day the column becomes `DATE`.
+
+Readers already expect a calendar date: `manage-sessions-view.tsx:77` renders `session.sessionDate ?? "No date"`, both dashboards sort by `readTime(session.sessionDate)`, and `manage.ts:646-647` / `:669-684` compare via `Date.parse` / `calendarParts`, which behave identically on a `date`-serialised `YYYY-MM-DD`.
 
 ## RLS is not involved
 
-`grep -c "date_of_birth\|initial_contact\|last_contacted_on" supabase/migrations/20261006010000_scoped_rls_policies.sql` → **0**.
+`grep -c "date_of_birth\|initial_contact\|last_contacted_on\|session_date" supabase/migrations/20261006010000_scoped_rls_policies.sql` → **0**.
 
 No policy references these columns, so the migration touches no policy and cannot weaken scoped access. This was the highest-risk unknown in the sibling spec's assessment; it is now closed.
 

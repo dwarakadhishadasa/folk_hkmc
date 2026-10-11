@@ -68,11 +68,13 @@
     Verify: pnpm typecheck:workspace, pnpm lint.
 
 - id: "3"
-  title: Migrate the three date columns to DATE and tighten the validator
+  title: Migrate the four date columns to DATE and tighten the validator
   description: >-
     CAP-3, CAP-4 and CAP-5. Convert the columns to DATE in one reversible
-    migration and bring optionalIsoDate into agreement with the new type, so
+    migration and bring the write paths into agreement with the new type, so
     what the API accepts is exactly what the column can store.
+    Covers contacts date_of_birth, initial_contact, last_contacted_on AND
+    sessions session_date (Dwaraka 2026-10-11 scope addition).
     DECIDED 2026-10-10: last_contacted_on ends EMPTY (Dwaraka park decision) —
     its existing values are nulled after reporting, alongside any other
     unconvertible values.
@@ -81,19 +83,24 @@
     Read SPEC.md, existing-state.md and migration-playbook.md in full. The
     migration and the validator MUST land in the same change — see below.
 
-    Story 1's audit is a hard gate. Do not run any ALTER until its numbers
-    have been read and the not_a_date rows are known. One bad value makes the
+    Story 1's contacts audit is a hard gate, and story 3 adds the sessions
+    audit to it: run the CAP-1 queries against sessions.session_date and read
+    the numbers before any ALTER on that table. One bad value makes the
     whole cast fail and leaves a partially migrated column with no working
     read path.
 
-    THE MIGRATION AND THE VALIDATOR ARE ONE CHANGE. lib/manage/api-handlers.ts
+    THE MIGRATION AND THE VALIDATORS ARE ONE CHANGE. lib/manage/api-handlers.ts
     optionalIsoDate validates only the prefix /^\d{4}-\d{2}-\d{2}/ and
     deliberately allows trailing content because existing rows hold a full ISO
     timestamp. A DATE column cannot store one. Land the migration alone and a
     client sending 2026-02-31T10:00:00Z passes the handler and is then rejected
     by Postgres with an error the handler never produced — the unreadable
-    failure its own comment warns about. Whichever way OQ-3 is resolved, the
-    same rule must appear in the migration and in the handler.
+    failure its own comment warns about. The sessions POST is the live version
+    of the same bug: apps/*/app/api/sessions/route.ts writes
+    startsAt.toISOString() straight through createSession with no validator,
+    so slice it to ten characters in the same change or the app's own write
+    breaks the day the column becomes DATE. Whichever way OQ-3 is resolved, the
+    same rule must appear in the migration and in the handlers.
 
     DO NOT PUT THE CLOCK IN THE CAST. SUPABASE_DATE_TIME_ZONE is Asia/Kolkata
     and currentProgramDate() already emits a program-local calendar date, which

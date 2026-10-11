@@ -126,7 +126,7 @@ export async function POST(request: Request) {
     const closesAt = new Date(startsAt.getTime() + duration.durationMinutes * MINUTE_MS)
     const session = await createSession({
       name,
-      sessionDate: startsAt.toISOString(),
+      sessionDate: startsAt.toISOString().slice(0, 10),
       locationId,
       preacherUserId: owningPreacherId,
       durationMinutes: duration.durationMinutes,

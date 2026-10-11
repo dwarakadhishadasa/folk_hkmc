@@ -32,7 +32,7 @@ SELECT
 FROM contacts;
 ```
 
-Repeat for `initial_contact` and `last_contacted_on`.
+Repeat for `initial_contact` and `last_contacted_on`, and again for `sessions.session_date` (same shape, `FROM sessions`):
 
 **List the offenders by id before deciding anything:**
 
@@ -63,6 +63,8 @@ ALTER TABLE contacts
   ALTER COLUMN date_of_birth    TYPE date USING left(date_of_birth, 10)::date,
   ALTER COLUMN initial_contact  TYPE date USING left(initial_contact, 10)::date,
   ALTER COLUMN last_contacted_on TYPE date USING left(last_contacted_on, 10)::date;
+ALTER TABLE sessions
+  ALTER COLUMN session_date TYPE date USING left(session_date, 10)::date;
 ```
 
 `left(..., 10)::date` is safe **only after the audit has confirmed every non-null value starts with a valid `YYYY-MM-DD`**. A single `"35000"` makes the whole statement fail.
@@ -71,6 +73,7 @@ ALTER TABLE contacts
 
 ```sql
 -- Report, then null. Run the SELECT and read the ids before the UPDATE.
+-- Repeat per column, on contacts and on sessions.session_date.
 UPDATE contacts
 SET date_of_birth = NULL
 WHERE date_of_birth IS NOT NULL AND date_of_birth !~ '^\d{4}-\d{2}-\d{2}';
@@ -116,6 +119,8 @@ It validates the **prefix** and explicitly permits trailing content. After CAP-3
 - **truncate** to ten characters in `optionalIsoDate`, so the client and the column agree.
 
 Rejecting is stricter and makes a bad value visible at the boundary. Truncating is friendlier and matches the migration. **Whichever is chosen, the same rule must appear in the migration and in the handler**, or the import path and the API path disagree about what a valid date is.
+
+**Sessions joins the same change.** `apps/folk` and `apps/gita-life` `app/api/sessions/route.ts:129` must slice `startsAt.toISOString()` to ten characters before `createSession`, so the app stops writing the trailing content the migration truncates. No new validator module — the slice at the single call site both apps share in shape is the whole fix.
 
 ## What must be true when this is done
 

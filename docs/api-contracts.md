@@ -225,7 +225,7 @@ Response:
     {
       "id": "3b0d1e64-2a6c-4f18-9c8a-77d0c5b9e412",
       "name": "Sunday FOLK",
-      "sessionDate": "2026-06-11T15:30:00.000Z",
+      "sessionDate": "2026-06-11",
       "locationIds": ["8a1f0c33-4d2b-4e91-b7a5-0c6d9e2f1a84"],
       "preacherIds": ["9f1c2f0e-6a1a-4a9a-9a2e-1b7c8d3f5a10"],
       "publicAttendanceEnabled": true,

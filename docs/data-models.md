@@ -38,15 +38,15 @@ Source types: `ContactFields`, `ContactRecord`. Table `public.contacts`.
 | `name` | text | Required for creation |
 | `phone` | text | Normalized to last 10 digits |
 | `age` | integer | Public registration only |
-| `date_of_birth` | text | Staff contact form; `YYYY-MM-DD` |
+| `date_of_birth` | date | Staff contact form; `YYYY-MM-DD`. Blank → `NULL`; trailing timestamps rejected 400 |
 | `year` | text | Student year or `Unknown` for working |
 | `college` | text | Student contacts |
 | `company` | text | Working contacts |
 | `designation` | text | Gita Life contact field |
 | `notes` | text | Staff comments |
 | `source` | text | e.g. `Public Registration`, `Attendance Registration`, `Pass distribution` |
-| `initial_contact` | text | Current Asia/Kolkata program date on create |
-| `last_contacted_on` | text | Not written on create; no update path — parked by story 2, awaiting the future feature that defines a contact interaction |
+| `initial_contact` | date | Current Asia/Kolkata program date on create. Blank → `NULL`; trailing timestamps rejected 400 |
+| `last_contacted_on` | date | Parked empty: not written on create and no update path (story 2); migration nulled existing values after reporting |
 | `address` | text | Street address |
 | `location_ids` | text[] | Location scope; no join table |
 | `assigned_preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL` |
@@ -87,7 +87,7 @@ Source types: `SessionFields`, `SessionRecord`. Table `public.sessions`.
 | `id` | uuid | Primary key |
 | `program_id` | text | Program scope |
 | `name` | text | Session name |
-| `session_date` | text | Creation/start time |
+| `session_date` | date | Creation/start date, `YYYY-MM-DD`; `POST /api/sessions` slices to ten characters |
 | `preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL` |
 | `location_id` | uuid | FK → `public.locations(id)`, `ON DELETE RESTRICT` |
 | `public_attendance_enabled` | boolean | Must be true to accept public attendance |

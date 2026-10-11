@@ -1,5 +1,7 @@
 import "server-only"
 
+import { isValid, parseISO } from "date-fns"
+
 import { authzErrorResponse, getStaffContext, requireRole, type StaffContext } from "@/lib/authz"
 import {
   MANAGE_CONTACT_PATCH_KEYS,
@@ -83,9 +85,14 @@ function boundedText(value: unknown, field: string, maxLength: number): string |
 /**
  * `initial_contact` and `date_of_birth` are read as ISO dates, so an
  * unparseable value makes the row disappear from the Contact Generation chart
- * with no error anywhere. Blank is allowed, and anything after a leading
- * `YYYY-MM-DD` is allowed, so contacts already holding a full ISO timestamp
- * still round-trip.
+ * with no error anywhere. Blank is allowed, and anything else must be exactly
+ * `YYYY-MM-DD` naming a real calendar day — the same rule the grid date editor
+ * enforces (`components/grid/grid-editors.tsx`, `parseISO` + `isValid`) and
+ * the same rule the `DATE` cast enforces
+ * (`supabase/migrations/20261010000000_contacts_date_columns_to_date.sql`,
+ * `pg_input_is_valid(left(col,10),'date')`). Trailing content such as a full
+ * ISO timestamp is rejected here with the handler's own 400, so Postgres never
+ * sees a value it would reject with an error this handler did not produce.
  */
 function optionalIsoDate(value: unknown, field: string): string | null {
   const date = boundedText(value, field, 40)
@@ -94,8 +101,8 @@ function optionalIsoDate(value: unknown, field: string): string | null {
     return null
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}/.test(date)) {
-    throw new AuthzBadRequest(`${field} must be blank or start with YYYY-MM-DD.`)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !isValid(parseISO(date))) {
+    throw new AuthzBadRequest(`${field} must be blank or a real calendar date as YYYY-MM-DD.`)
   }
 
   return date

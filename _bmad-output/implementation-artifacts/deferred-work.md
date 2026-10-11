@@ -329,3 +329,13 @@ source_spec: `2-park-last-contacted-on-as-empty-date-for-future-use.md`
 severity: low
 reason: `manage-favorites-view.tsx:559`'s `??` alone would render `""` as an empty gap; the blank case is closed upstream by `normalizeString()` (`lib/supabase/data.ts:234-236`) and `text()` (`lib/supabase/manage.ts:180-187`), which today collapse any non-string or blank to `undefined`/`null`. Nothing pins either. After this change most rows take that path, so a future edit letting either mapper pass blanks through would silently restore the empty-gap rendering AC #3 forbids with no gate firing. Distinct from the Favorites deferral, which is about the panel never being opened. Settled by a unit assertion on both mappers, or by normalising blanks at the display site instead of relying on them.
 status: open
+
+- source_spec: `_bmad-output/specs/spec-contacts-date-types/stories/3-migrate-the-four-date-columns-to-date-and-tighten-the-validators.md`
+  summary: No committed spec pins the new date rules (contacts 400s, sessions POST slice, four-column DATE cast)
+  evidence: Review demonstrated a validator revert ships with the suite green (grid-editors rejection is client-side; manage-contacts-api rows never send dates; grid commit passes on TEXT or DATE; no sessions-create spec exists). Temp 5-assertion API proof ran green but was deleted per the story's temp-dir rule. Committing spec files is reserved to Dwaraka (this story and story 2).
+- source_spec: `_bmad-output/specs/spec-contacts-date-types/stories/3-migrate-the-four-date-columns-to-date-and-tighten-the-validators.md`
+  summary: Hosted sessions.session_date needs its CAP-1 audit before any hosted apply of 20261010000000
+  evidence: Story 1 measured hosted contacts (0 not_a_date over 1,094 rows) but nothing measured hosted sessions; the migration truncates-never-rejects with ids in the apply log, so the risk is bounded but the audit is still owed by the future hosted step.
+- source_spec: `_bmad-output/specs/spec-contacts-date-types/stories/3-migrate-the-four-date-columns-to-date-and-tighten-the-validators.md`
+  summary: Local stack needs a managed supabase:reset once the storage image defect is fixed
+  evidence: Reset fails on vendor storage-api:v1.79.28 fresh-init (pre-existing, before any user migration); the hand-rebuilt stack lacks the schema_migrations ledger rows and the contact-photos bucket row. Settles when a managed reset succeeds and the story's Verification section re-runs clean.

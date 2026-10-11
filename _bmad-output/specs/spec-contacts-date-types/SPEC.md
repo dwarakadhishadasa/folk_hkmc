@@ -10,17 +10,18 @@ sources: []
 >
 > **Location note.** Authored in `/tmp/opencode/specs/` while `bmad-loop` held the worktree clean, then moved into the repository at `_bmad-output/specs/spec-contacts-date-types/`. It is written to run **before** `spec-contacts-premium-grid`, whose date-filter operators depend on real date semantics.
 
-# Convert the contacts date columns to `DATE`
+# Convert the contacts and session date columns to `DATE`
 
 ## Why
 
-A **pain to solve**, in the data rather than the interface. Three columns on `contacts` are declared `TEXT` and hold calendar dates:
+A **pain to solve**, in the data rather than the interface. Four columns are declared `TEXT` and hold calendar dates — three on `contacts`, one on `sessions`:
 
 ```sql
 -- 20261004000000_create_core_tables.sql
-date_of_birth      TEXT,   -- :11
-initial_contact    TEXT,   -- :17
-last_contacted_on  TEXT,   -- :18
+date_of_birth      TEXT,   -- contacts :11
+initial_contact    TEXT,   -- contacts :17
+last_contacted_on  TEXT,   -- contacts :18
+session_date       TEXT,   -- sessions :48
 ```
 
 Everything that makes a date column a *date* — ordering by it, comparing it to today, filtering "in the last 30 days" — is currently guaranteed by a convention rather than by a type. The convention holds: the date editor writes fixed-width `YYYY-MM-DD` (`grid-editors.tsx:860`, `:880`) and `optionalIsoDate` (`lib/manage/api-handlers.ts:90`) validates the prefix. Fixed-width ISO sorts lexicographically, so ordering is accidentally correct.
@@ -30,7 +31,8 @@ Everything that makes a date column a *date* — ordering by it, comparing it to
 Two things make this worth doing now rather than never:
 
 - **The write path is already validated; the migration path never was.** `optionalIsoDate` guards `PATCH`, but `scripts/migrate-airtable-data.mjs` wrote these columns through a `text()` helper (`:532-539`) that returns `String(number)` for numeric Airtable fields. A column that a validated write path treats as ISO may contain `"35000"` from the import. **The type is the only thing that would have caught it.**
-- **One of the three does not mean what it says.** `lib/supabase/data.ts:614-621` writes `last_contacted_on: currentProgramDate()` at **insert** and nothing ever updates it. So "last contacted on" is "created on" for every row, and `manage-favorites-view.tsx:559` shows it to users as `Last contacted on: … or never`. Converting the column without fixing this would carefully migrate a value that lies.
+- **One of the three contacts columns does not mean what it says.** `lib/supabase/data.ts:614-621` writes `last_contacted_on: currentProgramDate()` at **insert** and nothing ever updates it. So "last contacted on" is "created on" for every row, and `manage-favorites-view.tsx:559` shows it to users as `Last contacted on: … or never`. Converting the column without fixing this would carefully migrate a value that lies.
+- **The fourth has a live producer of trailing content.** `apps/folk/app/api/sessions/route.ts:129` (and the `apps/gita-life` equivalent) writes `startsAt.toISOString()` — a full timestamp — straight through `createSession` (`lib/supabase/data.ts:882`) with no validator. A `DATE` column forces that path to emit a ten-character calendar date, which is also what every reader (`manage-sessions-view.tsx:77`, dashboard sort, `calendarParts`) already expects.
 
 ## Capabilities
 
@@ -43,19 +45,19 @@ Two things make this worth doing now rather than never:
   - **success:** The insert-time write is either removed and the column updated on each contact interaction, or the column is renamed to record creation; `manage-favorites-view.tsx:559` displays the corrected meaning; the audit and the migration both reflect the decision.
 
 - **CAP-3 — Schema migration**
-  - **intent:** The three columns store real dates, so comparisons are correct by type rather than by convention.
-  - **success:** `date_of_birth`, `initial_contact` and `last_contacted_on` are `DATE`; the cast truncates a valid prefix with trailing content to ten characters; unconvertible values become `NULL` **only after being reported**; the change is one reversible file following the repo's naming convention; `scripts/apply-migrations.mjs` applies it cleanly against the local stack.
+  - **intent:** The four columns store real dates, so comparisons are correct by type rather than by convention.
+  - **success:** `date_of_birth`, `initial_contact`, `last_contacted_on` and `session_date` are `DATE`; the cast truncates a valid prefix with trailing content to ten characters; unconvertible values become `NULL` **only after being reported**; the change is one reversible file following the repo's naming convention; `scripts/apply-migrations.mjs` applies it cleanly against the local stack.
 
 - **CAP-4 — Write validation matches the new type**
   - **intent:** What the API accepts is exactly what the column can store.
-  - **success:** `optionalIsoDate` no longer permits trailing content, or the migration truncates it; a value produced by the date editor round-trips unchanged; a full ISO timestamp submitted after deployment is either accepted-and-truncated or rejected with the handler's own message — never silently dropped by Postgres.
+  - **success:** `optionalIsoDate` no longer permits trailing content, and the sessions POST emits a ten-character date instead of a full ISO timestamp; a value produced by the date editor round-trips unchanged; a full ISO timestamp submitted after deployment is either accepted-and-truncated or rejected with the handler's own message — never silently dropped by Postgres.
 
 - **CAP-5 — Reads do not regress**
   - **intent:** Nothing downstream breaks, and date handling gets better rather than merely changing.
-  - **success:** Contacts render in the grid, the dashboard Contact Generation chart still counts them, Favorites still shows the value, and every existing e2e row covering edit, filter and sort on a date column still passes.
+  - **success:** Contacts render in the grid, the dashboard Contact Generation chart still counts them, Favorites still shows the value, sessions still list with their date and dashboard ordering is unchanged, and every existing e2e row covering edit, filter and sort on a date column still passes.
 
 - **CAP-6 — Scope preservation**
-  - **intent:** Nothing outside the three columns changes.
+  - **intent:** Nothing outside the four columns changes.
   - **success:** No RLS policy is modified; no new route and no new authorization logic; `apps/folk` and `apps/gita-life` stay mirrored; no value is invented for a row that had none.
 
 ## Constraints
@@ -77,7 +79,7 @@ Two things make this worth doing now rather than never:
 
 ## Success signal
 
-An operator opens `/manage` → Contacts, double-clicks a date of birth, picks 1985-03-12 from the calendar, and it saves. They open the filter, choose *Date of Birth · is before · one year ago*, and every row that has a date of birth and is older appears — with **no row silently missing because its value did not parse**. The migration's audit shows the exact counts that made the cast safe, `last_contacted_on` now updates when someone is contacted, and the local stack comes up clean on a fresh `apply-migrations` run.
+An operator opens `/manage` → Contacts, double-clicks a date of birth, picks 1985-03-12 from the calendar, and it saves. They open the filter, choose *Date of Birth · is before · one year ago*, and every row that has a date of birth and is older appears — with **no row silently missing because its value did not parse**. They create a session and it stores a ten-character calendar date that lists and sorts exactly as before. The migration's audit shows the exact counts that made the cast safe, `last_contacted_on` now updates when someone is contacted, and the local stack comes up clean on a fresh `apply-migrations` run.
 
 ## Assumptions
 
@@ -89,10 +91,10 @@ An operator opens `/manage` → Contacts, double-clicks a date of birth, picks 1
 
 - **OQ-1 — What counts as a contact interaction?** `last_contacted_on` needs a write path. Options: updated when a session attendance row is recorded for that contact, when the row is edited in `/manage`, or both. **This spec assumes attendance**, because that is the observable moment a preacher actually spoke to someone. Needs your call.
 - **OQ-2 — Unconvertible values.** Rows that are not dates at all (`"unknown"`, `"35000"`). (a) set `NULL` and record every id, (b) block the migration until manually repaired, (c) abandon the conversion. **This spec assumes (a) for a small count and (b) for a large one** — the audit's count decides.
-- **OQ-3 — Trailing content.** `optionalIsoDate` deliberately permits a full ISO timestamp after the date prefix because existing rows hold one, and a `date` column cannot. (a) truncate to ten characters in the migration and tighten the validator, (b) keep the column `TEXT`. **This spec assumes (a)** — no screen in this app shows the time.
+- **OQ-3 — Trailing content.** `optionalIsoDate` deliberately permits a full ISO timestamp after the date prefix because existing rows hold one, and a `date` column cannot — and the sessions POST actively writes one (`route.ts:129`). (a) truncate to ten characters in the migration and tighten the validator, slicing the sessions write to ten characters, (b) keep the column `TEXT`. **This spec assumes (a)** — no screen in this app shows the time. **Story 3 owns the sessions audit** (story 1 measured contacts and is done): the same CAP-1 queries run against `sessions.session_date` and are read before any `ALTER` on that table.
 
 ## Resolved Questions
 
 - **Should this be its own spec, before the grid work?** Yes, and it is. `spec-contacts-premium-grid` CAP-12 builds `is within` / `is after` / `is before` / relative-date operators over these exact columns. Running it first means that spec's date operators are written against a type that guarantees them.
 - **Does the client type ripple?** **No** — and this corrects the earlier spec. `lib/supabase/types.ts:154,156,158` already declare these columns as `string | null`, and Supabase `gen-types` emits `string` for **both** `text` and `date`. Regenerating the file after the migration produces byte-identical output. The ripple is entirely in **validation and migration**, not in TypeScript.
-- **Does this touch RLS?** **No.** `supabase/migrations/20261006010000_scoped_rls_policies.sql` references these three columns **zero** times. The migration touches no policy.
+- **Does this touch RLS?** **No.** `supabase/migrations/20261006010000_scoped_rls_policies.sql` references these four columns **zero** times. The migration touches no policy.
