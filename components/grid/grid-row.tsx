@@ -30,23 +30,26 @@ const ALIGN_CLASS: Record<GridCellView["align"], string> = {
 }
 
 /**
- * The in-cell editor.
+ * The in-cell editor for a column with no `meta.grid.editor`.
  *
  * It takes focus and selects the current value on mount, so the first keystroke
  * *replaces* the value rather than appending to it. Without the selection the
- * caret lands at the end of the pre-filled text and `e` then typing silently
- * commits a concatenation — the worst possible failure for a write that looks
- * like it succeeded. Focus and select are done in an effect rather than through
- * `autoFocus` because `select()` needs the input mounted and focused first.
+ * caret lands at the end of the pre-filled text and the first keystroke after a
+ * double-click silently commits a concatenation — the worst possible failure for
+ * a write that looks like it succeeded. Focus and select are done in an effect
+ * rather than through `autoFocus` because `select()` needs the input mounted and
+ * focused first.
  */
 function GridCellEditor({
   draft,
   onDraftChange,
   onDraftKeyDown,
+  onDraftBlur,
 }: {
   draft: string
   onDraftChange: (value: string) => void
   onDraftKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
+  onDraftBlur: () => void
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -63,6 +66,10 @@ function GridCellEditor({
       value={draft}
       onChange={(event) => onDraftChange(event.target.value)}
       onKeyDown={onDraftKeyDown}
+      // Blur commits, through the one path the hook owns: an untouched draft is
+      // a no-op there, so a double-click followed by a stray click writes
+      // nothing.
+      onBlur={onDraftBlur}
       onPointerDown={(event) => event.stopPropagation()}
       aria-label="Edit cell value"
       className="border-ring bg-card focus-visible:ring-ring/50 h-full w-full rounded-[3px] border bg-transparent px-1 text-[13px] outline-none focus-visible:ring-[2px]"
@@ -130,6 +137,11 @@ export interface GridRowProps<TData> {
    * is what separates "focus this cell" from "extend the range to this cell".
    */
   onCellPointerDown: (rowId: string, columnId: string, extend: boolean) => void
+  /**
+   * Double-click on one cell: the sole opener, and the commit route when the
+   * cell's editor is already open. Read-only and checkbox columns no-op.
+   */
+  onCellDoubleClick: (rowId: string, columnId: string) => void
 }
 
 /**
@@ -155,6 +167,7 @@ export function GridRow<TData>({
   isEditing,
   domId,
   onCellPointerDown,
+  onCellDoubleClick,
 }: GridRowProps<TData>) {
   const stickyLeftByColumn = new Map(frozenColumns.map((entry) => [entry.columnId, entry.left]))
   const lastFrozenColumnId =
@@ -201,6 +214,19 @@ export function GridRow<TData>({
                 : (cell.error ?? cell.text)
             }
             onPointerDown={(event) => onCellPointerDown(row.id, cell.columnId, event.shiftKey)}
+            // `preventDefault` is OQ-7's answer, and it is load-bearing: the
+            // browser selects a word under the cursor on a double-click, before
+            // any handler runs, and inside a 32px fixed-height cell a selected
+            // word is not something an operator can read or act on. Editing
+            // wins. On the *open* editor the default is left alone, because
+            // selecting a word inside a text field is exactly what one wants.
+            onDoubleClick={(event) => {
+              if (!cell.editing) {
+                event.preventDefault()
+              }
+
+              onCellDoubleClick(row.id, cell.columnId)
+            }}
             className={cn(
               "truncate px-2 align-middle text-[13px]",
               ALIGN_CLASS[cell.align],
@@ -222,6 +248,7 @@ export function GridRow<TData>({
                 draft={cell.draft}
                 onDraftChange={cell.onDraftChange}
                 onDraftKeyDown={cell.onDraftKeyDown}
+                onDraftBlur={cell.onDraftBlur}
               />
             ) : cell.render !== undefined ? (
               cell.render

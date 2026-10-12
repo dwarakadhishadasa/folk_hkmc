@@ -166,6 +166,16 @@ export interface GridKeyboardApi<TData> {
    */
   focusCell: (rowId: string, columnId: string, extend?: boolean) => void
   /**
+   * The one opener. Double-clicking a closed cell opens its editor; double-clicking
+   * the cell whose editor is already open commits that draft and closes.
+   *
+   * Returns nothing because the caller already knows the gesture happened: the
+   * interesting outcomes — a read-only column, a checkbox cell — are no-ops that
+   * are *visible as such*, and `openEditor`'s boolean is what the guard itself
+   * returns rather than something a spec needs to read.
+   */
+  onCellDoubleClick: (rowId: string, columnId: string) => void
+  /**
    * Moves the whole focus model onto `rowId`: the first editable column of that
    * row, the range anchor with it, the virtualizer scrolled to it and the DOM
    * focus landed.
@@ -207,6 +217,8 @@ export interface GridKeyboardApi<TData> {
   setStatusMessage: (message: string | null) => void
   isRowFocused: (row: Row<TData>) => boolean
   isRowEditing: (row: Row<TData>) => boolean
+  /** Whether any cell is open, which is what the edit-hint line keys off. */
+  isCellEditing: boolean
   /** DOM id of the focused row, referenced by the container's activedescendant. */
   focusedRowDomId: string | undefined
   getCellView: (row: Row<TData>, cell: Cell<TData, unknown>) => GridCellView<TData>
@@ -253,6 +265,32 @@ export function useGridKeyboard<TData>({
   const [selectionAnchor, setSelectionAnchor] = useState<GridSelectionCoordinate | null>(null)
 
   const restoreFocusRef = useRef<string | null>(null)
+
+  /**
+   * Whether the operator has changed the open draft at least once.
+   *
+   * Set **only** by the editor-facing `setDraft`, never by `openEditor`'s own
+   * seeding and never by comparing the draft to the cell's text. `openEditor`
+   * seeds the draft from the cell's current value, so an untouched draft always
+   * *equals* the existing value — and under blur-commit that equality would make
+   * every stray cell click a PATCH. Comparing strings is the other half of the
+   * same trap: it cannot tell "the operator retyped what was there" (a real
+   * intent, and what the inline `Enter` path relies on) from "the operator
+   * typed nothing".
+   */
+  const touchedRef = useRef(false)
+
+  /**
+   * Set by `cancelEditing`, read and cleared by the close/blur path.
+   *
+   * `OptionSearch` and the date input intercept `Escape` themselves, so Radix
+   * never sees it there — but the multiselect option list and the calendar have
+   * no local handler, and a bare `Escape` reaches Radix and closes the popover.
+   * Now that popover close *commits*, that bare `Escape` would silently commit
+   * instead of discarding, so every editor's `Escape` sets this flag and the
+   * commit path reads it. A flag on the existing single path, not a second one.
+   */
+  const discardRequestedRef = useRef(false)
 
   const visibleRows = table.getRowModel().rows
   const clampedRowIndex =
@@ -710,6 +748,19 @@ export function useGridKeyboard<TData>({
   }, [])
 
   /**
+   * The editor-facing draft setter, and the **only** thing that marks a draft
+   * touched.
+   *
+   * `openEditor` seeds through `setDraft` directly and `commitCellInput` passes
+   * explicit values, so neither can make this fire: it means "the operator typed
+   * into the open editor", which is exactly the condition blur-commit needs.
+   */
+  const setEditorDraft = useCallback((next: string) => {
+    touchedRef.current = true
+    setDraft(next)
+  }, [])
+
+  /**
    * The draft key handler, read through a ref.
    *
    * `handleDraftKeyDown` needs `commitEditing`, `commitEditing` needs the editor
@@ -719,6 +770,15 @@ export function useGridKeyboard<TData>({
    * every render and read only from an event handler.
    */
   const draftKeyDownRef = useRef<(event: KeyboardEvent<HTMLInputElement>) => void>(() => undefined)
+
+  /**
+   * The blur-commit handler, read through a ref for the same reason as
+   * `draftKeyDownRef`: `buildEditorContext` is built before `commitEditing` is
+   * declared, because the editor context hands the editor a way to blur-commit
+   * and `commitEditing` needs that context to reach `runCommit`. The cycle is
+   * real, so it is broken the same way.
+   */
+  const blurCommitRef = useRef<() => void>(() => undefined)
 
   const revertCommit = useCallback(
     (
@@ -837,6 +897,10 @@ export function useGridKeyboard<TData>({
    * `draftSeed` differs gets its own representation (a date cell edits
    * `2026-03-05`, not `5 Mar 2026`). Returns false on a non-editable cell, which
    * the callers treat as a no-op rather than an error.
+   *
+   * CAP-10 (double-click is the sole opener) is Phase B: until this change's
+   * retirement lands, the four legacy openers still route here, which is exactly
+   * the baseline control the new mechanism is verified against.
    */
   const openEditor = useCallback(
     (rowIndex: number, columnId: string, seed?: string): boolean => {
@@ -874,6 +938,12 @@ export function useGridKeyboard<TData>({
 
       setEditing({ rowId: row.id, columnId })
 
+      // Reset before seeding, and never through `setEditorDraft`: the draft is
+      // about to be *equal* to the cell's value, and a blur before a single
+      // keystroke must still be a no-op.
+      touchedRef.current = false
+      discardRequestedRef.current = false
+
       const text = displayCellText(row.id, cell)
       setDraft(seed ?? definition?.draftSeed?.(text, cell.getValue()) ?? text)
       return true
@@ -886,6 +956,10 @@ export function useGridKeyboard<TData>({
       return
     }
 
+    // Read and cleared by the commit path, not here: `Escape` inside an editor
+    // both exits it *and* arms the flag, and the popover's own close event may
+    // arrive after this has already run.
+    discardRequestedRef.current = true
     restoreFocusRef.current = gridCellKey(editing.rowId, editing.columnId)
     exitEditing()
   }, [editing, exitEditing])
@@ -951,8 +1025,9 @@ export function useGridKeyboard<TData>({
         text: raw.length > 0 ? raw : GRID_EMPTY_TEXT,
         getValue: () => cell.getValue(),
         draft: currentDraft,
-        setDraft,
+        setDraft: setEditorDraft,
         onDraftKeyDown: (event) => draftKeyDownRef.current(event),
+        blurCommit: () => blurCommitRef.current(),
         commitDraft: (draftArgument?: string) => {
           const source = draftArgument ?? currentDraft
           let parsed: unknown
@@ -998,7 +1073,7 @@ export function useGridKeyboard<TData>({
       openEditor,
       revertCommit,
       runCommit,
-      setDraft,
+      setEditorDraft,
       visibleRows,
     ],
   )
@@ -1038,6 +1113,16 @@ export function useGridKeyboard<TData>({
       return
     }
 
+    // An `Escape` that got this far is a discard, not a save. The flag is
+    // consumed here rather than in `cancelEditing` because a popover's close
+    // event can arrive after the editor has already exited, and `editing` is
+    // then null — so this is also where the *second* caller of the commit path
+    // finds out that the draft was discarded.
+    if (discardRequestedRef.current) {
+      discardRequestedRef.current = false
+      return
+    }
+
     const target = editing
     const row = visibleRows.find((candidate) => candidate.id === target.rowId)
     const cell = row?.getVisibleCells().find((candidate) => candidate.column.id === target.columnId)
@@ -1049,6 +1134,95 @@ export function useGridKeyboard<TData>({
 
     commitCellInput(target, cell, { kind: "draft", draft })
   }, [commitCellInput, draft, editing, exitEditing, visibleRows])
+
+  /**
+   * The blur half of the commit path, for one cell.
+   *
+   * Runs through `commitEditing` and therefore through the single commit route,
+   * so blur gets the optimistic display, the validation-before-save ordering and
+   * the revert for free. It adds exactly two rules on top:
+   *
+   * - **untouched issues no request.** The draft was seeded from the cell's own
+   *   value, so committing it would PATCH production data on every stray click.
+   * - **focus is not restored.** `runCommit` hands focus back to the edited cell
+   *   so `Enter` and `Escape` land where the operator was; on a blur they have
+   *   *deliberately* moved somewhere else, so the same suppression the `Tab`
+   *   branch applies is applied here.
+   *
+   * `skipUntouched` is what makes this safe to route every editor through: a
+   * `select` that was opened and closed without a pick must not write.
+   */
+  const commitEditingOnBlur = useCallback(() => {
+    if (!editing) {
+      return
+    }
+
+    if (discardRequestedRef.current) {
+      // Already exited by `cancelEditing`; the flag is cleared there.
+      return
+    }
+
+    if (!touchedRef.current) {
+      // Nothing to write, so this is a **cancel** rather than a commit, and it
+      // gets the cancel's focus behaviour: the cell is where the operator was,
+      // and Radix's own trigger-restore has nowhere to land because the trigger
+      // unmounts with the editor. Deliberately *not* `cancelEditing` — that would
+      // arm the discard flag, and the next commit has to be a real one.
+      restoreFocusRef.current = gridCellKey(editing.rowId, editing.columnId)
+      exitEditing()
+      return
+    }
+
+    commitEditing()
+    restoreFocusRef.current = null
+  }, [commitEditing, editing, exitEditing])
+
+  /**
+   * The sole opener gesture, and the commit route when the cell is already open.
+   *
+   * Two jobs, one handler, because they are the same gesture seen twice: a
+   * double-click on a closed cell opens it; a double-click on the open cell's own
+   * editor commits and closes, which is what a second double-click means to an
+   * operator who has just typed into it.
+   *
+   * **The checkbox case is deliberately inert.** A double-click is two clicks and
+   * `CheckboxControl.onCheckedChange` fires on each, so the value nets unchanged
+   * — and `openEditor` would toggle a *third* time. Hence the
+   * `commitsOnInteraction` skip rather than a special case in the editor: the
+   * rule is "a double-click never opens an editor whose control is the cell".
+   */
+  const onCellDoubleClick = useCallback(
+    (rowId: string, columnId: string): void => {
+      const index = visibleRows.findIndex((row) => row.id === rowId)
+
+      if (index === -1) {
+        return
+      }
+
+      const row = visibleRows[index]
+      const cell = row
+        ?.getVisibleCells()
+        .find((candidate) => candidate.column.id === columnId)
+
+      if (!row || !cell) {
+        return
+      }
+
+      const definition = resolveGridEditor(cell.column.columnDef.meta?.grid?.editor)
+
+      if (definition?.commitsOnInteraction === true) {
+        return
+      }
+
+      if (editing?.rowId === rowId && editing.columnId === columnId) {
+        commitEditingOnBlur()
+        return
+      }
+
+      openEditor(index, columnId)
+    },
+    [commitEditingOnBlur, editing, openEditor, visibleRows],
+  )
 
   /**
    * Clears a cell through the normal commit path. Skipped — silently — on the
@@ -1357,6 +1531,10 @@ export function useGridKeyboard<TData>({
   // is long after mount.
   useEffect(() => {
     draftKeyDownRef.current = handleDraftKeyDown
+  })
+
+  useEffect(() => {
+    blurCommitRef.current = commitEditingOnBlur
   })
 
   const handleContainerKeyDown = useCallback(
@@ -1807,8 +1985,9 @@ export function useGridKeyboard<TData>({
             }
           : undefined,
         error: override?.error,
-        onDraftChange: setDraft,
+        onDraftChange: setEditorDraft,
         onDraftKeyDown: (event) => draftKeyDownRef.current(event),
+        onDraftBlur: () => blurCommitRef.current(),
       }
     },
     [
@@ -1823,6 +2002,7 @@ export function useGridKeyboard<TData>({
       rowCellText,
       selectedRowIndexes,
       selectionBounds,
+      setEditorDraft,
     ],
   )
 
@@ -1830,11 +2010,13 @@ export function useGridKeyboard<TData>({
     focusedRowIndex: clampedRowIndex,
     statusMessage,
     focusCell,
+    onCellDoubleClick,
     focusRow,
     focusRowCell,
     setStatusMessage,
     isRowFocused,
     isRowEditing,
+    isCellEditing: editing !== null,
     focusedRowDomId: clampedRowIndex >= 0 ? focusedRowDomId : undefined,
     getCellView,
     containerProps: {

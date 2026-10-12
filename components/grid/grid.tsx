@@ -68,6 +68,16 @@ export const GRID_MIN_COLUMN_WIDTH = 72
 /** Viewport rows rendered beyond the visible window, per direction. */
 export const GRID_OVERSCAN = 12
 
+/**
+ * The three ways an open draft ends, in the order the design renders them.
+ *
+ * Verbatim from `Visual-Design/contacts-grid-states-v1.html` Panel 5. It is the
+ * only place the edit model is stated in words, and it is load-bearing that all
+ * three appear: an operator who does not know clicking away saves will click away
+ * to cancel, which under this model commits instead.
+ */
+const GRID_EDIT_HINT = "Enter saves · Escape discards · clicking away also saves"
+
 const INITIAL_COLUMN_SIZING_INFO: ColumnSizingInfoState = {
   startOffset: null,
   startSize: null,
@@ -879,6 +889,22 @@ export function Grid<TData extends RowData>({
         {keyboard.statusMessage ?? ""}
       </p>
 
+      {/*
+        The edit affordance line, from `contacts-grid-states-v1.html` Panel 5.
+        Only while a cell is editing, and `sr-only` at rest exactly like the
+        status line above — so it shifts nothing and takes no vertical space
+        until there is a draft to explain.
+      */}
+      <p
+        data-grid-edit-hint=""
+        className={cn(
+          "text-muted-foreground px-2 py-1 text-[13px]",
+          keyboard.isCellEditing ? "block" : "sr-only",
+        )}
+      >
+        {GRID_EDIT_HINT}
+      </p>
+
       <div
         ref={scrollRef}
         role="group"
@@ -991,6 +1017,7 @@ export function Grid<TData extends RowData>({
                   isEditing={keyboard.isRowEditing(row)}
                   domId={keyboard.isRowFocused(row) ? keyboard.focusedRowDomId : undefined}
                   onCellPointerDown={keyboard.focusCell}
+                  onCellDoubleClick={keyboard.onCellDoubleClick}
                 />
               )
             })}

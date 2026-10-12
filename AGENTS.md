@@ -17,7 +17,7 @@ HKMC program-operations monorepo for the FOLK Chennai and Gita Life web apps. Ne
 - Planning and per-story specs: `_bmad-output/specs/<spec>/`
 - Staff authorization boundary: `lib/authz.ts` — `getStaffContext()`, `requireRole()`
 - E2E suite: specs in `e2e/specs/`, config `playwright.config.ts`. Claiming a matrix row is Covered? `docs/claiming-a-matrix-row.md`
-- Story 2's 19-row coverage map: `_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md`
+- Story 2's 19-row coverage map: `_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.ssmd`
 
 ## Running and verifying
 

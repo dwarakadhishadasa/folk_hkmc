@@ -87,6 +87,19 @@ export interface GridEditorContext<TData> {
    */
   onDraftKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
   /**
+   * The editor lost the pointer: commit a **touched** draft, or close an
+   * untouched one without writing.
+   *
+   * Handed to the editor rather than implemented locally for the same reason
+   * `onDraftKeyDown` is: "untouched issues no request" and "focus is not yanked
+   * back" are hook-owned rules, and an editor that rolled its own blur handler
+   * would get exactly one of the two wrong — a second mutation channel, or a
+   * PATCH on every stray cell click. An `Escape` that sets the hook's discard
+   * flag first makes this a no-op, which is what keeps `Escape` a discard on
+   * every editor including the ones with no local `Escape` handler.
+   */
+  blurCommit: () => void
+  /**
    * Parse `draft` (or the argument) and route the result through the grid's one
    * write path. A `parse` that throws reverts the cell with the thrown message,
    * which is why an editor has no error slot of its own.

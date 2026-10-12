@@ -156,7 +156,16 @@ export interface GridCellCommit<TData> {
   row: TData
   /** Displayed value before the edit, used to revert a rejected write. */
   previousValue: unknown
-  /** Value parsed from the draft. Unchanged text still commits. */
+  /**
+   * Value parsed from the draft.
+   *
+   * An unchanged value still commits on `Enter`: an operator who retyped what
+   * was already there has expressed an intent, and the create path depends on an
+   * unchanged-but-complete draft committing. **Blur is the stricter rule** — a
+   * draft with zero keystrokes since the editor opened is a no-op and issues no
+   * request, because `openEditor` seeds the draft from the cell's current value
+   * and committing that would PATCH on every stray cell click.
+   */
   value: unknown
 }
 
@@ -298,4 +307,9 @@ export interface GridCellView<TData = unknown> {
   error?: string
   onDraftChange: (value: string) => void
   onDraftKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
+  /**
+   * The editor lost the pointer. Commits a touched draft through the one write
+   * path and no-ops an untouched one, and never pulls focus back to the cell.
+   */
+  onDraftBlur: () => void
 }

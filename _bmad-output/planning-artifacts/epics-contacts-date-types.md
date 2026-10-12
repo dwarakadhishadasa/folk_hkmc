@@ -101,7 +101,7 @@ So that no one mistakes creation date for last contact.
 **When** the change lands
 **Then** the insert write is removed, no update path is added, and new rows store `NULL` (FR2)
 **And** `initial_contact` keeps its insert write (creation is its correct meaning).
-
+  
 **Given** existing rows hold creation dates displayed as last contact
 **When** the migration in Story 1.3 runs
 **Then** those values are nulled only after every id is reported (Dwaraka-approved null), the column stays `DATE`, and no value is invented (FR2, NFR6, AR2, AR7).

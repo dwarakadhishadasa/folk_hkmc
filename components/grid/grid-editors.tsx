@@ -152,6 +152,10 @@ function InlineField({
         // The hook's handler, not a local one: `Enter`, `Escape` and `Tab`
         // must behave the same here as they do in a plain editable cell.
         onKeyDown={ctx.onDraftKeyDown}
+        // Blur commits through the same single path. `Enter` has already exited
+        // the editor by then, so the mount-order race between the two cannot
+        // produce a second write.
+        onBlur={() => ctx.blurCommit()}
         onPointerDown={(event) => event.stopPropagation()}
         data-grid-editor={ctx.columnId}
         aria-label="Edit cell value"
@@ -182,9 +186,17 @@ function PopoverEditor({ ctx, children }: { ctx: GridEditorContext<unknown>; chi
         setOpen(next)
 
         if (!next) {
-          // Closing is a discard. AC4 is explicit that clicking away mid-edit
-          // writes nothing for every editor except `checkbox`.
-          ctx.close()
+          // Closing is a **commit**, not a discard: CAP-10 makes an operator's
+          // corrections survive moving away, and `select`, `multiselect`, `date`,
+          // `longtext` and `user` all render through here. Getting this backwards
+          // is the worst available failure — it silently discards the option an
+          // operator just picked in a dropdown.
+          //
+          // `ctx.blurCommit` is the one path, and it carries the two rules blur
+          // needs: a draft with zero keystrokes since the editor opened is a
+          // no-op, and an `Escape` that never reached a local handler still
+          // discards rather than committing.
+          ctx.blurCommit()
         }
       }}
     >
@@ -193,8 +205,9 @@ function PopoverEditor({ ctx, children }: { ctx: GridEditorContext<unknown>; chi
           data-grid-editor={ctx.columnId}
           data-state={open ? "open" : "closed"}
           onPointerDown={(event) => {
-            // The cell keeps the pointer: focus has to stay on the cell so `e`
-            // and `Space` still address this column afterwards.
+            // The cell keeps the pointer. Without this the cell would take the
+            // pointer event and the trigger — the thing Radix anchors to — would
+            // never see the click, so a double-click could not reach it at all.
             event.stopPropagation()
           }}
           className="flex h-full min-w-0 items-center"
@@ -206,6 +219,23 @@ function PopoverEditor({ ctx, children }: { ctx: GridEditorContext<unknown>; chi
         align="start"
         sideOffset={4}
         collisionPadding={8}
+        // `Escape` is a discard, and it has to be claimed *here* rather than
+        // left to each control. Now that closing commits, a bare `Escape`
+        // reaching Radix would dismiss the popover and commit the draft instead
+        // of discarding it — and the multiselect option list and the calendar
+        // have no local `Escape` handler at all, so those two were exactly the
+        // editors where that would happen. Capture-phase plus
+        // `stopPropagation` stops the key before Radix's document-level
+        // dismissable layer sees it, so no editor can commit on `Escape`
+        // regardless of what its own controls do.
+        onKeyDownCapture={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault()
+            event.stopPropagation()
+            console.log('CAPTURE-ESCAPE')
+            ctx.close()
+          }
+        }}
         // `design-constraints.md` bans drop shadows on data surfaces; the
         // primitive's default carries one.
         className="w-64 p-2 shadow-none"
@@ -223,8 +253,8 @@ function PopoverEditor({ ctx, children }: { ctx: GridEditorContext<unknown>; chi
  * incidental: the contacts table's favorite star is addressed in the suite as
  * "the row's only button", so a button in every cell of four editor columns
  * would make `getByRole("button")` ambiguous there. The cell is already the
- * focusable, keyboard-reachable thing — `e` opens its editor — so a control
- * inside it needs no role of its own.
+ * focusable, keyboard-reachable thing — a double-click opens its editor — so a
+ * control inside it needs no role of its own.
  */
 function OpenableDisplay({
   ctx,
@@ -242,8 +272,8 @@ function OpenableDisplay({
       role="presentation"
       data-grid-editor={kind}
       // No `stopPropagation` here: the pointer has to reach the cell so the
-      // click also focuses it, which is what leaves `e` and `Space` addressing
-      // this column afterwards.
+      // double-click that opens this editor is the cell's own opener, and so a
+      // single click still focuses the cell.
       onClick={() => {
         ctx.open()
       }}
@@ -774,11 +804,21 @@ function MultiselectControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
             key={option}
             selected={selected.includes(option)}
             onClick={() => {
-              setSelected((current) =>
-                current.includes(option)
+              setSelected((current) => {
+                const next = current.includes(option)
                   ? current.filter((entry) => entry !== option)
-                  : [...current, option],
-              )
+                  : [...current, option]
+
+                // Mirrored into the hook's draft so a click *away* commits what
+                // was picked. Only a list that differs from the seeded draft
+                // counts: re-clicking an option already present nets unchanged,
+                // and a blur must not turn that into a write.
+                if (next.join(LIST_SEPARATOR) !== ctx.draft) {
+                  ctx.setDraft(next.join(LIST_SEPARATOR))
+                }
+
+                return next
+              })
             }}
           >
             <span aria-hidden="true" className="w-3 shrink-0">
@@ -867,7 +907,13 @@ function DateControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
       <div className="mt-2 flex items-center gap-2">
         <input
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            // Mirrored into the hook's draft so the blur-commit can commit a
+            // date the operator typed rather than only a day they picked. The
+            // local state is what renders; the draft is what a click-away saves.
+            ctx.setDraft(event.target.value)
+            setText(event.target.value)
+          }}
           onKeyDown={(event) => {
             handleCommitKeys(
               event,
