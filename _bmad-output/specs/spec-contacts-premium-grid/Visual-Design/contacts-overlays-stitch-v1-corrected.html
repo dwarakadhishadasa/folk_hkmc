@@ -1,0 +1,451 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>FOLK Chennai - Contacts Operations Console</title>
+<!-- Tailwind CSS CDN with forms and container-queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts for Poppins & Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Poppins:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              ivory: '#FFF9F0',
+              navy: '#0F1E54',
+              navyDark: '#0B1437',
+              navyHover: '#1A2D6D',
+              saffron: '#F98B1C',
+              charcoal: '#24324A',
+              slateText: '#4A5568',
+              borderHairline: '#E2E8F0',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Poppins', 'sans-serif'],
+          },
+          boxShadow: {
+            'popover': '0 10px 25px -5px rgba(15, 30, 84, 0.12), 0 8px 10px -6px rgba(15, 30, 84, 0.08)',
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-scrollbars">
+    /* Subtle custom scrollbar for popover lists */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 5px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #F8FAFC;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+      /* CAP-14 — the column menu is revealed on hover AND on keyboard focus.
+       Without :focus-within a sighted keyboard operator tabs onto an invisible
+       control. Base stays in the tree (opacity-0, never display:none) so it
+       remains focusable and tappable for touch. */
+    .header-cell:hover .header-menu-btn { opacity: 1; }
+    .header-cell:focus-within .header-menu-btn { opacity: 1; }
+  </style>
+<style>
+    /* CAP-15 / grid.tsx:633 — the virtualizer estimates from a FIXED row
+       height, so it is locked on all three axes. h-8 alone does not do this.
+
+       A <tr> cannot actually be height-capped: in a CSS table the row is
+       driven by its cells, `height` behaves as a minimum and `max-height` is
+       ignored. Measured before this rule, the row rendered at 34.5px. The
+       cells carry the lock, and the row follows them. */
+    .grid-row-h { height: 32px; min-height: 32px; max-height: 32px; }
+    .grid-row-h > td, .grid-row-h > th {
+      height: 32px; max-height: 32px;
+      padding: 4px 8px;
+    }
+    /* CAP-12 — neutral row hover. Amber was the same hue family as saffron,
+       so a passive hover read as a partially activated row. */
+    .grid-row-h:hover { background-color: rgba(74, 85, 104, 0.05); }
+  </style>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+</head>
+<body class="bg-[#FFF9F0] text-brand-charcoal font-sans min-h-screen flex flex-col antialiased selection:bg-brand-saffron selection:text-white">
+<!-- BEGIN: TopNavigation -->
+<header class="w-full bg-[#0F1E54] text-white border-b border-[#0F1E54]"><div class="max-w-[1440px] mx-auto px-6 py-3 flex items-center justify-between"><div class="flex items-center"><div class="bg-white rounded-full px-7 py-2 h-11 flex items-center justify-center shadow-sm overflow-hidden"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZFbHSQ96YO8en3gbhY9J1s8ntnUg2yp_2i01DCGKwY7tv5HsHsQlE09yw1hnznljzRRVdns4bJBCt09aiaelR8XlN9mG_KIa8IwVJGTmCmgSuDS3yHChcih6BwtnDph-ab4OJcj6p7qmEaCRdZgH9BbTs9Jx1lnna022rOCNrZlGrBFMsm_l5-fCSyjHxbPX_ho_CFyS13ltPhisjDKRjcacNnUmTXGgC3L9JbLSpZ4GaxrvmQy789HS0jkoxptT2Dg" alt="FOLK - Friends of Lord Krishna" class="h-8 w-auto object-contain block"></div></div><div class="flex items-center bg-[#1B295B]/80 rounded-full px-2 py-1.5 space-x-1 border border-white/10"><button type="button" class="flex items-center space-x-2 text-white/80 hover:text-white px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors"><span class="material-symbols-outlined text-[18px]">person</span><span class="">Contact</span></button><button type="button" class="flex items-center space-x-2 text-white/80 hover:text-white px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors"><span class="material-symbols-outlined text-[18px]">calendar_month</span><span class="">Sessions</span></button><button type="button" class="flex items-center space-x-2 text-white/80 hover:text-white px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors"><span class="material-symbols-outlined text-[18px]">send</span><span class="">Invite</span></button><button type="button" class="flex items-center space-x-2 bg-white text-[#0F1E54] shadow-sm px-4 py-1.5 rounded-full text-[13px] font-semibold transition-all"><span class="material-symbols-outlined text-[18px]">tune</span><span class="">Manage</span></button></div><div class="flex items-center space-x-4 text-[13px]"><span class="text-white/95 font-medium tracking-tight">Dwarakadhisha Dasa (Admin)</span><button type="button" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[13px] font-medium transition-all"><span class="material-symbols-outlined text-[16px]">logout</span><span class="">Logout</span></button></div></div></header>
+<!-- END: TopNavigation -->
+<!-- BEGIN: SubHeader -->
+<div class="px-8 pt-6 pb-2 max-w-[1440px] w-full mx-auto">
+<div class="flex items-center justify-between mb-4">
+<div>
+<h1 class="text-[22px] font-semibold text-brand-charcoal font-display tracking-tight">Contacts</h1>
+<p class="text-xs text-brand-slateText mt-0.5">226 contacts · 4 locations</p>
+</div>
+<!-- Location dropdown button -->
+<div class="relative">
+<button class="inline-flex items-center gap-2 bg-white border border-brand-borderHairline text-brand-charcoal text-xs font-medium px-3 py-1.5 rounded-md hover:bg-slate-50 shadow-sm transition" type="button">
+<span class="">All locations</span>
+<svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- Navigation Sub-tabs -->
+<div class="flex space-x-7 border-b border-brand-borderHairline text-sm">
+<button class="pb-2.5 text-brand-slateText hover:text-brand-charcoal font-medium transition">Dashboard</button>
+<button class="pb-2.5 text-brand-navy font-semibold border-b-2 border-brand-navy -mb-px">Contacts</button>
+<button class="pb-2.5 text-brand-slateText hover:text-brand-charcoal font-medium transition">Sessions</button>
+<button class="pb-2.5 text-brand-slateText hover:text-brand-charcoal font-medium transition">Attendance</button>
+<button class="pb-2.5 text-brand-slateText hover:text-brand-charcoal font-medium transition">Favorites</button>
+</div>
+</div>
+<!-- END: SubHeader -->
+<!-- BEGIN: MainContent -->
+<main class="px-8 pb-12 max-w-[1440px] w-full mx-auto flex-1 flex flex-col">
+<!-- Outer Card wrapper for toolbar & grid -->
+<div class="bg-white border border-brand-borderHairline rounded-xl shadow-sm mt-3 overflow-visible relative flex-1 flex flex-col">
+<!-- BEGIN: ToolbarBand -->
+<section aria-label="Contacts Toolbar" class="h-14 px-4 border-b border-brand-borderHairline flex items-center justify-between gap-3 bg-white rounded-t-xl relative z-30">
+<!-- Left Toolbar Items -->
+<div class="flex items-center gap-2.5">
+<!-- Search input -->
+<div class="relative w-64">
+<span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</span>
+<input class="w-full pl-8 pr-3 py-1 text-xs border border-brand-borderHairline rounded-md text-brand-charcoal placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-brand-navy focus:border-brand-navy h-8 bg-white" placeholder="Search all columns" type="text">
+</div>
+<!-- Filter button -->
+<button class="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-medium text-[#F98B1C] bg-[#F98B1C]/10 border border-[#F98B1C]/30 rounded-md hover:bg-[#F98B1C]/15 transition-colors" type="button">
+<svg class="w-3.5 h-3.5 mr-1.5 text-[#F98B1C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="7" y1="12" x2="17" y2="12"></line><line x1="10" y1="18" x2="14" y2="18"></line></svg>
+<span class="">Filtered by Name, Phone</span>
+</button>
+<!-- SURFACE 1 TRIGGER: Sort Button Container -->
+<div class="relative" data-purpose="surface-1-container">
+<button aria-expanded="true" aria-haspopup="dialog" class="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-medium text-brand-charcoal bg-slate-50 border border-brand-navy rounded-md shadow-sm transition-colors" id="sort-toolbar-trigger" type="button">
+<svg class="w-3.5 h-3.5 text-brand-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="font-semibold text-brand-navy">Sort</span>
+</button>
+<!-- BEGIN: Surface 1 (Global Sort Popover) -->
+<div class="absolute left-0 top-full mt-2 w-60 bg-white border border-brand-borderHairline rounded-lg shadow-popover p-3 z-50 text-xs" data-purpose="surface-1-popover">
+<div class="text-[12px] font-medium text-brand-slateText pb-2">Sort by</div>
+<!-- Select 1: Field being sorted -->
+<div class="relative mb-2">
+<select class="w-full h-8 text-[13px] text-brand-charcoal border border-brand-borderHairline rounded-md px-2.5 pr-8 bg-white focus:outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy appearance-none">
+<option selected="">Name</option>
+<option>Phone</option>
+<option>Location</option>
+<option>Initial Contact</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+<!-- Hairline Separator -->
+<div class="border-t border-brand-borderHairline my-2"></div>
+<!-- Select 2: Direction -->
+<div class="relative mb-3">
+<select class="w-full h-8 text-[13px] text-brand-charcoal border border-brand-borderHairline rounded-md px-2.5 pr-8 bg-white focus:outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy appearance-none">
+<option selected="">Ascending</option>
+<option>Descending</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+<!-- Bottom quiet text button -->
+<div class="pt-1 flex items-center">
+<button class="text-[12px] font-medium text-brand-slateText hover:text-brand-navy transition-colors" type="button">
+                  Clear sort
+                </button>
+</div>
+</div>
+<!-- END: Surface 1 (Global Sort Popover) -->
+</div>
+<!-- SURFACE 2 TRIGGER: Hide fields Button Container -->
+<div class="relative" data-purpose="surface-2-container">
+<button aria-expanded="true" aria-haspopup="dialog" class="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-medium text-brand-charcoal bg-slate-50 border border-brand-navy rounded-md shadow-sm transition-colors" id="hide-fields-trigger" type="button">
+<svg class="w-3.5 h-3.5 text-brand-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M4 6h16M4 10h16M4 14h16M4 18h16" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="font-semibold text-brand-navy">Hide fields</span>
+</button>
+<!-- BEGIN: Surface 2 (Hide Fields Popover) -->
+<div class="absolute left-0 top-full mt-2 w-[260px] bg-white border border-brand-borderHairline rounded-lg shadow-popover p-3 z-50" data-purpose="surface-2-popover">
+<div class="text-[12px] font-medium text-brand-slateText pb-1">Fields</div>
+<!-- Exactly 14 field checkboxes (9 checked, 5 unchecked) -->
+<div class="space-y-0.5 max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
+<!-- 1. Name [x] — locked: pinned identity column -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 rounded cursor-not-allowed opacity-60 bg-slate-50/60">
+<input checked="" class="w-4 h-4 rounded text-slate-500 border-slate-300 focus:ring-0 focus:ring-offset-0 cursor-not-allowed" disabled="" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Name</span>
+</label>
+<!-- 2. Phone [x] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input checked="" class="w-4 h-4 rounded text-brand-navy border-slate-300 focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Phone</span>
+</label>
+<!-- 3. Location [x] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input checked="" class="w-4 h-4 rounded text-brand-navy border-slate-300 focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Location</span>
+</label>
+<!-- 4. Source [ ] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input class="w-4 h-4 rounded text-brand-navy border-[#CBD5E1] focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Source</span>
+</label>
+<!-- 5. Books Read [ ] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input class="w-4 h-4 rounded text-brand-navy border-[#CBD5E1] focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Books Read</span>
+</label>
+<!-- 6. Initial Contact [x] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input checked="" class="w-4 h-4 rounded text-brand-navy border-slate-300 focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Initial Contact</span>
+</label>
+<!-- 7. Date of Birth [ ] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input class="w-4 h-4 rounded text-brand-navy border-[#CBD5E1] focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Date of Birth</span>
+</label>
+<!-- 8. Total Attendance [x] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input checked="" class="w-4 h-4 rounded text-brand-navy border-slate-300 focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Total Attendance</span>
+</label>
+<!-- 9. Past 60 Days [x] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input checked="" class="w-4 h-4 rounded text-brand-navy border-slate-300 focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Past 60 Days</span>
+</label>
+<!-- 10. Last Contacted On [ ] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input class="w-4 h-4 rounded text-brand-navy border-[#CBD5E1] focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Last Contacted On</span>
+</label>
+<!-- 11. Notes [x] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input checked="" class="w-4 h-4 rounded text-brand-navy border-slate-300 focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Notes</span>
+</label>
+<!-- 12. Collected By [x] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input checked="" class="w-4 h-4 rounded text-brand-navy border-slate-300 focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Collected By</span>
+</label>
+<!-- 13. Favorite [ ] -->
+<label class="h-8 flex items-center gap-2.5 px-1.5 hover:bg-slate-50 rounded cursor-pointer">
+<input class="w-4 h-4 rounded text-brand-navy border-[#CBD5E1] focus:ring-0 focus:ring-offset-0 cursor-pointer" type="checkbox">
+<span class="text-[13px] text-brand-charcoal">Favorite</span>
+</label>
+<!-- 14. Actions [x] - Visibly unavailable / locked -->
+<div class="h-8 flex items-center justify-between px-1.5 opacity-60 cursor-not-allowed bg-slate-50/60 rounded">
+<div class="flex items-center gap-2.5">
+<input checked="" class="w-4 h-4 rounded text-slate-500 border-slate-300 cursor-not-allowed focus:ring-0" disabled="" type="checkbox">
+<span class="text-[13px] text-brand-charcoal font-medium">Actions</span>
+</div>
+<!-- Small lock indicator -->
+<svg class="w-3.5 h-3.5 text-slate-400 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- END: Surface 2 (Hide Fields Popover) -->
+</div>
+</div>
+<!-- Right Toolbar Items -->
+<div class="flex items-center space-x-3">
+<span class="text-xs text-brand-slateText font-medium">41 of 226 shown</span>
+<button class="h-8 px-3.5 inline-flex items-center gap-1.5 bg-brand-navy hover:bg-brand-navyHover text-white text-xs font-semibold rounded-md shadow-sm transition" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+</svg>
+<span class="">New contact</span>
+</button>
+</div>
+</section>
+<!-- END: ToolbarBand -->
+<!-- BEGIN: ContactsTableContainer -->
+<div class="overflow-x-auto relative flex-1" style="min-height: 480px;">
+<table class="w-full text-left border-separate border-spacing-0" id="contacts-data-table">
+<thead>
+<tr class="border-b border-brand-borderHairline bg-[#F8F5EF] text-[12px] font-semibold text-brand-slateText uppercase tracking-wider select-none">
+<!-- Column: Name -->
+<th class="header-cell relative h-8 px-2 py-1 w-72" scope="col"><div class="flex items-center justify-between h-full"><span class="truncate">Name</span><div class="flex items-center space-x-1 pl-1"><button type="button" class="header-menu-btn opacity-0 transition-opacity p-0.5 text-brand-slateText hover:text-brand-navy" aria-label="Column options for Name"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg></button></div></div></th>
+<!-- Column: Phone -->
+<th class="header-cell relative h-8 px-2 py-1 w-48" scope="col"><div class="flex items-center justify-between h-full"><span class="truncate">Phone</span><div class="flex items-center space-x-1 pl-1"><button type="button" class="header-menu-btn opacity-0 transition-opacity p-0.5 text-brand-slateText hover:text-brand-navy" aria-label="Column options for Phone"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg></button></div></div></th>
+<!-- Column: Location (Holds Surface 3 Menu Trigger) -->
+<th class="header-cell relative h-8 px-2 py-1 w-56 relative bg-slate-100/70 border-x border-brand-borderHairline" data-purpose="surface-3-container" scope="col">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="text-brand-navy font-bold">Location</span>
+<svg class="w-3 h-3 text-brand-navy" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M5 15l7-7 7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<!-- The active "···" control trigger -->
+<button type="button" class="header-menu-btn opacity-0 transition-opacity p-0.5 text-brand-slateText hover:text-brand-navy" aria-label="Column options for Location"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg></button>
+</div>
+<!-- BEGIN: Surface 3 (Column Menu Popover) -->
+<div class="absolute left-6 top-full mt-1.5 w-[200px] bg-white border border-brand-borderHairline rounded-lg shadow-popover py-1 z-50 normal-case font-normal text-left" data-purpose="surface-3-popover">
+<!-- 1. Sort ascending -->
+<button class="w-full h-8 px-3 py-1.5 text-[13px] text-brand-charcoal hover:bg-slate-50 flex items-center gap-2.5 transition-colors" type="button">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="">Sort ascending</span>
+</button>
+<!-- 2. Sort descending -->
+<button class="w-full h-8 px-3 py-1.5 text-[13px] text-brand-charcoal hover:bg-slate-50 flex items-center gap-2.5 transition-colors" type="button">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="">Sort descending</span>
+</button>
+<!-- Hairline separator -->
+<div class="border-t border-brand-borderHairline my-1"></div>
+<!-- 3. Hide column -->
+<button class="w-full h-8 px-3 py-1.5 text-[13px] text-brand-charcoal hover:bg-slate-50 flex items-center gap-2.5 transition-colors" type="button">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="">Hide column</span>
+</button>
+<!-- 4. Filter -->
+<button class="w-full h-8 px-3 py-1.5 text-[13px] text-brand-charcoal hover:bg-slate-50 flex items-center gap-2.5 transition-colors" type="button">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="">Filter</span>
+</button>
+</div>
+<!-- END: Surface 3 (Column Menu Popover) -->
+</th>
+<!-- Column: Initial Contact -->
+<th class="header-cell relative h-8 px-2 py-1 w-44" scope="col"><div class="flex items-center justify-between h-full"><span class="truncate">Initial Contact</span><div class="flex items-center space-x-1 pl-1"><button type="button" class="header-menu-btn opacity-0 transition-opacity p-0.5 text-brand-slateText hover:text-brand-navy" aria-label="Column options for Initial Contact"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg></button></div></div></th>
+<!-- Column: Actions -->
+<th class="header-cell relative h-8 px-2 py-1 text-right w-24" scope="col"><div class="flex items-center justify-between h-full"><span class="truncate">Actions</span><div class="flex items-center space-x-1 pl-1"><button type="button" class="header-menu-btn opacity-0 transition-opacity p-0.5 text-brand-slateText hover:text-brand-navy" aria-label="Column options for Actions"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg></button></div></div></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-brand-borderHairline text-[13px] text-brand-charcoal">
+<!-- Row 1 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Ramesh Kumar</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 98401 23456</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">Chennai Central</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-02-14</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 2 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Anandh Swaminathan</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 94440 98765</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">Anna Nagar</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-02-18</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 3 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Deepa Sundaram</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 97890 11223</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">T. Nagar</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-01-29</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 4 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Karthik Narayanan</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 98842 55678</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">Chennai Central</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-02-02</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 5 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Sowmya Radhakrishnan</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 99620 44321</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">Velachery</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-01-15</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 6 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Vignesh Balaji</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 98412 88990</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">Anna Nagar</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-02-11</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 7 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Meera Ranganathan</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 97909 33445</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">T. Nagar</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-02-05</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 8 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Gautham Krishnan</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 98408 77665</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">Chennai Central</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-01-22</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 9 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Pooja Venkatesh</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 91760 11998</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">Velachery</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-02-17</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+<!-- Row 10 -->
+<tr class="grid-row-h hover:bg-[#4A5568]/5 transition-colors">
+<td class="px-2 py-1 font-medium text-brand-charcoal whitespace-nowrap">Hariharan Srinivasan</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap">+91 98840 22334</td>
+<td class="px-2 py-1 text-brand-charcoal whitespace-nowrap bg-slate-50/40">Anna Nagar</td>
+<td class="px-2 py-1 text-brand-slateText whitespace-nowrap tabular-nums">2026-01-10</td>
+<td class="px-2 py-1 text-right whitespace-nowrap"><button aria-label="Delete contact" class="p-1 text-slate-400 hover:text-[#ba1a1a] rounded transition-colors inline-flex items-center justify-center" title="Delete" type="button"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- END: ContactsTableContainer -->
+<!-- Table Footer / Pagination status -->
+<div class="h-10 px-4 border-t border-brand-borderHairline flex items-center justify-between bg-white text-xs text-brand-slateText rounded-b-xl">
+
+<div class="flex items-center space-x-1">
+<button class="px-2.5 py-1 border border-brand-borderHairline rounded hover:bg-slate-50 text-slate-400 cursor-not-allowed">Previous</button>
+<button class="px-2.5 py-1 bg-brand-navy text-white rounded font-medium">1</button>
+<button class="px-2.5 py-1 border border-brand-borderHairline rounded hover:bg-slate-50">2</button>
+<button class="px-2.5 py-1 border border-brand-borderHairline rounded hover:bg-slate-50">3</button>
+<button class="px-2.5 py-1 border border-brand-borderHairline rounded hover:bg-slate-50">4</button>
+<button class="px-2.5 py-1 border border-brand-borderHairline rounded hover:bg-slate-50">5</button>
+<button class="px-2.5 py-1 border border-brand-borderHairline rounded hover:bg-slate-50">Next</button>
+</div>
+</div>
+</div>
+</main>
+<!-- END: MainContent -->
+
+
+</body></html>

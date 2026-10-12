@@ -213,38 +213,41 @@ The per-column filter popover. Today every header carries its own funnel button 
 
 What survives: `meta.grid.filter`'s **first** job, supplying a value type so the modal knows whether a field is text or numeric, and `f.<colId>` as the serialization while conditions remain simple.
 
-### It is an inline bar, per OQ-18
+### It is a popover anchored under the toolbar, per OQ-18
 
-**This section previously argued for a modal and that argument is withdrawn.** Dwaraka chose the inline bar — the reference screenshot's own shape — so the grid, the conditions and the live result count are on screen together.
+**This section previously argued for a modal, then for an inline bar. Both arguments are withdrawn.** Dwaraka chose the inline bar because the live row count was free when the bar sat above the grid, and then reversed it on seeing a composed design: a popover anchored under the toolbar's filter control keeps the count visible, because the count lives in the toolbar row and the popover hangs below it.
 
 The comparison that used to sit here:
 
-| | Inline bar | Modal |
-| --- | --- | --- |
-| Grid visible while filtering | yes | no, the modal covers it |
-| Row count updates live as you build | yes | no |
-| Space | permanent, eats vertical space | on demand |
+| | Popover | Inline bar | Modal |
+| --- | --- | --- | --- |
+| Live row count visible while composing | yes — it stays in the toolbar | yes | no, the modal covers it |
+| Grid rows visible while composing | no, covered | yes | no |
+| Vertical space | on demand | permanent | on demand |
+| Aesthetically | yes | no | no |
 
-**The modal's one compensating feature is gone with it.** The previous plan was to show a live matching-row count *inside* the modal, because a covering modal cannot update the grid's count as you type. An inline bar gets that free — it is the reason to prefer it. Do not build a second count.
+**The cost is real and is the one recorded here so nobody rediscovers it later:** the operator cannot watch *which* rows match while composing, because the popover covers the grid. That was accepted in exchange for not spending permanent vertical space on every visit, and in exchange for not hand-reconstructing a count inside a covering dialog.
 
-What is left of the modal argument is the one real cost: the bar is permanent and eats vertical space. That is accepted, in exchange for a filter whose effect on the result set is visible while it is being composed.
+The popover is **not dismissible into a different shape**: it has a close affordance and a "Clear all", but it is a single surface anchored to one control. Do not reintroduce a per-column popover — see "What it replaces" below.
 
 `components/ui/dialog.tsx` exists and is **not** used here.
 
 ### Contents — condition rows, and one connective for the whole list
 
-Per OQ-18 this is an inline bar; per OQ-13 it holds **several** conditions:
+Per OQ-18 this is a popover; per OQ-13 it holds **several** conditions:
 
 ```
 In this view, show contacts
 
-  Where  [ Current status ▾ ] [ is empty ▾ ]              [🗑] [⠿]
-  and ▾  [ Phone           ▾ ] [ contains ▾ ] [ Enter a value ] [🗑] [⠿]
+  Where  [ Current status ▾ ] [ is empty ▾ ]              [🗑]
+  and ▾  [ Phone           ▾ ] [ contains ▾ ] [ Enter a value ] [🗑]
 
-  + Add condition          Copy from another view
+  + Add condition          Clear all
 ```
 
-**Absent, deliberately:** *"Copy from another view"* (needs saved views, a non-goal), *"Describe how to filter this view"* (Ask AI, a non-goal), and **`+ Add condition group`** — which the reference screenshot also shows, and which stays out because grouping is what forces an ordered mixed expression. Say why in the code, or a later agent reading only the screenshot will re-add them.
+**Absent, deliberately:** *"Copy from another view"* (needs saved views, a non-goal), *"Describe how to filter this view"* (Ask AI, a non-goal), **`+ Add condition group`** — which the reference screenshot also shows, and which stays out because grouping is what forces an ordered mixed expression — and **the `⠿` drag handle** on condition rows, which the reference screenshot also shows. Say why in the code, or a later agent reading only the screenshot will re-add them.
+
+**Why there is no drag handle.** One connective governs the whole list, so conditions are a **set of columns**, never an ordered expression (see "Where the conditions live in the URL"). Reordering two conditions joined by a global *match all* or *match any* cannot change the result set — there are no precedence rules for an order to affect. The handle would imply a capability that has no effect. If grouping is ever added, this reasoning is what must be revisited first.
 
 **One connective governs the whole list.** The `and ▾` prefix shown on the second row is driven by a single value for the whole bar, not per row: *match all* or *match any*. So the list is never `A and B or C`, which means **no precedence rules, no ordered expression, and no ordered serialization**. Airtable's own bar looks per-row and behaves per-group; this one looks the same and behaves globally. That difference is the whole point and it should be stated in the code, because the visual suggests the more complicated semantics.
 
@@ -262,8 +265,8 @@ This is the substantive part, and it is why CAP-12 is not "the old filter in a m
 
 | Field type | Operators | Value control |
 | --- | --- | --- |
-| **text** | contains · does not contain · is · is not · is empty · is not empty | text input; **hidden** for the two empty operators |
-| **number** | is · is not · greater than · less than · is empty · is not empty | numeric input; hidden for empty |
+| **text** | contains · does not contain · is · is not · is empty · is not empty | text input; **disabled** for the two empty operators |
+| **number** | is · is not · greater than · less than · is empty · is not empty | numeric input; disabled for empty |
 | **date** | is · is not · is within · is after · is before · is on or before · is on or after · is empty · is not empty | **a select**: today · yesterday · one week ago · one month ago · N days ago · exact date — then a date input when *exact date* is chosen |
 | **checkbox** | one entry: *is* — **shown, not hidden** (OQ-15) | a **checkbox**, not a text input |
 | **single select** | is · is not · is any of · is none of · is empty · is not empty | the option list; hidden for empty |
@@ -271,7 +274,9 @@ This is the substantive part, and it is why CAP-12 is not "the old filter in a m
 
 Three consequences that are easy to get wrong:
 
-**The value control is conditional, per operator.** `is empty` has no value. `is any of` on a select has a *list* of values. *Exact date* swaps a text input for a date input. Every operator declares its value shape, and the modal renders from that declaration rather than special-casing operator ids.
+**The value control is conditional, per operator.** `is empty` has no value. `is any of` on a select has a *list* of values. *Exact date* swaps a text input for a date input. Every operator declares its value shape, and the popover renders from that declaration rather than special-casing operator ids.
+
+**An operator with no value renders its control DISABLED, not absent.** This was previously "hidden". The disabled treatment is deliberate: a greyed control that visibly reads "not applicable" tells an operator more than a control that silently disappears and leaves the row looking ragged. Two obligations come with it — the control must carry a real `disabled`/`aria-disabled` so it is unfocusable and announced as unavailable, and it must not accept a value even programmatically, or `is empty` acquires a value it cannot serialize.
 
 **The checkbox operator control shows one entry** (OQ-15). My earlier suggestion was to hide it; Dwaraka chose uniformity, which is defensible — an operator scanning the modal sees the same three-control shape whatever the field type, and one inert option costs less than the inconsistency.
 
@@ -302,20 +307,19 @@ No `date` or `timestamp` type. The date editor writes `YYYY-MM-DD` (`grid-editor
 
 Whether a view should re-evaluate on open is exactly the saved-view question this spec declined to answer, so freezing the boundary is consistent.
 
-### Two filters, two indicators
+### One indicator, and it names the columns
 
-An active filter must be visible in **both** places, or one of them lies:
+An active filter is indicated in the **toolbar only**, and it states *which columns* are filtering — e.g. **"Filtered by Name, Phone"** — in saffron, which is otherwise reserved for nothing.
 
-- the toolbar carries an active state — with a permanent bar, that is a count of active conditions rather than a control that opens something
-- the header's Filter item shows the same state for its column
+**This section previously required two indicators.** It asked for a toolbar state *and* a per-column header state, because under the inline-bar design the toolbar could only carry a **count** ("2 filters active"), and a count alone does not say which columns are involved — so the header indicator had to supply the rest. With thirteen funnels collapsing into one popover, the toolbar indicator is strong enough to stand alone. **Do not add a per-column header indicator on the strength of the old text**; the reasoning it rested on is withdrawn with the inline bar.
 
-With thirteen funnels becoming one bar, the header indicator is what tells an operator *which* column is narrowing their results.
+The residual cost is recorded rather than solved: if a filtered column is scrolled out of the horizontal viewport, the toolbar says *which* column but not *where in the row it sits*. That is accepted for now. If it proves painful, a header marker is a small addition — but it must not become a permanently visible control, or CAP-14 fails and the thirteen funnels return.
 
-### The header's Filter item pre-fills the bar
+### The header's Filter item pre-fills the popover
 
-The column menu's fourth item reveals the inline bar with a condition on that column already added, and the operator preselected to `contains` (or `is` for a non-text field). That keeps Airtable's quick path — filter the column I'm looking at — while every condition is composed in one place, and it is why the header's funnel icon is redundant.
+The column menu's fourth item opens the popover with a condition on that column already added, and the operator preselected to `contains` (or `is` for a non-text field). That keeps Airtable's quick path — filter the column I'm looking at — while every condition is composed in one place, and it is why the header's funnel icon is redundant.
 
-**It reveals, it does not open.** There is no modal and no overlay any more, so this item must not suggest one: it focuses or expands the bar rather than covering the grid.
+**It opens the one popover, anchored under the toolbar** — not a per-column popover of its own. The thirteen funnels are gone; opening this item must not resurrect one, or the grid fills with filters again.
 
 ## CAP-13 — Column drag-and-drop, via `@dnd-kit/core`
 

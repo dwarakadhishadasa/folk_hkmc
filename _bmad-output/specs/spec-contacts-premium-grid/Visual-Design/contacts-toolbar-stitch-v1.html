@@ -1,0 +1,406 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FOLK Chennai — Contacts Operations Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Poppins:wght@600&amp;display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ivory: '#FFF9F0',
+            surface: '#FFFFFF',
+            royal: {
+              DEFAULT: '#0F1E54',
+              hover: '#1A2D6D'
+            },
+            saffron: '#F98B1C',
+            charcoal: '#24324A',
+            slateCustom: '#4A5568',
+            hairline: '#E2E8F0',
+            hairlineBlue: '#D8E2EC',
+            errorRestrained: '#DC2626'
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Poppins', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom refined enterprise styles */
+    body {
+      background-color: #FFF9F0;
+      color: #24324A;
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .font-poppins {
+      font-family: 'Poppins', sans-serif;
+    }
+    .grid-row-h {
+      height: 32px;
+      min-height: 32px;
+      max-height: 32px;
+    }
+    .hairline-b {
+      border-bottom: 1px solid #E2E8F0;
+    }
+    .hairline-r {
+      border-right: 1px solid #E2E8F0;
+    }
+    .hairline-all {
+      border: 1px solid #E2E8F0;
+    }
+    /* Hover menu button trigger behavior */
+    .header-cell:hover .header-menu-btn {
+      opacity: 1;
+      visibility: visible;
+    }
+    /* Custom focus state */
+    input:focus, select:focus, button:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px #0F1E54;
+      border-color: #0F1E54;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#FFF9F0] text-[#24324A] text-[13px] antialiased selection:bg-[#0F1E54] selection:text-white pb-12">
+
+  <!-- Top App Navigation Bar (institutional header) -->
+  <header class="w-full bg-[#0F1E54] text-white border-b border-[#0F1E54]"><div class="max-w-[1440px] mx-auto px-6 py-3 flex items-center justify-between"><div class="flex items-center"><div class="bg-white rounded-full px-7 py-2 h-11 flex items-center justify-center shadow-sm overflow-hidden"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZFbHSQ96YO8en3gbhY9J1s8ntnUg2yp_2i01DCGKwY7tv5HsHsQlE09yw1hnznljzRRVdns4bJBCt09aiaelR8XlN9mG_KIa8IwVJGTmCmgSuDS3yHChcih6BwtnDph-ab4OJcj6p7qmEaCRdZgH9BbTs9Jx1lnna022rOCNrZlGrBFMsm_l5-fCSyjHxbPX_ho_CFyS13ltPhisjDKRjcacNnUmTXGgC3L9JbLSpZ4GaxrvmQy789HS0jkoxptT2Dg" alt="FOLK - Friends of Lord Krishna" class="h-8 w-auto object-contain block"></div></div><div class="flex items-center bg-[#1B295B]/80 rounded-full px-2 py-1.5 space-x-1 border border-white/10"><button type="button" class="flex items-center space-x-2 text-white/80 hover:text-white px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors"><span class="material-symbols-outlined text-[18px]">person</span><span class="">Contact</span></button><button type="button" class="flex items-center space-x-2 text-white/80 hover:text-white px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors"><span class="material-symbols-outlined text-[18px]">calendar_month</span><span class="">Sessions</span></button><button type="button" class="flex items-center space-x-2 text-white/80 hover:text-white px-4 py-1.5 rounded-full text-[13px] font-medium transition-colors"><span class="material-symbols-outlined text-[18px]">send</span><span class="">Invite</span></button><button type="button" class="flex items-center space-x-2 bg-white text-[#0F1E54] shadow-sm px-4 py-1.5 rounded-full text-[13px] font-semibold transition-all"><span class="material-symbols-outlined text-[18px]">tune</span><span class="">Manage</span></button></div><div class="flex items-center space-x-4 text-[13px]"><span class="text-white/95 font-medium tracking-tight">Dwarakadhisha Dasa (Admin)</span><button type="button" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[13px] font-medium transition-all"><span class="material-symbols-outlined text-[16px]">logout</span><span class="">Logout</span></button></div></div></header>
+
+  <!-- Main Work Area Container -->
+  <main class="max-w-[1440px] mx-auto px-6 pt-5">
+    
+    <!-- 1. Page Header (Single compact band, not a tall hero) -->
+    <div class="flex items-end justify-between pb-3">
+      <div>
+        <h1 class="font-poppins text-[22px] font-semibold tracking-tight text-[#24324A] leading-tight">Contacts</h1>
+        <p class="text-[12px] font-normal text-[#4A5568] mt-0.5">226 contacts · 4 locations</p>
+      </div>
+
+      <!-- Scope Control Aligned to Optical Block -->
+      <div class="relative">
+        <button type="button" class="inline-flex items-center justify-between h-8 px-3 text-[13px] font-medium text-[#24324A] bg-white border border-[#E2E8F0] rounded-[6px] hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-[#0F1E54]">
+          <span class="">All locations</span>
+          <svg class="w-3.5 h-3.5 ml-1.5 text-[#4A5568]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. Tab Row directly beneath, tight to the header -->
+    <nav class="flex space-x-6 border-b border-[#E2E8F0] pt-1">
+      <!-- Inactive Tab: Dashboard -->
+      <a href="#dashboard" class="pb-2.5 text-[13px] font-medium text-[#4A5568] hover:text-[#24324A] transition-colors border-b-2 border-transparent">
+        Dashboard
+      </a>
+
+      <!-- Active Tab: Contacts (weight plus royal blue underline) -->
+      <a href="#contacts" class="pb-2.5 text-[13px] font-semibold text-[#0F1E54] border-b-2 border-[#0F1E54] flex items-center">
+        Contacts
+      </a>
+
+      <!-- Inactive Tab: Sessions -->
+      <a href="#sessions" class="pb-2.5 text-[13px] font-medium text-[#4A5568] hover:text-[#24324A] transition-colors border-b-2 border-transparent">
+        Sessions
+      </a>
+
+      <!-- Inactive Tab: Attendance -->
+      <a href="#attendance" class="pb-2.5 text-[13px] font-medium text-[#4A5568] hover:text-[#24324A] transition-colors border-b-2 border-transparent">
+        Attendance
+      </a>
+
+      <!-- Inactive Tab: Favorites -->
+      <a href="#favorites" class="pb-2.5 text-[13px] font-medium text-[#4A5568] hover:text-[#24324A] transition-colors border-b-2 border-transparent">
+        Favorites
+      </a>
+    </nav>
+
+    <!-- White Card Section: Toolbar + Filter Bar + Data Grid Container -->
+    <div class="mt-4 bg-white rounded-[8px] border border-[#E2E8F0] shadow-none">
+
+      <!-- 3. Toolbar Band on White Card -->
+      <div class="px-3.5 py-2.5 border-b border-[#E2E8F0] flex items-center justify-between gap-3 bg-white">
+        <!-- Left-aligned controls group -->
+        <div class="flex items-center space-x-2 flex-wrap">
+          
+          <!-- Search input -->
+          <div class="relative w-64">
+            <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#4A5568]">
+              <svg class="w-3.5 h-3.5 text-[#4A5568]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+            </div>
+            <input type="text" placeholder="Search all columns" class="w-full h-8 pl-8 pr-3 text-[13px] placeholder:text-[#4A5568]/70 border border-[#E2E8F0] rounded-[6px] bg-white text-[#24324A] hover:border-slate-300 transition-colors">
+          </div>
+
+          <!-- Active Filter button with Saffron Dot -->
+          <div class="relative inline-block">
+  <button type="button" class="h-8 px-2.5 text-[13px] font-medium text-[#24324A] bg-white border border-[#E2E8F0] rounded-[6px] inline-flex items-center hover:bg-slate-50 transition-colors"><svg class="w-3.5 h-3.5 mr-1.5 text-[#EA580C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="7" y1="12" x2="17" y2="12"></line><line x1="10" y1="18" x2="14" y2="18"></line></svg><span class="text-[#EA580C] font-semibold">Filtered by Name, Phone</span></button>
+  <div class="absolute left-0 top-[calc(100%+6px)] z-50 w-[600px] bg-white rounded-[8px] border border-[#E2E8F0] p-4 text-[13px] text-[#24324A]" style="box-shadow: 0 10px 25px -5px rgba(15, 30, 84, 0.12), 0 8px 10px -6px rgba(15, 30, 84, 0.08);">
+    <div class="flex items-center justify-between pb-3 mb-3 border-b border-[#E2E8F0]">
+      <div class="flex items-center text-[12px] font-medium text-[#4A5568]">
+        <span class="">In this view, show contacts</span>
+        
+      </div>
+      <button type="button" title="Close filters" class="w-6 h-6 flex items-center justify-center text-[#4A5568] hover:text-[#24324A] rounded hover:bg-slate-100 transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="space-y-2.5"><div class="flex items-center space-x-2 text-[13px]"><div class="w-16 flex items-center justify-center text-[#4A5568] font-medium select-none h-9 text-xs uppercase tracking-wider text-center">Where</div><div class="relative w-44"><select class="w-full h-9 px-2.5 pr-7 text-[13px] text-[#24324A] bg-white border border-[#E2E8F0] rounded-[6px] appearance-none cursor-pointer hover:border-slate-300 transition-colors"><option>Current status</option><option selected="">Name</option><option>Location</option><option>Phone</option><option>Last contacted</option></select><div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#4A5568]"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div></div><div class="relative w-36"><select class="w-full h-9 px-2.5 pr-7 text-[13px] text-[#24324A] bg-white border border-[#E2E8F0] rounded-[6px] appearance-none cursor-pointer hover:border-slate-300 transition-colors"><option>is empty</option><option selected="">is not empty</option><option>is</option><option>is not</option></select><div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#4A5568]"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div></div><div class="w-44"><input type="text" placeholder="" disabled="" class="w-full h-9 px-2.5 text-[13px] placeholder:text-[#4A5568]/60 border border-[#E2E8F0] rounded-[6px] bg-[#F8FAFC] text-[#24324A] cursor-not-allowed"></div><div class="flex items-center space-x-1 pl-1"><button type="button" aria-label="Delete condition" title="Delete condition" class="w-8 h-8 flex items-center justify-center text-[#4A5568]/60 hover:text-[#DC2626] rounded hover:bg-slate-100 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div><div class="flex items-center space-x-2 text-[13px]"><div class="relative w-16"><select class="w-full h-9 px-1 pr-4 text-[12px] text-[#24324A] font-medium bg-white border border-[#E2E8F0] rounded-[6px] appearance-none cursor-pointer text-center hover:border-slate-300 transition-colors"><option selected="">and</option><option>or</option></select><div class="absolute inset-y-0 right-0 flex items-center px-1 pointer-events-none text-[#4A5568]"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div></div><div class="relative w-44"><select class="w-full h-9 px-2.5 pr-7 text-[13px] text-[#24324A] bg-white border border-[#E2E8F0] rounded-[6px] appearance-none cursor-pointer hover:border-slate-300 transition-colors"><option selected="">Phone</option><option>Name</option><option>Location</option><option>Current status</option><option>Last contacted</option></select><div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#4A5568]"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div></div><div class="relative w-36"><select class="w-full h-9 px-2.5 pr-7 text-[13px] text-[#24324A] bg-white border border-[#E2E8F0] rounded-[6px] appearance-none cursor-pointer hover:border-slate-300 transition-colors"><option selected="">contains</option><option>does not contain</option><option>starts with</option><option>is</option></select><div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-[#4A5568]"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg></div></div><div class="w-44"><input type="text" placeholder="Enter a value" class="w-full h-9 px-2.5 text-[13px] placeholder:text-[#4A5568]/60 border border-[#E2E8F0] rounded-[6px] bg-white text-[#24324A] hover:border-slate-300 transition-colors"></div><div class="flex items-center space-x-1 pl-1"><button type="button" aria-label="Delete condition" title="Delete condition" class="w-8 h-8 flex items-center justify-center text-[#4A5568]/60 hover:text-[#DC2626] rounded hover:bg-slate-100 transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div></div>
+    <div class="mt-3 pt-3 border-t border-[#E2E8F0] flex items-center justify-between">
+      <button type="button" class="inline-flex items-center text-[12px] font-medium text-[#0F1E54] hover:text-[#1A2D6D] hover:underline transition-all">
+        <span class="mr-1 font-semibold text-[13px]">+</span>
+        <span class="">Add condition</span>
+      </button>
+      <button type="button" class="text-[12px] font-normal text-[#4A5568] hover:text-[#DC2626] transition-colors">
+        Clear all
+      </button>
+    </div>
+  </div>
+</div>
+
+          <!-- View label with chevron -->
+          <button type="button" class="h-8 px-2.5 text-[13px] font-medium text-[#24324A] bg-white border border-[#E2E8F0] rounded-[6px] inline-flex items-center hover:bg-slate-50 transition-colors">
+            <span class="">All contacts</span>
+            <svg class="w-3.5 h-3.5 ml-1.5 text-[#4A5568]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+
+          <!-- Columns button -->
+          <button type="button" class="h-8 px-2.5 text-[13px] font-medium text-[#4A5568] bg-white border border-[#E2E8F0] rounded-[6px] inline-flex items-center hover:text-[#24324A] hover:bg-slate-50 transition-colors">
+            <svg class="w-3.5 h-3.5 mr-1.5 text-[#4A5568]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+            </svg>
+            <span class="">Columns</span>
+          </button>
+
+          <!-- Primary "New contact" Button in Royal Blue -->
+          <button type="button" class="h-8 px-3 text-[13px] font-medium text-white bg-[#0F1E54] hover:bg-[#1A2D6D] border border-[#0F1E54] rounded-[6px] inline-flex items-center transition-colors">
+            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            <span class="">New contact</span>
+          </button>
+
+        </div>
+
+        <!-- Right-aligned, muted 12px: "41 of 226 shown" -->
+        <div class="text-[12px] font-normal text-[#4A5568] whitespace-nowrap pl-2">
+          41 of 226 shown
+        </div>
+      </div>
+
+      <!-- 4. Filter Conditions Bar Directly Below Toolbar (Always Visible) -->
+      
+
+      <!-- 5. Data Grid: Header row and sample rows (32px tall, exact 8px horizontal / 4px vertical padding) -->
+      <div class="w-full overflow-x-auto bg-white">
+        <table class="w-full border-collapse text-left table-fixed">
+          <!-- Colgroup defining generous column widths without ugly truncation -->
+          <colgroup>
+            <col style="width: 240px;">
+            <col style="width: 170px;">
+            <col style="width: 180px;">
+            <col style="width: 160px;">
+            <col style="width: 150px;">
+            
+          </colgroup>
+
+          <!-- Grid Header Row (Dense 32px height, slateCustom uppercase-ish tracking, sort indicator only at rest) -->
+          <thead>
+            <tr class="grid-row-h bg-[#F8FAFC] border-b border-[#E2E8F0]">
+              
+              <!-- Column: Name -->
+              <th scope="col" class="header-cell relative h-8 px-2 py-1 text-[12px] font-semibold tracking-wider uppercase text-[#4A5568] border-r border-[#E2E8F0] select-none group cursor-pointer hover:bg-slate-100/70 transition-colors">
+                <div class="flex items-center justify-between h-full">
+                  <span class="truncate">Name</span>
+                  <div class="flex items-center space-x-1 pl-1">
+                    <svg class="w-3 h-3 text-[#4A5568]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"></path>
+                    </svg>
+                    <!-- Hover-only menu trigger -->
+                    <span class="header-menu-btn opacity-0 transition-opacity p-0.5 text-[#4A5568] hover:text-[#24324A]">
+                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
+                    </span>
+                  </div>
+                </div>
+              </th>
+
+              <!-- Column: Location -->
+              <th scope="col" class="header-cell relative h-8 px-2 py-1 text-[12px] font-semibold tracking-wider uppercase text-[#4A5568] border-r border-[#E2E8F0] select-none group cursor-pointer hover:bg-slate-100/70 transition-colors">
+                <div class="flex items-center justify-between h-full">
+                  <span class="truncate">Location</span>
+                  <div class="flex items-center space-x-1 pl-1">
+                    <svg class="w-3 h-3 text-[#4A5568]/40 group-hover:text-[#4A5568]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                    </svg>
+                    <span class="header-menu-btn opacity-0 transition-opacity p-0.5 text-[#4A5568] hover:text-[#24324A]">
+                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
+                    </span>
+                  </div>
+                </div>
+              </th>
+
+              <!-- Column: Phone -->
+              <th scope="col" class="header-cell relative h-8 px-2 py-1 text-[12px] font-semibold tracking-wider uppercase text-[#4A5568] border-r border-[#E2E8F0] select-none group cursor-pointer hover:bg-slate-100/70 transition-colors">
+                <div class="flex items-center justify-between h-full">
+                  <span class="truncate">Phone</span>
+                  <div class="flex items-center space-x-1 pl-1">
+                    <svg class="w-3 h-3 text-[#4A5568]/40 group-hover:text-[#4A5568]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                    </svg>
+                    <span class="header-menu-btn opacity-0 transition-opacity p-0.5 text-[#4A5568] hover:text-[#24324A]">
+                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
+                    </span>
+                  </div>
+                </div>
+              </th>
+
+              <!-- Column: Current status -->
+              <th scope="col" class="header-cell relative h-8 px-2 py-1 text-[12px] font-semibold tracking-wider uppercase text-[#4A5568] border-r border-[#E2E8F0] select-none group cursor-pointer hover:bg-slate-100/70 transition-colors">
+                <div class="flex items-center justify-between h-full">
+                  <span class="truncate">Current status</span>
+                  <div class="flex items-center space-x-1 pl-1">
+                    
+                    <span class="header-menu-btn opacity-0 transition-opacity p-0.5 text-[#4A5568] hover:text-[#24324A]">
+                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
+                    </span>
+                  </div>
+                </div>
+              </th>
+
+              <!-- Column: Last contacted -->
+              <th scope="col" class="header-cell relative h-8 px-2 py-1 text-[12px] font-semibold tracking-wider uppercase text-[#4A5568] border-r border-[#E2E8F0] select-none group cursor-pointer hover:bg-slate-100/70 transition-colors">
+                <div class="flex items-center justify-between h-full">
+                  <span class="truncate">Initial contact</span>
+                  <div class="flex items-center space-x-1 pl-1">
+                    
+                    <span class="header-menu-btn opacity-0 transition-opacity p-0.5 text-[#4A5568] hover:text-[#24324A]">
+                      <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
+                    </span>
+                  </div>
+                </div>
+              </th>
+
+              <!-- Trailing flex fill -->
+              
+            </tr>
+          </thead>
+
+          <!-- Grid Body (Rows strictly 32px tall, cell padding 8px horizontal, 4px vertical, vertically centered) -->
+          <tbody class="divide-y divide-[#E2E8F0] font-normal text-[13px] text-[#24324A]">
+            
+            <!-- Sample Row 1: Ramesh Kumar (matches filtered condition: Current status is empty) -->
+            <tr class="grid-row-h hover:bg-slate-50 transition-colors group">
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate font-medium">
+                Ramesh Kumar
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate text-[#24324A]">
+                Velachery
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate font-mono text-[12.5px] text-[#24324A]">
+                +91 98401 23456
+              </td>
+              <!-- Empty Status cell (no pill, no chip, reads as text on a surface) -->
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] text-[#4A5568]/40 italic">
+                —
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate text-[#4A5568] text-[12px]">
+                2026-02-14
+              </td>
+              
+            </tr>
+
+            <!-- Sample Row 2: Anandh Swaminathan -->
+            <tr class="grid-row-h hover:bg-slate-50 transition-colors group">
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate font-medium">
+                Anandh Swaminathan
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate text-[#24324A]">
+                Mylapore
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate font-mono text-[12.5px] text-[#24324A]">
+                +91 94440 81290
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] text-[#4A5568]/40 italic">
+                —
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate text-[#4A5568] text-[12px]">
+                2026-02-18
+              </td>
+              
+            </tr>
+
+            <!-- Sample Row 3: Deepa Sundaram -->
+            <tr class="grid-row-h hover:bg-slate-50 transition-colors group">
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate font-medium">
+                Deepa Sundaram
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate text-[#24324A]">
+                Anna Nagar
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate font-mono text-[12.5px] text-[#24324A]">
+                +91 98842 19543
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] text-[#4A5568]/40 italic">
+                —
+              </td>
+              <td class="h-8 px-2 py-1 align-middle border-r border-[#E2E8F0] truncate text-[#4A5568] text-[12px]">
+                2026-01-29
+              </td>
+              
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footnote / Status strip for keyboard operators -->
+      <div class="px-3.5 py-1.5 bg-[#F8FAFC] border-t border-[#E2E8F0] flex items-center justify-between text-[11px] text-[#4A5568]">
+        <div class="flex items-center space-x-3">
+          
+          
+          
+          
+          
+        </div>
+        
+      </div>
+
+    </div>
+
+  </main>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body></html>

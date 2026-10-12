@@ -1,39 +1,3 @@
-# Story breakdown for SPEC-contacts-premium-grid.
-#
-# Execution order is list order. Reconciled with epics.md on 2026-10-10.
-#
-# Ten stories in four epics, grouped by the files each one owns so every story
-# is an independently mergeable PR. Stories 2, 3 and 4 share files with their
-# neighbours, which is exactly why the order is load-bearing: reordering them
-# turns a clean sequence into a series of merge conflicts.
-#
-#   1 before everything — it changes the edit model that 3, 4, 6, 7 and 9 are
-#     written against.
-#   2 before 3 and 4    — grid-header-cell.tsx and grid-row.tsx overlap;
-#     moving the header after the cells is a conflict waiting to happen.
-#   6 after ../spec-contacts-date-types/ — its date operators are written
-#     against the DATE type that spec produces. Stories 2, 3, 4 and 5 do NOT
-#     touch a date column and are deliberately left outside that gate.
-#   6 before 7          — the redesigned toolbar's filter control opens the
-#     modal story 6 builds.
-#   9 after 1 and 3     — the panel needs the commit rules and the renderers.
-#
-# DELTA FROM THE 8-STORY VERSION OF 2026-10-09. Three changes:
-#   + story 5 (scroll container) — CAP-2's scroll half had no owner; the old
-#     story 3 claimed only the empty-state half.
-#   + story 8 (page header)      — CAP-1 had zero mentions across all eight.
-#   ~ the Filter menu item moved from story 2 to story 6. The old story 2 told
-#     the dev to add a Filter item opening a filter modal that story 5 built
-#     LATER and that is gated behind spec-contacts-date-types. That ships a
-#     dead control, which CAP-6 and FR6 both forbid.
-#
-# epics.md holds the acceptance criteria for all ten. This file holds the
-# dispatch-time traps only — read both before starting a story.
-#
-# Environment: the primitives need no stack; /dev/grid-preview (500 synthetic
-# rows) is enough to grade them. Every /manage story needs the local stack
-# (pnpm dev:local) and pnpm test:e2e. One runner at a time, 5-7 minutes.
-
 - id: "1"
   title: Double-click edit model, blur-commit, and retiring the keyboard openers
   description: >-
@@ -105,6 +69,12 @@
 
     Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
 
+    APPROVED COMPOSITION (grid states): Visual-Design/contacts-grid-states-v1.html
+      Panel 5 is this story's surface: a cell in edit mode, plus the hint line
+      'Enter saves - Escape discards - clicking away also saves'.
+      Read the Visual Design section of SPEC.md for the artifact index.
+
+
 - id: "2"
   title: Column drag-and-drop, a clean column menu, and a contextual header affordance
   description: >-
@@ -175,6 +145,43 @@
     rejected drop leaves the order unchanged, and that a drag persists through
     the cols URL param.
 
+    CAP-14's column menu and CAP-17's sort popover are drawn here. The header
+    at rest is label + sort indicator only, with the menu revealed on hover AND
+    keyboard focus. The header label is NOT a sort button.
+    Read the Visual Design section of SPEC.md for the artifact index.
+    CAP-14's column menu and CAP-17's sort popover are drawn here. The header at
+    rest is label + sort indicator only, with the menu revealed on hover AND
+    keyboard focus. The header label is NOT a sort button.
+    Read the Visual Design section of SPEC.md for the artifact index.
+    APPROVED COMPOSITION: Visual-Design/contacts-overlays-stitch-v1-corrected.html
+    CAP-14's column menu and CAP-17's sort popover are drawn here. The header at
+    rest is label + sort indicator only, with the menu revealed on hover AND
+    keyboard focus. The header label is NOT a sort button.
+    Read the Visual Design section of SPEC.md for the artifact index.
+
+    CAP-17 - ONE GLOBAL SORT SURFACE, BUILT HERE. The toolbar carries a Sort
+    control opening a popover with exactly two controls: a FIELD dropdown and a
+    DIRECTION select (ascending / descending). The same popover opens from this
+    story's Sort ascending and Sort descending menu items, with BOTH controls
+    prefilled to that column and that direction - which is why those two items
+    still exist even though the popover can do both. THE HEADER LABEL IS NOT A
+    SORT BUTTON: remove the sort handling at grid-header-cell.tsx:177, which also
+    settles the conflict docs/manage-grid-pattern.md records about a header
+    being both. Sort state stays in the `sort` URL param, and a cleared sort is
+    a valid state. One surface, three entry points, one state.
+
+    CAP-19 - DELETE STAYS, AND IS ONLY AN ICON. Nothing to build here; it is
+    recorded as a constraint so nobody 'improves' it. GridRowDeleteControl
+    (grid-row-lifecycle.tsx:142) is already a 24px ghost button carrying only
+    Trash2 at 14px, in --destructive, with aria-label="Delete <name>", disabled
+    while deleting, opening a confirmation. Removing per-row delete was
+    considered on 2026-10-12 and rejected. Its two seams - data-grid-delete-row
+    and data-grid-delete-report - are documented at
+    e2e/fixtures/manage-grid.ts:27 and must survive. GridRowAddControl and
+    data-grid-add-record are SEPARATE and unaffected - creation is reached from
+    the toolbar's New contact button.
+
+
 - id: "3"
   title: Type-keyed cell renderers, linked-record labels, and blank-not-dash
   description: >-
@@ -226,6 +233,11 @@
     grep -rn "dark:" components/grid/ must still be 0 and the raw-hex grep
     must still be 0.
 
+    APPROVED COMPOSITION (grid states): Visual-Design/contacts-grid-states-v1.html
+      Panels 1 and 4 show the rendered cell types and the blank-not-dash rule.
+      Read the Visual Design section of SPEC.md for the artifact index.
+
+
 - id: "4"
   title: Active-cell state and the cell-metrics contract
   description: >-
@@ -274,6 +286,13 @@
 
     Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
 
+    APPROVED COMPOSITION (grid states): Visual-Design/contacts-grid-states-v1.html
+      Panel 3 is the active-cell ring - a 1px inset royal blue outline held in
+      React state, distinct from both row hover and row selection. Panel 1 is
+      the 32px / 8px / 13px metrics contract this story owns.
+      Read the Visual Design section of SPEC.md for the artifact index.
+
+
 - id: "5"
   title: One scroll container, and a surface that does not clip
   description: >-
@@ -321,10 +340,11 @@
 - id: "6"
   title: The filter conditions bar with per-field-type operators
   description: >-
-    CAP-12, and CAP-14's fourth menu item. An inline bar above the grid holds a
-    list of Field/operator/value conditions joined by one all-or-nothing
-    connective, where the operator list and value control both depend on the
-    field's type. Replaces the per-column filter popover.
+    CAP-12, and CAP-14's fourth menu item. A POPOVER anchored under the
+    toolbar's filter control holds a list of Field/operator/value conditions
+    joined by one all-or-nothing connective, where the operator list and value
+    control both depend on the field's type. Replaces the per-column filter
+    popover.
   invoke_dev_with: >-
     DEPENDS ON ../spec-contacts-date-types/ HAVING LANDED. Its date operators
     are written against the DATE type that spec produces. Read that spec's
@@ -335,15 +355,37 @@
     Read SPEC.md CAP-12 and OQ-13 and OQ-18 through OQ-21, surface-and-toolbar.md
     section CAP-12, existing-state.md, and epics.md Story 3.1.
 
-    THIS IS AN INLINE BAR, NOT A MODAL. OQ-18 reversed the earlier modal
-    decision. surface-and-toolbar.md's modal-vs-inline argument is WITHDRAWN
-    and struck through — do not rebuild it, and do not reach for
-    components/ui/dialog.tsx. The bar carries one row per condition
-    (Field · operator · value, each with its own delete and drag handle) plus
-    `+ Add condition`, and shows the matching row count LIVE as conditions are
-    composed. That live count is the whole reason the bar was chosen: the
-    abandoned modal design had to reconstruct it by hand inside a covering
-    dialog. Do not build a second count.
+    THIS IS A POPOVER ANCHORED UNDER THE TOOLBAR, NOT AN INLINE BAR AND
+    NOT A MODAL. OQ-18 records three reversals and the current answer is the
+    popover; surface-and-toolbar.md's modal-vs-inline and inline-vs-popover
+    arguments are BOTH WITHDRAWN and struck through — do not rebuild either,
+    and do not reach for components/ui/dialog.tsx. The popover is anchored
+    below the toolbar so the live matching-row count stays visible in the
+    toolbar row: that visibility, not the ability to watch rows update, is why
+    it was chosen over a covering dialog. Do not build a second count.
+    The accepted cost, recorded so nobody rediscovers it: the popover covers
+    the grid, so the operator cannot watch WHICH rows match while composing.
+    It carries one row per condition (Field · operator · value, each with its
+    own delete control) plus `+ Add condition`.
+
+    NO DRAG HANDLE ON CONDITION ROWS. The reference screenshot shows one and it
+    is NOT in scope, alongside "Copy from another view", Ask AI and
+    "+ Add condition group". Because one connective governs the whole list,
+    conditions are a SET of columns, never an ordered expression, so
+    reordering them cannot change the result set — the handle would imply a
+    capability with no effect. Say why in the code, or a later agent reading
+    only the screenshot will re-add it.
+
+    AN OPERATOR WITH NO VALUE RENDERS ITS CONTROL DISABLED, NOT ABSENT.
+    `is empty` and `is not empty` take no value; the control is greyed rather
+    than removed, so the operator can see it is not applicable. It must carry a
+    real disabled/aria-disabled and must not accept a value programmatically.
+
+    ONE TOOLBAR FILTER INDICATOR, NAMING THE COLUMNS. e.g. "Filtered by Name,
+    Phone", in saffron. It does NOT also appear on the affected column headers —
+    the earlier "two indicators" requirement was a consequence of the inline
+    bar, whose toolbar could only show a count, and it is withdrawn with it.
+    Do not add a permanently visible per-column control; CAP-14 forbids it.
 
     STILL ABSENT, DELIBERATELY: condition GROUPS, "Copy from another view", and
     Ask AI. All three are visible in the reference screenshot, so say why they
@@ -360,10 +402,10 @@
     THIS STORY ADDS THE FOURTH MENU ITEM. The column menu now contains exactly
     Sort ascending, Sort descending, Hide column, Filter, which completes
     CAP-14. Story 2 shipped the first three deliberately, so that no item ever
-    pointed at a filter surface that did not exist yet. The Filter item now
-    REVEALS the bar with that column's condition pre-filled and a valid
-    operator preselected — it does not open anything, and must not cover the
-    grid.
+    pointed at a filter surface that did not exist yet. The Filter item opens
+    the SAME toolbar-anchored popover with that column's condition pre-filled
+    and a valid operator preselected. It must NOT open a per-column popover of
+    its own — the thirteen funnels this story removes must not come back.
 
     THE OPERATOR SET IS PER FIELD TYPE, in a typed registry keyed by field
     type, not a switch statement. Text: contains, does not contain, is, is not,
@@ -419,8 +461,8 @@
     Update docs/manage-grid-pattern.md's meta.grid table in the same commit.
 
     IF THIS STORY EXCEEDS ITS CONTEXT, split it as: (a) the operator registry
-    plus typed value controls, then (b) the bar, the URL codec and the popover
-    removal.
+    plus typed value controls, then (b) the popover, the URL codec and the
+    per-column popover removal.
 
     Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
     Assert per type: the right operators, the conditional value control, the
@@ -428,14 +470,19 @@
     that all four menu items are present, that an `is empty` condition survives
     a reload, that match-all and match-any both behave, and that f.location
     still round-trips.
+    APPROVED COMPOSITION: Visual-Design/contacts-toolbar-stitch-v1-corrected.html
+    The filter POPOVER, anchored under the toolbar. Do not build the inline bar -
+    OQ-18 was reversed twice and this comp is the accepted answer.
+    Read the Visual Design section of SPEC.md for the artifact index.
 
 - id: "7"
-  title: Toolbar compaction, contextual bulk actions, and the current-view label
+  title: Toolbar compaction, Hide fields, contextual bulk actions, and the Sort control
   description: >-
-    CAP-6. One compact band carrying search, a filter control with an active
-    indicator, the view label, column visibility and ordering, record creation,
-    and visible result and selection counts — with the bulk bar appearing only
-    on selection.
+    CAP-6, CAP-17 and CAP-18. One compact band carrying search, a filter control
+    that is also the active-state indicator, a Hide fields control, a global
+    Sort control, record creation, and visible result and selection counts —
+    with the bulk bar appearing only on selection. There is NO view label and
+    NO view dropdown (OQ-1, resolved twice).
   invoke_dev_with: >-
     Read SPEC.md CAP-6, surface-and-toolbar.md, existing-state.md,
     docs/manage-grid-pattern.md, and epics.md Story 3.2. Most of this ALREADY
@@ -446,10 +493,16 @@
     button in toolbarExtra, and the bulk button is already disabled at zero.
     The work is compaction and hierarchy, not construction.
 
-    YOUR FILTER ROLE IS NOW A COUNT, NOT A CONTROL. Story 3.1's filter surface
-    is a permanent inline bar (OQ-18), so there is nothing left for a button to
-    open. Show how many conditions are active; do NOT add an "open filter"
-    control, which would be exactly the nonfunctional button CAP-6 forbids.
+    YOUR FILTER CONTROL IS A BUTTON AGAIN, AND IT IS ALSO THE INDICATOR.
+    Story 3.1's filter surface is a popover anchored under this control
+    (OQ-18), so the toolbar button opens it — and when conditions are active
+    the SAME control becomes the indicator, naming the columns it is filtering
+    in saffron, e.g. "Filtered by Name, Phone". One control, two jobs; do not
+    ship both a separate indicator and a separate trigger. This paragraph
+    previously said the filter role was "a count, not a control" because the
+    inline bar was permanent and there was nothing to open — that reasoning
+    died with the inline bar. What still holds from it: never add a control
+    that does not work, which is what CAP-6 forbids.
 
     THE STATUS MESSAGE CHANNEL MUST SURVIVE. grid.tsx:865 renders the grid's
     own live region, and story 5 of spec-grid-keyboard-editors-and-theme
@@ -470,6 +523,25 @@
     permanent footer.
 
     Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
+    APPROVED COMPOSITION: Visual-Design/contacts-toolbar-stitch-v1-corrected.html
+    The toolbar band and its control order. There is NO view label and NO view
+    dropdown (OQ-1). Hide fields lives in the overlays comp.
+    Read the Visual Design section of SPEC.md for the artifact index.
+
+    CAP-18 - THE DEFAULT FIELD SET. Nine of fourteen columns visible, five
+    hidden: hide Source, Books Read, Date of Birth, Last Contacted On and
+    Favorite. This is a product decision recorded in SPEC.md, not a consequence
+    of definition order. The Hide fields control IS the column-visibility
+    surface - it REPLACES the existing Columns menu at grid-toolbar.tsx:130, so
+    do not ship both. Name and Actions are hideable: false and must render
+    ticked and disabled. Hiding is reversible and persists in the `hide` URL
+    param, so the hidden set is a DEFAULT, NOT A LOCK - every one of the five
+    stays reachable. Location and Collected By stay visible because they are
+    the joined accessor columns, so CAP-4's unresolved marker is on screen
+    rather than behind an unhide. Last Contacted On is hidden because OQ-16
+    records it as written once at insert and never updated, so it reads as
+    'created on' and would mislead. CAP-17's Sort control also lands here.
+
 
 - id: "8"
   title: Page header, navigation, and scope
@@ -514,80 +586,15 @@
 
     Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
 
-- id: "9"
-  title: Record review panel
-  description: >-
-    CAP-5, CAP-7's panel surface and CAP-16's panel boundary. An action-column
-    control opens a modular record panel with every field, editable ones
-    committed through the existing write path, prev/next navigation, and grid
-    state preserved.
-  done_checkpoint: true
-  invoke_dev_with: >-
-    Read SPEC.md CAP-5 and CAP-7, record-review.md IN FULL, existing-state.md,
-    and epics.md Story 4.1 before writing anything. This is the first genuinely
-    new surface this grid has gained, and its failure modes are state loss,
-    which no assertion catches unless the assertion is written first.
+    APPROVED COMPOSITION: Visual-Design/contacts-toolbar-stitch-v1-corrected.html
+    Page header, tab row and scope indicator.
+    Read the Visual Design section of SPEC.md for the artifact index.
 
-    OPEN IT FROM AN ACTION-COLUMN CONTROL, NOT A ROW CLICK (OQ-6). A
-    double-click already means "edit this cell". Three controls call
-    stopPropagation on pointerdown — the select checkbox at :796, the favorite
-    star at :953, the delete control at :990 — and with no row-level handler
-    that entire bug class disappears. Keep the three calls anyway: they also
-    stop the grid's own cell focus from moving out from under a control.
-
-    A SHEET, NOT A MODAL (OQ-3): CAP-5's success requires returning to the
-    grid with filters, sort, column order, selection, scroll and the focused
-    cell intact, and a sheet that keeps the grid visible makes that verifiable
-    by eye.
-
-    READ THE WHOLE RECORD, including fields hidden or scrolled off in the
-    grid — a record review showing a subset is a second grid. Show read-only
-    fields as visibly read-only. Render linked records as labels per story 3
-    and link them to the EXISTING /manage?view=... routes, not new ones.
-    Include the attendance history: payload.attendance already carries every
-    record and the rollups are resolved, so it is already loaded. NO FETCH —
-    CAP-9 forbids a second row store.
-
-    NO DELETE INSIDE THE PANEL. Story 5 of spec-grid-keyboard-editors-and-
-    theme ships delete in the row's action column with confirmation and per-row
-    outcomes; a second path is a second confirmation flow that can disagree with
-    the first.
-
-    THERE IS NO DIRTY FLAG AND NO PROMPT. That was designed and then deleted
-    when OQ-2 was resolved: blur commits, so an edit cannot be abandoned by
-    clicking away and the prompt could never appear. Do not build it. If a
-    future story adds one it is reintroducing a problem the user removed.
-
-    NAVIGATE prev/next through the CURRENT FILTERED, SORTED order — the same
-    order the operator is looking at. Do not re-derive it by re-sorting; the
-    grid already holds the resolved row model. Disable the control at the
-    ends, do not wrap. Arrow keys navigate, Escape closes, and Escape must not
-    steal the key from an open editor — isGuardedTarget
-    (use-grid-keyboard.ts:68) is the model. Opening the panel is NOT Enter:
-    Enter is CAP-10's commit key and one key meaning two things is how edits
-    get lost.
-
-    WRITE FEEDBACK reuses handleCellCommit, so a rejected write reverts and
-    shows the server's own message, and saving/saved/failed are three visibly
-    distinct states (CAP-7). One validation story, one message. Do not invent a
-    record-level save — the API has none.
-
-    SCROLL IS THE ONE THAT BREAKS SILENTLY. It is not in the URL. If the panel
-    is an overlay over an unmounted-then-remounted grid, scroll resets to top
-    and every other preservation assertion still passes.
-
-    NEW SEAMS ONLY, per record-review.md: data-record-panel,
-    -record, -field="<columnId>", -saving, -nav="next|prev". Do NOT repurpose
-    any data-grid-* attribute: e2e/fixtures/manage-grid.ts documents that
-    contract and 21 specs outside this work depend on it.
-
-    IF THIS STORY EXCEEDS ITS CONTEXT, split it as: (a) the read-only panel,
-    then (b) editable fields plus save states.
-
-    Verify: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
-    Specs: open, close, navigate, edit-and-save, failed-save revert and
-    message, and grid state preserved across open/close. The dirty-close
-    prompt spec is DELETED, not skipped.
+# WITHDRAWN 2026-10-12 by Dwaraka — record review is not in scope.
+# CAP-5 is withdrawn in SPEC.md; no record panel, no per-row open affordance,
+# no prev/next. Its purpose is served by the joined accessor columns being
+# visible by default (CAP-18). Kept as a comment so story ordering does not
+# lead a later agent to reinstate it.
 
 - id: "10"
   title: Interaction boundaries, accessibility, and the recorded visual pass
@@ -648,3 +655,14 @@
     spec to e2e/specs/; generate failures into a temp dir and remove them in a
     finally. One e2e runner at a time: every spec shares one seeded database
     and concurrent runs corrupt each other's fixtures.
+    Read SPEC.md's "Visual Design" section for the artifact index.
+    APPROVED COMPOSITION: Visual-Design/contacts-toolbar-stitch-v1-corrected.html
+    The surfaces to grade during the recorded visual pass at 1440x900 and
+    1024x768.
+    Read the Visual Design section of SPEC.md for the artifact index.
+
+    APPROVED COMPOSITION (grid states): Visual-Design/contacts-grid-states-v1.html
+      The six panels ARE the state distinctions CAP-16 names, which no assertion
+      can check. They are graded by eye at 1440x900 and 1024x768.
+      Read the Visual Design section of SPEC.md for the artifact index.
+

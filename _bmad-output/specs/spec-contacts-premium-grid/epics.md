@@ -19,7 +19,6 @@ inputDocuments:
   - _bmad-output/specs/spec-contacts-premium-grid/SPEC.md
   - _bmad-output/specs/spec-contacts-premium-grid/existing-state.md
   - _bmad-output/specs/spec-contacts-premium-grid/surface-and-toolbar.md
-  - _bmad-output/specs/spec-contacts-premium-grid/record-review.md
   - _bmad-output/specs/spec-contacts-premium-grid/stories.yaml
   - _bmad-output/specs/spec-contacts-date-types/SPEC.md
   - docs/manage-grid-pattern.md
@@ -41,8 +40,8 @@ contract is spec-shaped, so the mapping is:
 |---|---|
 | Functional Requirements | `SPEC.md` § Capabilities (CAP-1…CAP-16) |
 | NonFunctional Requirements | `SPEC.md` § Constraints, § Non-goals, CAP-8 |
-| Additional Requirements | `existing-state.md`, `surface-and-toolbar.md`, `record-review.md` |
-| UX Design Requirements | `surface-and-toolbar.md`, `record-review.md` (visual + interaction contract) |
+| Additional Requirements | `existing-state.md`, `surface-and-toolbar.md` |
+| UX Design Requirements | `surface-and-toolbar.md` (visual + interaction contract) |
 
 **This run supersedes `stories.yaml` (8 stories, derived 2026-10-09).** Coverage
 was checked mechanically — one `grep -o "CAP-n"` per capability — and two
@@ -97,13 +96,14 @@ human label; an id with no matching lookup renders a visibly unresolved
 marker, distinct from empty; location and collectedBy degrade consistently;
 no label is ever derived from the id.
 
-FR5 (CAP-5) Record review. An explicit per-row control in the action column
-opens a modular record panel; the panel shows all fifteen fields including
-ones hidden or scrolled off in the grid; read-only fields are visibly
-read-only; prev/next moves through the current filtered, sorted order with the
-controls disabled at the ends; closing preserves filters, sort, column order,
-selection, scroll position and the focused cell; the panel is table-agnostic
-so Sessions and Attendance can adopt it later; the panel adds no fetch.
+WITHDRAWN 2026-10-12 by Dwaraka. FR5 (CAP-5) Record review is NOT built. There is no record
+panel, no per-row open affordance and no prev/next. What the panel would have
+served — reading a whole record at once — is served by the grid itself: the
+joined accessor columns (location, collectedBy) are visible by default under
+CAP-18, so CAP-4's labels and unresolved markers stay on screen. The trade is
+real and recorded: a hidden field is now reachable only by unhiding it, so
+CAP-18's default set has to be right. Kept as history so the FR numbering and
+the traceability matrix below stay coherent — do not reinstate.
 
 FR6 (CAP-6) Toolbar and views. One compact band carries scoped search, a count
 of active filter conditions, a current-view label, column visibility and
@@ -167,11 +167,10 @@ ellipsis and the full value stays reachable; numbers are right-aligned and
 tabular; linked records render as readable labels; no cell ever changes its
 row's height.
 
-FR15 (CAP-16) Interaction boundaries. A checkbox click activates neither an
-edit nor the record panel; dropdown and popover interactions never trigger a
-double-click edit; a read-only field never enters edit mode; editing a cell
-never opens the record panel; a single cell click preserves existing row and
-record navigation conventions; keyboard propagation is stopped only where a
+FR15 (CAP-16) Interaction boundaries. A checkbox click never activates an
+edit; dropdown and popover interactions never trigger a double-click edit; a
+read-only field never enters edit mode; a single cell click preserves existing
+row navigation conventions; keyboard propagation is stopped only where a
 specific key would otherwise be swallowed.
 
 FR16 (CAP-10) Edit activation and commit. A double-click opens the editor on
@@ -265,8 +264,8 @@ NFR16 No deliberately broken spec is ever committed to e2e/specs/ — that is a
   committed, not because the story finished. **Verify its actual shape before
   story 1 starts** — whether `GridRowLifecycle`, `GridRowAddControl` and the
   per-row delete outcome reporting are complete, and whether
-  `docs/manage-grid-pattern.md`'s new section is finished. CAP-5, CAP-6, CAP-7
-  and CAP-13 all build on it. Story 1 does not.
+  `docs/manage-grid-pattern.md`'s new section is finished. CAP-6, CAP-7 and
+  CAP-13 all build on it. Story 1 does not.
 - **This spec runs AFTER `../spec-contacts-date-types/`**, which converts the
   three date columns to `DATE`. CAP-12's date operators are written against
   that type.
@@ -302,10 +301,7 @@ NFR16 No deliberately broken spec is ever committed to e2e/specs/ — that is a
   `meta.grid.filter` table, the Move left / Move right section, and the
   per-column filter control.
 - **`grid-view-state.ts:9-15` carries the six URL keys** — `q`, `f.<colId>`,
-  `sort`, `cols`, `hide`, `size.<colId>`. Record review adds no fetch.
-- **Record panel seams are new attributes only** — `data-record-panel`,
-  `-record`, `-field="<columnId>"`, `-saving`, `-nav="next|prev"`. No existing
-  `data-grid-*` attribute is repurposed.
+  `sort`, `cols`, `hide`, `size.<colId>`. Nothing this spec adds fetches again.
 - **Pre-existing proxy gap:** `proxy.ts:9-20` matches neither `/manage` nor
   `/api/manage/*`, so session refresh does not run for the manage surface.
   Any new `/api/manage/*` route inherits it. **This spec adds no route.**
@@ -374,12 +370,13 @@ UX-DR12  The view control is a static label over URL-backed view state. It
          that looks like a view selector and cannot save a view is exactly the
          nonfunctional button the brief forbids.
 
-UX-DR13  The record panel is a RIGHT-SIDE SHEET, not a modal. CAP-5's success
-         requires returning to the grid with filters, sort, column order,
-         selection, scroll and the focused cell intact; a sheet that keeps the
-         grid visible makes that verifiable by eye rather than by trust.
+WITHDRAWN 2026-10-12 by Dwaraka — moot, there is no panel.
 
-UX-DR14  The panel shows ALL fifteen fields, including ones hidden or scrolled
+UX-DR13  (withdrawn with FR5) The record panel was to be a RIGHT-SIDE SHEET,
+         not a modal.
+
+UX-DR14  (withdrawn with FR5) The panel was to show ALL fifteen fields,
+         including ones hidden or scrolled
          off in the grid — a record review that shows a subset is a second
          grid. Read-only fields are visibly read-only. Linked records render
          as labels and link to the EXISTING /manage?view=... routes, not new
@@ -431,10 +428,9 @@ FR1  (CAP-1)  Epic 3  - S8 page header, navigation and scope
 FR2  (CAP-2)  Epic 2  - S5 one scroll container, surface does not clip
 FR3  (CAP-3)  Epic 2  - S3 type-keyed cell renderers
 FR4  (CAP-4)  Epic 2  - S3 linked-record labels and unresolved marker
-FR5  (CAP-5)  Epic 4  - S9 record review panel
+FR5  (CAP-5)  WITHDRAWN 2026-10-12 — not built; see FR5's definition above
 FR6  (CAP-6)  Epic 3  - S7 toolbar compaction and contextual bulk bar
 FR7  (CAP-7)  Epic 1  - S1 edit safety on the blur-commit path
-                  Epic 4  - S9 panel-side save feedback (three states)
 FR8  (CAP-11) Epic 2  - S4 active-cell state
 FR9  (CAP-12) Epic 3  - S6 the filter conditions bar
 FR10 (CAP-13) Epic 2  - S2 column drag-and-drop via @dnd-kit/core
@@ -460,11 +456,11 @@ FR16 (CAP-10) Epic 1  - S1 double-click edit model, blur-commit, retirement
   the nonfunctional control `surface-and-toolbar.md` §CAP-6 and FR6 forbid.
   Shipping it would make FR11 fail rather than defer. CAP-14's "exactly four
   items" is therefore **not satisfied until S6**.
-- **CAP-7 (FR7)** is split by surface. The grid-cell half — validation before
-  save, visible progress, server's message, revert — rides S1's blur-commit
-  path. The panel half — the same three states rendered per field — rides S9,
-  because `record-review.md` is explicit that there is one validation story and
-  one message, and the panel reuses `handleCellCommit` rather than owning a
+- **CAP-7 (FR7)** rides S1's blur-commit path: validation before save, visible
+  progress, the server's own message, and revert. There is exactly one
+  validation story and one message surface — `use-grid-keyboard` owns them, and
+  nothing else renders a competing error. *(The former panel half rode the
+  withdrawn S9.)*
   second error surface.
 
 **CAP-16 (FR15)** is primarily Epic 4's closing gate, but its edit-side
@@ -632,19 +628,18 @@ S6 is gated because its date operators are written against the `DATE` type the
 predecessor spec produces. S6 must precede S7: the redesigned toolbar's filter
 control opens the modal S6 builds.
 
-### Epic 4: Reviewing one record, and proving nothing regressed
+### Epic 4: Proving nothing regressed
 
-An operator opens one person, reads everything about them, moves to the next,
-and returns to the grid exactly as they left it — and everything is still
-operable without a mouse.
+Everything is still operable without a mouse, and the recorded visual pass is
+written into the story file. *(Was: "Reviewing one record, and proving nothing
+regressed" — the record-review half was withdrawn with FR5.)*
 
-**FRs covered:** FR5 (CAP-5), FR12 (CAP-8), FR13 (CAP-9), FR15 (CAP-16)
+**FRs covered:** FR12 (CAP-8), FR13 (CAP-9), FR15 (CAP-16). FR5 withdrawn.
 
-- **S9** — Record review panel `done_checkpoint`
 - **S10** — Interaction boundaries, accessibility, and the recorded visual pass
   `done_checkpoint`
 
-S9 needs S1's commit rules and S3's renderers. S10 is the closing gate: it
+S10 is the closing gate: it
 depends on every prior story, which the dependency rules permit (an epic builds
 on earlier epics) — it depends on no *future* story.
 
@@ -663,7 +658,6 @@ represents unnecessary churn.
 | `grid-toolbar.tsx` | | | ● | |
 | `manage-portal.tsx` | | | ● | |
 | `manage-contacts-table.tsx` | | ● | | ● |
-| *(new record panel)* | | | | ● |
 
 **`grid-header-cell.tsx` and `grid.tsx` are touched by both Epic 2 and Epic 3.**
 That is real overlap, so the split needs a justification beyond convenience.
@@ -1238,6 +1232,11 @@ correct in both themes
 
 ### Story 4.1: Record review panel
 
+> **WITHDRAWN 2026-10-12 by Dwaraka.** This story is NOT built. It opened
+> a record panel, which CAP-5 dropped. Retained as history so the story and
+> epic numbering stays resolvable; do not implement from it. The panel's
+> purpose is served by visible joined columns under CAP-18.
+
 **Implements:** FR5 (CAP-5), FR7 (CAP-7 — panel surface), FR15 (CAP-16 — panel boundary)
 
 As a **program coordinator**,
@@ -1323,8 +1322,7 @@ with the keyboard.
 | A checkbox click activates neither an edit nor the panel | `stopPropagation` on pointerdown |
 | A dropdown or popover interaction never triggers a double-click edit | the cell's handler checks the target is not inside `[data-grid-editor]` |
 | A read-only field never enters edit mode | `openEditor`'s editable guard |
-| Editing a cell never opens the record panel | no row-level open handler exists |
-| A single cell click preserves row and record navigation | it sets the active cell and nothing else |
+| A single cell click preserves row navigation | it sets the active cell and nothing else |
 | Keyboard propagation is stopped only where a key would be swallowed | `isGuardedTarget` |
 
 **Given** the grid

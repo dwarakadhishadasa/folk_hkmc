@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+
+<html lang="en" style=""><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Contacts Grid - Cell and Row States | FOLK Chennai</title>
+<!-- Tailwind CSS CDN with Forms & Container Queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Poppins, Inter, Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Poppins:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              royal: '#0F1E54',
+              saffron: '#F98B1C',
+              ivory: '#FFF9F0',
+              charcoal: '#24324A',
+              slate: '#4A5568',
+              hairline: '#E2E8F0',
+              headerWarm: '#F8F5EF',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Poppins', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<!-- Typography and Base Styles -->
+<style data-purpose="typography">
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #FFF9F0;
+      color: #24324A;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+  </style>
+<!-- Custom Cell and Row State Styles -->
+<style data-purpose="grid-states">
+    /* Exact 32px height rows with clean text centering */
+    .grid-row-standard {
+      height: 32px;
+      max-height: 32px;
+    }
+    .grid-cell-standard {
+      height: 32px;
+      padding: 4px 8px;
+      line-height: 24px;
+      vertical-align: middle;
+    }
+    /* Panel 2: Neutral Slate Hover Tint */
+    .row-state-hover {
+      background-color: rgba(74, 85, 104, 0.05);
+    }
+    /* Panel 3: Active Cell Inset Ring */
+    .cell-state-active {
+      box-shadow: inset 0 0 0 1px #0F1E54;
+      background-color: #FFFFFF;
+    }
+    /* Panel 4: Selected Row Tint */
+    .row-state-selected {
+      background-color: rgba(15, 30, 84, 0.08);
+    }
+    /* Panel 4: Cell Range Highlight */
+    .cell-state-range {
+      background-color: rgba(249, 139, 28, 0.30) !important;
+    }
+    /* Panel 5: Active Cell Edit Input */
+    .cell-edit-input {
+      outline: 2px solid #0F1E54 !important;
+      border: none !important;
+      border-radius: 4px !important;
+      height: 24px;
+      line-height: 20px;
+      padding: 2px 6px;
+      font-size: 13px;
+      color: #24324A;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+    /* Panel 6: Error Cell Border */
+    .cell-state-error {
+      outline: 1px solid #DC2626;
+      outline-offset: -1px;
+      background-color: #FFF;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#FFF9F0] text-[#24324A]">
+<!-- BEGIN: TopHeader -->
+<header class="w-full bg-[#0F1E54] h-[68px] border-b border-[#0F1E54] px-6 flex items-center justify-between sticky top-0 z-50 shadow-sm" data-purpose="main-navigation-bar">
+<!-- Brand Logo Area -->
+<div class="flex items-center">
+<div class="bg-white rounded-full h-[44px] px-4 flex items-center justify-center shadow-inner">
+<img alt="FOLK Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAtjVswRe49VL7SkwVroOBUCWGzaG5Tvu1ZOxjVoCiVM-lGQcC3x40K_nLe-fexnPkwMEpBeD1X2w6MZgT9-sFaV891Iszbiu0lwBr4LzQLaJz4EEwxW-TUWeDTHg9CSyb9b1Q4fFyfOfOmfAZHFM6Usp_h6X-hpNRXMvT3PFHKmtwC95lHoNWPfOx9i3tWlZ48Lk-OUXQi3XDNCEzE2R2Ih6kyfKJ6S4sJx-tcklGuKnxSdU5dSFDVwJG_W67XNtcfyA"/>
+</div>
+</div>
+<!-- Center Navigation Pill Container -->
+<nav aria-label="Global Navigation" class="flex items-center gap-1 bg-[#1B295B]/80 border border-white/10 rounded-full py-[6px] px-2">
+<a class="flex items-center gap-1.5 px-3 py-1 text-[13px] font-medium text-white/80 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">person</span>
+<span class="">Contact</span>
+</a>
+<a class="flex items-center gap-1.5 px-3 py-1 text-[13px] font-medium text-white/80 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">calendar_month</span>
+<span class="">Sessions</span>
+</a>
+<a class="flex items-center gap-1.5 px-3 py-1 text-[13px] font-medium text-white/80 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">send</span>
+<span class="">Invite</span>
+</a>
+<a class="flex items-center gap-1.5 bg-white text-[#0F1E54] rounded-full px-4 py-1.5 text-[13px] font-semibold shadow-sm" href="#">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+<span class="">Manage</span>
+</a>
+</nav>
+<!-- User Profile & Session Controls -->
+<div class="flex items-center gap-4">
+<span class="text-[13px] font-medium text-white/95">Dwarakadhisha Dasa (Admin)</span>
+<button class="flex items-center gap-1.5 bg-white/10 border border-white/20 text-white rounded-full px-3.5 py-1.5 text-[13px] hover:bg-white/15 transition-all" type="button">
+<span class="material-symbols-outlined text-[16px]">logout</span>
+<span class="">Logout</span>
+</button>
+</div>
+</header>
+<!-- END: TopHeader -->
+<!-- BEGIN: MainContentArea -->
+<main class="max-w-[1440px] mx-auto px-8 py-6">
+<!-- Subheader Section -->
+<section class="mb-4" data-purpose="page-title-and-tabs">
+<div class="flex items-start justify-between mb-4">
+<div>
+<h1 class="font-display font-semibold text-[22px] text-[#24324A] leading-tight">Contacts</h1>
+<p class="text-[12px] text-[#4A5568] mt-0.5">226 contacts · 4 locations</p>
+</div>
+<!-- Location Selector -->
+<div>
+<button class="bg-white border border-[#E2E8F0] rounded-md px-3 py-1.5 text-[13px] text-[#24324A] font-medium flex items-center gap-2 hover:bg-[#4A5568]/5 transition-colors shadow-2xs" type="button">
+<span class="">All locations</span>
+<span class="material-symbols-outlined text-[16px] text-[#4A5568]">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<div class="flex items-center space-x-7 border-b border-[#E2E8F0] text-[13px] font-medium text-[#4A5568]">
+<a class="pb-2 hover:text-[#0F1E54] transition-colors" href="#">Dashboard</a>
+<a class="pb-2 border-b-2 border-[#0F1E54] font-semibold text-[#24324A]" href="#">Contacts</a>
+<a class="pb-2 hover:text-[#0F1E54] transition-colors" href="#">Sessions</a>
+<a class="pb-2 hover:text-[#0F1E54] transition-colors" href="#">Attendance</a>
+<a class="pb-2 hover:text-[#0F1E54] transition-colors" href="#">Favorites</a>
+</div>
+</section>
+<!-- Persistent Toolbar -->
+<section class="bg-white border border-[#E2E8F0] rounded-lg p-3 mb-8 shadow-xs" data-purpose="persistent-toolbar">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<!-- Search Input -->
+<div class="relative w-64">
+<span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#4A5568]">
+<span class="material-symbols-outlined text-[16px]">search</span>
+</span>
+<input class="w-full h-8 pl-8 pr-3 text-[13px] border border-[#E2E8F0] rounded-[6px] focus:outline-none focus:border-[#0F1E54] placeholder-[#4A5568]/70" placeholder="Search all columns" type="text"/>
+</div>
+<!-- Filtered Badge / Button -->
+<button class="h-8 px-3 border border-[#F98B1C] text-[#F98B1C] bg-[#FFF9F0] rounded-[6px] text-[13px] font-medium flex items-center gap-1.5 shadow-2xs" type="button">
+<!-- 3-line filter_list icon (three horizontal lines of decreasing length) -->
+<svg class="w-4 h-4 text-[#F98B1C]" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" viewbox="0 0 24 24">
+<line x1="3" x2="21" y1="6" y2="6"></line>
+<line x1="6" x2="18" y1="12" y2="12"></line>
+<line x1="9" x2="15" y1="18" y2="18"></line>
+</svg>
+<span class="">Filtered by Name, Phone</span>
+</button>
+<!-- Sort Button -->
+<button class="h-8 px-3 border border-[#E2E8F0] text-[#24324A] bg-white rounded-[6px] text-[13px] font-medium flex items-center gap-1.5 hover:bg-[#4A5568]/5 transition-colors shadow-2xs" type="button">
+<span class="material-symbols-outlined text-[16px] text-[#4A5568]">swap_vert</span>
+<span class="">Sort</span>
+</button>
+<!-- Hide Fields Button -->
+<button class="h-8 px-3 border border-[#E2E8F0] text-[#24324A] bg-white rounded-[6px] text-[13px] font-medium flex items-center gap-1.5 hover:bg-[#4A5568]/5 transition-colors shadow-2xs" type="button">
+<span class="material-symbols-outlined text-[16px] text-[#4A5568]">view_column</span>
+<span class="">Hide fields</span>
+</button>
+</div>
+<!-- Right Side: Counter & Action Button -->
+<div class="flex items-center gap-4">
+<span class="text-[12px] font-normal text-[#4A5568]">41 of 226 shown</span>
+<button class="h-8 px-3.5 bg-[#0F1E54] hover:bg-[#1B295B] text-white rounded-[6px] text-[13px] font-semibold flex items-center gap-1 shadow-2xs transition-colors" type="button">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span class="">New contact</span>
+</button>
+</div>
+</div>
+</section>
+<!-- BEGIN: GridStatesContainer -->
+<div class="space-y-8" data-purpose="stacked-grid-state-panels">
+<!-- ========================================== -->
+<!-- PANEL 1: AT REST -->
+<!-- ========================================== -->
+<section class="space-y-1.5" data-purpose="panel-at-rest">
+<h2 class="text-[11px] font-semibold tracking-wider text-[#4A5568] uppercase">Panel 1 — At rest</h2>
+<div class="bg-white border border-[#E2E8F0] rounded-md overflow-hidden shadow-2xs">
+<table class="w-full text-left border-separate border-spacing-0 text-[13px]">
+<thead>
+<tr class="bg-[#F8F5EF] h-8 border-b border-[#E2E8F0] text-[12px] font-semibold tracking-wider text-[#4A5568] uppercase"><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Name</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Phone</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Location</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold"><div class="flex items-center justify-between"><span class="">Initial Contact</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th></tr>
+</thead>
+<tbody class="divide-y divide-[#E2E8F0] text-[#24324A]">
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Ramesh Kumar</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 98401 23456</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Velachery</td>
+<td class="grid-cell-standard">2026-02-14</td>
+</tr>
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anandh Swaminathan</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 94440 98765</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Mylapore</td>
+<td class="grid-cell-standard">2026-02-18</td>
+</tr>
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Deepa Sundaram</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 97890 11223</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anna Nagar</td>
+<td class="grid-cell-standard">2026-01-29</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- PANEL 2: ROW HOVER -->
+<!-- ========================================== -->
+<section class="space-y-1.5" data-purpose="panel-row-hover">
+<h2 class="text-[11px] font-semibold tracking-wider text-[#4A5568] uppercase">Panel 2 — Row hover</h2>
+<div class="bg-white border border-[#E2E8F0] rounded-md overflow-hidden shadow-2xs">
+<table class="w-full text-left border-separate border-spacing-0 text-[13px]">
+<thead>
+<tr class="bg-[#F8F5EF] h-8 border-b border-[#E2E8F0] text-[12px] font-semibold tracking-wider text-[#4A5568] uppercase"><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Name</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Phone</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Location</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold"><div class="flex items-center justify-between"><span class="">Initial Contact</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th></tr>
+</thead>
+<tbody class="divide-y divide-[#E2E8F0] text-[#24324A]">
+<!-- Row 1 with neutral slate hover tint -->
+<tr class="grid-row-standard row-state-hover">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Ramesh Kumar</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 98401 23456</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Velachery</td>
+<td class="grid-cell-standard">2026-02-14</td>
+</tr>
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anandh Swaminathan</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 94440 98765</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Mylapore</td>
+<td class="grid-cell-standard">2026-02-18</td>
+</tr>
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Deepa Sundaram</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 97890 11223</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anna Nagar</td>
+<td class="grid-cell-standard">2026-01-29</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- PANEL 3: ACTIVE CELL -->
+<!-- ========================================== -->
+<section class="space-y-1.5" data-purpose="panel-active-cell">
+<h2 class="text-[11px] font-semibold tracking-wider text-[#4A5568] uppercase">Panel 3 — Active cell</h2>
+<div class="bg-white border border-[#E2E8F0] rounded-md overflow-hidden shadow-2xs">
+<table class="w-full text-left border-separate border-spacing-0 text-[13px]">
+<thead>
+<tr class="bg-[#F8F5EF] h-8 border-b border-[#E2E8F0] text-[12px] font-semibold tracking-wider text-[#4A5568] uppercase"><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Name</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Phone</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Location</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold"><div class="flex items-center justify-between"><span class="">Initial Contact</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th></tr>
+</thead>
+<tbody class="divide-y divide-[#E2E8F0] text-[#24324A]">
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Ramesh Kumar</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 98401 23456</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Velachery</td>
+<td class="grid-cell-standard">2026-02-14</td>
+</tr>
+<!-- Row 2: Phone cell active with inset royal blue ring -->
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anandh Swaminathan</td>
+<td class="grid-cell-standard cell-state-active border-r border-[#E2E8F0]">+91 94440 98765</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Mylapore</td>
+<td class="grid-cell-standard">2026-02-18</td>
+</tr>
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Deepa Sundaram</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 97890 11223</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anna Nagar</td>
+<td class="grid-cell-standard">2026-01-29</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- PANEL 4: ROW SELECTED AND CELL RANGE -->
+<!-- ========================================== -->
+<section class="space-y-1.5" data-purpose="panel-row-selected-and-cell-range">
+<h2 class="text-[11px] font-semibold tracking-wider text-[#4A5568] uppercase">Panel 4 — Row selected and cell range</h2>
+<div class="bg-white border border-[#E2E8F0] rounded-md overflow-hidden shadow-2xs">
+<table class="w-full text-left border-separate border-spacing-0 text-[13px]">
+<thead>
+<tr class="bg-[#F8F5EF] h-8 border-b border-[#E2E8F0] text-[12px] font-semibold tracking-wider text-[#4A5568] uppercase"><th class="w-8 px-2 py-1 text-center font-semibold border-r border-[#E2E8F0]"></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Name</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Phone</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Location</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold"><div class="flex items-center justify-between"><span class="">Initial Contact</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th></tr>
+</thead>
+<tbody class="divide-y divide-[#E2E8F0] text-[#24324A]">
+<tr class="grid-row-standard">
+<td class="grid-cell-standard text-center border-r border-[#E2E8F0]">
+<input class="rounded border-gray-300 text-[#0F1E54] focus:ring-0 h-3.5 w-3.5" type="checkbox"/>
+</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Ramesh Kumar</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 98401 23456</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Velachery</td>
+<td class="grid-cell-standard">2026-02-14</td>
+</tr>
+<!-- Row 2: Cell Range Highlight across Phone, Location, Initial Contact -->
+<tr class="grid-row-standard">
+<td class="grid-cell-standard text-center border-r border-[#E2E8F0]">
+<input class="rounded border-gray-300 text-[#0F1E54] focus:ring-0 h-3.5 w-3.5" type="checkbox"/>
+</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anandh Swaminathan</td>
+<td class="grid-cell-standard cell-state-range border-r border-[#E2E8F0]">+91 94440 98765</td>
+<td class="grid-cell-standard cell-state-range border-r border-[#E2E8F0]">Mylapore</td>
+<td class="grid-cell-standard cell-state-range">2026-02-18</td>
+</tr>
+<!-- Row 3: Selected Row with Royal Blue Selection Tint and Checked Checkbox -->
+<tr class="grid-row-standard row-state-selected">
+<td class="grid-cell-standard text-center border-r border-[#E2E8F0]">
+<input checked="" class="rounded border-gray-300 text-[#0F1E54] focus:ring-0 h-3.5 w-3.5" type="checkbox"/>
+</td>
+<td class="grid-cell-standard font-medium border-r border-[#E2E8F0]">Deepa Sundaram</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 97890 11223</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anna Nagar</td>
+<td class="grid-cell-standard">2026-01-29</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- ========================================== -->
+<!-- PANEL 5: EDITING A CELL -->
+<!-- ========================================== -->
+<section class="space-y-1.5" data-purpose="panel-editing-cell">
+<h2 class="text-[11px] font-semibold tracking-wider text-[#4A5568] uppercase">Panel 5 — Editing a cell</h2>
+<div class="bg-white border border-[#E2E8F0] rounded-md overflow-hidden shadow-2xs">
+<table class="w-full text-left border-separate border-spacing-0 text-[13px]">
+<thead>
+<tr class="bg-[#F8F5EF] h-8 border-b border-[#E2E8F0] text-[12px] font-semibold tracking-wider text-[#4A5568] uppercase"><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Name</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Phone</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Location</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold"><div class="flex items-center justify-between"><span class="">Initial Contact</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th></tr>
+</thead>
+<tbody class="divide-y divide-[#E2E8F0] text-[#24324A]">
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Ramesh Kumar</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 98401 23456</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Velachery</td>
+<td class="grid-cell-standard">2026-02-14</td>
+</tr>
+<!-- Row 2: In active edit mode with focused input and 2px royal blue outline -->
+<tr class="grid-row-standard">
+<td class="grid-cell-standard relative border-r border-[#E2E8F0]">
+<input autofocus="" class="cell-edit-input w-full" type="text" value="Ramse"/>
+</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 94440 98765</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Mylapore</td>
+<td class="grid-cell-standard">2026-02-18</td>
+</tr>
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Deepa Sundaram</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 97890 11223</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anna Nagar</td>
+<td class="grid-cell-standard">2026-01-29</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Editing Key Shortcut Hint Line -->
+<p class="text-[12px] text-[#4A5568] pl-1 pt-0.5">
+          Enter saves · Escape discards · clicking away also saves
+        </p>
+</section>
+<!-- ========================================== -->
+<!-- PANEL 6: SAVE REJECTED -->
+<!-- ========================================== -->
+<section class="space-y-1.5" data-purpose="panel-save-rejected">
+<h2 class="text-[11px] font-semibold tracking-wider text-[#4A5568] uppercase">Panel 6 — Save rejected</h2>
+<div class="bg-white border border-[#E2E8F0] rounded-md overflow-hidden shadow-2xs">
+<div class="flex items-center gap-1.5 px-2 h-[28px] border-b border-[#E2E8F0] bg-white text-[13px] text-[#DC2626]"><span class="material-symbols-outlined text-[15px]">close</span><span class="font-medium">Phone number is already in use by another contact</span><span class="font-normal text-[#DC2626]"> — Ramesh Kumar</span></div><table class="w-full text-left border-separate border-spacing-0 text-[13px]">
+<thead>
+<tr class="bg-[#F8F5EF] h-8 border-b border-[#E2E8F0] text-[12px] font-semibold tracking-wider text-[#4A5568] uppercase"><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Name</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Phone</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold border-r border-[#E2E8F0]"><div class="flex items-center justify-between"><span class="">Location</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th><th class="group px-2 py-1 font-semibold"><div class="flex items-center justify-between"><span class="">Initial Contact</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-[#0F1E54] transition-opacity" type="button"><span class="material-symbols-outlined text-[16px]">more_vert</span></button></div></th></tr>
+</thead>
+<tbody class="divide-y divide-[#E2E8F0] text-[#24324A]">
+<!-- Row 1: Phone Cell has 1px #DC2626 error border -->
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Ramesh Kumar</td>
+<td class="grid-cell-standard cell-state-error border-r border-[#E2E8F0]">+91 98401 23456</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Velachery</td>
+<td class="grid-cell-standard">2026-02-14</td>
+</tr>
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anandh Swaminathan</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 94440 98765</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Mylapore</td>
+<td class="grid-cell-standard">2026-02-18</td>
+</tr>
+<tr class="grid-row-standard">
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Deepa Sundaram</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">+91 97890 11223</td>
+<td class="grid-cell-standard border-r border-[#E2E8F0]">Anna Nagar</td>
+<td class="grid-cell-standard">2026-01-29</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Error Message Notification Container directly below grid table -->
+</section>
+</div>
+<!-- END: GridStatesContainer -->
+</main>
+<!-- END: MainContentArea -->
+</body></html>

@@ -2,7 +2,6 @@
 id: SPEC-contacts-premium-grid
 companions:
   - existing-state.md
-  - record-review.md
   - surface-and-toolbar.md
 sources: []
 ---
@@ -19,18 +18,18 @@ sources: []
 
 A **pain to solve**, named by the product owner against a screenshot of the live page: *"the grid feels very simple… The look and feel is not premium industry standard."* `/manage` → Contacts is the daily working surface for a church program coordinator managing a few hundred people, and it currently reads as a raw table dump rather than an enterprise tool.
 
-The grid is **not** underbuilt. `components/grid/` already ships virtualization, a sticky header, a frozen leading run, URL-backed view state, a full keyboard model, cell range selection, clipboard TSV, eleven typed editors, row selection, bulk writes, and a row lifecycle. Twenty-one e2e specs and a nineteen-row coverage matrix guard it. What is missing is the *surface layer*: visual hierarchy, an empty state that is not punctuation, a compact toolbar, and a record-review workflow.
+The grid is **not** underbuilt. `components/grid/` already ships virtualization, a sticky header, a frozen leading run, URL-backed view state, a full keyboard model, cell range selection, clipboard TSV, eleven typed editors, row selection, bulk writes, and a row lifecycle. Twenty-one e2e specs and a nineteen-row coverage matrix guard it. What is missing is the *surface layer*: visual hierarchy, an empty state that is not punctuation, a compact toolbar, a filter conditions surface, and a coherent default field set.
 
 The gap between the reference and the build is smaller than it looks and must be stated precisely, because three claims in the brief are already contradicted by the source and a fourth is already satisfied:
 
 | Brief says | Source says |
 | --- | --- |
 | "display linked-record labels instead of raw internal IDs" | **Already done.** `manage-contacts-table.tsx:849` joins locations through `locationNameById`; `:937` joins staff through `payload.staffNames`. The raw UUIDs in the screenshot are the *unresolvable-id fallback*, not a missing join. |
-| "avoid loading the entire dataset solely to implement record navigation" | **Already satisfied.** `loadManagePortalData` materializes the full scoped set and `data-loading-decision.md` §3 closed on client-side row models. Record review must add no fetch. |
+| "avoid loading the entire dataset solely to implement record navigation" | **Already satisfied.** `loadManagePortalData` materializes the full scoped set and `data-loading-decision.md` §3 closed on client-side row models. Nothing this spec adds fetches again. |
 | "make missing values visually subtle" | **Contradicted.** Empty cells render the literal em-dash `GRID_EMPTY_TEXT`, asserted by three e2e specs. It is punctuation, not subtlety. |
 | "a view selector with a clear current-view label" | **No backend exists.** No view table, and `proxy.ts` matches neither `/manage` nor `/api/manage/*`. |
 
-Airtable is the reference for interaction patterns and density, not for its palette. The screens it informs are: one visual emphasis per row, a genuinely empty empty-state, controls in one compact band, and a record panel that docks beside the grid rather than replacing it.
+Airtable is the reference for interaction patterns and density, not for its palette. What it informs here: one visual emphasis per row, a genuinely empty empty-state, and controls in one compact band. Its record panel is **not** adopted — CAP-5 was withdrawn, and the panel's job is done by visible joined columns instead (CAP-18).
 
 ## Capabilities
 
@@ -50,13 +49,10 @@ Airtable is the reference for interaction patterns and density, not for its pale
   - **intent:** An operator reads a relationship as a name, never as a database identifier.
   - **success:** Every location and staff cell renders a human label; an id with no matching lookup renders a visibly *unresolved* marker rather than a raw UUID.
 
-- **CAP-5 — Record review**
-  - **intent:** An operator can open one record for review, read all of it, move to the next, and return to the grid exactly as they left it.
-  - **success:** An explicit per-row affordance opens a modular record panel; prev/next moves between records in the current filtered order; opening and closing preserves filters, sort, column order, selection, scroll position and the focused cell; the panel is table-agnostic so Sessions and Attendance can adopt it later.
-
+- **CAP-5 — WITHDRAWN by Dwaraka, 2026-10-12.** Record review is **not** in scope. There is no record panel, no per-row open affordance, and no prev/next navigation. What the panel was going to solve — reading a whole record at once — is served instead by the grid itself: the joined accessor columns (`Location`, `Collected By`) are visible columns under CAP-18, so CAP-4's labels and unresolved markers are permanently on screen rather than behind an open. The trade is recorded rather than hidden: **a hidden field is now reachable only by unhiding it**, because there is no longer a second surface showing every field. CAP-18's default set therefore has to be right. Removed from `companions:`; `record-review.md` is deleted.
 - **CAP-6 — Toolbar and views**
   - **intent:** An operator can reach every grid control in one compact band, with bulk actions appearing only when relevant.
-  - **success:** One band carries scoped search, a filter control with a visible active indicator, a current-view label, column visibility and ordering, record creation, and visible result and selection counts; the bulk-action bar appears only while rows are selected; no control is present that does not work.
+  - **success:** One band carries scoped search, a filter control with a visible active indicator, a **Hide fields** control, a **global Sort** control, record creation, and visible result and selection counts; the bulk-action bar appears only while rows are selected; no control is present that does not work. **There is no view label and no view dropdown** — see OQ-1, which this supersedes.
 
 - **CAP-7 — Edit safety**
   - **intent:** An operator can edit a field knowing the value either saved or told them why it did not.
@@ -68,7 +64,7 @@ Airtable is the reference for interaction patterns and density, not for its pale
 
 - **CAP-12 — Filter conditions bar**
   - **intent:** An operator builds a filter as a visible list of conditions, whose operators and value controls suit each field's type, joined by one all-or-nothing connective.
-  - **success:** An inline bar above the grid shows the conditions for the view, each row carrying **Field · operator · value**, plus **`+ Add condition`** — and no condition *groups*, no saved views, no "Copy from another view", no AI prompt; **the operator list and the value control both depend on the field's type** — text offers contains / does not contain / is / is not / is empty / is not empty, number adds relational comparison, date offers its own operator set plus a relative-date value select, checkbox offers one fixed operator with a checkbox value, and single- and multi-select offer is / is not / is any of / is none of / is empty / is not empty; **one connective governs the whole list** — match all, or match any — so a list is never a mixed `A and B or C` expression; changing the field type resets operator and value to something valid; each condition can be deleted on its own; the per-column filter popover is gone; the column menu's Filter item reveals the bar with that column's condition pre-filled; an active filter is visibly indicated in the toolbar and the header; **the result count updates live as conditions are composed**, which the bar gets free by sitting above the grid; and every condition round-trips through the URL.
+  - **success:** A **popover anchored under the toolbar's filter control** holds the conditions for the view, each row carrying **Field · operator · value**, plus **`+ Add condition`** — and no condition *groups*, no saved views, no "Copy from another view", no AI prompt, and **no drag handle on condition rows**; **the operator list and the value control both depend on the field's type** — text offers contains / does not contain / is / is not / is empty / is not empty, number adds relational comparison, date offers its own operator set plus a relative-date value select, checkbox offers one fixed operator with a checkbox value, and single- and multi-select offer is / is not / is any of / is none of / is empty / is not empty; **one connective governs the whole list** — match all, or match any — so a list is never a mixed `A and B or C` expression; changing the field type resets operator and value to something valid; each condition can be deleted on its own; the per-column filter popover is gone; the column menu's Filter item reveals the popover with that column's condition pre-filled; an active filter is visibly indicated in the toolbar, which **names the columns it is filtering**; **the result count updates live as conditions are composed**, and stays visible because the popover is anchored below the toolbar rather than over it; and every condition round-trips through the URL.
 
 - **CAP-13 — Column reordering by drag**
   - **intent:** An operator arranges columns by dragging, with the mouse, a finger or the keyboard.
@@ -76,7 +72,7 @@ Airtable is the reference for interaction patterns and density, not for its pale
 
 - **CAP-14 — Header affordance hygiene**
   - **intent:** A column header stays clean at rest and offers its actions only where they are wanted.
-  - **success:** The column menu contains exactly **Sort ascending, Sort descending, Hide column, Filter**; the menu control is revealed on header hover and on keyboard focus; it is never hidden from a touch user; it is suppressed on the selection column and on any header that supplies its own control.
+  - **success:** The column menu contains exactly **Sort ascending, Sort descending, Hide column, Filter**; the menu control is revealed on header hover and on keyboard focus; it is never hidden from a touch user; it is suppressed on the selection column and on any header that supplies its own control. **The header label is NOT a sort button** — sorting moved to one global popover (CAP-6), reached from the toolbar and from these two menu items, so a header is either a control or a sort button, never both.
 
 - **CAP-8 — Accessibility and performance**
   - **intent:** The grid is fully operable without a mouse and does not shift or stutter under an operator's hands.
@@ -92,13 +88,60 @@ Airtable is the reference for interaction patterns and density, not for its pale
 
 - **CAP-16 — Interaction boundaries**
   - **intent:** No gesture in the grid does two things at once.
-  - **success:** A checkbox click activates neither an edit nor the record panel; dropdown and popover interactions never trigger a double-click edit; a read-only field never enters edit mode; editing a cell never opens the record panel; a single cell click preserves existing row and record navigation conventions; keyboard propagation is stopped only where a specific key would otherwise be swallowed.
+  - **success:** A checkbox click never activates an edit; dropdown and popover interactions never trigger a double-click edit; a read-only field never enters edit mode; a single cell click preserves existing row navigation conventions; keyboard propagation is stopped only where a specific key would otherwise be swallowed.
 
 - **CAP-10 — Edit activation and commit**
   - **intent:** An operator opens a cell editor the same way every time, and cannot lose a change by moving away from it.
   - **success:** A double-click opens the editor on every editable field type and **no other gesture opens it**; a second double-click commits; moving focus away commits; `Escape` is the only way to discard; the keyboard openers `e`, printable-character type-to-edit and `Space`-seeding are gone; blur-commit goes through the single commit path and fires **no request when the draft is unchanged**; arrow/Tab/Home/End navigation and `Space`-on-checkbox continue to work, because they are not edit openers.
 
 *CAP-10 is numbered out of sequence deliberately. It supersedes shipped upstream behaviour, and every other capability here is written on top of the edit model it defines.*
+
+- **CAP-17 — One global sort surface**
+  - **intent:** Sorting is one decision made in one place, not a third control bolted onto the toolbar.
+  - **success:** The toolbar carries a **Sort** control opening a popover with exactly two controls — a **field** dropdown and a **direction** select (ascending / descending). The same popover opens from the column menu's **Sort ascending** and **Sort descending** items with **both controls prefilled** to that column and that direction. **The header label is not a sort button** — `grid-header-cell.tsx:177` currently makes it one, and that goes, which also settles the conflict `docs/manage-grid-pattern.md` records ("a header which is a control must not also be a sort button"). Sort state stays in the `sort` URL parameter and a cleared sort is a valid state. One surface, three entry points, one state.
+
+- **CAP-18 — Default field set**
+  - **intent:** An operator opens Contacts and sees the fields that drive a follow-up decision, not all fourteen.
+  - **success:** Nine of fourteen columns are visible by default and five are hidden. The set is a product decision, not an accident of definition order. **Visible:** Name, Phone, Location, Initial Contact, Total Attendance, Past 60 Days, Notes, Collected By, Actions. **Hidden:** Source, Books Read, Date of Birth, Last Contacted On, Favorite. Hiding is reversible per-operator through **Hide fields** and persists in the `hide` URL parameter; the hidden set is a **default, not a lock** — every one of the five stays reachable. Three consequences are deliberate: `Location` and `Collected By` are visible because they are the joined accessor columns, so CAP-4's unresolved marker is on screen rather than behind an unhide; `Favorite` is hidden because the star is a per-row control with no place in a default scan and bulk favourite already exists on selection (`runBulkFavorite`, `manage-contacts-table.tsx:669`); and `Last Contacted On` is hidden because OQ-16 records it as written once at insert and never updated, so it reads as "created on" and would be actively misleading on screen. Two columns are `hideable: false` and are not part of this negotiation: **Name** (`manage-contacts-table.tsx:834`, the pinned identity column) and **Actions**.
+
+- **CAP-19 — Delete stays, and is only an icon**
+  - **intent:** A destructive action is available per row, but carries no text, no label and no visual weight beyond a small red bin.
+  - **success:** Per-row delete remains, exactly as shipped by story 5 of `spec-grid-keyboard-editors-and-theme`. **Dwaraka, 2026-10-12 — considered removing the `actions` column entirely, then kept it:** the control is already nothing but the red bin, so there is nothing to change. `GridRowDeleteControl` (`grid-row-lifecycle.tsx:142`) renders a 24px ghost button carrying only `Trash2` at 14px, in `--destructive`, with `aria-label="Delete <name>"`, disabled while the row is deleting, opening a confirmation before anything is removed. Two seams carry it: `data-grid-delete-row` and `data-grid-delete-report`, documented at `e2e/fixtures/manage-grid.ts:27`. **`GridRowAddControl` and `data-grid-add-record` are separate and unaffected** — creation is reached from the toolbar's "New contact" button.
+
+## Visual Design
+
+**Every capability with a visual surface has an approved composition in `Visual-Design/`. Read it before building; it is the design contract, and this section is the index.** These are Google Stitch compositions, reviewed against this spec and corrected where the generated markup contradicted it. They are **direction artifacts, not pixel specs** — Story 10's recorded manual pass remains the verification gate.
+
+| File | What it is | Covers |
+| --- | --- | --- |
+| `Visual-Design/contacts-toolbar-stitch-v1-corrected.html` / `.png` | **Authoritative.** The Contacts screen | CAP-1, CAP-2, CAP-6, CAP-12 |
+| `Visual-Design/contacts-overlays-stitch-v1-corrected.html` / `.png` | **Authoritative.** Sort, Hide fields, column menu | CAP-14, CAP-17, CAP-18 |
+| `Visual-Design/contacts-grid-states-v1.html` / `.png` | **Authoritative.** Six cell and row states, plus the status strip | CAP-7, CAP-11, CAP-15, CAP-16 |
+| `Visual-Design/stitch-DESIGN-UNVERIFIED.md` | **DO NOT IMPLEMENT FROM.** Stitch's own token write-up; contradicts the render (sidebar, 4px radius, pills, mobile cards). Its Colors section is accurate | — |
+| `Visual-Design/review-v1.md` | Screen 1 review — outcome and the four decisions | — |
+| `Visual-Design/review-overlays-v4.md` | Overlays review — corrections applied, and two findings withdrawn on review | — |
+| `Visual-Design/screen-1-deltas.md` | Every divergence between the generated markup and this spec | — |
+| `Visual-Design/design-inventory.md` | Capability → story → asset map, and the open gaps | — |
+| `Visual-Design/brand-reference-home-1440x900.png` | Brand identity anchor (royal blue / saffron / ivory) | — |
+| `Visual-Design/contacts-current-1440x900.png`, `-1024x768.png` | **The live grid as it is today** — what this work fixes. Not a style target | — |
+| `contacts-toolbar-stitch-v1.html` / `.png`, raw exports | Superseded provenance. The `-corrected-` files are the ones to use | — |
+| `stitch-prompt-*.md` | The prompts that produced them, and the design decisions they encode | — |
+
+### Three things the corrected files settle that prose alone does not
+
+- **`OQ-11` / `OQ-18` filter popover** — anchored under the toolbar, count staying visible in the toolbar row, no close button, one condition row per line, disabled value control under `is empty`.
+- **`OQ-1` and the toolbar band** — there is no view label; the band reads *Search · Filtered by · Sort · Hide fields · count · New contact*.
+- **Column headers at rest** — label and sort indicator only, with the menu revealed on hover **and** keyboard focus.
+- **The status strip** — a one-line `#DC2626` message between the toolbar and the grid, collapsing to zero height when empty (`grid.tsx:871`), and naming the record so it still identifies the row when scrolled out of sight. Never below the table.
+
+### Two corrections carried into the comps, both measured
+
+- **`border-collapse` is not what the grid uses.** `contacts-grid-states-v1.html` renders rows at exactly **32px**; the two earlier comps render 33.5px because they also carried `border-collapse`. The shipped grid uses `border-separate border-spacing-0`, and the cell — not the row — must carry the fixed height, because `max-height` does not constrain a `<tr>` or `<td>` in a CSS table.
+- **Header hover menus must reveal on `:focus-within` as well as `:hover`,** and stay in the tree at rest (`opacity-0`, never `display:none`) so the control remains focusable and tappable.
+
+### One unresolved measurement, carried deliberately
+
+Both corrected files render rows at **33.5px**, not the 32px contract, because `max-height` does not constrain a `<tr>` or `<td>` in a CSS table — measured, in `review-overlays-v4.md`. The implementation must pin the height at the cell, as `grid-row.tsx` does. **Do not copy either comp's table structure**: both use `border-separate` now, but the fixed height must come from the cell, not from `max-height` on the row.
 
 ## Constraints
 
@@ -131,14 +174,13 @@ Airtable is the reference for interaction patterns and density, not for its pale
 - **Server-side pagination.** `data-loading-decision.md` §3 closed on client-side virtualization over the full scoped set; the set is already fully materialized server-side, so paging would be a new capability that does not reduce server reads.
 - **Light/dark theme work.** Owned by story 6 of `spec-grid-keyboard-editors-and-theme` and unstarted; `ThemeProvider` is still unmounted. This work is graded in whatever theme exists and must not mount the provider.
 - **New column virtualization.** Already excluded upstream as interacting with the sticky header, frozen run and `columnOrder`.
-- **Porting record review to Sessions or Attendance.** The panel is built table-agnostic so a later port copies it; only Contacts is ported here.
 - **A second table implementation, a new data-fetch path, or fabricated/seeded production data** to make a column look fuller.
 
 - **Retiring the keyboard openers is not a regression to be quietly fixed.** CAP-10 removes `e`, type-to-edit and `Space`-seeding on purpose. A spec that later "helpfully" restores one has undone an explicit product decision.
 
 ## Success signal
 
-An operator opens `/manage` → Contacts with 226 contacts. The grid reads as one compact surface at 32px rows; `Name` is the one visually weighted column; a single click leaves a restrained outline on the active cell without any input appearing; `Date of Birth` reads as genuinely empty rather than as a wall of dashes. They double-click a name, type a correction, and click away — the value saves, and no request was made for the cells they merely clicked. They set a filter condition and the result count narrows live above the grid; they add a second condition and switch the connective from *match all* to *match any*, and 41 of 226 rows remain after a reload — the `is empty` condition included. They drag `Notes` two columns left and the order survives a refresh. They use the row's review control and a panel opens beside the grid with every location and staff field as a name; they force a failed save, read the server's own message, and watch the cell revert. They close it and find their filter, sort, selection and scroll position exactly where they left them. Every one of those flows is a committed Playwright spec, all nineteen existing matrix rows are still green, and `grep -rn "dark:" components/grid/` is still zero.
+An operator opens `/manage` → Contacts with 226 contacts. The grid reads as one compact surface at 32px rows; `Name` is the one visually weighted column; a single click leaves a restrained outline on the active cell without any input appearing; `Date of Birth` reads as genuinely empty rather than as a wall of dashes. They double-click a name, type a correction, and click away — the value saves, and no request was made for the cells they merely clicked. They set a filter condition and the result count narrows live above the grid; they add a second condition and switch the connective from *match all* to *match any*, and 41 of 226 rows remain after a reload — the `is empty` condition included. They drag `Notes` two columns left and the order survives a refresh. Every location and staff field reads as a name in the grid itself, with no unresolved id anywhere in the default view; they force a failed save, read the server's own message, and watch the cell revert. They open Hide fields and the five hidden fields are one click away. Every one of those flows is a committed Playwright spec, all nineteen existing matrix rows are still green, and `grep -rn "dark:" components/grid/` is still zero.
 
 ## Assumptions
 
@@ -148,18 +190,16 @@ An operator opens `/manage` → Contacts with 226 contacts. The grid reads as on
 
 ## Open Questions
 
-- **OQ-1 — View semantics.** The brief asks for a view selector; no view backend exists. (a) a static label over URL-backed view state, ships now; (b) per-user saved views, needs a table, migration and route; (c) shared views, additionally needs a staff trust model. **This spec assumes (a).**
-- **OQ-3 — Panel placement.** Right-side sheet (Airtable's pattern; keeps the grid visible, which is what lets CAP-5 claim state is preserved) or modal. **This spec assumes a right-side sheet.**
-- **OQ-5 — Sequencing. Story 5 landed UNFINISHED.** `bmad-loop` committed `b2a0f67 feature/story-5-unfinished` on `feat/grid-keyboard-editors-and-theme`; the story file reads `status: 'in-progress'`. **The worktree is clean because the partial work was committed, not because the story finished** — an earlier reading of this spec got that wrong. Four capabilities here build directly on story 5's output: CAP-5 and CAP-6 on the `statusMessage` channel, CAP-7 on the commit path, CAP-13 on the header. **Verify story 5's actual shape before story 1 starts** — whether `GridRowLifecycle`, `GridRowAddControl` and the per-row delete outcome reporting are complete, and whether `docs/manage-grid-pattern.md`'s new section is finished. Story 1 (the edit model) does not depend on it and can start.
-- **OQ-6 — Panel opening gesture.** Row click is discarded, because a double-click now means "edit" and the two gestures would collide. (a) a dedicated control in the row's action column, (b) `Enter` on a focused cell, (c) a row overflow menu. **This spec assumes (a)** — the only option that does not conflict with CAP-10's commit rules.
+- **OQ-1 — View semantics. RESOLVED by Dwaraka, then RESOLVED AGAIN — the label is dropped entirely.** *History, kept because the first answer was itself overturned.* The brief asked for a view selector; no view backend exists. (a) A static label over URL-backed view state shipped first. (b) Per-user saved views would need a table, migration and route. (c) Shared views would additionally need a staff trust model. **Dwaraka rejected the label itself**: a control that looks like a view selector but cannot save a view is the nonfunctional button the brief forbids, and a *static* label over view state is closer to that than to a real feature. **The toolbar ships no view label and no view dropdown.** View state remains URL-backed (`q`, `sort`, `cols`, `hide`, `f.<colId>`) and is communicated through the filter indicator, the Hide fields control and the live result count — not through a view name.
+- **OQ-5 — Sequencing. Story 5 landed UNFINISHED.** `bmad-loop` committed `b2a0f67 feature/story-5-unfinished` on `feat/grid-keyboard-editors-and-theme`; the story file reads `status: 'in-progress'`. **The worktree is clean because the partial work was committed, not because the story finished** — an earlier reading of this spec got that wrong. Three capabilities here build directly on story 5's output: CAP-6 on the `statusMessage` channel, CAP-7 on the commit path, CAP-13 on the header. **Verify story 5's actual shape before story 1 starts** — whether `GridRowLifecycle`, `GridRowAddControl` and the per-row delete outcome reporting are complete, and whether `docs/manage-grid-pattern.md`'s new section is finished. Story 1 (the edit model) does not depend on it and can start.
 - **OQ-7 — Double-click vs. text selection.** A double-click on a cell with existing text selects the word, and the browser does that before any handler runs. Does editing win? **This spec assumes yes**, meaning `preventDefault` on the cell's double-click and no word selection inside editable cells.
 - **OQ-10 — Keyboard column reordering. WITHDRAWN.** `@dnd-kit/core` supplies a `KeyboardSensor`, so drag-and-drop is keyboard-operable and removing `Move left` / `Move right` is **not** the accessibility regression this spec previously recorded it as.
 - **OQ-14 — Relative-date evaluation.** Relative presets are computed against "today" in the browser, which makes a shared URL non-reproducible and a test clock-dependent. (a) serialize the computed absolute boundary so the filter stops moving, (b) serialize the literal preset and re-evaluate so the filter stays live. **This spec assumes (a)** — determinism over liveness, consistent with declining saved views.
-- **OQ-11 — Filter contents. SUPERSEDED by OQ-18.** The modal is no longer a modal; it is an inline bar, and `+ Add condition` **is** in scope. Only the condition *group*, "Copy from another view" and Ask AI remain out.
+- **OQ-11 — Filter contents. SUPERSEDED by OQ-18.** *(Historical, kept because it is the decision that was overturned, and twice more since — see OQ-18 for the current surface.)* The modal is no longer a modal; `+ Add condition` **is** in scope. Only the condition *group*, "Copy from another view" and Ask AI remain out — as does the drag handle, which the current popover does not have either.
 
 - **OQ-13 — One condition or several. RESOLVED by Dwaraka.** Several. `+ Add condition` adds a row; the connective is **one `and` / `or` select governing the whole list**, so the list is never a mixed `A and B or C` expression and needs no precedence rules. A single condition still composes with the global search `q`, because `f.<colId>` already ANDs across columns. See CAP-12.
 
-- **OQ-18 — Filter surface shape. RESOLVED by Dwaraka.** An **inline bar** above the grid, not a modal. This reverses the modal decision recorded in `surface-and-toolbar.md`, and it is a net simplification: the bar sits above the grid, so **the matching-row count updates live as conditions are composed** — the one piece of Airtable's inline bar this spec had planned to *carry across into* the modal by hand. The modal's compensation for that blind spot is now unnecessary. The cost is the one the modal was chosen to avoid: the bar occupies permanent vertical space.
+- **OQ-18 — Filter surface shape. RESOLVED by Dwaraka, then REVERSED TWICE; the current answer is a popover.** *History, kept because each reversal was made for a reason that later agents will otherwise re-litigate.* (a) A **modal**, first. Rejected because a covering dialog cannot show the grid's matching-row count while you compose. (b) An **inline bar** above the grid, per the reference screenshot's own shape. Chosen because the live count was then free, and the bar's only cost was permanent vertical space. (c) **A popover anchored under the toolbar's filter control** — the current decision, made after reviewing a Stitch composition. The popover keeps the count visible **because it is anchored below the toolbar rather than over it**, which neutralises the objection that sank (a). Its cost against (b) is that it does not permanently occupy vertical space, and that the operator cannot watch *which* rows match while composing — a smaller loss than (a)'s, and not one (b) argued for specifically. Design reference: `_bmad-output/specs/spec-contacts-premium-grid/Visual-Design/`. **Do not rebuild the inline bar.**
 
 - **OQ-19 — Where a condition list lives in the URL. RESOLVED by Dwaraka.** `f.<colId>` **stays**, keeping its AND-across-columns semantics, so matrix row 17's `f.location` round-trip assertion is untouched and every existing shared URL keeps its meaning. Match-**any** conditions need a new key family mirroring the existing prefixes. No ordered expression is ever serialized, because there is no mixed expression to serialize.
 
@@ -169,7 +209,7 @@ An operator opens `/manage` → Contacts with 226 contacts. The grid reads as on
 
 ## Resolved Questions
 
-- **OQ-2 — Edit activation and commit. RESOLVED by Dwaraka.** Inline edits open on **double-click only**; a second double-click commits; **blur also commits**; **Enter persists** and **Escape discards**. The keyboard openers `e`, printable-character type-to-edit and `Space`-seeding are **retired**. Because blur commits, an edit can no longer be abandoned by clicking away, so the dirty-flag prompt and its confirmation dialog are **deleted** from the record panel rather than built. See CAP-10.
+- **OQ-2 — Edit activation and commit. RESOLVED by Dwaraka.** Inline edits open on **double-click only**; a second double-click commits; **blur also commits**; **Enter persists** and **Escape discards**. The keyboard openers `e`, printable-character type-to-edit and `Space`-seeding are **retired**. Because blur commits, an edit can no longer be abandoned by clicking away, so there is no dirty-flag prompt and no confirmation dialog anywhere in this spec. See CAP-10.
 - **OQ-4 — Default row height. RESOLVED by Dwaraka.** The default stays at **32px**. The "dense by default" idea is dropped; dense remains a user-selectable option. This supersedes the earlier assumption recorded in this spec.
 - **OQ-8 — Keyboard editing. RESOLVED by Dwaraka.** Double-click remains the **only** edit opener. The second requirements block's *"avoid using double-click as the only way to discover editing"* is **not** a reversal of OQ-2; it is read as a requirement that the active-cell affordance make editing discoverable, and that arrows/Tab/Home/End/Escape keep working. CAP-10 is unchanged.
 - **OQ-9 — Column reordering. RESOLVED by Dwaraka.** `Move left` and `Move right` are **removed** from the column menu and replaced by **drag-and-drop via `@dnd-kit/core`**. See CAP-13. This supersedes the menu-based approach `grid-header-cell.tsx:116-120` chose deliberately, and `docs/manage-grid-pattern.md` needs updating in the same commit.
