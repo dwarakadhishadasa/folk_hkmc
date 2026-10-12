@@ -49,7 +49,7 @@ scrolled away.
 
 | Key | Effect |
 | --- | --- |
-| `editable: true` | Gates the `e` key. Also the only thing that should be in `PATCH_KEY_BY_COLUMN`. |
+| `editable: true` | Gates the double-click that opens the editor — and it is the *only* opener. Also the only thing that should be in `PATCH_KEY_BY_COLUMN`. |
 | `editor: <GridEditorKey>` | Names the typed editor the cell renders and parses with. Resolved through the registry in `components/grid/grid-editors.tsx`. |
 | `editorOptions` | Presentation-only configuration for that editor: `options`, `users`, `currency`, `locale`. |
 | `filter: "text" \| "number"` | Chooses the per-column filter control and supplies its `filterFn` |
@@ -123,7 +123,7 @@ Two more conventions inside an editor display:
   as `getByRole("button")` *inside the row, unscoped*, and four green assertions rely on it
   being the only one. A button in every `select` / `multiselect` / `date` / `user` cell makes
   those ambiguous. The grid's own editors use a `<span role="presentation">`: the cell is
-  already the focusable, keyboard-reachable thing, and `e` opens its editor.
+  already the focusable, keyboard-reachable thing, and a double-click opens its editor.
 - **It must not grow the cell.** `GridRow` enforces fixed row heights, so anything with a
   list, a search, a calendar or a multi-line body opens in a `Popover` portal. `notes` is a
   popover precisely because a textarea cannot fit in 32px.
@@ -138,7 +138,7 @@ it is a visible change on a table that already shipped: nothing regressed, somet
 Two conventions inside a custom cell:
 
 - `onPointerDown` → `stopPropagation()`. Otherwise the cell takes the pointer, the grid moves cell
-  focus to that column, and the next `e` becomes a no-op because the column is not editable.
+  focus to that column, and the next double-click becomes a no-op because the column is not editable.
 - A row checkbox goes through `row.getIsSelected()` / `row.toggleSelected()` and the header control
   through `row.getIsSelected()` over `table.getRowModel().rows`, so `data-state="selected"` and the
   checkbox never disagree.

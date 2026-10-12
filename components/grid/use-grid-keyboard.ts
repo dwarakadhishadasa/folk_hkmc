@@ -874,8 +874,8 @@ export function useGridKeyboard<TData>({
    * The row's first editable visible column, or its first visible column when it
    * has none.
    *
-   * The same rule `beginEditing` applies to a cold grid, reused here so "the row
-   * the operator just added" and "the cell `e` would open" cannot disagree.
+   * The row the operator just added arrives focused on this column, which is the
+   * same rule an arrow press would have used to get there.
    */
   const firstEditableColumnId = useCallback(
     (row: Row<TData>): string | undefined => {
@@ -890,20 +890,18 @@ export function useGridKeyboard<TData>({
   )
 
   /**
-   * The one opener. `Enter`, `e`, a click on a display widget and the
-   * printable-character branch all land here, so the seeding rules cannot drift
-   * apart: `Enter` and `e` seed the cell's display text for in-place editing, a
-   * printable character seeds itself to replace the value, and an editor whose
-   * `draftSeed` differs gets its own representation (a date cell edits
-   * `2026-03-05`, not `5 Mar 2026`). Returns false on a non-editable cell, which
-   * the callers treat as a no-op rather than an error.
+   * The one opener. A double-click on a closed cell is the **only** gesture that
+   * gets here — `e`, printable-character type-to-edit, `Space`-seeding,
+   * `Enter`-when-not-editing and the old click-to-open display are all retired by
+   * CAP-10 — so the seeding rule is the cell's own display text and nothing can
+   * drift apart from it. An editor whose `draftSeed` differs gets its own
+   * representation (a date cell edits `2026-03-05`, not `5 Mar 2026`).
    *
-   * CAP-10 (double-click is the sole opener) is Phase B: until this change's
-   * retirement lands, the four legacy openers still route here, which is exactly
-   * the baseline control the new mechanism is verified against.
+   * Returns false on a read-only cell, which the callers treat as a no-op rather
+   * than an error, and `false` is what proves `meta.grid.editable` is the guard.
    */
   const openEditor = useCallback(
-    (rowIndex: number, columnId: string, seed?: string): boolean => {
+    (rowIndex: number, columnId: string): boolean => {
       const row = visibleRows[rowIndex]
 
       if (!row) {
@@ -923,10 +921,10 @@ export function useGridKeyboard<TData>({
 
       const definition = resolveGridEditor(cell.column.columnDef.meta?.grid?.editor)
 
-      // `checkbox` is the one editor whose control *is* the cell, so opening it
-      // flips the value instead of mounting a draft. That is what makes `e` and
-      // `Enter` on a checkbox behave the same as clicking it, and it is why no
-      // textbox ever appears over a boolean.
+      // `checkbox` is the one editor whose control *is* the cell, so "opening" it
+      // flips the value instead of mounting a draft. A double-click never gets
+      // here for one — `onCellDoubleClick` returns before this — so this branch
+      // exists for the keyboard model rather than for the pointer.
       if (definition?.commitsOnInteraction === true) {
         runCommit(
           { rowId: row.id, columnId },
@@ -945,7 +943,7 @@ export function useGridKeyboard<TData>({
       discardRequestedRef.current = false
 
       const text = displayCellText(row.id, cell)
-      setDraft(seed ?? definition?.draftSeed?.(text, cell.getValue()) ?? text)
+      setDraft(definition?.draftSeed?.(text, cell.getValue()) ?? text)
       return true
     },
     [displayCellText, runCommit, visibleRows],
@@ -963,29 +961,6 @@ export function useGridKeyboard<TData>({
     restoreFocusRef.current = gridCellKey(editing.rowId, editing.columnId)
     exitEditing()
   }, [editing, exitEditing])
-
-  const beginEditing = useCallback(() => {
-    const row = visibleRows[clampedRowIndex]
-
-    if (!row) {
-      return
-    }
-
-    if (focusedColumnId) {
-      // With a column focused, that column decides: `e` on a non-editable cell
-      // is a no-op, not a jump to a different cell.
-      openEditor(clampedRowIndex, focusedColumnId)
-      return
-    }
-
-    // With no column focused, `e` starts the first editable cell so the key is
-    // useful from a cold grid.
-    const targetColumnId = firstEditableColumnId(row)
-
-    if (targetColumnId) {
-      openEditor(clampedRowIndex, targetColumnId)
-    }
-  }, [clampedRowIndex, firstEditableColumnId, focusedColumnId, openEditor, visibleRows])
 
   /**
    * Builds what one editor instance is handed.
@@ -1048,13 +1023,6 @@ export function useGridKeyboard<TData>({
           commitValue(parsed)
         },
         commitValue,
-        open: () => {
-          const index = visibleRows.findIndex((candidate) => candidate.id === row.id)
-
-          if (index !== -1) {
-            openEditor(index, columnId)
-          }
-        },
         close: cancelEditing,
         editing: editing?.rowId === row.id && editing.columnId === columnId,
         options: meta?.editorOptions ?? {},
@@ -1070,11 +1038,9 @@ export function useGridKeyboard<TData>({
       draft,
       editing,
       exitEditing,
-      openEditor,
       revertCommit,
       runCommit,
       setEditorDraft,
-      visibleRows,
     ],
   )
 
@@ -1621,25 +1587,14 @@ export function useGridKeyboard<TData>({
         return
       }
 
-      if (event.key === "e") {
-        // `preventDefault` is load-bearing, not tidy: the editor mounts and takes
-        // focus during this same keydown, and without it the browser's default
-        // text insertion then lands in the freshly focused input, so the key that
-        // opened the editor also types a stray "e" into it.
+      // CAP-10: `e` and `Enter`-when-not-editing are **not** openers. There is no
+      // branch here for them, and that absence is the contract — a branch that
+      // existed and did nothing would be a second thing to keep in step with the
+      // opener. `Enter` while a draft is open still commits it, which is the one
+      // of the three that survives.
+      if (event.key === "Enter" && editing) {
         event.preventDefault()
-        beginEditing()
-        return
-      }
-
-      if (event.key === "Enter") {
-        event.preventDefault()
-
-        if (editing) {
-          commitEditing()
-        } else {
-          beginEditing()
-        }
-
+        commitEditing()
         return
       }
 
@@ -1659,18 +1614,15 @@ export function useGridKeyboard<TData>({
         return
       }
 
-      // `Space` is both a toggle and a printable character: on a checkbox it
-      // commits the flip, everywhere else it seeds the editor with `" "`.
-      // Prevented either way, so the page never scrolls out from under the grid.
+      // `Space` is a toggle on a checkbox cell and nothing else. It no longer seeds an
+      // editor anywhere (CAP-10 retired the seeding half), but the toggle is not
+      // an opener and is not retired with it, and `preventDefault` stays on both
+      // paths so the page never scrolls out from under the grid.
       if (event.key === " ") {
         event.preventDefault()
 
-        if (focusedColumnId && toggleCheckboxCell(clampedRowIndex, focusedColumnId)) {
-          return
-        }
-
         if (focusedColumnId) {
-          openEditor(clampedRowIndex, focusedColumnId, " ")
+          toggleCheckboxCell(clampedRowIndex, focusedColumnId)
         }
 
         return
@@ -1682,30 +1634,9 @@ export function useGridKeyboard<TData>({
         if (focusedColumnId) {
           clearCell(clampedRowIndex, focusedColumnId)
         }
-
-        return
-      }
-
-      // Printable characters open the editor seeded with themselves, replacing
-      // the value. On a read-only column this is a no-op — and deliberately
-      // not prevented, so nothing is swallowed that was never going to edit.
-      if (event.key.length === 1 && focusedColumnId) {
-        const row = visibleRows[clampedRowIndex]
-        const cell = row
-          ?.getVisibleCells()
-          .find((candidate) => candidate.column.id === focusedColumnId)
-
-        if (cell?.column.columnDef.meta?.grid?.editable === true) {
-          // Same load-bearing `preventDefault` as `e`: the editor mounts and
-          // takes focus in this keydown, and the opening keystroke must not
-          // land in it a second time next to the seed.
-          event.preventDefault()
-          openEditor(clampedRowIndex, focusedColumnId, event.key)
-        }
       }
     },
     [
-      beginEditing,
       cancelEditing,
       clearCell,
       clampedRowIndex,
@@ -1718,7 +1649,6 @@ export function useGridKeyboard<TData>({
       moveFocus,
       moveTab,
       moveToEdge,
-      openEditor,
       stepFocus,
       toggleCheckboxCell,
       visibleRows,

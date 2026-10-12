@@ -210,6 +210,17 @@ function PopoverEditor({ ctx, children }: { ctx: GridEditorContext<unknown>; chi
             // never see the click, so a double-click could not reach it at all.
             event.stopPropagation()
           }}
+          onClick={(event) => {
+            // The trigger must not toggle. Radix composes its own toggle onto
+            // this `onClick` and skips it when the default is prevented, so
+            // calling `preventDefault` leaves the cell's `onDoubleClick` in sole
+            // charge of opening and closing: without it the *first* click of a
+            // second double-click would close the editor and the `dblclick` that
+            // follows would reopen it, which is the opposite of what a second
+            // double-click means. `preventDefault` does not stop propagation, so
+            // the gesture still reaches the cell.
+            event.preventDefault()
+          }}
           className="flex h-full min-w-0 items-center"
         >
           <span className="truncate">{ctx.text}</span>
@@ -219,22 +230,27 @@ function PopoverEditor({ ctx, children }: { ctx: GridEditorContext<unknown>; chi
         align="start"
         sideOffset={4}
         collisionPadding={8}
-        // `Escape` is a discard, and it has to be claimed *here* rather than
-        // left to each control. Now that closing commits, a bare `Escape`
-        // reaching Radix would dismiss the popover and commit the draft instead
-        // of discarding it — and the multiselect option list and the calendar
-        // have no local `Escape` handler at all, so those two were exactly the
-        // editors where that would happen. Capture-phase plus
-        // `stopPropagation` stops the key before Radix's document-level
-        // dismissable layer sees it, so no editor can commit on `Escape`
-        // regardless of what its own controls do.
-        onKeyDownCapture={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault()
-            event.stopPropagation()
-            console.log('CAPTURE-ESCAPE')
-            ctx.close()
-          }
+        // `Escape` is a discard, and it has to be claimed *here* rather than left
+        // to each control. Now that closing commits, a dismissed popover is a
+        // write — and Radix registers its own escape listener on the document in
+        // the **capture** phase, above the React root's, so a `keydown` handler
+        // anywhere in the tree loses the race and is reached only after the popover
+        // has already closed. `onEscapeKeyDown` is the one lever that runs *inside*
+        // Radix's own handler: returning `false` refuses the dismissal, and
+        // `ctx.close()` arms the hook's discard flag while it is still in time.
+        //
+        // This matters most for `multiselect` and the calendar, which have no local
+        // `Escape` handler at all: without this, a bare `Escape` there reached
+        // Radix, dismissed the popover, and committed a draft the operator asked to
+        // throw away. It belongs on `PopoverContent`, not on `Popover`: Radix
+        // 1.1.4 reads it off the content's `DismissableLayer`, and the root
+        // silently ignores a prop it does not own — which is exactly what a
+        // first attempt here did, and left the bug in place while the code
+        // *looked* handled.
+        onEscapeKeyDown={(event) => {
+          event.preventDefault()
+          ctx.close()
+          return false
         }}
         // `design-constraints.md` bans drop shadows on data surfaces; the
         // primitive's default carries one.
@@ -255,14 +271,19 @@ function PopoverEditor({ ctx, children }: { ctx: GridEditorContext<unknown>; chi
  * would make `getByRole("button")` ambiguous there. The cell is already the
  * focusable, keyboard-reachable thing — a double-click opens its editor — so a
  * control inside it needs no role of its own.
+ *
+ * **There is deliberately no `onClick` here.** The click-to-open display it
+ * used to carry is retired by CAP-10 ("no other gesture opens it"): a single
+ * click now only moves the focus model onto the cell, which is what CAP-11
+ * asks for. The gesture is still *advertised* — `cursor-pointer` below is the
+ * discoverability OQ-8 requires now that double-click is the only opener — but
+ * advertising a gesture is not performing it.
  */
 function OpenableDisplay({
-  ctx,
   kind,
   className,
   children,
 }: {
-  ctx: GridEditorContext<unknown>
   kind: string
   className?: string
   children: ReactNode
@@ -271,12 +292,6 @@ function OpenableDisplay({
     <span
       role="presentation"
       data-grid-editor={kind}
-      // No `stopPropagation` here: the pointer has to reach the cell so the
-      // double-click that opens this editor is the cell's own opener, and so a
-      // single click still focuses the cell.
-      onClick={() => {
-        ctx.open()
-      }}
       className={`flex h-full min-w-0 cursor-pointer items-center ${className ?? ""}`}
     >
       {children}
@@ -674,7 +689,7 @@ function CheckboxControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
 const selectEditor: GridEditorDefinition<unknown> = {
   renderDisplay: (ctx) =>
     ctx.text === EMPTY_TEXT ? undefined : (
-      <OpenableDisplay ctx={ctx} kind="select">
+      <OpenableDisplay kind="select">
         <Pill>{ctx.text}</Pill>
       </OpenableDisplay>
     ),
@@ -734,7 +749,7 @@ function SelectControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
 const multiselectEditor: GridEditorDefinition<unknown> = {
   renderDisplay: (ctx) =>
     ctx.text === EMPTY_TEXT ? undefined : (
-      <OpenableDisplay ctx={ctx} kind="multiselect" className="gap-1">
+      <OpenableDisplay kind="multiselect" className="gap-1">
         {ctx.text
           .split(LIST_SEPARATOR)
           .slice(0, 2)
@@ -804,21 +819,23 @@ function MultiselectControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
             key={option}
             selected={selected.includes(option)}
             onClick={() => {
-              setSelected((current) => {
-                const next = current.includes(option)
-                  ? current.filter((entry) => entry !== option)
-                  : [...current, option]
+              // Computed outside the updater on purpose: a `useState` updater runs
+              // during render, so a `ctx.setDraft` inside one is a `setState` on
+              // the grid during this component's render — React logs it and the
+              // two states can disagree for a frame.
+              const next = selected.includes(option)
+                ? selected.filter((entry) => entry !== option)
+                : [...selected, option]
 
-                // Mirrored into the hook's draft so a click *away* commits what
-                // was picked. Only a list that differs from the seeded draft
-                // counts: re-clicking an option already present nets unchanged,
-                // and a blur must not turn that into a write.
-                if (next.join(LIST_SEPARATOR) !== ctx.draft) {
-                  ctx.setDraft(next.join(LIST_SEPARATOR))
-                }
+              setSelected(next)
 
-                return next
-              })
+              // Mirrored into the hook's draft so a click *away* commits what was
+              // picked. Only a list that differs from the seeded draft counts:
+              // re-clicking an option already present nets unchanged, and a blur
+              // must not turn that into a write.
+              if (next.join(LIST_SEPARATOR) !== ctx.draft) {
+                ctx.setDraft(next.join(LIST_SEPARATOR))
+              }
             }}
           >
             <span aria-hidden="true" className="w-3 shrink-0">
@@ -850,7 +867,7 @@ const dateEditor: GridEditorDefinition<unknown> = {
     }
 
     return (
-      <OpenableDisplay ctx={ctx} kind="date">
+      <OpenableDisplay kind="date">
         <span className="truncate">{format(parsed, "d MMM yyyy")}</span>
       </OpenableDisplay>
     )
@@ -1039,7 +1056,7 @@ const userEditor: GridEditorDefinition<unknown> = {
     }
 
     return (
-      <OpenableDisplay ctx={ctx} kind="user" className="gap-1">
+      <OpenableDisplay kind="user" className="gap-1">
         <span
           aria-hidden="true"
           className="bg-muted text-muted-foreground flex size-4 shrink-0 items-center justify-center rounded-[3px] text-[10px]"

@@ -52,9 +52,17 @@
  * ## Why "add then immediately type" is its own test
  *
  * The focus lands on a *cell*, not on the editor: `+ Add record` moves the
- * keyboard model, and the first printable character opens the editor through the
- * story-2 type-to-edit branch. Two different mechanisms; a single combined
- * assertion would pass if only one of them worked.
+ * keyboard model, and the double-click that follows opens the editor. Two
+ * different mechanisms; a single combined assertion would pass if only one of
+ * them worked.
+ *
+ * **Both halves changed with CAP-10.** This used to be "the first printable
+ * character opens the editor through the story-2 type-to-edit branch", with the
+ * character doubling as the seed. Type-to-edit is retired — it was one of five
+ * openers, and a seeded draft is indistinguishable on screen from a deliberate
+ * overwrite — so the opener is a double-click and the draft is seeded from the
+ * cell's own (blank) value instead. The test still covers both mechanisms; it
+ * just no longer proves a retired one.
  *
  * ## Why the service worker is blocked
  *
@@ -71,7 +79,7 @@
  * path in the worker, and nothing in CAP-6 is about offline behaviour.
  */
 
-import { expect, test, type Page } from "@playwright/test"
+import { expect, test, type Locator, type Page } from "@playwright/test"
 
 import {
   ROW_LIFECYCLE_TAG,
@@ -91,6 +99,7 @@ import {
   filterGlobally,
   gridStatusLine,
   manageContactsUrl,
+  openCellEditor,
   openContactsGrid,
   openPreviewGrid,
   renderedRows,
@@ -113,31 +122,41 @@ function draftRow(page: Page) {
 }
 
 /**
- * Type `text` into the open editor, appending to the type-to-edit seed.
+ * Type `text` into the open editor, replacing the seeded draft.
  *
- * The seed is **selected** on mount, so a plain `keyboard.type` would replace it
- * rather than extend it and the opening character would be lost. `End` collapses
- * that selection first — the same two steps `grid-keyboard.spec.ts` key 4 takes,
- * and for the same reason: this exercises the keyboard model's own contract
- * rather than working around it.
+ * The draft is seeded from the cell's own value and is **selected** on mount, so
+ * a plain `keyboard.type` replaces it wholesale — which is what every caller
+ * wants. `End` collapses that selection first so that a caller *appending*
+ * instead has to say so, rather than the two being indistinguishable.
+ *
+ * (The old helper did the opposite: it existed because the type-to-edit branch
+ * seeded the draft with the opening character. That branch is retired by CAP-10,
+ * so the seed is now the cell's value and the helper's `End` is only there to
+ * make "replace" and "append" separate calls.)
  */
-async function typeAppendingSeed(page: Page, text: string): Promise<void> {
+async function typeReplacingSeed(page: Page, text: string): Promise<void> {
   await cellEditor(page).press("End")
   await page.keyboard.type(text)
 }
 
 /**
- * Type `text` into a focused cell from scratch, through the type-to-edit branch.
+ * Open the focused cell's editor with a double-click and type `text` into it.
  *
- * The first character is what *opens* the editor and becomes its selected seed,
- * so the rest has to be typed after collapsing that selection. Skipping the
- * `End` loses the first character, which reads as "the grid dropped a character"
- * rather than as a broken spec — hence spelled out rather than left implicit.
+ * **Why the gesture changed.** This used to be "type the first character, which
+ * opens the editor through the story-2 type-to-edit branch, then type the rest
+ * after collapsing that seed's selection". Type-to-edit is retired by CAP-10 —
+ * double-click is the only opener — so the first character no longer opens
+ * anything, and a double-click does.
+ *
+ * Why it still matters that the *cell* holds focus first: `+ Add record` puts
+ * the keyboard model on the draft row's first editable cell, and the cell under
+ * test is then named explicitly, so the double-click addresses a known cell
+ * rather than whatever happens to be focused.
  */
-async function typeIntoCell(page: Page, text: string): Promise<void> {
-  await page.keyboard.type(text.slice(0, 1))
-  await expect(cellEditor(page), "typing opened the cell's editor").toBeFocused()
-  await typeAppendingSeed(page, text.slice(1))
+async function typeIntoCell(page: Page, cell: Locator, text: string): Promise<void> {
+  await openCellEditor(cell)
+  await expect(cellEditor(page), "the double-click opened the cell's editor").toBeFocused()
+  await typeReplacingSeed(page, text)
 }
 
 /**
@@ -278,7 +297,7 @@ async function refuseDeletes(page: Page): Promise<void> {
 }
 
 test.describe("row lifecycle", () => {
-  test("add — the new row's first editable cell takes focus, and typing seeds that cell's editor", async ({
+  test("add — the new row's first editable cell takes focus, and a double-click opens that cell's editor", async ({
     page,
   }) => {
     const held = holdCreateRequests(page)
@@ -302,15 +321,21 @@ test.describe("row lifecycle", () => {
       await expect(nameCell, "the appended row's first editable cell holds focus").toBeFocused()
       await expect(cellEditor(page), "the editor is not opened for them").toHaveCount(0)
 
-      // A printable character opens the editor through the story-2 type-to-edit
-      // branch, seeded with itself. Had focus stayed on the button, this keypress
-      // would have gone nowhere.
-      await page.keyboard.type("R")
-      await expect(cellEditor(page), "typing opened the seeded editor").toBeFocused()
-      await expect(cellEditor(page), "the seed is the opening character").toHaveValue("R")
+      // A double-click on that focused cell opens the editor. **Why the gesture
+      // changed:** this used to be `page.keyboard.type("R")`, because the first
+      // printable character opened the editor through the story-2 type-to-edit
+      // branch *and* became its selected seed. Type-to-edit is retired by CAP-10
+      // (double-click is the sole opener), so the character no longer opens
+      // anything and the seed is now the draft row's own blank value. The claim
+      // under test is unchanged — add, then edit the focused cell — but it is
+      // worth naming that the double-click alone, with no keystroke, is what
+      // opens it.
+      await openCellEditor(nameCell)
+      await expect(cellEditor(page), "the double-click opened the editor").toBeFocused()
+      await expect(cellEditor(page), "a blank draft row seeds an empty draft").toHaveValue("")
 
-      await typeAppendingSeed(page, "avi")
-      await expect(cellEditor(page), "the seed and the rest together read Ravi").toHaveValue("Ravi")
+      await typeReplacingSeed(page, "Ravi")
+      await expect(cellEditor(page), "the draft reads Ravi").toHaveValue("Ravi")
       await expect(nameCell, "the editor is inside the new row's name cell").toBeVisible()
 
       await page.keyboard.press("Enter")
@@ -389,7 +414,7 @@ test.describe("row lifecycle", () => {
       await openContactsGrid(page)
       await addRecordButton(page).click()
 
-      await typeIntoCell(page, name)
+      await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
       await page.keyboard.press("Enter")
 
       // The real handler, not an interception: `parseContactPatch` is the one
@@ -412,8 +437,7 @@ test.describe("row lifecycle", () => {
       // The draft survives its refusal, so the record can be completed: the
       // second commit carries the first field's value along. Dropping the draft
       // instead would make a two-`NOT NULL` record impossible to create.
-      await cellIn(draftRow(page), "phone").click()
-      await typeIntoCell(page, phone)
+      await typeIntoCell(page, cellIn(draftRow(page), "phone"), phone)
       await page.keyboard.press("Enter")
 
       await expect(
@@ -457,12 +481,11 @@ test.describe("row lifecycle", () => {
       await openContactsGrid(page)
       await addRecordButton(page).click()
 
-      await typeIntoCell(page, name)
+      await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
       await page.keyboard.press("Enter")
       await expect(gridStatusLine(page), "the name alone is refused").toHaveText("Phone is required.")
 
-      await cellIn(draftRow(page), "phone").click()
-      await typeIntoCell(page, phone)
+      await typeIntoCell(page, cellIn(draftRow(page), "phone"), phone)
       await page.keyboard.press("Enter")
 
       // Promotion is observable from the DOM: the row keeps its position but takes
@@ -612,7 +635,7 @@ test.describe("row lifecycle", () => {
       // what makes the second commit carry the first field's value along. Arming
       // the interception first would fail the *name* commit instead, which tests
       // a one-field record and not the two-field draft this case is about.
-      await typeIntoCell(page, name)
+      await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
       await page.keyboard.press("Enter")
       await expect(gridStatusLine(page), "the first commit is refused for the missing phone").toHaveText(
         "Phone is required.",
@@ -620,8 +643,7 @@ test.describe("row lifecycle", () => {
 
       held = holdCreateRequests(page)
 
-      await cellIn(draftRow(page), "phone").click()
-      await typeIntoCell(page, phone)
+      await typeIntoCell(page, cellIn(draftRow(page), "phone"), phone)
       await page.keyboard.press("Enter")
 
       // In flight: the value is on screen while the write is unresolved, so this

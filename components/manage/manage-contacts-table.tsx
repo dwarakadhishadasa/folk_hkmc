@@ -327,7 +327,7 @@ function SelectAllControl({
       className="flex justify-center"
       onPointerDown={(event) => {
         // Without this the cell takes the pointer, the grid moves cell focus to a
-        // non-editable column, and the next `e` becomes a no-op.
+        // non-editable column, and the next double-click becomes a no-op.
         event.stopPropagation()
       }}
     >
@@ -795,7 +795,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
             className="flex justify-center"
             onPointerDown={(event) => {
               // Without this the cell takes the pointer, the grid moves cell focus
-              // to a non-editable column, and the next `e` becomes a no-op.
+              // to a non-editable column, and the next double-click becomes a no-op.
               event.stopPropagation()
             }}
           >

@@ -70,7 +70,7 @@ export function gridRoot(page: Page): Locator {
   return page.locator("[data-grid-root]")
 }
 
-/** The keyboard-owning scroll container, which is what `j`/`k`/`e` listen on. */
+/** The keyboard-owning scroll container, which is what `j`/`k` and `Tab` listen on. */
 export function gridScroll(page: Page): Locator {
   return page.getByRole("group", { name: "Contacts" })
 }
@@ -174,6 +174,35 @@ export async function focusCellAt(page: Page, rowIndex: number, columnId: string
   // it explicit means the spec is asserting keyboard behaviour rather than
   // relying on whether a given browser focuses a `tabindex="-1"` cell on click.
   await gridScroll(page).focus()
+}
+
+/**
+ * Open a cell's editor — a **double-click**, and the only gesture that opens one.
+ *
+ * CAP-10 retired the `e` key, printable-character type-to-edit, `Space`-seeding
+ * and the single click on a display widget, so every spec that used to press `e`
+ * opens its editor through here instead. It is a helper rather than a bare
+ * `dblclick()` so the reason a spec is double-clicking lives in one place: a
+ * later agent who reads one retired gesture can find the rest.
+ *
+ * The double-click also does the focusing: `GridRow`'s `onPointerDown` fires on
+ * the way down and moves the focus model onto the cell, so a spec no longer needs
+ * a separate click to point the grid at a column before opening it.
+ */
+export async function openCellEditor(cell: Locator): Promise<void> {
+  await cell.dblclick()
+}
+
+/**
+ * Open a cell's editor at the cell's padding corner instead of its centre.
+ *
+ * For the two preview columns whose centre **is** its own control — `website` is
+ * a link and `flagged` is a checkbox — the first click of the double-click would
+ * otherwise navigate or toggle instead of opening. Same argument as
+ * `focusPreviewCellAt`'s corner click, for the same cells.
+ */
+export async function openCellEditorAtCorner(cell: Locator): Promise<void> {
+  await cell.dblclick({ position: { x: 2, y: 2 } })
 }
 
 /** Toggle a column's sort, moving none → ascending → descending → none. */

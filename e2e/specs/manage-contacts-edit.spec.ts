@@ -81,6 +81,7 @@ import {
   cellIn,
   filterGlobally,
   gridStatusLine,
+  openCellEditor,
   openContactsGrid,
   readContactColumn,
   readContactNames,
@@ -121,8 +122,10 @@ async function focusNameCell(page: Page, id: string, name: string): Promise<void
   await filterGlobally(page, name)
   await expect(rowById(page, id), "the filtered row should be the one under test").toBeVisible()
 
-  // Pointer focus is what tells the grid which column `e` applies to; without it
-  // `e` opens the row's first editable cell, which happens to be `name` too.
+  // A single click points the focus model at this column. Since CAP-10 a click no
+  // longer opens anything — the double-click in each test does — so this is only
+  // here to make the cell the active one, which is what a grid-level assertion
+  // reads.
   await cellIn(rowById(page, id), "name").click()
 }
 
@@ -142,7 +145,7 @@ const RELEASE_TIMEOUT_MS = 15_000
  *
  * The wait is therefore driven by the parked handlers themselves, not by a
  * `waitForResponse` registered here. A waiter created at interception time
- * starts its clock before the test has even pressed `e`, so it expires during
+ * starts its clock before the test has even opened the editor, so it expires during
  * the optimistic assertion's own 20s poll — and on the failing path, the one
  * that matters, it is already spent. Tracking each handler's completion makes
  * the bound restart at `release`, needs no URL of its own to drift from
@@ -250,7 +253,7 @@ test.describe("inline cell editing", () => {
 
     const { requests, release } = holdContactPatch(page)
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "name"))
       await expect(cellEditor(page)).toBeFocused()
 
       // The editor selects its contents on mount, so typing replaces rather
@@ -299,7 +302,7 @@ test.describe("inline cell editing", () => {
     try {
       await focusNameCell(page, target.id, target.name)
 
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "name"))
       await expect(cellEditor(page)).toBeFocused()
       await page.keyboard.type(renamed)
       await page.keyboard.press("Enter")
@@ -339,7 +342,7 @@ test.describe("inline cell editing", () => {
     try {
       await focusNameCell(page, target.id, target.name)
 
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "name"))
       await expect(cellEditor(page)).toBeFocused()
       await page.keyboard.type(renamed)
       await page.keyboard.press("Enter")
@@ -383,7 +386,7 @@ test.describe("inline cell editing", () => {
     })
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "name"))
       await expect(cellEditor(page)).toBeFocused()
       await page.keyboard.type(`${original}-Rejected`)
       await page.keyboard.press("Enter")
@@ -413,11 +416,9 @@ test.describe("inline cell editing", () => {
     const phoneCell = cellIn(rowById(page, target.id), "phone")
     await expect(phoneCell).toHaveText(target.phone)
 
-    await phoneCell.click()
-
     const { requests, release } = holdContactPatch(page)
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(phoneCell)
       await expect(cellEditor(page)).toBeFocused()
       await clearCellEditor(page)
       await page.keyboard.press("Enter")
@@ -456,8 +457,7 @@ test.describe("inline cell editing", () => {
 
     const before = await readContactColumn([target.id], "phone")
 
-    await phoneCell.click()
-    await page.keyboard.press("e")
+    await openCellEditor(phoneCell)
     await expect(cellEditor(page)).toBeFocused()
     await clearCellEditor(page)
     await page.keyboard.press("Enter")
@@ -488,7 +488,7 @@ test.describe("inline cell editing", () => {
     })
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "name"))
       await expect(cellEditor(page)).toBeFocused()
       await page.keyboard.type(`${original}-Unreachable`)
       await page.keyboard.press("Enter")

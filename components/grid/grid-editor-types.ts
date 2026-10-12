@@ -107,8 +107,6 @@ export interface GridEditorContext<TData> {
   commitDraft: (draft?: string) => void
   /** Commit an already-typed value — a boolean flip, a picked option. */
   commitValue: (value: unknown) => void
-  /** Open this cell's editor, the way `e` does. Used by a click-to-open display. */
-  open: () => void
   /** Leave the editor without writing. */
   close: () => void
   /** True while the cell is open, so a popover editor can start open. */
@@ -136,10 +134,10 @@ export interface GridEditorDefinition<TData> {
   /** Present only when the editor commits on interaction rather than `Enter`. */
   commitsOnInteraction?: boolean
   /**
-   * What `e` and type-to-edit prefill, for the editors whose edit text is not
-   * their display text — a `date` cell displays `5 Mar 2026` and edits
-   * `2026-03-05`. Omitted means "seed with the cell's display text", which is
-   * right for every editor the two share.
+   * What a double-click prefills, for the editors whose edit text is not their
+   * display text — a `date` cell displays `5 Mar 2026` and edits `2026-03-05`.
+   * Omitted means "seed with the cell's display text", which is right for every
+   * editor the two share.
    */
   draftSeed?: (text: string, value: unknown) => string
 }

@@ -35,6 +35,7 @@ import {
   filterGlobally,
   headerCell,
   manageContactsUrl,
+  openCellEditor,
   openContactsGrid,
   readContactNames,
   renderedRows,
@@ -162,8 +163,12 @@ test.describe("filtering, sorting and the empty scope", () => {
     expect(originalNames.get(editedId), "the row under test must exist in the database").toBe(nameBefore)
 
     try {
-      await cellIn(target, "name").click()
-      await page.keyboard.press("e")
+      // CAP-10: a double-click is the only gesture that opens a cell editor. This
+      // used to be `cellIn(target, "name").click()` followed by `press("e")`,
+      // because `e` was one of five openers and a click only pointed the focus
+      // model at the column. That opener is retired on purpose — see the
+      // story's "Non-goals" — so the double-click both focuses and opens.
+      await openCellEditor(cellIn(target, "name"))
       await expect(page.getByRole("textbox", { name: "Edit cell value" })).toBeFocused()
       await page.keyboard.type(SORTS_FIRST_NAME)
       await page.keyboard.press("Enter")

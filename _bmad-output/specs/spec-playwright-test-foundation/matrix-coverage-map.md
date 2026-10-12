@@ -181,6 +181,48 @@ Both are per-item isolation over real network outcomes, which is what the row's
 error-handling column asks for. The wording differs from the matrix's literal
 "`fetch` rejects", and that difference is recorded here rather than papered over.
 
+### Rows 1–5 and 18 re-verified under CAP-10 — the edit model moved, the verdicts did not
+
+`spec-contacts-premium-grid` story 1 replaced the edit **opener**: double-click
+is now the only gesture that opens a cell editor, `e` / printable-character
+type-to-edit / `Space`-seeding and the single click on a display widget are
+retired, blur commits, and `Escape` is the only discard. Rows 1–5
+(`manage-contacts-edit.spec.ts`) and row 18 (`manage-contacts-filter.spec.ts`)
+are the rows whose specs opened an editor with `press("e")`, so their evidence
+was rewritten: every opener gesture became a double-click plus `keyboard.type`,
+and each converted site records why the behaviour was removed.
+
+**The verdicts above are unchanged and were re-verified, not assumed.** The
+claim each row makes is untouched by the opener change — one PATCH, a value that
+survives a reload, a 400 that reverts, an empty required field, a dropped
+request, a sort that reads the committed value — and the run below is the record
+of them passing under the new model. Nothing was deleted: a retired assertion
+records its reason on the test, so a green suite is not read as evidence that the
+keyboard model still works.
+
+A new spec, `e2e/specs/grid-edit-model.spec.ts` (27 tests), carries the CAP-10
+claims themselves — the one opener, the single commit path, zero requests on an
+untouched blur, `Escape` as the only discard, and the four retired openers
+opening nothing. It sits **outside** this 19-row map: none of the 19 rows is
+about edit activation, and adding a twentieth row for it would claim coverage
+this foundation never specified.
+
+The recorded run, against `HEAD` on top of `065dec1`, local stack,
+`baseURL http://127.0.0.1:3000`, single worker:
+
+```
+$ pnpm test:e2e:determinism
+
+Pass counts
+  run 1 of 2: 190 passed
+  run 2 of 2: 190 passed
+
+Suite determinism PASSED — 2 consecutive green runs.
+```
+
+190 tests, twice, with no manual reset between the runs — which is the bar this
+map set for itself and not a new one.
+
 
 ## The blocking prerequisite: row volume — **now exists**
 

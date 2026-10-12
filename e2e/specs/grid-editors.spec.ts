@@ -19,6 +19,15 @@
  * | `email`      | preview `emailAddress` | `parse`: no domain             |
  * | `user`       | preview `assignee` | `parse`: an unknown id (pasted)  |
  *
+ * ## How an editor is opened — CAP-10
+ *
+ * **Every test here opens its editor with a double-click** (`openCellEditor`),
+ * because a double-click is the only gesture that opens one. `e`,
+ * printable-character type-to-edit, `Space`-seeding and the single click on a
+ * display widget are retired; `Escape` is the only discard and clicking away is
+ * a commit. The eleven editors are unchanged by that — what is asserted below is
+ * parsing, validation and the one write path, none of which moved.
+ *
  * ## Why two harnesses
  *
  * A preview-hosted type is asserted on `/dev/grid-preview`: 500 deterministic
@@ -65,6 +74,8 @@ import {
   filterGlobally,
   focusPreviewCellAt,
   gridStatusLine,
+  openCellEditor,
+  openCellEditorAtCorner,
   openContactsGrid,
   openPreviewGrid,
   readContactColumn,
@@ -183,18 +194,21 @@ async function inScopeRow(offset: number): Promise<{ id: string; name: string }>
 /**
  * Open `/manage` narrowed to one row and focus one of its cells.
  *
- * A click-to-open display (`select`, `multiselect`, `date`, `user`) opens its
- * popover on the very click that focuses the cell. `Escape` closes that again
- * without writing, so the `e` a test presses next is the opener under test rather
- * than an accident of the click — and a grid-level gesture such as a paste is not
- * swallowed by a cell that is still open.
+ * A single click and nothing more: since CAP-10 a click-to-open display no
+ * longer opens its popover, so there is nothing to dismiss afterwards and no
+ * `Escape` to press here. The click is still needed for the tests whose subject
+ * is a grid-level gesture — a paste is swallowed while a cell is open, and the
+ * paste cannot happen without the cell being closed first — and for the ones
+ * that assert on a *closed* cell's own text.
+ *
+ * A test that wants an editor open double-clicks through `openCellEditor`, which
+ * focuses the cell on its way down and so makes this helper's click redundant.
  */
 async function focusContactsCell(page: Page, id: string, name: string, columnId: string) {
   await openContactsGrid(page)
   await filterGlobally(page, name)
   await expect(rowById(page, id), "the filtered row should be the one under test").toBeVisible()
   await cellIn(rowById(page, id), columnId).click()
-  await page.keyboard.press("Escape")
 }
 
 /**
@@ -247,7 +261,7 @@ test.describe("typed editor — text, on /manage", () => {
     })
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "name"))
       await expect(cellEditor(page), "the text editor opens an in-cell input").toBeFocused()
       await page.keyboard.type(renamed)
       await page.keyboard.press("Enter")
@@ -278,7 +292,7 @@ test.describe("typed editor — text, on /manage", () => {
     await focusContactsCell(page, target.id, target.name, "name")
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "name"))
       await expect(cellEditor(page)).toBeFocused()
       await cellEditor(page).press("ControlOrMeta+a")
       await cellEditor(page).press("Backspace")
@@ -303,7 +317,7 @@ test.describe("typed editor — text, on /manage", () => {
 
     const { requests, release } = holdContactPatch(page)
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "name"))
       await expect(cellEditor(page)).toBeFocused()
       await page.keyboard.type(renamed)
       await page.keyboard.press("Enter")
@@ -338,7 +352,7 @@ test.describe("typed editor — longtext, on /manage", () => {
     await focusContactsCell(page, target.id, target.name, "notes")
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "notes"))
       const textarea = page.getByRole("textbox", { name: "Edit Notes" })
       await expect(textarea, "longtext opens in a popover, not in the cell").toBeFocused()
       await textarea.press("ControlOrMeta+a")
@@ -368,7 +382,7 @@ test.describe("typed editor — longtext, on /manage", () => {
     await focusContactsCell(page, target.id, target.name, "notes")
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "notes"))
       const textarea = page.getByRole("textbox", { name: "Edit Notes" })
       await expect(textarea).toBeFocused()
 
@@ -400,7 +414,7 @@ test.describe("typed editor — longtext, on /manage", () => {
 
     const { requests, release } = holdContactPatch(page)
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "notes"))
       const textarea = page.getByRole("textbox", { name: "Edit Notes" })
       await expect(textarea).toBeFocused()
       await textarea.press("ControlOrMeta+a")
@@ -434,7 +448,7 @@ test.describe("typed editor — select, on /manage", () => {
 
     try {
       await focusContactsCell(page, target.id, target.name, "source")
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "source"))
 
       const option = page.getByRole("option", { name: "preview-fixture", exact: true })
       await expect(option, "the select opens in a popover with its options").toBeVisible()
@@ -461,7 +475,7 @@ test.describe("typed editor — select, on /manage", () => {
     await focusContactsCell(page, target.id, target.name, "source")
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "source"))
       const search = optionSearch(page, /Find an option for Source/)
       await expect(search).toBeFocused()
       await search.pressSequentially("no-such-source")
@@ -490,7 +504,7 @@ test.describe("typed editor — select, on /manage", () => {
 
     const { requests, release } = holdContactPatch(page)
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "source"))
       await page.getByRole("option", { name: "preview-fixture", exact: true }).click()
 
       await expect
@@ -540,7 +554,7 @@ test.describe("typed editor — multiselect, on /manage", () => {
 
     try {
       await focusContactsCell(page, target.id, target.name, "booksRead")
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "booksRead"))
 
       const option = page.getByRole("option", { name: secondBook, exact: true })
       await expect(option, "the multiselect lists payload.booksReadOptions").toBeVisible()
@@ -593,7 +607,7 @@ test.describe("typed editor — multiselect, on /manage", () => {
 
     const { requests, release } = holdContactPatch(page)
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "booksRead"))
       await page.getByRole("option", { name: secondBook, exact: true }).click()
       await page.getByRole("button", { name: "Apply" }).click()
 
@@ -626,7 +640,7 @@ test.describe("typed editor — date, on /manage", () => {
 
     try {
       await focusContactsCell(page, target.id, target.name, "initialContact")
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "initialContact"))
 
       const field = page.getByRole("textbox", { name: "Initial Contact as YYYY-MM-DD" })
       await expect(page.locator('[data-grid-editor="calendar"]'), "the calendar is rendered").toBeVisible()
@@ -655,7 +669,7 @@ test.describe("typed editor — date, on /manage", () => {
     await focusContactsCell(page, target.id, target.name, "initialContact")
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "initialContact"))
       const field = page.getByRole("textbox", { name: "Initial Contact as YYYY-MM-DD" })
       await expect(page.locator('[data-grid-editor="calendar"]')).toBeVisible()
       await field.pressSequentially("2026-02-31")
@@ -681,7 +695,7 @@ test.describe("typed editor — date, on /manage", () => {
 
     const { requests, release } = holdContactPatch(page)
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "initialContact"))
       const field = page.getByRole("textbox", { name: "Initial Contact as YYYY-MM-DD" })
       await expect(page.locator('[data-grid-editor="calendar"]')).toBeVisible()
       await field.pressSequentially(ISO)
@@ -766,12 +780,10 @@ test.describe("typed editor — checkbox, on /dev/grid-preview", () => {
 test.describe("typed editor — currency, on /dev/grid-preview", () => {
   test("commit — a typed amount is formatted on the cell", async ({ page }) => {
     await openPreviewGrid(page)
-    await focusPreviewCellAt(page, 0, "amount")
-
     const before = (await cellAt(page, 0, "amount").textContent()) ?? ""
     expect(before, "the test needs a different amount to prove the change").not.toContain("1,234.50")
 
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "amount"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -787,10 +799,9 @@ test.describe("typed editor — currency, on /dev/grid-preview", () => {
 
   test("rejection — a third decimal place reverts in the cell", async ({ page }) => {
     await openPreviewGrid(page)
-    await focusPreviewCellAt(page, 0, "amount")
     const before = (await cellAt(page, 0, "amount").textContent()) ?? ""
 
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "amount"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -809,8 +820,7 @@ test.describe("typed editor — currency, on /dev/grid-preview", () => {
     const notes = cellAt(page, 0, "notes")
     const before = (await notes.textContent()) ?? ""
 
-    await focusPreviewCellAt(page, 0, "amount")
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "amount"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -833,10 +843,9 @@ test.describe("typed editor — currency, on /dev/grid-preview", () => {
 test.describe("typed editor — number, on /dev/grid-preview", () => {
   test("commit — a typed number is written and shown right-aligned", async ({ page }) => {
     await openPreviewGrid(page)
-    await focusPreviewCellAt(page, 0, "quantity")
     const before = (await cellAt(page, 0, "quantity").textContent()) ?? ""
 
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "quantity"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -849,10 +858,9 @@ test.describe("typed editor — number, on /dev/grid-preview", () => {
 
   test("rejection — trailing garbage is rejected and the cell reverts", async ({ page }) => {
     await openPreviewGrid(page)
-    await focusPreviewCellAt(page, 0, "quantity")
     const before = (await cellAt(page, 0, "quantity").textContent()) ?? ""
 
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "quantity"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -871,8 +879,7 @@ test.describe("typed editor — number, on /dev/grid-preview", () => {
     const notes = cellAt(page, 0, "notes")
     const before = (await notes.textContent()) ?? ""
 
-    await focusPreviewCellAt(page, 0, "quantity")
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "quantity"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -898,11 +905,8 @@ test.describe("typed editor — url, on /dev/grid-preview", () => {
   test("commit — a typed URL is written and renders as a link", async ({ page }) => {
     await openPreviewGrid(page)
     // The cell's padding, not the anchor: for this column the centre of the cell
-    // is the link itself.
-    await cellAt(page, 0, "website").click({ position: { x: 2, y: 2 } })
-    await page.getByRole("group", { name: "Grid preview rows" }).focus()
-
-    await page.keyboard.press("e")
+    // is the link itself, and the first click of the double-click would navigate.
+    await openCellEditorAtCorner(cellAt(page, 0, "website"))
     await expect(cellEditor(page), "the url editor opens an in-cell input").toBeFocused()
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
@@ -917,13 +921,11 @@ test.describe("typed editor — url, on /dev/grid-preview", () => {
 
   test("rejection — a bare host with no scheme reverts in the cell", async ({ page }) => {
     await openPreviewGrid(page)
-    // Clicking the cell's own padding rather than the link: `focusPreviewCellAt`
-    // clicks the element's centre, and for this column that is the anchor.
-    await cellAt(page, 0, "website").click({ position: { x: 2, y: 2 } })
-    await page.getByRole("group", { name: "Grid preview rows" }).focus()
     const before = (await cellAt(page, 0, "website").textContent()) ?? ""
 
-    await page.keyboard.press("e")
+    // Clicking the cell's own padding rather than the link: the centre of this
+    // cell is the anchor.
+    await openCellEditorAtCorner(cellAt(page, 0, "website"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -942,10 +944,7 @@ test.describe("typed editor — url, on /dev/grid-preview", () => {
     const notes = cellAt(page, 0, "notes")
     const before = (await notes.textContent()) ?? ""
 
-    await cellAt(page, 0, "website").click({ position: { x: 2, y: 2 } })
-    await page.getByRole("group", { name: "Grid preview rows" }).focus()
-
-    await page.keyboard.press("e")
+    await openCellEditorAtCorner(cellAt(page, 0, "website"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -970,9 +969,7 @@ test.describe("typed editor — email, on /dev/grid-preview", () => {
 
   test("commit — a typed address is written and shown", async ({ page }) => {
     await openPreviewGrid(page)
-    await focusPreviewCellAt(page, 0, "emailAddress")
-
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "emailAddress"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -985,10 +982,9 @@ test.describe("typed editor — email, on /dev/grid-preview", () => {
 
   test("rejection — an address with no domain reverts in the cell", async ({ page }) => {
     await openPreviewGrid(page)
-    await focusPreviewCellAt(page, 0, "emailAddress")
     const before = (await cellAt(page, 0, "emailAddress").textContent()) ?? ""
 
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "emailAddress"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -1007,8 +1003,7 @@ test.describe("typed editor — email, on /dev/grid-preview", () => {
     const notes = cellAt(page, 0, "notes")
     const before = (await notes.textContent()) ?? ""
 
-    await focusPreviewCellAt(page, 0, "emailAddress")
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "emailAddress"))
     await expect(cellEditor(page)).toBeFocused()
     await cellEditor(page).press("ControlOrMeta+a")
     await cellEditor(page).press("Backspace")
@@ -1031,13 +1026,9 @@ test.describe("typed editor — email, on /dev/grid-preview", () => {
 test.describe("typed editor — user, on /dev/grid-preview", () => {
   test("commit — a picked person is written and shown with their initials", async ({ page }) => {
     await openPreviewGrid(page)
-    // The click-to-open display opens its popover on the click that focuses the
-    // cell; dismiss it so `e` is the opener under test.
-    await focusPreviewCellAt(page, 0, "assignee")
-    await page.keyboard.press("Escape")
     const before = (await cellAt(page, 0, "assignee").textContent()) ?? ""
 
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "assignee"))
     const search = optionSearch(page, /Find Assignee/)
     await expect(search, "the user editor opens a searchable popover").toBeFocused()
 
@@ -1054,10 +1045,10 @@ test.describe("typed editor — user, on /dev/grid-preview", () => {
 
   test("rejection — an id that is not a known person reverts in the cell", async ({ page }) => {
     await openPreviewGrid(page)
-    // The click that focuses the cell also opens this column's popover, and the
-    // grid ignores a paste while a cell is open — so dismiss it first.
+    // The grid ignores a paste while a cell is open, and since CAP-10 a single
+    // click no longer opens this column's popover — so one click leaves the cell
+    // closed and focused, which is exactly what a paste needs.
     await focusPreviewCellAt(page, 0, "assignee")
-    await page.keyboard.press("Escape")
     const before = (await cellAt(page, 0, "assignee").textContent()) ?? ""
     await grantClipboard(page)
 
@@ -1077,9 +1068,7 @@ test.describe("typed editor — user, on /dev/grid-preview", () => {
     const notes = cellAt(page, 0, "notes")
     const before = (await notes.textContent()) ?? ""
 
-    await focusPreviewCellAt(page, 0, "assignee")
-    await page.keyboard.press("Escape")
-    await page.keyboard.press("e")
+    await openCellEditor(cellAt(page, 0, "assignee"))
     await expect(optionSearch(page, /Find Assignee/)).toBeFocused()
     await page.getByRole("option", { name: "M. Nair" }).click()
 
@@ -1101,7 +1090,8 @@ test.describe("typed editors — positioning and the registry", () => {
     page,
   }) => {
     // `initialContact`, because a null date renders as the plain placeholder with
-    // no click-to-open widget — so `e` is what opens the editor here, and the
+    // no click-to-open widget — so the double-click is the only thing that opens
+    // the editor here, and the
     // test is about the popover rather than about the click affordance.
     const target = await inScopeRow(59)
 
@@ -1109,7 +1099,7 @@ test.describe("typed editors — positioning and the registry", () => {
     const row = rowById(page, target.id)
     const before = await row.evaluate((element) => element.getBoundingClientRect().height)
 
-    await page.keyboard.press("e")
+    await openCellEditor(cellIn(rowById(page, target.id), "initialContact"))
     const popover = page.locator('[data-grid-editor="calendar"]')
     await expect(popover, "the calendar is rendered").toBeVisible()
 
@@ -1126,9 +1116,23 @@ test.describe("typed editors — positioning and the registry", () => {
     await page.keyboard.press("Escape")
   })
 
-  test("AC4 — clicking away mid-edit writes nothing", async ({ page }) => {
+  /**
+   * AC4 **reversed** — clicking away mid-edit now *writes*.
+   *
+   * This used to read "AC4 — clicking away mid-edit writes nothing" and assert
+   * zero PATCHes. **Why the behaviour was removed:** upstream story 2's AC4 was
+   * written when the popover editors discarded on close, so a correction an
+   * operator typed and then clicked away from was silently lost — the opposite of
+   * what an edit needs. CAP-10 makes moving focus away *commit*, through the one
+   * commit path, and `Escape` is the only discard. The replacement is not merely
+   * the negation of the old assertion: it asserts that exactly one write carries
+   * the typed text and reaches the database, because "clicking away commits"
+   * would be satisfied as well by a commit that lost the draft.
+   */
+  test("AC4 (retired, inverted) — clicking away mid-edit commits through the one path", async ({ page }) => {
     const target = await inScopeRow(61)
     const original = await readContactColumn([target.id], "notes")
+    const note = "committed by clicking away"
 
     await focusContactsCell(page, target.id, target.name, "notes")
 
@@ -1139,22 +1143,30 @@ test.describe("typed editors — positioning and the registry", () => {
     })
 
     try {
-      await page.keyboard.press("e")
+      await openCellEditor(cellIn(rowById(page, target.id), "notes"))
       const textarea = page.getByRole("textbox", { name: "Edit Notes" })
       await expect(textarea).toBeFocused()
-      await textarea.pressSequentially("discarded")
+      // Emptied first, because the textarea seeds from whatever the cell already
+      // holds and `pressSequentially` *appends*: on a row carrying a leftover
+      // note the assertion would then read a concatenation.
+      await textarea.press("ControlOrMeta+a")
+      await textarea.press("Backspace")
+      await textarea.pressSequentially(note)
 
-      // `checkbox` is the only editor that commits on interaction. Every other
-      // type discards on an outside click, so a half-typed note must not fire a
-      // write.
+      // An outside click: Radix dismisses the popover, and closing is now a
+      // commit. `checkbox` still commits on interaction — that assertion survives
+      // below, unchanged.
       await page.locator("h2").click()
 
       await expect(textarea, "the editor closed").toHaveCount(0)
-      expect(requests, "clicking away mid-edit must not write").toHaveLength(0)
-      await expect(cellIn(rowById(page, target.id), "notes")).not.toContainText("discarded")
-      expect((await readContactColumn([target.id], "notes")).get(target.id)).toBe(
-        original.get(target.id),
-      )
+      await expect
+        .poll(() => requests.length, { message: "clicking away is one commit" })
+        .toBe(1)
+      expect(requests[0]).toMatchObject({ contactId: target.id, notes: note })
+      await expect(cellIn(rowById(page, target.id), "notes")).toContainText(note)
+      await expect
+        .poll(async () => (await readContactColumn([target.id], "notes")).get(target.id))
+        .toBe(note)
     } finally {
       await page.unroute(SINGLE_CONTACT_ROUTE)
       await restoreContactColumn(original, "notes")
