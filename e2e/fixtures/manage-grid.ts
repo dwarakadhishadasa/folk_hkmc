@@ -22,8 +22,8 @@
  * | `[data-grid-cell="<id>~<columnId>"]`    | `gridCellKey`, same file      |
  * | `[data-grid-cell-selected]`             | `grid-row.tsx`, cell range only |
  * | `[data-grid-column="<columnId>"]`       | `grid-header-cell.tsx`        |
- * | `[data-grid-drag-handle="<columnId>"]` | the header's drag activator — absent on pinned columns and custom headers |
- * | `[data-grid-sort-popover]`            | `grid-sort-popover.tsx`, the one global sort surface |
+ * | `[data-grid-drag-handle="<columnId>"]`   | the header's drag activator — absent on pinned columns and custom headers |
+ * | `[data-grid-sort-popover]`               | `grid-sort-popover.tsx`, the one global sort surface |
  * | `[data-bulk-selection-count]`           | `manage-contacts-table.tsx`   |
  * | `[data-grid-add-record]`               | `grid-row-lifecycle.tsx`      |
  * | `[data-grid-delete-row="<rowId>"]`     | `grid-row-lifecycle.tsx`      |

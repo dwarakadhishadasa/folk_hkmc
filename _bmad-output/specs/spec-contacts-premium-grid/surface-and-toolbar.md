@@ -205,7 +205,7 @@ A double-click on a cell with text selects the word, and the browser does that b
 
 New specs: double-click opens on each of the seven editor types; single click does **not** open; a second double-click commits; blur commits a touched draft; blur commits **nothing** when untouched; `Escape` discards; arrows and `Tab` still navigate without opening an editor; `Space` on a checkbox still toggles.
 
-## CAP-12 — The filter conditions bar
+## CAP-12 — Filter conditions
 
 ### What it replaces
 
@@ -239,11 +239,13 @@ Per OQ-18 this is a popover; per OQ-13 it holds **several** conditions:
 ```
 In this view, show contacts
 
-  Where  [ Current status ▾ ] [ is empty ▾ ]              [🗑]
+  Where  [ Notes           ▾ ] [ is empty ▾ ]              [🗑]
   and ▾  [ Phone           ▾ ] [ contains ▾ ] [ Enter a value ] [🗑]
 
   + Add condition          Clear all
 ```
+
+**The first condition is `Notes · is empty`, not the `Current status · is empty` the compositions draw.** There is no status field — not in `lib/supabase/types.ts`, not in the fourteen at `manage-contacts-table.tsx:820-1010`. The comps render it because `stitch-prompt-contacts-toolbar.md:101` asked for it. `Notes` is used instead because it is in CAP-18's visible nine and is frequently blank, so the operator is looking straight at the column they are filtering (OQ-22). The defect OQ-20 records is about **any** zero-length value, so the column choice does not weaken it.
 
 **Absent, deliberately:** *"Copy from another view"* (needs saved views, a non-goal), *"Describe how to filter this view"* (Ask AI, a non-goal), **`+ Add condition group`** — which the reference screenshot also shows, and which stays out because grouping is what forces an ordered mixed expression — and **the `⠿` drag handle** on condition rows, which the reference screenshot also shows. Say why in the code, or a later agent reading only the screenshot will re-add them.
 

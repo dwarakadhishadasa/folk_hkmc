@@ -6,6 +6,7 @@ status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'c7241e0dba6dd28496eac3b1aea8dbd763dd56cb'
+baseline_revision: '41e310b4cbeb054b4fb338c2cc69501699ab100d'
 context:
   - '{project-root}/AGENTS.md'
   - '{project-root}/docs/architecture/testing.md'
@@ -67,7 +68,8 @@ context:
 - `docs/manage-grid-pattern.md` — same-commit rewrite: `meta.grid` table :48-60, pinned-run rule :64-68, custom-header note :76, porting checklist :399-422 (esp. :403-404).
 - `e2e/fixtures/manage-grid.ts` — `toggleSort` helper :209-210 clicks `Sort by <label>` button: must change when the label stops being a button; header helper `[data-grid-column]` :215 is the seam for new menu/drag assertions.
 - `e2e/specs/manage-contacts-filter.spec.ts:185-190`, `e2e/specs/grid-cell-range.spec.ts:53,241-242` — assert the label-as-sort-button model this story removes; update in the same commit with recorded reasons. Zero existing specs cover menu items, `cols`, or drag — all new.
-- `Visual-Design/contacts-overlays-stitch-v1-corrected.html` — authoritative direction artifact for the menu + sort popover at rest/hover; not a pixel spec.
+- `Visual-Design/contacts-overlays-stitch-v1-corrected.html` — authoritative direction artifact for the menu + sort popover at rest/hover; not a pixel spec. Read `visual-design.md` (a companion of SPEC.md, and the binding) for the measured values and the do-not-copy list — particularly the header-at-rest rule (label + sort indicator only, menu revealed on `:hover` **and** `:focus-within` at `opacity-0`, never `display:none`).
+- **CAP-13 HAS NO COMPOSITION.** All three approved comps contain zero `drag` / `grip` / drag-handle occurrences — the drag affordance was never composed, so nothing here is copied and nothing here is graded. This story therefore *invents* the affordance rather than implementing a reviewed one; see Design Notes. Do not go looking for a reference that does not exist.
 
 ## Tasks & Acceptance
 
@@ -95,7 +97,7 @@ context:
 - `resolveColumnDropOrder` + `isPinnedRunIntact` in `grid.tsx` are exported pure helpers: remove-dragged-id from the full order, insert at the drop target's slot (hidden ids keep their slots), reject when the pinned leading run would break. `commitColumnDrop` (ex-`moveColumn`) returns whether it wrote; drop commits once via the transient handle, rejects cancel.
 - The menu item both applies the sort and opens the popover prefilled, so the popover always shows what the grid is doing. Two hard-won integration facts are documented in code: (1) the open is deferred with `requestAnimationFrame` past the menu's close, and (2) the popover ignores focus-outside dismissal — without both, the menu close's late focus-return dismisses the popover the instant it opens (proven with focusin tracing: field focused, then focus yanked back into the closing menu, then to the trigger).
 - E2E helper `dragHeaderTo` uses stepped `mouse.move` (25 steps), not `dragTo`: `@dnd-kit/core`'s pointer sensor never activates on Playwright's single-jump drag, so the drop silently no-ops with no `cols` written.
-- Deliberate contract changes, each with the reason recorded at the edit site: `toggleSort` helper now goes menu item + popover (header label is not a sort button); row 17's per-column filter is driven through the `f.location` URL param (header funnel removed until story 6's conditions bar) with an added virtualizer-settle wait; row 18 / range 4 sort via directed menu items.
+- Deliberate contract changes, each with the reason recorded at the edit site: `toggleSort` helper now goes menu item + popover (header label is not a sort button); row 17's per-column filter is driven through the `f.location` URL param (header funnel removed until story 6's conditions popover) with an added virtualizer-settle wait; row 18 / range 4 sort via directed menu items.
 - No new `/api/manage/*` route; `components/grid/` keeps zero Manage/contacts vocabulary; token-clean grep still 0; all `data-grid-*` attributes preserved, two added (`data-grid-drag-handle`, `data-grid-sort-popover`) and documented in the fixture header.
 
 ## Spec Change Log
@@ -105,6 +107,12 @@ context:
 ## Design Notes
 
 Drop-commit mirrors the width drag: `beginTransientChange` on drag start so per-frame moves stay local, `commitTransientChange` once on drop so the URL takes exactly one push, `cancelTransientChange` when a drop is rejected. The pinned-run check runs against the *resulting* order array (built with the same hidden-skipping walk as `moveColumn`), never against the drop target alone — the frozen `left` offsets accumulate in `columnOrder`, so a bad commit is invisible statically and breaks only while scrolling.
+
+**The drag affordance was invented, not implemented, and the reasoning is recorded here because nothing was available to copy.** All three approved comps contain zero drag/grip occurrences, so CAP-13 has no reviewed design. What shipped: **the label itself is the activator** — `grid-header-cell.tsx:170-179` wraps label + `SortIndicator` in a span carrying `setNodeRef`, the dnd `attributes`/`listeners`, `role="button"`, `tabIndex={0}`, `aria-label="Drag to reorder <label>"`, `cursor-grab` → `active:cursor-grabbing`, and `data-grid-drag-handle`. Pinned and custom-header columns render the same label in a plain span with no activators (`:183-187`), so the seam `[data-grid-drag-handle]` is absent exactly where dragging must be impossible — which is what makes the fixture contract at `manage-grid.ts:25` checkable.
+
+Three properties worth defending explicitly. (1) **No grip icon was added.** A visible grip would put a third mark in the at-rest header, and CAP-14 plus every comp require at-rest to be label + sort indicator *only*; making the label the handle satisfies both. (2) **The affordance exists only where it works** — `canDrag` gates it, so a pinned column is inert rather than draggable-and-rejected. (3) **`tabIndex={0}` + `role="button"` + a real accessible name** is what lets `@dnd-kit`'s `KeyboardSensor` work and satisfies CAP-8; removing the `e`-era affordances must not leave drag pointer-only.
+
+**One unreviewed deviation to judge at the visual pass:** the focus ring here is `focus-visible:ring-1 ring-inset ring-ring/50` — 1px, inset, at 50% opacity — where `visual-design.md` records the focus ring as a **2px** royal blue. This is not a recorded defect, because no comp covers this state and there is nothing to have departed from; it is an unreviewed value that the recorded pass at 1440×900 and 1024×768 has to accept or correct.
 
 ## Verification
 

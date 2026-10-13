@@ -1,9 +1,17 @@
 ---
 id: SPEC-contacts-premium-grid
 companions:
+  - visual-design.md
   - existing-state.md
   - surface-and-toolbar.md
-sources: []
+sources:
+  - Visual-Design/review-v1.md
+  - Visual-Design/review-overlays-v4.md
+  - Visual-Design/screen-1-deltas.md
+  - Visual-Design/design-inventory.md
+  - Visual-Design/stitch-prompt-contacts-toolbar.md
+  - Visual-Design/stitch-prompt-contacts-overlays.md
+  - Visual-Design/stitch-prompt-contacts-grid-states.md
 ---
 
 > **Canonical contract.** This SPEC and the files in `companions:` are the complete, preservation-validated contract for what to build, test, and validate.
@@ -62,7 +70,7 @@ Airtable is the reference for interaction patterns and density, not for its pale
   - **intent:** An operator always knows which cell the next keystroke will act on.
   - **success:** A single click makes a cell the active cell with a clear but restrained outline of consistent colour and thickness; the active cell is held in React state, not CSS `:hover`; it is visually distinct from row hover and from row selection; a selected row and an active cell coexist; arrows move it; no indicator changes a cell's dimensions or shifts its content.
 
-- **CAP-12 — Filter conditions bar**
+- **CAP-12 — Filter conditions**
   - **intent:** An operator builds a filter as a visible list of conditions, whose operators and value controls suit each field's type, joined by one all-or-nothing connective.
   - **success:** A **popover anchored under the toolbar's filter control** holds the conditions for the view, each row carrying **Field · operator · value**, plus **`+ Add condition`** — and no condition *groups*, no saved views, no "Copy from another view", no AI prompt, and **no drag handle on condition rows**; **the operator list and the value control both depend on the field's type** — text offers contains / does not contain / is / is not / is empty / is not empty, number adds relational comparison, date offers its own operator set plus a relative-date value select, checkbox offers one fixed operator with a checkbox value, and single- and multi-select offer is / is not / is any of / is none of / is empty / is not empty; **one connective governs the whole list** — match all, or match any — so a list is never a mixed `A and B or C` expression; changing the field type resets operator and value to something valid; each condition can be deleted on its own; the per-column filter popover is gone; the column menu's Filter item reveals the popover with that column's condition pre-filled; an active filter is visibly indicated in the toolbar, which **names the columns it is filtering**; **the result count updates live as conditions are composed**, and stays visible because the popover is anchored below the toolbar rather than over it; and every condition round-trips through the URL.
 
@@ -110,41 +118,36 @@ Airtable is the reference for interaction patterns and density, not for its pale
 
 ## Visual Design
 
-**Every capability with a visual surface has an approved composition in `Visual-Design/`. Read it before building; it is the design contract, and this section is the index.** These are Google Stitch compositions, reviewed against this spec and corrected where the generated markup contradicted it. They are **direction artifacts, not pixel specs** — Story 10's recorded manual pass remains the verification gate.
+**`visual-design.md` is the binding, and it is a companion — read it before building any surface.** It maps every capability to a named composition, fixes the measured values, and lists the defects that were corrected out of the generated exports so they are not copied back in. What follows is only the index; the contract is there.
 
 | File | What it is | Covers |
 | --- | --- | --- |
 | `Visual-Design/contacts-toolbar-stitch-v1-corrected.html` / `.png` | **Authoritative.** The Contacts screen | CAP-1, CAP-2, CAP-6, CAP-12 |
-| `Visual-Design/contacts-overlays-stitch-v1-corrected.html` / `.png` | **Authoritative.** Sort, Hide fields, column menu | CAP-14, CAP-17, CAP-18 |
-| `Visual-Design/contacts-grid-states-v1.html` / `.png` | **Authoritative.** Six cell and row states, plus the status strip | CAP-7, CAP-11, CAP-15, CAP-16 |
+| `Visual-Design/contacts-overlays-stitch-v1-corrected.html` / `.png` | **Authoritative.** Sort, Hide fields, column menu | CAP-14, CAP-17, CAP-18, CAP-19 |
+| `Visual-Design/contacts-grid-states-v1.html` / `.png` | **Authoritative.** Six cell and row states, plus the status strip | CAP-7, CAP-10, CAP-11, CAP-15, CAP-16 |
 | `Visual-Design/stitch-DESIGN-UNVERIFIED.md` | **DO NOT IMPLEMENT FROM.** Stitch's own token write-up; contradicts the render (sidebar, 4px radius, pills, mobile cards). Its Colors section is accurate | — |
-| `Visual-Design/review-v1.md` | Screen 1 review — outcome and the four decisions | — |
-| `Visual-Design/review-overlays-v4.md` | Overlays review — corrections applied, and two findings withdrawn on review | — |
-| `Visual-Design/screen-1-deltas.md` | Every divergence between the generated markup and this spec | — |
-| `Visual-Design/design-inventory.md` | Capability → story → asset map, and the open gaps | — |
 | `Visual-Design/brand-reference-home-1440x900.png` | Brand identity anchor (royal blue / saffron / ivory) | — |
 | `Visual-Design/contacts-current-1440x900.png`, `-1024x768.png` | **The live grid as it is today** — what this work fixes. Not a style target | — |
 | `contacts-toolbar-stitch-v1.html` / `.png`, raw exports | Superseded provenance. The `-corrected-` files are the ones to use | — |
-| `stitch-prompt-*.md` | The prompts that produced them, and the design decisions they encode | — |
+| `stitch-prompt-*.md`, `review-v1.md`, `review-overlays-v4.md`, `screen-1-deltas.md`, `design-inventory.md` | Provenance and review record, absorbed into `visual-design.md` | — |
 
-### Three things the corrected files settle that prose alone does not
+They are **direction artifacts, not pixel specs** — CAP-8's recorded manual pass remains the verification gate. Every story that builds a surface names its composition, and a story that changes a value a composition fixes updates that composition in the same commit.
 
-- **`OQ-11` / `OQ-18` filter popover** — anchored under the toolbar, count staying visible in the toolbar row, no close button, one condition row per line, disabled value control under `is empty`.
+### Four things the corrected files settle that prose alone does not
+
+- **`OQ-11` / `OQ-18` filter popover** — anchored under the toolbar, count staying visible in the toolbar row, no close button, one condition row per line, disabled value control under `is empty`, and **one indicator that names the columns it is filtering**.
 - **`OQ-1` and the toolbar band** — there is no view label; the band reads *Search · Filtered by · Sort · Hide fields · count · New contact*.
-- **Column headers at rest** — label and sort indicator only, with the menu revealed on hover **and** keyboard focus.
-- **The status strip** — a one-line `#DC2626` message between the toolbar and the grid, collapsing to zero height when empty (`grid.tsx:871`), and naming the record so it still identifies the row when scrolled out of sight. Never below the table.
+- **Column headers at rest** — label and sort indicator only, with the menu revealed on hover **and** keyboard focus (`opacity-0`, never `display: none`).
+- **The status strip** — a one-line `#DC2626` message **between** the toolbar and the grid, collapsing to zero height when empty (`grid.tsx:871`), and naming the record so it still identifies the row when scrolled out of sight. Never below the table.
 
-### Two corrections carried into the comps, both measured
+### Two measurements that must not be copied, and one unresolved contradiction
 
-- **`border-collapse` is not what the grid uses.** `contacts-grid-states-v1.html` renders rows at exactly **32px**; the two earlier comps render 33.5px because they also carried `border-collapse`. The shipped grid uses `border-separate border-spacing-0`, and the cell — not the row — must carry the fixed height, because `max-height` does not constrain a `<tr>` or `<td>` in a CSS table.
-- **Header hover menus must reveal on `:focus-within` as well as `:hover`,** and stay in the tree at rest (`opacity-0`, never `display:none`) so the control remains focusable and tappable.
-
-### One unresolved measurement, carried deliberately
-
-Both corrected files render rows at **33.5px**, not the 32px contract, because `max-height` does not constrain a `<tr>` or `<td>` in a CSS table — measured, in `review-overlays-v4.md`. The implementation must pin the height at the cell, as `grid-row.tsx` does. **Do not copy either comp's table structure**: both use `border-separate` now, but the fixed height must come from the cell, not from `max-height` on the row.
+- **`border-collapse` is not what the grid uses.** `contacts-grid-states-v1.html` renders rows at exactly **32px** because it pins the height on the **cell**. `contacts-overlays-stitch-v1-corrected.html` does too. **`contacts-toolbar-stitch-v1-corrected.html` does not** — it still carries `border-collapse` (line 215) and pins height on the `<tr>`, so it renders 33.5px. Measured, in `review-overlays-v4.md`: in a CSS table `height` is a *minimum*, `max-height` does not apply to `<tr>` or `<td>`, and `border-collapse: collapse` costs a further pixel. The shipped grid uses `border-separate border-spacing-0` and fixes the height at the cell, as `grid-row.tsx` does. **Take the table structure from the overlays or grid-states comp, never from the toolbar comp.**
+- **One comp draws a column that does not exist — in the grid body only.** Both corrected comps show a `Current status` header, which is not one of the fourteen at `manage-contacts-table.tsx:820-1010`, and neither shows Total Attendance, Past 60 Days, Notes or Collected By. **The grid body's column set is layout only; CAP-18's nine is the only column set that ships.** Note the divergence is confined to the body — the Hide fields popover is CAP-18-conformant and needs no correction. See **OQ-22**.
 
 ## Constraints
 
+- **The visual design is binding, and it is discoverable.** `visual-design.md` is a companion, not an appendix: every capability with a visual surface has a named composition there, and **every story that builds one names the file it implements from.** A story that changes a value a composition fixes updates that composition in the same commit, so the comps cannot silently become history.
 - **The grid stays a primitive.** `components/grid/` keeps zero `Manage*`, `/api/manage` or contacts vocabulary. Four tables consume it and `docs/manage-grid-pattern.md` forbids a second table implementation.
 - **Token-clean is load-bearing.** Zero raw hex, `rgb(`, `white` or `black` under `components/grid/` today. Hierarchy is expressed with weight, space and existing semantic tokens — never a new literal colour or a per-option hue.
 - **One commit path.** `use-grid-keyboard.ts` owns draft, optimistic display and visible revert. A typed editor supplies parsing and validation only; a second mutation channel is a defect.
@@ -152,7 +155,7 @@ Both corrected files render rows at **33.5px**, not the 32px contract, because `
 - **Authorization is unchanged.** Writes go through `lib/manage/api-handlers.ts` with `getStaffContext` + `requireRole`, validated against `MANAGE_CONTACT_PATCH_KEYS`. No direct Supabase from a component; no new authorization logic.
 - **No new dependency or component library.** Compose what `components/ui/` already provides — `sheet`, `drawer`, `command`, `scroll-area`, `tooltip`, `tabs` are all present — plus `lucide-react`, already imported by the grid.
 - **Both apps stay byte-identical where they already are.** `md5sum` the `layout.tsx` files and both `api/manage/contacts/route.ts` files after editing.
-- **Story 5 is in flight.** `bmad-loop` is running on `feat/grid-keyboard-editors-and-theme` and owns `manage-contacts-table.tsx`. This work does not start until that branch lands; the two must never be edited concurrently.
+- **The work is in flight on `feat/grid-keyboard-editors-and-theme`; `bmad-loop` owns it.** Story 1 committed at `c7241e0`, story 2 was `in-progress` at `41e310b` when this was re-derived on 2026-10-13. The upstream story 5 landed **unfinished** (`b2a0f67`) — see OQ-5 — and its partial output is what stories 1 and 2 are built on. **A new story must not start while another is `in-progress`**, and no story may edit `manage-contacts-table.tsx` outside the one already owning it.
 - **`@dnd-kit/core` is the only new dependency this spec may add.** It is used for CAP-13 and nothing else, is added at the workspace root with the other shared dependencies, is version-pinned, and must resolve for both apps. Every other change composes `components/ui` and `lucide-react` as before.
 - **Drag must not break the pinned run.** The removed menu items refused to move a pinned column; a drop that would reorder `select` or the identity column is **rejected**, not silently ignored, and the *resulting order* is validated before it is committed — not just the drop target. `docs/manage-grid-pattern.md` exists because that rule has been got wrong before.
 - **Date fields are TEXT columns.** `date_of_birth`, `initial_contact` and `last_contacted_on` are all `TEXT` (`20261004000000_create_core_tables.sql:11,17,18`). Ordering comparisons work only because the editor writes fixed-width `YYYY-MM-DD`; relative-date operators **must** parse to a real `Date`, and an unparseable value must be handled explicitly rather than silently dropping rows.
@@ -191,7 +194,7 @@ An operator opens `/manage` → Contacts with 226 contacts. The grid reads as on
 ## Open Questions
 
 - **OQ-1 — View semantics. RESOLVED by Dwaraka, then RESOLVED AGAIN — the label is dropped entirely.** *History, kept because the first answer was itself overturned.* The brief asked for a view selector; no view backend exists. (a) A static label over URL-backed view state shipped first. (b) Per-user saved views would need a table, migration and route. (c) Shared views would additionally need a staff trust model. **Dwaraka rejected the label itself**: a control that looks like a view selector but cannot save a view is the nonfunctional button the brief forbids, and a *static* label over view state is closer to that than to a real feature. **The toolbar ships no view label and no view dropdown.** View state remains URL-backed (`q`, `sort`, `cols`, `hide`, `f.<colId>`) and is communicated through the filter indicator, the Hide fields control and the live result count — not through a view name.
-- **OQ-5 — Sequencing. Story 5 landed UNFINISHED.** `bmad-loop` committed `b2a0f67 feature/story-5-unfinished` on `feat/grid-keyboard-editors-and-theme`; the story file reads `status: 'in-progress'`. **The worktree is clean because the partial work was committed, not because the story finished** — an earlier reading of this spec got that wrong. Three capabilities here build directly on story 5's output: CAP-6 on the `statusMessage` channel, CAP-7 on the commit path, CAP-13 on the header. **Verify story 5's actual shape before story 1 starts** — whether `GridRowLifecycle`, `GridRowAddControl` and the per-row delete outcome reporting are complete, and whether `docs/manage-grid-pattern.md`'s new section is finished. Story 1 (the edit model) does not depend on it and can start.
+- **OQ-5 — Sequencing. RESOLVED BY EXECUTION; the caveat stands.** Story 5 landed UNFINISHED — `bmad-loop` committed `b2a0f67 'feature/story-5-unfinished'` and its story file reads `status: 'in-progress'`. The worktree was clean because the partial work was **committed**, not because the story finished; an earlier reading of this spec got that wrong. Three capabilities here build directly on story 5's output: CAP-6 on the `statusMessage` channel, CAP-7 on the commit path, CAP-13 on the header. **That verification has now happened by execution rather than by inspection**: story 1 of this spec committed at `c7241e0` against story 5's real shape, and story 2 was `in-progress` at `41e310b` on 2026-10-13. What story 5 left unfinished is now a *residual*, not a blocker — `docs/manage-grid-pattern.md`'s new section is the one item still worth checking before the drag work lands.
 - **OQ-7 — Double-click vs. text selection.** A double-click on a cell with existing text selects the word, and the browser does that before any handler runs. Does editing win? **This spec assumes yes**, meaning `preventDefault` on the cell's double-click and no word selection inside editable cells.
 - **OQ-10 — Keyboard column reordering. WITHDRAWN.** `@dnd-kit/core` supplies a `KeyboardSensor`, so drag-and-drop is keyboard-operable and removing `Move left` / `Move right` is **not** the accessibility regression this spec previously recorded it as.
 - **OQ-14 — Relative-date evaluation.** Relative presets are computed against "today" in the browser, which makes a shared URL non-reproducible and a test clock-dependent. (a) serialize the computed absolute boundary so the filter stops moving, (b) serialize the literal preset and re-evaluate so the filter stays live. **This spec assumes (a)** — determinism over liveness, consistent with declining saved views.
@@ -203,9 +206,11 @@ An operator opens `/manage` → Contacts with 226 contacts. The grid reads as on
 
 - **OQ-19 — Where a condition list lives in the URL. RESOLVED by Dwaraka.** `f.<colId>` **stays**, keeping its AND-across-columns semantics, so matrix row 17's `f.location` round-trip assertion is untouched and every existing shared URL keeps its meaning. Match-**any** conditions need a new key family mirroring the existing prefixes. No ordered expression is ever serialized, because there is no mixed expression to serialize.
 
-- **OQ-20 — An empty filter value cannot round-trip. CONFIRMED DEFECT, found while settling OQ-19.** `grid-view-state.ts:130` reads `if (raw !== null && raw.trim().length > 0)` and `:211` writes `if (value.length > 0)`. An empty value is therefore indistinguishable from an absent one and is **dropped in both directions**. `Current status · is empty` — the first condition in the reference screenshot — silently vanishes on reload. This is already true today; `+ Add condition` only makes it visible more often.
+- **OQ-20 — An empty filter value cannot round-trip. CONFIRMED DEFECT, found while settling OQ-19.** `grid-view-state.ts:130` reads `if (raw !== null && raw.trim().length > 0)` and `:211` writes `if (value.length > 0)`. An empty value is therefore indistinguishable from an absent one and is **dropped in both directions**. `Notes · is empty` — the first condition in the reference composition — silently vanishes on reload. This is already true today; `+ Add condition` only makes it visible more often. The defect is about **any** zero-length value, not about the column the example names.
 
 - **OQ-21 — The operator must be in the serialized value. CONSEQUENCE of OQ-12, previously unstated.** `f.<colId>` today holds a bare value, so `contains` and `is` are indistinguishable in a URL. Per-type operators (OQ-12) cannot round-trip without the operator travelling with the value, and OQ-20 means a bare encoding cannot express `is empty` either. **The value must carry its operator** — e.g. `f.status=is:`, where the token is non-empty as a whole so it survives the `:130` and `:211` guards. This was a latent hole in the previous derivation of this spec, which asserted round-tripping without specifying a shape that could round-trip.
+
+- **OQ-22 — One comp draws a column that does not exist. RESOLVED by Dwaraka, 2026-10-13 — the grid body's column set is layout only.** `Current status` is drawn in both corrected comps' **grid body** and **is not a field.** It is absent from `lib/supabase/types.ts` and from the fourteen at `manage-contacts-table.tsx:820-1010`; `stitch-prompt-contacts-toolbar.md:101` asked for it, and Stitch drew it faithfully. The same prompt line also shows `Last contacted`, which CAP-18 deliberately hides for the OQ-16 reason. **History, kept because the rejected option was the better one.** (a) Regenerate the comps at nine columns — recommended, and declined. (b) `Current status` is a real product field never migrated and CAP-18 should gain it — a schema question wearing a design's clothes. **(c) Adopted: CAP-18's nine is right, the grid body stands as a layout reference, and the divergence is recorded.** Accepted cost: a reader who takes the body's column set from a comp builds a phantom column, so the prohibition is written into `visual-design.md`, into `surface-and-toolbar.md`'s condition sketch, and here rather than left to be discovered. **Two things that shrank the cost when checked.** First, the Hide fields popover is CAP-18-conformant and needs no correction — counted, it carries 7 checked + 2 locked = 9 visible and 5 unchecked, exactly CAP-18's set; whoever wrote the prompt got the field list right and the body wrong. So the divergence is confined to rendered headers, a width-and-density question, and **story 7's Hide fields work is unaffected**. Second, the `is empty` example is re-anchored to `Notes · is empty` — real, in the visible nine, frequently blank — and OQ-20's defect is about any zero-length value, so it costs that finding nothing.
 
 ## Resolved Questions
 

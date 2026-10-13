@@ -346,7 +346,19 @@ export function resolveColumnDropOrder(
   }
 
   const next = fullOrder.filter((id) => id !== activeId)
-  next.splice(next.indexOf(overId), 0, activeId)
+  const slot = next.indexOf(overId)
+
+  // Only reachable when `activeId === overId`, which `commitColumnDrop` already
+  // filters. It is checked here rather than left to `splice`: `indexOf` returns
+  // -1 for a missing id, and `splice(-1, 0, x)` silently inserts *before the
+  // last element* instead of refusing — which would hand back an order holding
+  // the dragged id twice. A pure helper that is also exported has to be correct
+  // for every input, not only the ones its first caller happens to send.
+  if (slot === -1) {
+    return null
+  }
+
+  next.splice(slot, 0, activeId)
   return next
 }
 

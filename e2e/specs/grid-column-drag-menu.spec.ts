@@ -114,10 +114,19 @@ test.describe("column menu, drag-and-drop and the sort popover", () => {
     await openContactsGrid(page)
 
     // The select header renders the consumer's own select-all control, so no
-    // menu trigger may exist inside it.
+    // menu trigger may exist inside it. This one column is both halves of the
+    // suppression row at once — it is the selection column *and* the only
+    // `columnDef.header` in either shipped table — so the assertion is stated
+    // against both gates at the same element.
     await expect(headerCell(page, "select").getByRole("button", { name: /Column options/ })).toHaveCount(
       0,
     )
+
+    // The gate, not a blanket absence: a plain string header — and, for `name`,
+    // a *pinned* header, which is withheld a drag handle but never its menu —
+    // still carries the full three-item control.
+    await expect(columnMenuTrigger(page, "phone", "Phone")).toBeVisible()
+    await expect(columnMenuTrigger(page, "name", "Name")).toBeVisible()
   })
 
   test("menu 3 — pinned columns are not draggable", async ({ page }) => {
