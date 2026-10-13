@@ -124,6 +124,13 @@ function fail(message) {
 // ---------------------------------------------------------------------------
 
 const PROGRAMS = ["folk", "gita-life"]
+const {
+  PREVIEW_LOCATIONS,
+  STAFF_EMAILS,
+  STAFF_NAMES,
+  booksFor,
+} = await import("./fixture-reference-data.mjs")
+
 const TAG = "preview-fixture-"
 const SEED_FILE = path.join(repoRoot, ".env.preview-seed.local")
 const SITE_URL = (process.env.PRODUCTION_URL?.trim() || "https://folk-hkmc-rho.vercel.app").replace(/\/+$/, "")
@@ -208,7 +215,28 @@ async function resolvePassword() {
   return { password: generated, source: `generated into ${path.relative(repoRoot, SEED_FILE)}`, wroteFile: true }
 }
 
-const emailFor = (role, program) => `${TAG}${role.toLowerCase()}-${program}@example.com`
+/**
+ * The staff sign-in address for a role in a program.
+ *
+ * This seeder OWNS the `auth.users` and `public.users` rows — `bulk-contact-fixtures.mjs`
+ * only reads them and verifies DW-3 alignment — so a change to the address
+ * belongs here or nowhere.
+ *
+ * The domain is RFC 2606's reserved `.test`, which cannot resolve to a real
+ * mailbox. `public.users.email` is a sign-in identity: a password reset against a
+ * seeded row must never be deliverable, and the previous `example.com` was safe
+ * for the same reason but told a reviewer nothing about who they were signing in
+ * as.
+ *
+ * **The wipe keys on the tag, so the tag must stay findable.** `--wipe` collects
+ * auth users whose email *starts with* `preview-fixture-`, which these do not.
+ * `wipeAuthUsers` below matches the `.fixture.test` domain instead; see its own
+ * comment for why that is safe rather than merely convenient.
+ */
+const emailFor = (role, program) => STAFF_EMAILS[program][role]
+
+/** The one domain suffix every seeded staff address carries. */
+const STAFF_EMAIL_DOMAIN_SUFFIX = ".fixture.test"
 const likeTag = `${TAG}%`
 
 // ---------------------------------------------------------------------------
@@ -274,14 +302,206 @@ async function ensureAuthUser(email, password) {
   return { id: created.user.id, created: true }
 }
 
+/**
+ * The sign-in address this seeder used before the addresses became realistic.
+ *
+ * `public.users` is keyed on `(program_id, email)` and `auth.users` on the email,
+ * so **the address is the identity**. Renaming one does not rename the row — it
+ * creates a second Preacher for the same programme. That is not hypothetical: it
+ * is exactly what the first run after the rename did, leaving two of every role
+ * with the same programme, which quietly doubled the set of rows any
+ * role-scoped query could match.
+ *
+ * So a legacy row is resolved before the new one is written, in one of two ways,
+ * and the choice is made by what references the legacy id rather than by a flag:
+ *
+ *   - **Nothing references it** — an orphan left by an earlier rename. Deleted, so
+ *     the database returns to one row per role.
+ *   - **Something references it** — the real pre-rename state. Renamed in place:
+ *     same `auth.users.id`, same `public.users.id`, same `contacts.assigned_preacher_id`
+ *     and `collected_by_id` pointing at it, so DW-3 still holds and the bulk
+ *     generator's ids stay stable across runs.
+ *
+ * Deleting an *unreferenced* row is safe precisely because nothing points at it;
+ * it is never the case that a live Preacher loses their contacts here.
+ *
+ * Kept permanently rather than dropped after a release: anyone with an older
+ * checkout, or a database seeded before this change, still needs the path.
+ */
+const LEGACY_EMAIL = (role, program) => `${TAG}${role.toLowerCase()}-${program}@example.com`
+
+/**
+ * Retire the tagged location rows this seeder left behind when its names changed.
+ *
+ * `locations.name` is the seeder's key, so the rename is a rename and not an
+ * insert — a second row would leave every contact already pointing at the old id
+ * pointing at a name the Preacher's scope no longer lists, and those contacts
+ * would render as `Unknown location`.
+ *
+ * `contacts.location_ids` and `users.location_ids` are both `text[]` of ids, so
+ * **moving the references keeps every one of them valid**. An id that nothing
+ * points at is an orphan left by a previous partial run, and is deleted rather
+ * than renamed — there is nothing to preserve and a stale temple name on screen
+ * reads as a data bug rather than as history.
+ */
+async function retireLegacyLocation(program, legacyName, currentName) {
+  if (legacyName === currentName) return
+
+  const row = await unwrap(
+    db.from("locations").select("id").eq("program_id", program).eq("name", legacyName).maybeSingle(),
+    `reading legacy location ${legacyName}`,
+  )
+  if (!row) return
+
+  // The current row already exists, so this legacy row is an orphan from a
+  // previous partial run — unless something still points at it, in which case
+  // repointing is the only correct move and the duplicate must go.
+  const current = await unwrap(
+    db.from("locations").select("id").eq("program_id", program).eq("name", currentName).maybeSingle(),
+    `reading location ${currentName}`,
+  )
+
+  if (!current) {
+    // The current row was never created, so this legacy row IS the seeder's
+    // location under its old name. Rename it in place and every reference stays
+    // valid without touching a single `location_ids` array.
+    const { error } = await db.from("locations").update({ name: currentName }).eq("id", row.id)
+    if (error) fail(`renaming location ${legacyName} failed: ${error.code ?? ""} ${error.message}`)
+    log(`  renamed location ${legacyName} -> ${currentName} (id unchanged)`)
+    return
+  }
+
+  // Both exist: a duplicate from a previous partial run. Move every reference from
+  // the legacy id onto the current one, then drop the duplicate.
+  for (const table of ["contacts", "users"]) {
+    const { data, error } = await db
+      .from(table)
+      .select("id,location_ids")
+      .eq("program_id", program)
+    if (error) fail(`reading ${table} for location repointing failed: ${error.code ?? ""} ${error.message}`)
+
+    for (const record of data ?? []) {
+      const ids = record.location_ids ?? []
+      if (!ids.includes(row.id)) continue
+
+      const moved = ids.map((id) => (id === row.id ? current.id : id))
+      const { error: updateError } = await db
+        .from(table)
+        .update({ location_ids: moved })
+        .eq("id", record.id)
+      if (updateError) {
+        fail(`repointing ${table} ${record.id} onto ${currentName} failed: ${updateError.code ?? ""} ${updateError.message}`)
+      }
+    }
+  }
+
+  await unwrap(db.from("locations").delete().eq("id", row.id), `deleting duplicate location ${legacyName}`)
+  log(`  repointed ${legacyName} -> ${currentName} and removed the duplicate`)
+}
+
+/**
+ * Resolve a legacy staff row before the current one is written.
+ *
+ * Returns the id the current row must carry, or `null` when there is nothing to
+ * adopt and the normal create path applies.
+ */
+async function adoptLegacyStaff(program, role) {
+  const legacy = LEGACY_EMAIL(role, program)
+  const current = emailFor(role, program)
+  if (legacy === current) return null
+
+  const row = await unwrap(
+    db.from("users").select("id").eq("program_id", program).eq("email", legacy).maybeSingle(),
+    `reading legacy ${role} row ${legacy}`,
+  )
+  if (!row) return null
+
+  const authUser = await findAuthUserByEmail(legacy)
+  if (!authUser) {
+    // A `public.users` row with no `auth.users` twin is corrupt, and carrying it
+    // forward would preserve the corruption. Say so rather than healing it.
+    fail(
+      `legacy ${role} row ${legacy} has no auth.users row, so it cannot be resolved. ` +
+        `Delete it from public.users and re-run; nothing was written.`,
+    )
+  }
+
+  // Does anything still point at the legacy id?
+  const references = await Promise.all([
+    unwrap(
+      db
+        .from("contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("program_id", program)
+        .eq("assigned_preacher_id", row.id),
+      `counting contacts assigned to legacy ${role}`,
+    ),
+    unwrap(
+      db
+        .from("contacts")
+        .select("id", { count: "exact", head: true })
+        .eq("program_id", program)
+        .eq("collected_by_id", row.id),
+      `counting contacts collected by legacy ${role}`,
+    ),
+  ])
+  const referenced = (references[0] ?? 0) + (references[1] ?? 0)
+
+  if (referenced === 0) {
+    // An orphan from a previous partial rename. The current row already exists and
+    // is the one everything points at, so the legacy row is pure noise.
+    await unwrap(db.auth.admin.deleteUser(authUser.id), `deleting orphan auth user ${legacy}`)
+    await unwrap(db.from("users").delete().eq("id", row.id), `deleting orphan public.users ${legacy}`)
+    log(`  removed orphaned legacy ${role} ${legacy} (nothing referenced it)`)
+    return null
+  }
+
+  // The genuine pre-rename state. Renaming keeps every id stable.
+  await unwrap(
+    db.auth.admin.updateUserById(authUser.id, { email: current, email_confirm: true }),
+    `renaming auth user ${legacy} to ${current}`,
+  )
+  const { error } = await db.from("users").update({ email: current }).eq("id", row.id)
+  if (error) fail(`renaming public.users ${legacy} to ${current} failed: ${error.code ?? ""} ${error.message}`)
+
+  log(`  renamed legacy ${role} ${legacy} -> ${current} (id unchanged, ${referenced} reference(s))`)
+  return row.id
+}
+
 /** Insert-or-update keyed by an explicit lookup. */
+/**
+ * Insert-or-update keyed by an explicit lookup.
+ *
+ * ## Why the lookup is scoped by `program_id` as well as the key column
+ *
+ * `locations` has **no uniqueness constraint** — only a primary key — so two rows
+ * may legitimately share a name, and both programmes in this seeder use the same
+ * two Chennai temple names. Keying the lookup on `name` alone made the second
+ * programme's seed find the *first* programme's rows, update them, and report
+ * success: the seeder printed folk's locations, repointed them to gita-life, and
+ * folk silently ended up with none.
+ *
+ * Every call site here already passes a `program_id`, so the lookup is scoped on
+ * both columns and the two sets stay disjoint. This only became reachable once
+ * the names dropped their `preview-fixture-<n>-<program>` prefix, which had been
+ * making every name unique by construction.
+ */
 async function upsert({ table, key, row, label }) {
-  const existing = await unwrap(db.from(table).select("*").eq(key.column, key.value).maybeSingle(), `reading ${label}`)
+  const scope = row.program_id ? db.from(table).select("*").eq("program_id", row.program_id) : db.from(table).select("*")
+  const existing = await unwrap(
+    scope.eq(key.column, key.value).maybeSingle(),
+    `reading ${label}`,
+  )
+
   if (existing) {
-    const { error } = await db.from(table).update(row).eq(key.column, key.value)
+    const { error } = await db
+      .from(table)
+      .update(row)
+      .eq("id", existing.id)
     if (error) fail(`updating ${label} failed: ${error.code ?? ""} ${error.message}`)
     return { row: { ...existing, ...row }, created: false }
   }
+
   const inserted = await unwrap(db.from(table).insert(row).select("*").single(), `creating ${label}`)
   return { row: inserted, created: true }
 }
@@ -346,18 +566,40 @@ async function wipe() {
   for (const batch of batched(contactIds, DELETE_BATCH_SIZE)) {
     await del(db.from("contacts").delete().in("id", batch).select("id"), "tagged contacts")
   }
-  await del(db.from("locations").delete().like("name", likeTag).select("id"), "tagged locations")
+  // By name, because the locations no longer carry a tag. `PREVIEW_LOCATIONS` is
+  // this seeder's own two and the names scope the delete precisely: the bulk
+  // generator's temples are a disjoint slice of the same Chennai pool, so a name
+  // match here cannot reach them.
+  //
+  // No `program_id` filter — `wipe()` runs once for every program, and narrowing
+  // to a single one would leave the other programme's two locations behind.
+  await del(
+    db.from("locations").delete().in("name", PREVIEW_LOCATIONS).select("id"),
+    "preview-seeder locations",
+  )
 
-  const taggedUsers = (await unwrap(db.from("users").select("id,email").like("email", likeTag), "reading tagged users")) ?? []
+  // `users` are matched on the reserved domain rather than the name tag: the
+  // display name is now a person's name, so the tag lives only in the address.
+  // `.fixture.test` cannot be a real domain, which is what makes this specific
+  // enough to delete and specific enough not to touch anything real.
+  const taggedUsers =
+    (await unwrap(
+      db.from("users").select("id,email").like("email", `%${STAFF_EMAIL_DOMAIN_SUFFIX}`),
+      "reading tagged users",
+    )) ?? []
   for (const batch of batched(taggedUsers.map((row) => row.id), DELETE_BATCH_SIZE)) {
     await del(db.from("users").delete().in("id", batch).select("id"), "tagged public.users rows")
   }
 
   let authRemoved = 0
   const authEmails = new Set()
+  // Same reasoning as the `public.users` delete above, and the same guard: the
+  // previous `startsWith(TAG)` test matched nothing once the address became a
+  // person's, so an interrupted run would have left its auth users behind and the
+  // next run's DW-3 check would have failed on an id it could not explain.
   for (const user of await listAllAuthUsers()) {
     const email = user.email?.trim().toLowerCase()
-    if (email && email.startsWith(TAG)) authEmails.add(email)
+    if (email && email.endsWith(STAFF_EMAIL_DOMAIN_SUFFIX)) authEmails.add(email)
   }
   for (const email of authEmails) {
     const user = await findAuthUserByEmail(email)
@@ -379,7 +621,23 @@ async function seedProgram(program) {
   // --- locations -----------------------------------------------------------
   const locations = []
   for (const index of [1, 2]) {
-    const name = `${TAG}location-${index}-${program}`
+    // A real Chennai temple behind the tag. The tag and the index stay so the
+    // wipe and `bulk-fixtures.spec.ts` keep finding it by prefix; the place name
+    // is appended, and that is what the grid's `linked` renderer puts on screen.
+    // A plain Chennai temple name. `PREVIEW_LOCATIONS` is disjoint from the bulk
+    // generator's pool, which is what lets each seeder find its own rows by name
+    // now that neither carries a tag.
+    const place = PREVIEW_LOCATIONS[index - 1]
+    const legacyName = `${TAG}location-${index}-${program}`
+    const name = place
+
+    // Same reasoning as `adoptLegacyStaff`, on the same identity rule: the name IS
+    // the key, so appending to it creates a second location rather than renaming
+    // one. A database seeded before this change keeps its old row, and 41 bulk
+    // contacts point at it — which renders as `Unknown location` in the grid and
+    // reads as a data bug rather than the intentional unresolved case it is not.
+    await retireLegacyLocation(program, legacyName, name)
+
     const { row, created } = await upsert({
       table: "locations",
       key: { column: "name", value: name },
@@ -396,6 +654,12 @@ async function seedProgram(program) {
   const publicUsers = {}
   for (const { role, routedThroughPreacher } of ROLES) {
     const email = emailFor(role, program)
+
+    // Before anything is written: a database seeded before the addresses became
+    // realistic still holds the old rows, and the upsert below is keyed on email,
+    // so it would create a second row for the same role rather than adopt this one.
+    await adoptLegacyStaff(program, role)
+
     const { id, created: authCreated } = await ensureAuthUser(email, fixturePassword)
     if (authCreated) summary.created += 1
 
@@ -404,11 +668,17 @@ async function seedProgram(program) {
       id,
       program_id: program,
       email,
-      name: `${TAG}${role.toLowerCase()}-${program}`,
+      // A person's name rather than `preview-fixture-preacher-folk`. The tag
+      // survives in the email, which is what the wipe and DW-3 key on, so the
+      // display name does not have to carry it.
+      name: STAFF_NAMES[program][role],
       role,
       status: "Active",
-      // Admin sees both locations; the Preacher only location 1, so the
+      // Admin sees every location; the Preacher only location 1, so the
       // out-of-scope session on location 2 is unreadable by the Preacher.
+      // Unchanged, and deliberately: this seeder's two fixed contacts are what
+      // most of the `manage-contacts` suite addresses, and re-scoping them would
+      // move rows rather than improve them.
       location_ids: isAdmin ? locations.map((location) => location.id) : [locations[0].id],
       // Routed roles point at the program's Preacher.
       assigned_preacher_id: routedThroughPreacher ? publicUsers.Preacher.id : null,
@@ -461,7 +731,12 @@ async function seedProgram(program) {
         location_ids: [locations[0].id],
         // In-scope = assigned to the program's Preacher; out-of-scope = another user.
         assigned_preacher_id: scope === "inScope" ? publicUsers.Preacher.id : publicUsers.Admin.id,
-        collected_by_id: null,
+        // These two fixed contacts are what most of the `manage-contacts` suite
+        // addresses, so the collector is set on both: the in-scope one by the
+        // Preacher who owns it, the out-of-scope one by the Admin. That makes the
+        // column readable on every row a reviewer lands on.
+        collected_by_id: scope === "inScope" ? publicUsers.Preacher.id : publicUsers.Admin.id,
+        books_read: booksFor(scope === "inScope" ? 0 : 4),
         source: "preview-fixture",
       },
       label: `contact ${name}`,

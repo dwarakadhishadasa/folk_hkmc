@@ -553,9 +553,19 @@ test.describe("typed editor — multiselect, on /manage", () => {
    * looking for that name on screen.
    */
   function secondBookFor(held: readonly string[]): string {
-    const book = ["preview-fixture-book-0", "preview-fixture-book-1", "preview-fixture-book-2"]
-      .map((candidate) => candidate)
-      .find((candidate) => !held.includes(candidate))
+    // Prabhupad's titles, as the seeder now writes them. Kept as a literal rather
+    // than imported so this spec stays independent of the seeder's pool: the
+    // assertion is about *picking a book the row does not hold*, and a candidate
+    // list that moved with the seeder would let the two agree with each other
+    // while disagreeing with the grid.
+    const candidates = [
+      "Bhagavad-gita As It Is",
+      "Krsna: The Supreme Personality of Godhead",
+      "Srimad Bhagavatam",
+      "Caitanya-caritamrita",
+      "Nectar of Instruction",
+    ]
+    const book = candidates.find((candidate) => !held.includes(candidate))
 
     if (!book) {
       throw new Error("Every candidate book is already on the row; the fixture changed.")

@@ -60,11 +60,24 @@ import { readLocalSupabaseCredentials } from "./local-supabase-credentials.mjs"
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 const PROGRAMS = ["folk", "gita-life"]
-/** The seeder's tag. Every row this script writes starts with it. */
-const TAG = "preview-fixture-"
-/** This script's own tag, a strict prefix of `TAG` so the seeder's wipe finds it. */
-const BULK_TAG = "preview-fixture-bulk-"
-const BULK_LOCATION_PREFIX = "preview-fixture-bulk-location-"
+
+/**
+ * Each program's Preacher's offset into the location pool.
+ *
+ * The two programs get different locations, so an out-of-scope contact in one is
+ * not out of scope in the other. `locationsForPreacher` reads this as the
+ * starting index — a per-program constant, not a counter, so a reseed of one
+ * program cannot shift the other's scope.
+ */
+const PROGRAM_INDEX = { folk: 0, "gita-life": 1 }
+/**
+ * The marker every generated contact carries in `source`.
+ *
+ * Contacts are located by this column rather than by a name prefix, and locations
+ * by their plain names out of `BULK_LOCATIONS`. No generated row carries a tag on
+ * any field an operator reads.
+ */
+const SOURCE_MARKER = "preview-fixture-bulk"
 /** Role names in `public.users.role` this script's scope depends on. */
 const PREACHER = "Preacher"
 const ADMIN = "Admin"
@@ -80,11 +93,22 @@ const PHONE_PREFIX = { folk: "81", "gita-life": "82" }
  * A fixed name pool. Combined with the 4-digit index it is already distinct; the
  * pool exists so a human reading a grid sees names, not digits.
  */
-const NAME_POOL = [
-  "Aarav", "Bhavya", "Chirag", "Deepa", "Esha", "Farhan", "Geetha", "Harish",
-  "Ishita", "Jaya", "Kabir", "Lakshmi", "Meera", "Nikhil", "Ojas", "Priya",
-  "Rohan", "Sneha", "Tarun", "Usha", "Vikram", "Yash", "Zoya", "Ananya",
-]
+const {
+  BULK_LOCATIONS,
+  PREVIEW_LOCATIONS,
+  STAFF_EMAILS,
+  COLLECTED_BY_RATIO,
+  COLLEGES,
+  COMPANIES,
+  DESIGNATIONS,
+  NOTES,
+  contactName,
+  locationsForPreacher,
+  booksFor,
+} = await import("./fixture-reference-data.mjs")
+
+// `SOURCE_MARKER` is declared above with the other markers; the rationale for it
+// living on `source` rather than on `name` is recorded there.
 
 const CONTACT_COLUMNS =
   "id,program_id,name,phone,location_ids,assigned_preacher_id,college,company,designation,notes,is_favorite,books_read,source"
@@ -368,7 +392,16 @@ async function listAuthUsers() {
 const authUsersByEmail = async () =>
   new Map((await listAuthUsers()).map((user) => [user.email?.trim().toLowerCase(), user]))
 
-const emailFor = (role, program) => `${TAG}${role.toLowerCase()}-${program}@example.com`
+/**
+ * The staff sign-in address for a role in a program.
+ *
+ * Owned by `seed-preview-fixtures.mjs`, which creates the `auth.users` and
+ * `public.users` rows. This script only *reads* them: it verifies DW-3 alignment
+ * and resolves the ids, and inventing a second address here would create a
+ * `public.users` row with no `auth.users` twin — which is exactly the corruption
+ * DW-3 exists to catch.
+ */
+const emailFor = (role, program) => STAFF_EMAILS[program][role]
 
 // ---------------------------------------------------------------------------
 // Deterministic row generation
@@ -376,9 +409,15 @@ const emailFor = (role, program) => `${TAG}${role.toLowerCase()}-${program}@exam
 
 const pad = (value, width) => String(value).padStart(width, "0")
 
-/** `preview-fixture-bulk-<program>-<NNNN>-<Name>` — the 4-digit index keeps it distinct. */
+/**
+ * A contact's name: a person's name and nothing else.
+ *
+ * No prefix and no index suffix. Uniqueness comes from `contactName`, which
+ * cross-pairs two pools into 2,304 distinct names — the requirement is the
+ * generator's resume check, not a database constraint.
+ */
 function nameFor(program, index) {
-  return `${BULK_TAG}${program}-${pad(index, 4)}-${NAME_POOL[index % NAME_POOL.length]}`
+  return contactName(index)
 }
 
 /**
@@ -387,6 +426,14 @@ function nameFor(program, index) {
  * `phone TEXT NOT NULL` and `UNIQUE (phone, program_id)`, the empty string is the
  * *only* "contact with no phone", and at most one such row per program can exist.
  */
+/**
+ * The location names this generator owns, in generation order.
+ *
+ * `--count`/`--locations` index into this, so the default of 5 draws the first
+ * five temples and the pool is the ceiling.
+ */
+const bulkLocationNames = () => BULK_LOCATIONS
+
 function phoneFor(program, index) {
   if (index === 0) return ""
   return `${PHONE_PREFIX[program] ?? "80"}${pad(index, 8)}`
@@ -403,6 +450,20 @@ function phoneFor(program, index) {
  * *over*. An every-fourth-row split (the earlier ratio) left only 188 in-scope
  * at the same default, below the cap, so no spec could exercise it.
  */
+/**
+ * Who recorded this contact, on a 70 / 25 / 5 split across the Preacher, the
+ * Admin and nobody.
+ *
+ * Derived from the index rather than random, so a re-run is byte-identical — the
+ * property `bulk-fixtures.spec.ts` asserts for the whole tagged set.
+ */
+function collectorFor(index, preacherId, adminId) {
+  const bucket = index % 20
+  if (bucket < COLLECTED_BY_RATIO.preacher * 20) return preacherId
+  if (bucket < (COLLECTED_BY_RATIO.preacher + COLLECTED_BY_RATIO.admin) * 20) return adminId
+  return null
+}
+
 function buildContact({ program, index, locationIds, seededLocationId, preacherId, adminId }) {
   const inScope = index % 10 !== 9
   return {
@@ -416,15 +477,21 @@ function buildContact({ program, index, locationIds, seededLocationId, preacherI
     // In-scope = assigned to the program's Preacher; out-of-scope = the Admin,
     // matching `contacts` SELECT scope in the RLS policies.
     assigned_preacher_id: inScope ? preacherId : adminId,
-    collected_by_id: null,
+    // Deliberately not the same as the owner: `assigned_preacher_id` is who owns
+    // the contact, `collected_by_id` is who recorded it. Keeping them separate is
+    // what makes CAP-4's collector labels worth reading, and the null slice is
+    // the only way its empty branch stays reachable in `/manage`.
+    collected_by_id: collectorFor(index, preacherId, adminId),
     age: 18 + (index % 50),
-    college: index % 3 === 0 ? `preview-fixture-college-${index % 7}` : null,
-    company: index % 3 === 1 ? `preview-fixture-company-${index % 5}` : null,
-    designation: index % 4 === 2 ? `preview-fixture-designation-${index % 3}` : null,
-    notes: index % 4 === 0 ? `preview-fixture-bulk note ${index}` : null,
+    college: index % 3 === 0 ? COLLEGES[index % COLLEGES.length] : null,
+    company: index % 3 === 1 ? COMPANIES[index % COMPANIES.length] : null,
+    designation: index % 4 === 2 ? DESIGNATIONS[index % DESIGNATIONS.length] : null,
+    notes: index % 4 === 0 ? NOTES[index % NOTES.length] : null,
     is_favorite: index % 5 === 0,
-    books_read: [`preview-fixture-book-${index % 6}`],
-    source: BULK_TAG.replace(/-$/, ""),
+    // Two to four titles, so the multiselect cell renders a real multi-pill row
+    // rather than one value that never exercises the unpacking.
+    books_read: booksFor(index),
+    source: SOURCE_MARKER,
   }
 }
 
@@ -433,15 +500,17 @@ function buildContact({ program, index, locationIds, seededLocationId, preacherI
 // ---------------------------------------------------------------------------
 
 async function wipe(program) {
-  log(`Wiping rows tagged "${BULK_TAG}" for ${program} (rows without the tag are left untouched)…`)
+  log(`Wiping rows with source "${SOURCE_MARKER}" for ${program} (every other row is left untouched)…`)
 
-  // The filter is the only path to a delete, which is what makes "never deletes
-  // an untagged row" structural rather than a promise.
+  // Contacts are selected by `source` and locations by name, which is what the
+  // names being plain now requires. The filter is still the only path to a delete,
+  // so "never deletes a row this script did not create" stays structural rather
+  // than a promise.
   const contacts = await collectPaged(() =>
-    db.from("contacts").select("id").eq("program_id", program).like("name", `${BULK_TAG}%`),
+    db.from("contacts").select("id").eq("program_id", program).eq("source", SOURCE_MARKER),
   )
   const locations = await collectPaged(() =>
-    db.from("locations").select("id").eq("program_id", program).like("name", `${BULK_TAG}%`),
+    db.from("locations").select("id").eq("program_id", program).in("name", bulkLocationNames()),
   )
 
   // `.select("id")` is required: PostgREST returns no rows for a bare DELETE, so
@@ -516,15 +585,25 @@ async function verifyPrerequisites(program, authByEmail) {
     staff[role] = row
   }
 
+  // The preview seeder's own locations, found by name. They used to be found by
+  // `preview-fixture-` prefix, which is only possible while its names carry the
+  // tag — and `PREVIEW_LOCATIONS` is a disjoint slice of the Chennai pool, so the
+  // names are enough on their own.
+  //
+  // Ordered, because `buildContact` reads `seededLocations[0]` and PostgREST
+  // guarantees no row order. Without `.order` the id could differ between two runs
+  // over the same data, which would make the "a re-run is byte-identical" promise
+  // false for the `index % 6 === 5` rows.
   const seededLocations = await collectPaged(() =>
-    // Ordered, because `buildContact` reads `seededLocations[0]` and PostgREST
-    // guarantees no row order. Without `.order` the id could differ between two
-    // runs over the same data, which would make the "a re-run is byte-identical"
-    // promise false for the `index % 6 === 5` rows.
-    db.from("locations").select("id,name").eq("program_id", program).like("name", `${TAG}%`).order("name", { ascending: true }),
+    db
+      .from("locations")
+      .select("id,name")
+      .eq("program_id", program)
+      .in("name", PREVIEW_LOCATIONS)
+      .order("name", { ascending: true }),
   )
   if (seededLocations.length === 0) {
-    missing.push(`no \`${TAG}*\` locations for ${program}`)
+    missing.push(`none of the preview seeder's locations (${PREVIEW_LOCATIONS.join(", ")}) exist for ${program}`)
   }
 
   if (missing.length > 0) {
@@ -567,13 +646,33 @@ async function ensureLocation(program, name) {
  * Ids that no longer resolve are dropped, so a `--wipe` — which removes the bulk
  * locations and leaves the stale ids behind — cannot make the column grow forever.
  */
-async function widenPreacherLocations(preacher, bulkLocationIds, program) {
+/**
+ * Set the Preacher's scope to exactly the ids it is given, plus anything it
+ * already held that still exists.
+ *
+ * Named for what it used to do — it widened the Preacher to every generated
+ * location — and kept because the *seeder's own* locations are still part of the
+ * union. A Preacher must keep reading the rows the other seeder created, or
+ * `manage-contacts` loses its two fixed contacts and half its suite with them.
+ *
+ * What changed is that the generated locations are no longer all of them. The
+ * union therefore takes the caller's list as authoritative for the *generated*
+ * set and adds the pre-existing ids, rather than adding the generated set to
+ * whatever the Preacher happened to hold. Passing every generated location here
+ * would restore the old behaviour and silently un-scope the out-of-scope rows
+ * this fixture now depends on.
+ */
+async function widenPreacherLocations(preacher, generatedLocationIds, program, allGeneratedIds) {
   const programLocations = await collectPaged(() => db.from("locations").select("id").eq("program_id", program))
   const known = new Set(programLocations.map((row) => row.id))
   const previous = preacher.location_ids ?? []
+  const generated = new Set(allGeneratedIds ?? generatedLocationIds)
 
+  // Anything the Preacher held that is not one of the generated locations is a
+  // location this script does not own, and it must survive the rewrite.
+  const preserved = previous.filter((id) => known.has(id) && !generated.has(id))
   const union = []
-  for (const id of [...previous, ...bulkLocationIds]) {
+  for (const id of [...preserved, ...generatedLocationIds]) {
     if (known.has(id) && !union.includes(id)) union.push(id)
   }
 
@@ -583,7 +682,7 @@ async function widenPreacherLocations(preacher, bulkLocationIds, program) {
 
   const updated = await unwrap(
     db.from("users").update({ location_ids: union }).eq("id", preacher.id).select("id,location_ids").single(),
-    `widening the ${program} Preacher's location_ids`,
+    `setting the ${program} Preacher's location_ids`,
   )
   return { row: { ...preacher, location_ids: updated.location_ids }, changed: true }
 }
@@ -603,17 +702,19 @@ async function assertInvariants(program, target, preacherId, adminId) {
       .from("contacts")
       .select(CONTACT_COLUMNS)
       .eq("program_id", program)
-      .like("name", `${BULK_TAG}%`)
+      .eq("source", SOURCE_MARKER)
       .order("name", { ascending: true }),
   )
   const locations = await collectPaged(() => db.from("locations").select("id").eq("program_id", program))
   const locationIds = new Set(locations.map((row) => row.id))
 
   const problems = []
-  if (rows.length < target) problems.push(`${rows.length} tagged contact(s), expected at least ${target}`)
+  if (rows.length < target) problems.push(`${rows.length} generated contact(s), expected at least ${target}`)
 
-  const untagged = rows.filter((row) => !String(row.name).startsWith(BULK_TAG))
-  if (untagged.length) problems.push(`${untagged.length} row(s) in the tagged select are not tagged with ${BULK_TAG}`)
+  // Every row this script created carries the marker; a row without it means the
+  // select matched something we did not generate, which is worth failing on.
+  const unmarked = rows.filter((row) => row.source !== SOURCE_MARKER)
+  if (unmarked.length) problems.push(`${unmarked.length} row(s) in the selected set are not marked source="${SOURCE_MARKER}"`)
 
   const names = new Set(rows.map((row) => row.name))
   if (names.size !== rows.length) problems.push(`${rows.length - names.size} duplicate name(s)`)
@@ -725,23 +826,43 @@ async function generateProgram(program, options) {
   const adminId = staff[ADMIN].id
 
   // --- locations ------------------------------------------------------------
+  // Real Chennai locations behind the fixture tag. `bulk-fixtures.spec.ts` finds
+  // these by the prefix and `listBulkLocations` in `e2e/fixtures/bulk-contacts.ts`
+  // selects on it, so the tag must stay the first token — the *name* is what
+  // changes, and it is what the grid's `linked` renderer puts on screen.
   const bulkLocations = []
   let locationsCreated = 0
   for (let n = 1; n <= options.locations; n += 1) {
-    const { row, created } = await ensureLocation(program, `${BULK_LOCATION_PREFIX}${n}-${program}`)
+    // A plain Chennai temple name. The pool is disjoint from the preview seeder's
+    // two, which is what lets both find their own rows by name now that neither
+    // carries a marker.
+    const { row, created } = await ensureLocation(program, bulkLocationNames()[n - 1])
     bulkLocations.push(row)
     if (created) locationsCreated += 1
   }
 
   // --- the Preacher's scope -------------------------------------------------
-  const widened = await widenPreacherLocations(preacher, bulkLocations.map((row) => row.id), program)
+  // Three or four locations, deliberately a SUBSET of the generated ones. The
+  // Preacher previously received every generated location, because a contact
+  // outside a Preacher's scope renders its location as an unresolved marker and
+  // `bulk-fixtures.spec.ts` had no case for it.
+  //
+  // That is a scope decision with teeth: it changes which rows a Preacher session
+  // can read at all, so `bulk-fixtures.spec.ts:345` is rewritten rather than
+  // deleted — see that spec's own header for what it now claims.
+  const widened = await widenPreacherLocations(
+    preacher,
+    locationsForPreacher(bulkLocations.map((row) => row.id), PROGRAM_INDEX[program] ?? 0),
+    program,
+    bulkLocations.map((row) => row.id),
+  )
 
   // --- what is missing ------------------------------------------------------
-  // Selecting by the tag — not by a generated id list — is what makes a run that
+  // Selecting by `source` — not by a generated id list — is what makes a run that
   // was interrupted mid-insert recoverable, and what keeps a spec that edited a
   // generated row from having that edit reverted.
   const existing = await collectPaged(() =>
-    db.from("contacts").select("id,name").eq("program_id", program).like("name", `${BULK_TAG}%`),
+    db.from("contacts").select("id,name").eq("program_id", program).eq("source", SOURCE_MARKER),
   )
   const existingNames = new Set(existing.map((row) => row.name))
 

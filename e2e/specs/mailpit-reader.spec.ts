@@ -14,10 +14,14 @@
 
 import { expect, test } from "@playwright/test"
 import { readOtpForRecipient } from "../fixtures/mailpit"
+import { fixtureEmail } from "../fixtures/roles"
 
-const ADMIN = "preview-fixture-admin-folk@example.com"
-const VOLUNTEER = "preview-fixture-volunteer-folk@example.com"
-const PREACHER = "preview-fixture-preacher-folk@example.com"
+// Read from the harness's own role table rather than spelled out, so a renamed
+// fixture address cannot leave this spec asserting against a mailbox nothing
+// writes to. CHANGED 2026-10-13, with the seeded addresses.
+const ADMIN = fixtureEmail("admin")
+const VOLUNTEER = fixtureEmail("volunteer")
+const PREACHER = fixtureEmail("preacher")
 const SINCE = Date.parse("2026-10-08T09:00:00.000Z")
 
 interface Captured {

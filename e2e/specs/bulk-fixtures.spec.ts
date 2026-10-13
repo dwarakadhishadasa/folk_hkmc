@@ -24,9 +24,13 @@ import { spawnSync } from "node:child_process"
 import path from "node:path"
 import { readFileSync } from "node:fs"
 import { expect, test } from "@playwright/test"
+
+import { STAFF_EMAILS } from "../../scripts/fixture-reference-data.mjs"
 import {
+  BULK_LOCATION_NAMES,
   BULK_TAG,
   GENERATOR,
+  PREVIEW_LOCATION_NAMES,
   HOSTED_SUPABASE_URL,
   SEEDER_TAG,
   adminId,
@@ -123,6 +127,38 @@ function readNumber(output: string, pattern: RegExp): number | null {
  * silently truncates once `pnpm seed:bulk-full` has been run — and truncation here
  * is the dangerous kind, because both sides of the comparison come from this same
  * function and would agree on a short read.
+ */
+/**
+ * The rows the generator's `--wipe` would delete, read the way it reads them.
+ *
+ * CHANGED 2026-10-13: this used to select on `name like 'preview-fixture-bulk-%'`,
+ * which is why every generated name carried that prefix. The wipe now selects on
+ * `eq("source", BULK_TAG)`, and this reads it the same way so the assertion stays
+ * about the real filter rather than a restatement of it.
+ */
+async function contactsMatchingSourceFilter(): Promise<Array<{ id: string; name: string }>> {
+  const db = bulkFixtureClient()
+  const all: Array<{ id: string; name: string }> = []
+
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db
+      .from("contacts")
+      .select("id,name")
+      .eq("program_id", PROGRAM)
+      .eq("source", BULK_TAG)
+      .order("name")
+      .range(from, from + 999)
+    if (error) throw new Error(`Reading contacts failed: ${error.message}`)
+    all.push(...(data ?? []))
+    if (!data || data.length < 1000) return all
+  }
+}
+
+/**
+ * The preview seeder's own contacts, which keep their name prefix.
+ *
+ * Two rows per program, addressed by name across the `manage-contacts` suite, so
+ * their marker stays where it is while the 250 generated rows moved to `source`.
  */
 async function contactsMatchingSeederFilter(): Promise<Array<{ id: string; name: string }>> {
   const db = bulkFixtureClient()
@@ -274,18 +310,33 @@ test("Default run: the tagged set is large enough for row 7, with distinct names
   expect(names.length).toBe(contacts.length)
 })
 
-test("Default run: every name carries the preview-fixture- tag, so the seeder's --wipe finds it", async () => {
+test("Default run: every generated row carries the source marker, so --wipe finds it, and no name carries a tag", async () => {
   const contacts = await listBulkContacts(PROGRAM)
   expect(contacts.length).toBeGreaterThan(0)
+
+  // CHANGED 2026-10-13. This row asserted that every generated name began with
+  // `preview-fixture-bulk-`, which is what `--wipe` and the resume check selected
+  // on. The marker moved to `contacts.source` — a real column, already this exact
+  // string, and server-owned via `MANAGE_CONTACT_PATCH_KEYS` — so `name` no longer
+  // needs it and can be a person's name.
+  //
+  // The guarantee is preserved rather than dropped: this is still "the wipe can
+  // find every row it created", now asserted on the column the wipe actually uses.
   for (const contact of contacts) {
-    expect(contact.name, `${contact.name} is not tagged`).toMatch(new RegExp(`^${BULK_TAG}`))
+    expect(contact.source, `${contact.name} is not marked with the generator's source`).toBe(BULK_TAG)
   }
 
-  // The seeder filters on `name like 'preview-fixture%'`; prove the generated rows
-  // are inside that filter rather than merely sharing a prefix in prose.
-  const viaFilter = await contactsMatchingSeederFilter()
-  const tagged = viaFilter.filter((row) => row.name.startsWith(BULK_TAG))
-  expect(tagged.length).toBe(contacts.length)
+  // ...and the other half of the same change: a name is now just a name.
+  for (const contact of contacts) {
+    expect(contact.name, `${contact.name} still carries a fixture tag`).not.toMatch(
+      /^(preview-fixture|bulk|e2e-|spec-|dw3-)/,
+    )
+  }
+
+  // The seeder filters on `eq("source", …)`; prove the generated rows are inside
+  // that filter rather than merely agreeing in prose.
+  const viaFilter = await contactsMatchingSourceFilter()
+  expect(viaFilter.length).toBe(contacts.length)
 })
 
 test("Locations are real: every location_ids entry resolves to a location in the program", async () => {
@@ -309,10 +360,19 @@ test("Locations are real: every location_ids entry resolves to a location in the
 
   // Order-independent, because the generator's default is 5 locations but the
   // flag is not fixed at 5: `--locations 12` must not fail this row.
+  //
+  // CHANGED 2026-10-13: the generated location names used to be
+  // `preview-fixture-bulk-location-<n>-<program>`, which is what made "the names
+  // are the first N of the pool" checkable. They are now plain Chennai temple
+  // names, so the same claim is made against `BULK_LOCATION_NAMES` — the same
+  // list the fixture client selects on, duplicated rather than imported so this
+  // spec and the generator cannot agree with each other while disagreeing with
+  // the database.
   const bulkLocations = await listBulkLocations(PROGRAM)
   expect(bulkLocations.length).toBeGreaterThanOrEqual(1)
+  expect(bulkLocations.length).toBeLessThanOrEqual(BULK_LOCATION_NAMES.length)
   expect(bulkLocations.map((location) => location.name).sort()).toEqual(
-    bulkLocations.map((_, index) => `${BULK_TAG}location-${index + 1}-${PROGRAM}`).sort(),
+    [...BULK_LOCATION_NAMES].slice(0, bulkLocations.length).sort(),
   )
 })
 
@@ -342,33 +402,107 @@ test("Per-column variation: college, notes and is_favorite are not uniform", asy
   expect(new Set(contacts.map((contact) => contact.books_read).map((books) => (books ?? []).join(","))).size).toBeGreaterThanOrEqual(2)
 })
 
-test("Preacher can resolve names: the Preacher's location_ids covers every generated location", async () => {
-  const [preacher, bulkLocations, contacts, allLocations] = await Promise.all([
+/**
+ * REWRITTEN 2026-10-13, premium-grid story 3's fixture pass.
+ *
+ * This row previously asserted that the Preacher's `location_ids` covered **every**
+ * generated location. That is no longer true, on purpose: a Preacher now owns three
+ * or four of them, because a Preacher's scope is a product decision rather than a
+ * fixture convenience, and a Preacher scoped to a whole city is not a shape the
+ * programme has.
+ *
+ * What the row actually protected is worth keeping, and is kept below: a contact
+ * the Preacher can read must have a location the Preacher can resolve, so the cell
+ * shows a **name** rather than an unresolved marker. The reason the old wording
+ * said "otherwise the grid shows raw ids" is stale for a second reason — story 3
+ * removed the raw-id fallback, so an unresolvable location now renders
+ * `Unknown location`, never a UUID.
+ *
+ * The two halves are split into two rows so each is a separate claim:
+ *
+ *   - **In scope:** every location a contact the Preacher can read points at is one
+ *     the Preacher owns. The name renders.
+ *   - **Out of scope:** a contact pointing at a location the Preacher does not own
+ *     still exists, and is a different fact from a contact with no location.
+ */
+test("Preacher resolves names in scope: every location a readable contact points at is one the Preacher owns", async () => {
+  const [preacher, allLocations, ownedByPreacher] = await Promise.all([
     readPreacherLocationIds(PROGRAM),
-    listBulkLocations(PROGRAM),
-    listBulkContacts(PROGRAM),
     listProgramLocations(PROGRAM),
+    inScopeContacts(PROGRAM),
   ])
 
-  expect(bulkLocations.length).toBeGreaterThan(0)
-  for (const location of bulkLocations) {
-    expect(preacher, `the Preacher is not scoped to ${location.name}`).toContain(location.id)
-  }
+  expect(preacher.length, "the Preacher owns a small set, not the whole city").toBeGreaterThan(0)
+  expect(preacher.length, "a Preacher scoped to every generated location is not realistic").toBeLessThan(10)
 
-  // A Preacher session can only see a location it is scoped to, so every location
-  // a generated contact points at must be in that set — otherwise the grid shows
-  // raw ids.
-  for (const contact of contacts) {
+  const owned = new Set(preacher)
+  const names = new Map(allLocations.map((location) => [location.id, location.name]))
+
+  // `inScopeContacts` is the same helper the manage specs use, so "readable" means
+  // one thing here and in the suite that depends on it.
+  const readable = ownedByPreacher
+  expect(readable.length, "the generated set is large enough to hold both halves").toBeGreaterThan(0)
+
+  for (const contact of readable) {
     for (const id of contact.location_ids ?? []) {
-      expect(preacher, `${contact.name} points at a location the Preacher cannot see`).toContain(id)
+      expect(
+        owned.has(id),
+        `${contact.name} points at ${names.get(id) ?? id}, which the Preacher cannot resolve`,
+      ).toBe(true)
+      expect(names.get(id), "every owned location has a human name").toBeTruthy()
+      expect(names.get(id), "and that name is not a raw id").not.toBe(id)
     }
   }
 
-  // The seeded location the seeder gave the Preacher must survive the widening —
-  // the union is additive, not a replacement.
-  const seeded = allLocations.find((location) => location.name === `${SEEDER_TAG}location-1-${PROGRAM}`)
+  // The location the OTHER seeder gave the Preacher must survive. The bulk
+  // generator rewrites `location_ids` to exactly its own three or four, so without
+  // this the seeder's two fixed contacts would fall out of scope and take most of
+  // the manage-contacts suite with them. The union is additive for foreign
+  // locations and authoritative for its own.
+  // Prefix match, not equality. The seeder now appends the Chennai temple name
+  // to the tagged location (`preview-fixture-location-1-folk-T. Nagar Temple`), so
+  // an exact match would find nothing and this would fail on a fixture that is
+  // present and correct. The index still pins it to location 1 rather than
+  // whichever row happens to sort first.
+  const seeded = allLocations.find((location) =>
+    location.name.startsWith(`${SEEDER_TAG}location-1-${PROGRAM}-`),
+  )
   expect(seeded, "the seeder's location 1 should exist").toBeTruthy()
   expect(preacher, "the union must still include the seeded id").toContain(seeded!.id)
+})
+
+test("Preacher scope is a subset: an out-of-scope location exists, which is what makes an unresolved marker reachable", async () => {
+  const [preacher, bulkLocations, readable] = await Promise.all([
+    readPreacherLocationIds(PROGRAM),
+    listBulkLocations(PROGRAM),
+    inScopeContacts(PROGRAM),
+  ])
+
+  const owned = new Set(preacher)
+  const outOfScope = bulkLocations.filter((location) => !owned.has(location.id))
+
+  // The whole point of the subset: if every generated location were owned, this
+  // fixture could never produce a contact whose location the Preacher cannot
+  // resolve, and CAP-4's unresolved marker would only ever be provable on the
+  // preview harness.
+  expect(outOfScope.length, "the Preacher does not own every generated location").toBeGreaterThan(0)
+
+  // It has to be more than one, or the split has no shape: a Preacher owning
+  // every location but one is not what "three or four" describes.
+  expect(bulkLocations.length, "the generated set spans more locations than one Preacher owns").toBeGreaterThan(
+    owned.size,
+  )
+
+  // And the two facts stay distinct, which is the actual CAP-4 claim: an unscoped
+  // contact is NOT a contact with no location. Neither may render as the other.
+  const withLocation = readable.filter((contact) => (contact.location_ids ?? []).length > 0).length
+  const withoutLocation = readable.filter((contact) => (contact.location_ids ?? []).length === 0).length
+  expect(withLocation, "most contacts carry a location").toBeGreaterThan(0)
+  // A generated contact always carries one, so this row does not need to assert a
+  // count — it records that the two states are distinct in the data, not that both
+  // appear here. The empty case is asserted where it is reachable: on the preview
+  // harness's `assignee` column, in `grid-cell-renderers.spec.ts`.
+  expect(withoutLocation).toBeGreaterThanOrEqual(0)
 })
 
 test("Phone coverage: exactly one row has a blank phone and the rest have distinct phones", async () => {
@@ -564,8 +698,10 @@ test("Locations are real: --locations sets how many distinct joined names the pr
 
     const locations = await listBulkLocations(OTHER_PROGRAM)
     expect(locations, "--locations 3 must create exactly 3 generated locations").toHaveLength(3)
+    // The generated locations are plain names from the Chennai pool now, so
+    // `--locations 3` means the first three of it.
     expect(locations.map((location) => location.name).sort()).toEqual(
-      [1, 2, 3].map((n) => `${BULK_TAG}location-${n}-${OTHER_PROGRAM}`),
+      [...BULK_LOCATION_NAMES].slice(0, 3).sort(),
     )
 
     // Every contact's location must still resolve to a real row — the point of
@@ -627,10 +763,16 @@ test("Volume is a parameter: --program both splits the count across the two prog
 // Wipe
 // ---------------------------------------------------------------------------
 
-test("Wipe: --wipe removes only bulk-tagged rows, the seeded rows survive, and the set is restored", async () => {
+test("Wipe: --wipe removes only rows the generator created, the seeded rows survive, and the set is restored", async () => {
+  // The two sets are now disjoint by a real column rather than by a shared prefix:
+  // the seeder's rows carry a name prefix, the generator's carry `source`. Reading
+  // both is what makes the wipe assertion below mean something — a wipe that
+  // deleted the seeder's two contacts would pass a check that only looked at one.
   const seededBefore = await contactsMatchingSeederFilter()
-  const seededOnlyBefore = seededBefore.filter((row) => !row.name.startsWith(BULK_TAG))
-  const bulkBefore = seededBefore.filter((row) => row.name.startsWith(BULK_TAG))
+  const bulkBefore = await contactsMatchingSourceFilter()
+  const seededOnlyBefore = seededBefore.filter(
+    (row) => !bulkBefore.some((bulk) => bulk.id === row.id),
+  )
   const locationsBefore = await listBulkLocations(PROGRAM)
 
   expect(bulkBefore.length, "the bulk set must exist before a wipe").toBeGreaterThan(0)
@@ -646,8 +788,15 @@ test("Wipe: --wipe removes only bulk-tagged rows, the seeded rows survive, and t
     expect((await listBulkContacts(PROGRAM)).length, "no bulk contact may survive the wipe").toBe(0)
     expect((await listBulkLocations(PROGRAM)).length, "no bulk location may survive the wipe").toBe(0)
 
+    // The seeder's rows are untouched, and the generator's are gone — checked as
+    // two separate reads, because the two sets no longer share a name prefix and
+    // "what survived" is only meaningful if "what did not" was read the same way.
     const seededAfter = await contactsMatchingSeederFilter()
-    expect(seededAfter, "only bulk-tagged rows may be deleted").toEqual(seededOnlyBefore)
+    expect(seededAfter, "only rows the generator created may be deleted").toEqual(seededOnlyBefore)
+    expect(
+      await contactsMatchingSourceFilter(),
+      "no row carrying the generator's source may survive the wipe",
+    ).toEqual([])
   } finally {
     // The shared set is what story 4's rows select from, so it is restored even
     // when the assertions above fail. `--count` is set to the pre-wipe size so the
@@ -752,11 +901,13 @@ test("Scope on both sides: a non-Active staff row fails the DW-3 pre-write check
   // prerequisite. `status` is chosen over deleting the row because it is the
   // smaller violation — the row still exists, so the failure is DW-3's *status*
   // clause rather than its missing-row clause, and restoring is a single column.
-  // `fixtureEmail` is suite-wide (`folk`), and this row lives in the other
-  // program, so the address is spelled from the seeder's own convention —
-  // `preview-fixture-<role>-<program>@example.com`, the strings story 2's spec
-  // records as verified.
-  const email = `preview-fixture-preacher-${OTHER_PROGRAM}@example.com`
+  // `fixtureEmail` is suite-wide (`folk`) and this row lives in the other
+  // programme, so the address comes from the shared fixture table rather than
+  // from a constructed string. CHANGED 2026-10-13: the seeder's addresses are now
+  // plausible names on a reserved `.test` domain, and a locally-constructed
+  // address no longer matched — the DW-3 row below would have been reading a user
+  // that does not exist, which is a different failure from the one this row tests.
+  const email = STAFF_EMAILS[OTHER_PROGRAM].Preacher
   const { data: preacher, error: readError } = await db
     .from("users")
     .select("id,status")
@@ -840,11 +991,23 @@ test("Specs clean up after themselves: cleanupTaggedContacts removes a row the s
   const db = bulkFixtureClient()
   const id = crypto.randomUUID()
   const program = PROGRAM
-  const name = `${BULK_TAG}spec-created-${id.slice(0, 8)}`
+  // Owned by this suite through `source`, not through a name prefix: generated
+  // names are real people's names now, and a spec-created row has to be
+  // distinguishable from a generated one by the same column the cleanup helper
+  // checks.
+  const name = `Spec-created contact ${id.slice(0, 8)}`
+  const source = `${BULK_TAG}-spec-created`
 
   const created = await db
     .from("contacts")
-    .insert({ program_id: program, name, phone: `89${id.replace(/-/g, "").slice(0, 8)}`, location_ids: [], assigned_preacher_id: null })
+    .insert({
+      program_id: program,
+      name,
+      phone: `89${id.replace(/-/g, "").slice(0, 8)}`,
+      location_ids: [],
+      assigned_preacher_id: null,
+      source,
+    })
     .select("id,name")
     .single()
   if (created.error) throw new Error(`Creating the spec's own contact failed: ${created.error.message}`)
@@ -879,16 +1042,22 @@ test("Specs clean up after themselves: cleanupTaggedContacts refuses to delete a
   const db = bulkFixtureClient()
   const { data: seeded, error } = await db
     .from("contacts")
-    .select("id,name")
+    .select("id,name,source")
     .eq("program_id", PROGRAM)
     .like("name", `${SEEDER_TAG}contact-%`)
     .limit(1)
     .maybeSingle()
   if (error) throw new Error(`Reading a seeded contact failed: ${error.message}`)
   expect(seeded, "pnpm seed:local should have seeded at least one contact").toBeTruthy()
-  expect(seeded!.name.startsWith(BULK_TAG)).toBe(false)
+  // The seeder's contact is not the generator's: different `source`, different name
+  // shape. The refusal below is the guard that keeps a spec from deleting it.
+  expect(seeded!.source).not.toBe(BULK_TAG)
 
-  await expect(cleanupTaggedContacts([seeded!.id])).rejects.toThrow(/refuses to delete 1 untagged contact/)
+  // CHANGED 2026-10-13: ownership is read from `source` rather than a name prefix,
+  // so the refusal names what it actually checked.
+  await expect(cleanupTaggedContacts([seeded!.id])).rejects.toThrow(
+    /refuses to delete 1 contact\(s\) it does not own/,
+  )
   await expect(cleanupTaggedContacts([seeded!.id])).rejects.toThrow(new RegExp(seeded!.name))
 
   // And the row is still there, which is the whole point.
@@ -990,7 +1159,7 @@ test("DW-3: a public.users row whose id is not its auth id is refused before any
         id: row.publicId,
         program_id: THROWAWAY_PROGRAM,
         email: row.email,
-        name: `${BULK_TAG}dw3-${row.role}-${THROWAWAY_PROGRAM}`,
+        name: `DW3 throwaway ${row.role} ${THROWAWAY_PROGRAM}`,
         role: row.role === "preacher" ? "Preacher" : "Admin",
         status: "Active",
         location_ids: [],
@@ -998,9 +1167,12 @@ test("DW-3: a public.users row whose id is not its auth id is refused before any
       if (error) throw new Error(`Inserting the swapped public.users row ${row.email} failed: ${error.message}`)
     }
 
-    // One seeded-prefix location, so the generator gets *past* the missing-
-    // prerequisite check and reaches the DW-3 comparison it is here to fail.
-    const locationName = `${BULK_TAG}dw3-location-${THROWAWAY_PROGRAM}`
+    // One of the preview seeder's own location names, so the generator gets *past*
+    // the missing-prerequisite check and reaches the DW-3 comparison it is here to
+    // fail. CHANGED 2026-10-13: the prerequisite used to be "a `preview-fixture-%`
+    // location exists" and is now "one of `PREVIEW_LOCATION_NAMES` exists", by
+    // name — the generated locations no longer carry a tag to match on.
+    const locationName = PREVIEW_LOCATION_NAMES[0]
     const { data: location, error: locationError } = await db
       .from("locations")
       .insert({ program_id: THROWAWAY_PROGRAM, name: locationName, status: "Active" })

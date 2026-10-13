@@ -21,9 +21,64 @@ import { isLocalSupabaseUrl } from "../../scripts/local-supabase-target.mjs"
 import { readEnvValue } from "./auth-users"
 import { e2eProgramId, fixtureEmail, repoRoot } from "./roles"
 
-/** The tag `bulk-contact-fixtures.mjs` puts on every row it creates. */
-export const BULK_TAG = "preview-fixture-bulk-"
-/** The seeder's tag. A prefix of it, so the seeder's `--wipe` covers bulk rows. */
+/**
+ * The seeded staff addresses, per program, from `scripts/fixture-reference-data.mjs`.
+ *
+ * Imported here rather than re-spelled because `staffEmailFor` has to answer for a
+ * program that is not the suite's own, and a constructed string was silently wrong
+ * the moment the seeder's convention changed.
+ */
+import { STAFF_EMAILS } from "../../scripts/fixture-reference-data.mjs"
+
+/**
+ * The Chennai locations `bulk-contact-fixtures.mjs` owns.
+ *
+ * Duplicated from `scripts/fixture-reference-data.mjs` on purpose: this is the
+ * fixture client the specs read through, and importing the generator's own pool
+ * would let a spec and the thing it is checking agree with each other while
+ * disagreeing with the database. `bulk-fixtures.spec.ts` asserts both against the
+ * same list, so a change to one and not the other shows up as a failure rather
+ * than as a silent pass.
+ */
+export const BULK_LOCATION_NAMES = [
+  "Triplicane Temple",
+  "Mylapore Temple",
+  "Adyar Temple",
+  "Nanganallur Temple",
+  "Perungalathur Temple",
+  "Koyambedu Temple",
+  "Tambaram Temple",
+  "Chennai Central Temple",
+  "Washermanpet Temple",
+  "Royapettah Temple",
+] as const
+
+/** The two locations `seed-preview-fixtures.mjs` owns — the other slice of the pool. */
+export const PREVIEW_LOCATION_NAMES = ["T. Nagar Temple", "Velachery Temple"] as const
+
+/**
+ * The value in `contacts.source` on every row `bulk-contact-fixtures.mjs` creates.
+ *
+ * ## Why this replaced a name prefix
+ *
+ * Rows used to be found by `like('preview-fixture-bulk-%')` on `name`, which put a
+ * `preview-fixture-` word on every contact an operator reads. `source` is a real
+ * column, already this exact string, and is server-owned (`MANAGE_CONTACT_PATCH_KEYS`)
+ * so nothing can drift it. `contacts.name` itself has no uniqueness constraint and
+ * no marker, so the grid now shows `Rukmini Devi` and nothing else.
+ *
+ * A spec that selects generated rows must therefore use `.eq("source", BULK_TAG)`.
+ */
+export const BULK_TAG = "preview-fixture-bulk"
+
+/**
+ * The preview seeder's contact-name prefix, which it still uses.
+ *
+ * Its two fixed contacts, two sessions and their attendance keep the tag: they are
+ * addressed by name throughout the `manage-contacts` suite, and a rename there
+ * would rewrite a dozen specs for two rows of fixture. The bulk set does not, and
+ * the bulk set is the one an operator scrolls through.
+ */
 export const SEEDER_TAG = "preview-fixture-"
 
 /**
@@ -144,7 +199,7 @@ export async function listBulkContacts(program: string = e2eProgramId()): Promis
       .from("contacts")
       .select(BULK_CONTACT_COLUMNS)
       .eq("program_id", program)
-      .like("name", `${BULK_TAG}%`)
+      .eq("source", BULK_TAG)
       .order("name", { ascending: true }),
   )
   return rows
@@ -157,14 +212,22 @@ export async function listProgramLocations(program: string = e2eProgramId()): Pr
   )
 }
 
-/** The `preview-fixture-bulk-location-<n>-<program>` rows the generator created. */
+/**
+ * The rows the generator created, from its own Chennai pool.
+ *
+ * Located by name rather than by prefix: the generator's locations carry plain
+ * names now, and the pool is disjoint from the preview seeder's two, so the names
+ * are an unambiguous discriminator on their own. `locations` has no uniqueness
+ * constraint, which is why the disjointness is a real requirement rather than a
+ * convenience — two rows may legitimately share a name.
+ */
 export async function listBulkLocations(program: string = e2eProgramId()): Promise<BulkLocation[]> {
   return collectPaged<BulkLocation>(() =>
     bulkFixtureClient()
       .from("locations")
       .select("id,program_id,name,status")
       .eq("program_id", program)
-      .like("name", `${BULK_TAG}%`)
+      .in("name", BULK_LOCATION_NAMES)
       .order("name"),
   )
 }
@@ -183,7 +246,18 @@ export async function listBulkLocations(program: string = e2eProgramId()): Promi
  */
 function staffEmailFor(role: "preacher" | "admin", program: string): string {
   if (program === e2eProgramId()) return fixtureEmail(role)
-  return `preview-fixture-${role}-${program}@example.com`
+  // Another programme's address, spelled from the same table `fixtureEmail` reads
+  // so the two cannot drift. A constructed string here was correct only while the
+  // seeder used one convention; it stopped being correct the moment that changed,
+  // and the symptom was a DW-3 refusal naming an address no auth user has.
+  const other = STAFF_EMAILS[program]
+  if (!other) {
+    throw new Error(
+      `No fixture email for ${role} in program "${program}". Add it to STAFF_EMAILS in ` +
+        `scripts/fixture-reference-data.mjs.`,
+    )
+  }
+  return other[role === "preacher" ? "Preacher" : "Admin"]
 }
 
 /** The seeded staff row for a role — `public.users`, not `auth.users`. */
@@ -429,7 +503,7 @@ export async function cleanupRowLifecycleContacts(ids: readonly string[]): Promi
  * as a caller bug would make the helper impossible to use defensively.
  *
  * A spec that wants the *shared* generated set leaves it alone: it is removed by
- * `pnpm seed:bulk-local --wipe`, which is tag-scoped in the same way.
+ * `pnpm seed:bulk-local --wipe`, which selects on `source` in the same way.
  *
  * Returns the ids actually deleted, so a caller can assert the delete did
  * something rather than silently matching nothing.
@@ -439,21 +513,28 @@ export async function cleanupTaggedContacts(ids: readonly string[]): Promise<str
 
   const db = bulkFixtureClient()
 
-  const { data: rows, error: readError } = await db.from("contacts").select("id,name").in("id", [...ids])
+  // CHANGED 2026-10-13: ownership is read from `source`, not from a name prefix.
+  // The guard is the same guarantee — "never deletes a row this suite does not
+  // own" — and it had to move with the wipe, because a generated name is now
+  // `Rukmini Devi` and a prefix test would refuse every row it is meant to clean.
+  const { data: rows, error: readError } = await db
+    .from("contacts")
+    .select("id,name,source")
+    .in("id", [...ids])
   if (readError) throw new Error(`Reading the ${ids.length} contact(s) to clean up failed: ${readError.message}`)
 
-  const found = new Map((rows ?? []).map((row) => [row.id as string, row.name as string]))
+  const found = new Map((rows ?? []).map((row) => [row.id as string, row]))
   const untagged = ids
     .filter((id) => {
-      const name = found.get(id)
-      return name !== undefined && !name.startsWith(BULK_TAG)
+      const row = found.get(id)
+      return row !== undefined && row.source !== BULK_TAG
     })
-    .map((id) => `${id} (${found.get(id)})`)
+    .map((id) => `${id} (${found.get(id)?.name})`)
 
   if (untagged.length) {
     throw new Error(
-      `cleanupTaggedContacts refuses to delete ${untagged.length} untagged contact(s): ${untagged.join(", ")}. ` +
-        `It only removes rows whose name starts with "${BULK_TAG}".`,
+      `cleanupTaggedContacts refuses to delete ${untagged.length} contact(s) it does not own: ${untagged.join(", ")}. ` +
+        `It only removes rows whose source is "${BULK_TAG}".`,
     )
   }
 
