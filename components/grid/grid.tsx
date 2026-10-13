@@ -79,14 +79,14 @@ export const GRID_MIN_COLUMN_WIDTH = 72
 export const GRID_OVERSCAN = 12
 
 /**
- * The three ways an open draft ends, in the order the design renders them.
- *
- * Verbatim from `Visual-Design/contacts-grid-states-v1.html` Panel 5. It is the
- * only place the edit model is stated in words, and it is load-bearing that all
- * three appear: an operator who does not know clicking away saves will click away
- * to cancel, which under this model commits instead.
+ * NOTE: the Panel 5 edit hint ("Enter saves · Escape discards · clicking away
+ * also saves") was removed along with the status strip. The edit model is still
+ * what it was — clicking away *does* commit — but the grid no longer says so, so
+ * a consumer that wants the affordance stated must render it. Worth knowing if
+ * this is ever removed by accident: the hint was the only place the model was
+ * stated in words, and an operator who assumes clicking away cancels will commit
+ * a draft they meant to discard.
  */
-const GRID_EDIT_HINT = "Enter saves · Escape discards · clicking away also saves"
 
 const INITIAL_COLUMN_SIZING_INFO: ColumnSizingInfoState = {
   startOffset: null,
@@ -435,6 +435,23 @@ export interface GridProps<TData extends RowData> {
   rowLifecycle?: GridRowLifecycle<TData>
   /** Called only for a row the server confirmed, so the consumer can drop it. */
   onRowRemoved?: (rowId: string) => void
+  /**
+   * Called when a just-added row cannot be focused because the active filters
+   * exclude it — a blank draft under a text filter, which nothing will ever
+   * reveal on its own.
+   *
+   * This used to be written to the grid's own status line. That line is gone, so
+   * a consumer that wants to say anything about it has to render something:
+   * silently dropping the case leaves an operator looking at a record that
+   * appears not to have been created.
+   */
+  onUnreachableNewRow?: () => void
+  /**
+   * Receives keyboard-operation messages the grid has no strip of its own to
+   * render into — a copy the browser refused, a paste that skipped read-only
+   * cells. See `UseGridKeyboardOptions.onNotice`.
+   */
+  onNotice?: (message: string) => void
   /** Forces a CAP-9 variant, for the review harness. Derived from rows otherwise. */
   panel?: GridPanelState
   className?: string
@@ -474,6 +491,8 @@ export function Grid<TData extends RowData>({
   toolbarExtra,
   rowLifecycle,
   onRowRemoved,
+  onUnreachableNewRow,
+  onNotice,
   panel,
   className,
 }: GridProps<TData>) {
@@ -751,6 +770,7 @@ export function Grid<TData extends RowData>({
     // So a typed editor's validation message names the field the operator sees
     // ("Source") rather than its column id.
     columnLabelById: labelById,
+    onNotice,
   })
 
   useEffect(() => {
@@ -806,9 +826,7 @@ export function Grid<TData extends RowData>({
       //   looking at a row that is not on screen.
       if (rows.some((row, index) => getRowId(row, index) === pendingFocusRowId)) {
         setPendingFocusRowId(null)
-        keyboard.setStatusMessage(
-          "The new record is hidden by the current filters. Clear them to edit it.",
-        )
+        onUnreachableNewRow?.()
       }
 
       return
@@ -816,9 +834,8 @@ export function Grid<TData extends RowData>({
 
     if (keyboard.focusRowCell(pendingFocusRowId)) {
       setPendingFocusRowId(null)
-      keyboard.setStatusMessage(null)
     }
-  }, [getRowId, keyboard, pendingFocusRowId, rows, virtualWindowKey])
+  }, [getRowId, keyboard, onUnreachableNewRow, pendingFocusRowId, rows, virtualWindowKey])
 
   useEffect(() => {
     const onWindowBlur = () => {
@@ -955,32 +972,7 @@ export function Grid<TData extends RowData>({
         toolbarExtra={toolbarExtra}
       />
 
-      <p
-        role="status"
-        aria-live="polite"
-        className={cn(
-          "border-b border-border px-2 py-1 text-[13px]",
-          keyboard.statusMessage ? "text-destructive block" : "sr-only",
-        )}
-      >
-        {keyboard.statusMessage ?? ""}
-      </p>
-
-      {/*
-        The edit affordance line, from `contacts-grid-states-v1.html` Panel 5.
-        Only while a cell is editing, and `sr-only` at rest exactly like the
-        status line above — so it shifts nothing and takes no vertical space
-        until there is a draft to explain.
-      */}
-      <p
-        data-grid-edit-hint=""
-        className={cn(
-          "text-muted-foreground px-2 py-1 text-[13px]",
-          keyboard.isCellEditing ? "block" : "sr-only",
-        )}
-      >
-        {GRID_EDIT_HINT}
-      </p>
+      
 
       <div
         ref={scrollRef}

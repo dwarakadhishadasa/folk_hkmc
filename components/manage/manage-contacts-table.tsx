@@ -62,6 +62,24 @@ const FAVORITE_COLUMN_ID = "favorite"
 const ACTIONS_COLUMN_ID = "actions"
 
 /**
+ * What a `locationIds` / `collectedById` reference that resolves to nothing
+ * renders as.
+ *
+ * The honest answer is a marker, not the id and not a guess derived from it. A
+ * contact with no location and a contact whose location row is gone are
+ * *different facts*, and both the empty string and the raw UUID collapse them:
+ * one hides the dangling reference entirely, the other prints a database
+ * identifier at an operator and tells them nothing about what to do next.
+ *
+ * Wording lives here rather than in the grid because the primitive has no
+ * vocabulary for a location. `meta.grid.unresolvedText` carries this value to
+ * the `linked` renderer, which marks the cell rather than matching a shape — so
+ * rewording this string cannot silently stop the marker being recognised.
+ */
+const UNRESOLVED_LOCATION = "Unknown location"
+const UNRESOLVED_STAFF = "Unknown staff member"
+
+/**
  * Display order, and the layout every later `/manage` table copies: the selection
  * control leads, the frozen identity column follows it, and the row actions close
  * the table. `name` is frozen because `design-constraints.md` requires that
@@ -830,6 +848,11 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
             frozen: true,
             editable: true,
             editor: "text",
+            fieldType: "text",
+            // The one visual emphasis a row carries. Weight and space, never a
+            // colour: a second accent would compete with selection and focus,
+            // which `design-constraints.md` reserves outright.
+            emphasis: true,
             filter: "text",
             hideable: false,
           },
@@ -840,18 +863,29 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         id: PHONE_COLUMN_ID,
         header: COLUMN_LABELS[PHONE_COLUMN_ID],
         size: 140,
-        meta: { grid: { editable: true, editor: "text", filter: "text" } },
+        meta: { grid: { editable: true, editor: "text", fieldType: "text", filter: "text" } },
       }),
 
       // Joined rather than an array so both the per-column text filter and the
       // sort order read the same value the operator sees in the cell.
+      //
+      // An id the lookup misses becomes `UNRESOLVED_LOCATION`, never the id: this
+      // used to fall back to `?? id`, which printed a raw UUID into the cell, into
+      // its `title`, and out through the clipboard. `fieldType: "linked"` is what
+      // gets the cell a label at all — without it this column has no editor to
+      // key on and fell through to bare text.
       columnHelper.accessor(
-        (contact) => contact.locationIds.map((id) => locationNameById.get(id) ?? id).join(", "),
+        (contact) =>
+          contact.locationIds
+            .map((id) => locationNameById.get(id) ?? UNRESOLVED_LOCATION)
+            .join(", "),
         {
           id: LOCATION_COLUMN_ID,
           header: COLUMN_LABELS[LOCATION_COLUMN_ID],
           size: 180,
-          meta: { grid: { filter: "text" } },
+          meta: {
+            grid: { fieldType: "linked", unresolvedText: UNRESOLVED_LOCATION, filter: "text" },
+          },
         },
       ),
 
@@ -862,7 +896,14 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         id: SOURCE_COLUMN_ID,
         header: COLUMN_LABELS[SOURCE_COLUMN_ID],
         size: 180,
-        meta: { grid: { editable: true, editor: "select", editorOptions: { options: sourceOptions } } },
+        meta: {
+          grid: {
+            editable: true,
+            editor: "select",
+            fieldType: "select",
+            editorOptions: { options: sourceOptions },
+          },
+        },
       }),
 
       // `multiselect`: already a `string[]` on the row and already writable
@@ -876,6 +917,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
           grid: {
             editable: true,
             editor: "multiselect",
+            fieldType: "multiselect",
             filter: "text",
             editorOptions: { options: payload.booksReadOptions },
           },
@@ -888,28 +930,28 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         id: INITIAL_CONTACT_COLUMN_ID,
         header: COLUMN_LABELS[INITIAL_CONTACT_COLUMN_ID],
         size: 150,
-        meta: { grid: { editable: true, editor: "date" } },
+        meta: { grid: { editable: true, editor: "date", fieldType: "date" } },
       }),
 
       columnHelper.accessor("dateOfBirth", {
         id: DATE_OF_BIRTH_COLUMN_ID,
         header: COLUMN_LABELS[DATE_OF_BIRTH_COLUMN_ID],
         size: 140,
-        meta: { grid: { editable: true, editor: "date" } },
+        meta: { grid: { editable: true, editor: "date", fieldType: "date" } },
       }),
 
       columnHelper.accessor("totalAttendanceCount", {
         id: TOTAL_COLUMN_ID,
         header: COLUMN_LABELS[TOTAL_COLUMN_ID],
         size: 130,
-        meta: { grid: { filter: "number", align: "right", tabular: true } },
+        meta: { grid: { fieldType: "number", filter: "number", align: "right", tabular: true } },
       }),
 
       columnHelper.accessor("past60DayAttendanceCount", {
         id: PAST_60_COLUMN_ID,
         header: COLUMN_LABELS[PAST_60_COLUMN_ID],
         size: 110,
-        meta: { grid: { filter: "number", align: "right", tabular: true } },
+        meta: { grid: { fieldType: "number", filter: "number", align: "right", tabular: true } },
       }),
 
       // Read as an ISO date by the server, so it sorts correctly as text.
@@ -917,6 +959,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         id: LAST_CONTACTED_COLUMN_ID,
         header: COLUMN_LABELS[LAST_CONTACTED_COLUMN_ID],
         size: 140,
+        meta: { grid: { fieldType: "date" } },
       }),
 
       // Truncates to one line at the fixed row height; the cell's `title` carries
@@ -929,17 +972,26 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         // `longtext`: the control is a popover precisely because a textarea
         // cannot fit a 32px row without pushing the virtualized list out of
         // alignment.
-        meta: { grid: { editable: true, editor: "longtext" } },
+        meta: { grid: { editable: true, editor: "longtext", fieldType: "longtext" } },
       }),
 
+      // Degrades the same way as `location`: a staff id that resolves to nothing
+      // is `UNRESOLVED_STAFF`, and an absent `collectedById` is nothing at all.
+      // It used to fall back to `""`, which made a dangling reference
+      // indistinguishable from a contact nobody collected \u2014 the same collapse
+      // `location` had, in the other direction.
       columnHelper.accessor(
         (contact) =>
-          contact.collectedById ? (payload.staffNames[contact.collectedById] ?? "") : "",
+          contact.collectedById
+            ? (payload.staffNames[contact.collectedById] ?? UNRESOLVED_STAFF)
+            : "",
         {
           id: COLLECTED_BY_COLUMN_ID,
           header: COLUMN_LABELS[COLLECTED_BY_COLUMN_ID],
           size: 160,
-          meta: { grid: { filter: "text" } },
+          meta: {
+            grid: { fieldType: "linked", unresolvedText: UNRESOLVED_STAFF, filter: "text" },
+          },
         },
       ),
 

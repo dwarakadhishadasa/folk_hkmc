@@ -76,6 +76,11 @@ function buildPreviewRows(count: number): GridPreviewRow[] {
       emailAddress: `${first.toLowerCase()}.${second.toLowerCase()}@${PREVIEW_DOMAINS[index % PREVIEW_DOMAINS.length]}`,
       // One row in four has no assignee, so the empty state is reachable.
       assignee: index % 4 === 0 ? null : (PREVIEW_USERS[index % PREVIEW_USERS.length]?.id ?? null),
+      // One row in three is `site-missing`, which the `site` accessor resolves to
+      // nothing, so the unresolved marker is on screen without a fixture planting
+      // a dangling reference. The contacts table cannot be tested this way \u2014
+      // `bulk-fixtures.spec.ts` asserts every seeded location resolves.
+      site: index % 3 === 0 ? "site-missing" : `site-${index % 2 === 0 ? "north" : "quarry-road"}`,
     })
   }
 

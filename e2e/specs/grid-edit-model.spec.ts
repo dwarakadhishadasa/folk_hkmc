@@ -53,7 +53,7 @@ import {
   cellAt,
   cellIn,
   filterGlobally,
-  gridStatusLine,
+  gridRoot,
   openCellEditor,
   openCellEditorAtCorner,
   openContactsGrid,
@@ -68,8 +68,7 @@ function cellEditor(page: Page) {
   return page.getByRole("textbox", { name: "Edit cell value" })
 }
 
-/** Panel 5's hint line, in the design's own words. */
-const EDIT_HINT = "Enter saves · Escape discards · clicking away also saves"
+
 
 /** One in-scope bulk row, by position. Each test takes its own offset. */
 async function inScopeRow(offset: number): Promise<{ id: string; name: string }> {
@@ -320,7 +319,9 @@ test.describe("CAP-10 — one commit path", () => {
       expect(patches.count(), "an untouched blur must issue no request at all").toBe(0)
       await expect(cellIn(rowById(page, target.id), "name")).toHaveText(before ?? "")
       expect((await readContactColumn([target.id], "name")).get(target.id)).toBe(before)
-      await expect(gridStatusLine(page), "and there is nothing to report").toHaveText("")
+      await expect(cellIn(rowById(page, target.id), "name"), "and left it unmarked").not.toHaveClass(
+        /text-destructive/,
+      )
     } finally {
       await patches.stop()
     }
@@ -403,10 +404,18 @@ test.describe("CAP-10 — one commit path", () => {
 
       const dateCell = cellIn(rowById(page, target.id), "initialContact")
       await expect(dateCell, "a rejected draft reverts").toHaveText(
-        before === null || before === "" ? "—" : String(before),
+        // CHANGED by premium-grid story 3 (CAP-3, blank-not-dash): the em-dash that
+        // stood in for an empty baseline is gone, so an empty column reverts to the
+        // empty string. Recorded contract change, not a weakened gate — the
+        // destructive marking and the `data-grid-cell-error` message below still
+        // prove the draft was refused rather than saved.
+        String(before ?? ""),
       )
       await expect(dateCell, "and is marked destructive").toHaveClass(/text-destructive/)
-      await expect(gridStatusLine(page)).toContainText("must be a real date")
+      await expect(dateCell, "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /must be a real date/,
+      )
       expect(patches.count(), "a rejected draft must not be sent").toBe(0)
       expect((await readContactColumn([target.id], "initial_contact")).get(target.id)).toBe(before)
     } finally {
@@ -585,25 +594,39 @@ test.describe("CAP-10 — what still works", () => {
     await expect(cellEditor(page), "Enter must not open an editor").toHaveCount(0)
 
     await expect(cellAt(page, 0, "owner"), "and none of them changed the cell").toHaveText(before)
-    await expect(gridStatusLine(page), "or wrote anything").toHaveText("")
+    await expect(cellAt(page, 0, "owner"), "or left it marked").not.toHaveClass(
+      /text-destructive/,
+    )
   })
 })
 
-test.describe("CAP-10 — the edit hint line", () => {
-  test("Panel 5's hint renders only while a cell is editing", async ({ page }) => {
+test.describe("CAP-10 — the grid renders no strip between the toolbar and the headers", () => {
+  test("neither the status strip nor the edit hint is rendered, at rest or while editing", async ({
+    page,
+  }) => {
     await openPreviewGrid(page)
-    const hint = page.locator("[data-grid-edit-hint]")
 
-    // `sr-only` at rest, exactly like the status line above it: present for the
-    // accessibility tree, taking no vertical space.
-    await expect(hint, "the hint is in the tree at rest").toHaveCount(1)
-    await expect(hint, "and takes no space at rest").toHaveClass(/sr-only/)
+    // Both strips are gone, so the toolbar is followed directly by the table. The
+    // refusal messages they carried live on the cell that failed instead
+    // (`data-grid-cell-error`), which is asserted throughout `grid-editors`.
+    await expect(
+      page.locator("[data-grid-edit-hint]"),
+      "the edit hint line is not rendered at rest",
+    ).toHaveCount(0)
+    await expect(
+      gridRoot(page).locator('p[role="status"]'),
+      "and neither is a status strip",
+    ).toHaveCount(0)
 
     await openCellEditor(cellAt(page, 0, "owner"))
-    await expect(hint, "the hint is visible while editing").toHaveText(EDIT_HINT)
-    await expect(hint, "and takes up space only then").not.toHaveClass(/sr-only/)
 
-    await page.keyboard.press("Escape")
-    await expect(hint, "and is hidden again once the editor closes").toHaveClass(/sr-only/)
+    await expect(
+      page.locator("[data-grid-edit-hint]"),
+      "the hint does not appear once an editor opens, either",
+    ).toHaveCount(0)
+    await expect(
+      gridRoot(page).locator('p[role="status"]'),
+      "nor does a status strip",
+    ).toHaveCount(0)
   })
 })

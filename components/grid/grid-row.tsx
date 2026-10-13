@@ -5,7 +5,8 @@ import type { KeyboardEvent } from "react"
 import type { Row } from "@tanstack/react-table"
 
 import type { GridCellView, GridDensity, GridFrozenColumn } from "@/components/grid/grid-types"
-import { GRID_EMPTY_TEXT, gridCellKey } from "@/components/grid/use-grid-keyboard"
+import { gridCellKey } from "@/components/grid/use-grid-keyboard"
+import { resolveGridCellRenderer } from "@/components/grid/grid-cell-renderers"
 import { cn } from "@/lib/utils"
 
 /**
@@ -202,14 +203,54 @@ export function GridRow<TData>({
       {cells.map((cell) => {
         const stickyLeft = stickyLeftByColumn.get(cell.columnId)
 
+        // Resolved here rather than in the keyboard hook because it needs both
+        // the type and the resolved renderer, and because `GridCellView` carries
+        // no row value for a renderer to reach past — the registry reads
+        // `cell.text`, which is where the optimistic override already lives.
+        //
+        // Guarded on `render` as well as on `fieldType`, so a column supplying
+        // its own widget cannot be restyled by a data renderer even if it also
+        // declares a type. The hook already withholds `fieldType` in that case;
+        // this is the second half of the same rule, and the cheaper of the two to
+        // keep honest.
+        const typeRender =
+          cell.render === undefined
+            ? resolveGridCellRenderer(cell.fieldType)?.render({
+                text: cell.text,
+                unresolvedText: cell.unresolvedText,
+              })
+            : undefined
+
         return (
           <td
             key={cell.columnId}
             data-grid-cell={gridCellKey(row.id, cell.columnId)}
             data-grid-cell-selected={cell.isSelected ? "true" : undefined}
+            // The two attributes a spec reads to tell an editable cell from a
+            // read-only one, and to find the identity column. Both are on every
+            // cell rather than only on the ones carrying a class, so the
+            // distinction is assertable without a screenshot.
+            data-grid-cell-editable={cell.editable ? "true" : "false"}
+            data-grid-cell-emphasis={cell.emphasis ? "true" : undefined}
+            data-grid-field-type={cell.fieldType}
+            // The refusal message, as a real attribute rather than only as `title`.
+            // The grid has no status line any more, so the cell is the only place
+            // the message can be read from — and `title` is suppressed below for
+            // any column carrying a custom renderer, which is exactly the case
+            // (`booksRead`, `assignee`) a rejection is most likely to come from.
+            data-grid-cell-error={cell.error ?? undefined}
             tabIndex={-1}
             title={
-              cell.render || cell.text === GRID_EMPTY_TEXT
+              // Nothing to inspect in an empty cell, and nothing useful to say
+              // in a cell whose widget draws its own affordance — the star and
+              // the row actions are controls, not values, and a tooltip reading
+              // an id or a boolean would be worse than none.
+              //
+              // A cell the type renderer draws *does* keep its title. Truncation
+              // is invisible otherwise, and dropping it here would make the
+              // registry the only class of value cell with no inspectable full
+              // text.
+              cell.render !== undefined || cell.text.length === 0
                 ? undefined
                 : (cell.error ?? cell.text)
             }
@@ -232,6 +273,17 @@ export function GridRow<TData>({
               ALIGN_CLASS[cell.align],
               cell.tabular && "tabular-nums",
               cell.isFocused && "ring-ring relative z-[5] ring-1 ring-inset",
+              // Read-only is muted and the identity column is weighted, so one
+              // row has one emphasis and the eye can tell at a glance which
+              // cells will accept an edit.
+              //
+              // The muted class is withheld when the cell is in error, because
+              // `text-destructive` and `text-muted-foreground` are the same
+              // Tailwind specificity and which one wins would depend on
+              // stylesheet order. An explicit guard is readable; a silent
+              // precedence fight is not.
+              !cell.editable && !cell.error && cell.render === undefined && "text-muted-foreground",
+              cell.emphasis && "font-medium",
               cell.error && "text-destructive",
               // 1px divider instead of a scroll shadow, which design-constraints.md bans —
               // and on the last pinned column only, so the frozen region is separated from the
@@ -241,6 +293,24 @@ export function GridRow<TData>({
             )}
             style={stickyLeft === undefined ? undefined : { left: stickyLeft }}
           >
+            {/*
+              Five cases, and the order is load-bearing twice over.
+
+              An editor wins outright: it renders its own closed display, and it
+              does so after the override has been applied. `editing` is checked
+              before the widget for the same reason — a cell being edited must not
+              have a widget replace the field being typed into.
+
+              Then the consumer's own widget. It is absent for a plain value
+              column by construction, and present for the columns that draw their
+              own control — the favorite star, the row actions. Those have chosen
+              their appearance; nothing after this point may restyle them.
+
+              Then the type-keyed renderer, which only exists for a column that
+              declared `meta.grid.fieldType` and no widget. `undefined` from it
+              means "render the plain text", which is the correct outcome for an
+              empty value and for a type whose text already reads correctly.
+            */}
             {cell.editor ? (
               <GridCellContents cell={cell} editor={cell.editor} />
             ) : cell.editing ? (
@@ -252,6 +322,8 @@ export function GridRow<TData>({
               />
             ) : cell.render !== undefined ? (
               cell.render
+            ) : typeRender ? (
+              typeRender
             ) : (
               cell.text
             )}

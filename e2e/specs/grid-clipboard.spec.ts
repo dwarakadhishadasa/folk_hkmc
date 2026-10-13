@@ -32,12 +32,11 @@ import {
   cellIn,
   filterGlobally,
   focusPreviewCellAt,
-  gridStatusLine,
+  previewNotice,
   openPreviewGrid,
   rowById,
 } from "../fixtures/manage-grid"
 
-const GRID_EMPTY_TEXT = "—" // `GRID_EMPTY_TEXT` in components/grid/use-grid-keyboard.ts
 
 /** Grant clipboard access for the tests that touch the clipboard directly. */
 async function grantClipboard(page: Page): Promise<void> {
@@ -118,7 +117,9 @@ test.describe("grid clipboard", () => {
 
     // Committed, not just displayed: no destructive marker, no status.
     await expect(cellAt(page, 5, "owner")).not.toHaveClass(/text-destructive/)
-    await expect(gridStatusLine(page)).toHaveText("")
+    await expect(cellAt(page, 5, "owner"), "and left unmarked").not.toHaveClass(
+      /text-destructive/,
+    )
   })
 
   test("clip 3 — a cleared cell round-trips as an empty field, never the placeholder", async ({
@@ -131,7 +132,10 @@ test.describe("grid clipboard", () => {
     // empty — the placeholder must not leak into the clipboard.
     await focusPreviewCellAt(page, 2, "owner")
     await page.keyboard.press("Delete")
-    await expect(cellAt(page, 2, "owner")).toHaveText(GRID_EMPTY_TEXT)
+    // CHANGED by premium-grid story 3 (CAP-3, blank-not-dash): the grid renders
+    // an empty value as nothing, so there is no em-dash placeholder left to
+    // assert. Recorded contract change, not a weakened gate.
+    await expect(cellAt(page, 2, "owner")).toHaveText("")
 
     await focusPreviewCellAt(page, 2, "owner")
     await page.keyboard.press("Shift+ArrowRight")
@@ -148,11 +152,14 @@ test.describe("grid clipboard", () => {
     await focusPreviewCellAt(page, 7, "owner")
     await page.keyboard.press("ControlOrMeta+v")
 
-    await expect(cellAt(page, 7, "owner")).toHaveText(GRID_EMPTY_TEXT)
+    // CHANGED by premium-grid story 3 (CAP-3, blank-not-dash) \u2014 as above.
+    await expect(cellAt(page, 7, "owner")).toHaveText("")
     await expect(cellAt(page, 7, "region"), "the read-only neighbour keeps its value").toHaveText(
       targetRegion,
     )
-    await expect(gridStatusLine(page)).toContainText("Skipped")
+    await expect(previewNotice(page), "the skip is reported, not swallowed").toContainText(
+      "Skipped",
+    )
   })
 
   test("clip 4 — pasting over read-only cells commits what it can and reports the skip", async ({
@@ -177,7 +184,9 @@ test.describe("grid clipboard", () => {
     await page.keyboard.press("ControlOrMeta+v")
 
     await expect(cellAt(page, 5, "owner")).toHaveText(regionA)
-    await expect(gridStatusLine(page)).toContainText("Skipped")
+    await expect(previewNotice(page), "the skip is reported, not swallowed").toContainText(
+      "Skipped",
+    )
   })
 
   test("clip 5 — a rejected paste reverts like any other rejected write", async ({ page }) => {
@@ -201,6 +210,9 @@ test.describe("grid clipboard", () => {
     await expect(failingCell, "a rejected paste marks the cell destructive").toHaveClass(
       /text-destructive/,
     )
-    await expect(gridStatusLine(page)).toContainText("locked in the harness")
+    await expect(failingCell, "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /locked in the harness/,
+    )
   })
 })

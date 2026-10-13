@@ -85,7 +85,7 @@
   spec_checkpoint: true
   invoke_dev_with: >-
     Read SPEC.md, surface-and-toolbar.md sections CAP-13 and CAP-14,
-    existing-state.md, and epics.md Story 2.1. Both live in
+    existing-state.md, and epics.md Story 3.1. Both live in
     grid-header-cell.tsx, so this is one story by file ownership.
 
     THE MENU HAS THREE ITEMS IN THIS STORY, NOT FOUR. Sort ascending, Sort
@@ -194,7 +194,7 @@
     placeholder removed.
   invoke_dev_with: >-
     Read SPEC.md, surface-and-toolbar.md, existing-state.md, and epics.md Story
-    2.2. Also read docs/manage-grid-pattern.md for the DW-27 rules. This story
+    2.1. Also read docs/manage-grid-pattern.md for the DW-27 rules. This story
     changes cell rendering, which is exactly the operation that walks into those
     traps.
 
@@ -251,7 +251,7 @@
     control so its label cannot disagree with what the grid renders.
   invoke_dev_with: >-
     Read SPEC.md, surface-and-toolbar.md section "CAP-11 and CAP-15 — what is
-    already true", existing-state.md, and epics.md Story 2.3. The audit table
+    already true", existing-state.md, and epics.md Story 2.2. The audit table
     there lists what already ships: isFocused is resolved from focusedColumnId
     at use-grid-keyboard.ts:1757, the active ring is per-cell at
     grid-row.tsx:208 and distinct from the row hover background at :179,
@@ -308,7 +308,7 @@
   spec_checkpoint: true
   invoke_dev_with: >-
     Read SPEC.md CAP-2, surface-and-toolbar.md section CAP-2, existing-state.md,
-    and epics.md Story 2.4. This story is NEW in this reconciliation: CAP-2's
+    and epics.md Story 2.3. This story is NEW in this reconciliation: CAP-2's
     scroll half had no owner in the 8-story breakdown, where story 3 claimed
     only the empty-state half. The half that was missing is the substantive
     one.
@@ -398,7 +398,7 @@
     those four can proceed now.
 
     Read SPEC.md CAP-12 and OQ-13 and OQ-18 through OQ-21, surface-and-toolbar.md
-    section CAP-12, existing-state.md, and epics.md Story 3.1.
+    section CAP-12, existing-state.md, and epics.md Story 3.2.
 
     THIS IS A POPOVER ANCHORED UNDER THE TOOLBAR, NOT AN INLINE BAR AND
     NOT A MODAL. OQ-18 records three reversals and the current answer is the
@@ -531,7 +531,7 @@
     NO view dropdown (OQ-1, resolved twice).
   invoke_dev_with: >-
     Read SPEC.md CAP-6, surface-and-toolbar.md, existing-state.md,
-    docs/manage-grid-pattern.md, and epics.md Story 3.2. Most of this ALREADY
+    docs/manage-grid-pattern.md, and epics.md Story 3.3. Most of this ALREADY
     EXISTS: grid-toolbar.tsx renders the globalFilter search with its clear X,
     the Columns visibility menu, the density Select, a rowAction slot, a
     toolbarExtra slot, and the visible/total counts;
@@ -540,7 +540,7 @@
     The work is compaction and hierarchy, not construction.
 
     YOUR FILTER CONTROL IS A BUTTON AGAIN, AND IT IS ALSO THE INDICATOR.
-    Story 3.1's filter surface is a popover anchored under this control
+    Story 3.2's filter surface is a popover anchored under this control
     (OQ-18), so the toolbar button opens it — and when conditions are active
     the SAME control becomes the indicator, naming the columns it is filtering
     in saffron, e.g. "Filtered by Name, Phone". One control, two jobs; do not
@@ -604,7 +604,7 @@
     without cramping the tab row.
   invoke_dev_with: >-
     Read SPEC.md CAP-1, surface-and-toolbar.md section CAP-1,
-    existing-state.md, and epics.md Story 3.3. This story is NEW in this
+    existing-state.md, and epics.md Story 3.4. This story is NEW in this
     reconciliation: CAP-1 had ZERO mentions across all eight stories of the
     previous breakdown, so the whole page-header redesign had no owner.
 
@@ -660,7 +660,7 @@
   invoke_dev_with: >-
     Read SPEC.md CAP-8, CAP-9 and CAP-16, surface-and-toolbar.md, the "What
     must survive this work" list at the end of that file, and epics.md Story
-    4.2. This is the closing gate, not new feature work.
+    4.1. This is the closing gate, not new feature work.
 
     THE BOUNDARIES TO PROVE, each with the mechanism already in the source: a
     checkbox click activates no edit (stopPropagation); a dropdown or popover

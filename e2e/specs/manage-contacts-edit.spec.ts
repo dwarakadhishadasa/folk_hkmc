@@ -37,8 +37,7 @@
  * never absent and the `?? undefined` never fires. `GridCellView.render` is
  * therefore always defined, and `GridRow`'s `cell.render !== undefined ? … :
  * cell.text` always takes the first branch. `cell.text` — which carries the
- * override, the `GRID_EMPTY_TEXT` placeholder and the `title` tooltip — was dead
- * for every accessor column.
+ * override and the `title` tooltip — was dead for every accessor column.
  *
  * The tripwires did their job: `Grid` now resolves, from the column definitions
  * it was handed, which columns actually carry a `cell` renderer, and
@@ -80,7 +79,6 @@ import { e2eProgramId } from "../fixtures/roles"
 import {
   cellIn,
   filterGlobally,
-  gridStatusLine,
   openCellEditor,
   openContactsGrid,
   readContactColumn,
@@ -90,7 +88,6 @@ import {
   SINGLE_CONTACT_ROUTE,
 } from "../fixtures/manage-grid"
 
-const GRID_EMPTY_TEXT = "—" // `GRID_EMPTY_TEXT` in components/grid/use-grid-keyboard.ts
 
 /**
  * Rows are addressed by their generated index fragment, and each test takes its
@@ -327,7 +324,10 @@ test.describe("inline cell editing", () => {
       await expect(cell, "a resolved commit must not leave a destructive cell").not.toHaveClass(
         /text-destructive/,
       )
-      await expect(gridStatusLine(page)).toHaveText("")
+      await expect(cell, "a resolved commit leaves nothing to report").not.toHaveAttribute(
+        "data-grid-cell-error",
+        /.+/,
+      )
     } finally {
       await page.unroute(SINGLE_CONTACT_ROUTE)
       await restoreContactNames(originalNames)
@@ -360,7 +360,10 @@ test.describe("inline cell editing", () => {
 
       await expect(rowById(page, target.id)).toBeVisible()
       await expect(cellIn(rowById(page, target.id), "name")).toHaveText(renamed)
-      await expect(gridStatusLine(page), "a reload must not surface a stale edit error").toHaveText("")
+      await expect(
+        cellIn(rowById(page, target.id), "name"),
+        "a reload must not leave a stale edit error on the cell",
+      ).not.toHaveAttribute("data-grid-cell-error", /.+/)
     } finally {
       await restoreContactNames(originalNames)
     }
@@ -396,8 +399,13 @@ test.describe("inline cell editing", () => {
       // Reverted, not left holding the rejected draft.
       await expect(cell).toHaveText(original)
       await expect(cell, "a rejected cell must be marked destructive").toHaveClass(/text-destructive/)
-      await expect(gridStatusLine(page)).toContainText("Name is required.")
-      await expect(gridStatusLine(page)).toBeVisible()
+      await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /Name is required\./,
+      )
+      await expect(cell, "and it is visible on the cell that failed").toHaveClass(
+        /text-destructive/,
+      )
 
       // Rejection contained: the row never left the database carrying the draft.
       expect((await readContactNames([target.id])).get(target.id)).toBe(original)
@@ -431,10 +439,13 @@ test.describe("inline cell editing", () => {
 
       // The optimistic display of an empty value, observed while the PATCH is
       // still in flight.
-      await expect(
-        phoneCell,
-        "the empty value shows before the server answers",
-      ).toHaveText(GRID_EMPTY_TEXT)
+      //
+      // CHANGED by premium-grid story 3 (CAP-3, blank-not-dash). This asserted
+      // the em-dash `GRID_EMPTY_TEXT`; an empty value now renders as nothing. The
+      // point of the test is unchanged and still proven \u2014 the cell shows the
+      // *new* value before the server answers \u2014 it just no longer does so with
+      // a placeholder glyph.
+      await expect(phoneCell, "the empty value shows before the server answers").toHaveText("")
     } finally {
       await release()
       await page.unroute(SINGLE_CONTACT_ROUTE)
@@ -464,7 +475,10 @@ test.describe("inline cell editing", () => {
 
     // Server 400 first: the destructive marker and the message are the server's.
     await expect(phoneCell, "a reverted cell must be marked destructive").toHaveClass(/text-destructive/)
-    await expect(gridStatusLine(page)).toContainText("Phone is required.")
+    await expect(phoneCell, "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /Phone is required\./,
+    )
     await expect(phoneCell).toHaveText(target.phone)
 
     // And the rejection was not written.
@@ -498,7 +512,10 @@ test.describe("inline cell editing", () => {
       // Caught, reverted and surfaced — never a bare `TypeError: fetch failed`.
       await expect(cell).toHaveText(original)
       await expect(cell).toHaveClass(/text-destructive/)
-      await expect(gridStatusLine(page)).toContainText("Unable to reach the server.")
+      await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /Unable to reach the server\./,
+      )
       expect((await readContactNames([target.id])).get(target.id)).toBe(original)
     } finally {
       await page.unroute(SINGLE_CONTACT_ROUTE)

@@ -41,6 +41,7 @@ export type {
   GridEditError,
   GridEditErrorHandler,
   GridFrozenColumn,
+  GridFieldType,
   GridNewRow,
   GridPanelState,
   GridRowLifecycle,
@@ -56,12 +57,17 @@ export {
 } from "@/components/grid/use-grid-view-state"
 export {
   GRID_CELL_KEY_SEPARATOR,
-  GRID_EMPTY_TEXT,
   gridCellKey,
   useGridKeyboard,
   type GridKeyboardApi,
   type UseGridKeyboardOptions,
 } from "@/components/grid/use-grid-keyboard"
+export {
+  GRID_FIELD_TYPES,
+  resolveGridCellRenderer,
+  type GridCellRenderContext,
+  type GridCellRenderer,
+} from "@/components/grid/grid-cell-renderers"
 export {
   GRID_PARAM_KEYS,
   GRID_PARAM_PREFIXES,

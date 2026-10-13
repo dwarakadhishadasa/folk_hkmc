@@ -52,11 +52,59 @@ scrolled away.
 | `editable: true` | Gates the double-click that opens the editor — and it is the *only* opener. Also the only thing that should be in `PATCH_KEY_BY_COLUMN`. |
 | `editor: <GridEditorKey>` | Names the typed editor the cell renders and parses with. Resolved through the registry in `components/grid/grid-editors.tsx`. |
 | `editorOptions` | Presentation-only configuration for that editor: `options`, `users`, `currency`, `locale`. |
+| `fieldType: <GridFieldType>` | Names what the cell **holds**, resolved through the registry in `components/grid/grid-cell-renderers.tsx`. Independent of `editor` — see below. |
+| `unresolvedText` | The marker a `linked` accessor substitutes for an id its lookup cannot resolve. Pairs with `fieldType: "linked"`. |
+| `emphasis: true` | Marks the one column per row that carries the row's identity. Weight and space only, never a colour. |
 | `filter: "text" \| "number"` | Supplies the column's value type and its `filterFn` |
 | `align`, `tabular` | Reaches the cell directly |
 | `frozen: true` | Joins the pinned run |
 | `selectable: true` | Row-selection control: joins the pinned run ahead of the identity column |
 | `hideable: false` | Removed from the visibility menu |
+
+### `fieldType` is not `editor`, and that is the point
+
+Two different questions, two different keys:
+
+| Key | Question | Absent means |
+| --- | -------- | ------------ |
+| `editor` | How is this cell **edited**? | the cell cannot be edited at all |
+| `fieldType` | What does this cell **hold**? | the cell renders its plain text |
+
+They are separate declarations and neither is derived from the other. A joined
+accessor column — `location`, `collectedBy` — has **no editor and no stored
+value**, because its value is derived at render time from ids the payload
+already resolved. A renderer keyed on `editor` alone renders nothing for both:
+they fall through to bare text while a stored field next to them renders a pill.
+
+So every column declares both, and `fieldType` covers `text`, `select`,
+`multiselect`, `date`, `number`, `boolean`, `linked` and `longtext`. The grid
+hands `grid-row.tsx` three attributes for this: `data-grid-field-type`,
+`data-grid-cell-editable` and `data-grid-cell-emphasis`.
+
+**A column supplying its own `cell` widget declares no `fieldType`.** The widget
+has already chosen the cell's appearance; a data renderer over the favorite star
+would be restyling a button as if it were a value.
+
+#### `linked`, and the unresolved marker
+
+A `linked` cell renders one label and **never invents one**. An id with no
+matching lookup is a different fact from no id at all, so the two must not
+collapse:
+
+| State | Renders |
+| --- | --- |
+| Ids resolve | the labels, joined — as one pill, **not split per id** |
+| An id resolves to nothing | `meta.grid.unresolvedText` |
+| No ids at all | nothing |
+
+The marker wording lives in the **consumer** because the grid has no vocabulary
+for a location: `UNRESOLVED_LOCATION` in `manage-contacts-table.tsx` reads
+correctly there and means nothing in a primitive. It travels through
+`unresolvedText` and the renderer *marks* the cell rather than matching a shape,
+so rewording the marker cannot silently stop it being recognised.
+
+Never derive a label from the id. `?? id` printed a raw UUID into the cell, into
+its `title`, and out through the clipboard; that fallback is what this replaced.
 
 `filter` used to do a second job — choosing the per-column filter popover
 control. That control is gone: headers carry no funnel button, and the filter
@@ -95,8 +143,8 @@ carries a widget. The grid therefore resolves that question from the column defi
 it**, before the defaults are merged, and renders `cell.text` — not the default renderer — for every
 column that supplies none.
 
-That is not cosmetic. `cell.text` is where the optimistic override, the `—` placeholder and the
-`title` tooltip live. A grid that trusted `columnDef.cell` renders the library's `renderValue` for
+That is not cosmetic. `cell.text` is where the optimistic override and the `title`
+tooltip live. A grid that trusted `columnDef.cell` renders the library's `renderValue` for
 every accessor column instead, and an in-flight edit sits there showing the *old* value until the
 write resolves — with nothing in the console and no failing type check. This shipped once; it is
 why `renderCellNode` takes a resolved set instead of asking the column def.
@@ -422,6 +470,10 @@ order differs and leaves the pinned run intact. Neither is ever written per fram
 - [ ] Editable columns appear in `meta.grid.editable` **and** `PATCH_KEY_BY_COLUMN`.
 - [ ] Editable columns name an `meta.grid.editor` where a typed control fits, and still
       supply no `cell` widget of their own.
+- [ ] Every column declares `meta.grid.fieldType`, including joined accessors that have
+      no editor; exactly one column carries `emphasis`.
+- [ ] A joined accessor substitutes its own `meta.grid.unresolvedText` for an id the
+      lookup misses, and never falls back to the id or to `""`.
 - [ ] Every commit rejects with an `Error` carrying the server's message.
 - [ ] One fetch helper, `readError` on every body, named network failure.
 - [ ] Selection held in `useState`, passed as `state.rowSelection`, with `onRowSelectionChange`; not

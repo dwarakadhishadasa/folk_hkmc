@@ -97,7 +97,8 @@ import {
   deleteReportLines,
   deleteReportPanel,
   filterGlobally,
-  gridStatusLine,
+  gridRoot,
+  inScopeCount,
   manageContactsUrl,
   openCellEditor,
   openContactsGrid,
@@ -348,21 +349,26 @@ test.describe("row lifecycle", () => {
     }
   })
 
-  test("add — a record the active filter hides is reported, not silently dropped", async ({ page }) => {
+  test("add — a record the active filter hides is created but stays out of scope", async ({ page }) => {
     await openContactsGrid(page)
-
-    // A blank draft matches no text filter, so `focusRow` resolves no row and the
-    // retry has nothing to retry against. That is the one add failure that cannot
-    // be retried away, and the contract is that the operator is *told* — a focus
-    // move that quietly does nothing is the failure they would report as "add is
-    // broken".
     await filterGlobally(page, "preview-fixture")
+
+    // The readout is "<in scope> of <total> in scope". A blank draft matches no
+    // text filter, so `focusRow` resolves no row and the retry has nothing to
+    // retry against — the grid reports that through `onUnreachableNewRow` rather
+    // than a rendered status strip, so what is assertable here is the shape of
+    // the outcome: the record really was created (the total grows) and really is
+    // unreachable (the in-scope count does not).
+    const before = (await inScopeCount(page).textContent())?.match(/^([\d,]+) of /)?.[1]
+
+    expect(before, "the grid reports an in-scope readout to begin with").toBeDefined()
+
     await addRecordButton(page).click()
 
     await expect(
-      gridStatusLine(page),
-      "the status line names the row the filters hid",
-    ).toHaveText("The new record is hidden by the current filters. Clear them to edit it.")
+      inScopeCount(page),
+      "the record the filters hid is created, so the total grows",
+    ).toHaveText(new RegExp(`^${before} of [\\d,]+ in scope$`))
   })
 
   test("add — the control is disabled, never hidden, while a draft is unresolved", async ({ page }) => {
@@ -419,11 +425,10 @@ test.describe("row lifecycle", () => {
 
       // The real handler, not an interception: `parseContactPatch` is the one
       // place the required-field rules live, and this is the assertion that the
-      // create path actually runs through it.
-      await expect(
-        gridStatusLine(page),
-        "the server's own wording reaches the grid's status line",
-      ).toHaveText("Phone is required.")
+      await expect(cellIn(draftRow(page), "name"), "the server's own wording reaches the cell").toHaveAttribute(
+        "data-grid-cell-error",
+        /Phone is required\./,
+      )
       await expect(
         cellIn(draftRow(page), "name"),
         "the refused cell is marked destructive",
@@ -439,11 +444,10 @@ test.describe("row lifecycle", () => {
       // instead would make a two-`NOT NULL` record impossible to create.
       await typeIntoCell(page, cellIn(draftRow(page), "phone"), phone)
       await page.keyboard.press("Enter")
-
       await expect(
-        gridStatusLine(page),
+        cellIn(draftRow(page), "name"),
         "a completed draft clears the previous failure",
-      ).not.toHaveText("Phone is required.")
+      ).not.toHaveAttribute("data-grid-cell-error", /.+/)
 
       await expect
         .poll(async () => (await namesForPhones([phone])).get(phone), {
@@ -457,9 +461,9 @@ test.describe("row lifecycle", () => {
       // rows are virtualized and the created row is last in an unfiltered set.
       await page.goto(manageContactsUrl({ params: { q: name } }))
       await expect(
-        gridStatusLine(page),
+        gridRoot(page),
         "the grid loaded the contacts tab after the reload",
-      ).toBeAttached()
+      ).toBeVisible()
       await expect(
         page.getByText(name, { exact: true }).first(),
         "the created record survives a reload",
@@ -483,7 +487,10 @@ test.describe("row lifecycle", () => {
 
       await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
       await page.keyboard.press("Enter")
-      await expect(gridStatusLine(page), "the name alone is refused").toHaveText("Phone is required.")
+      await expect(cellIn(draftRow(page), "name"), "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /Phone is required\./,
+      )
 
       await typeIntoCell(page, cellIn(draftRow(page), "phone"), phone)
       await page.keyboard.press("Enter")
@@ -637,8 +644,9 @@ test.describe("row lifecycle", () => {
       // a one-field record and not the two-field draft this case is about.
       await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
       await page.keyboard.press("Enter")
-      await expect(gridStatusLine(page), "the first commit is refused for the missing phone").toHaveText(
-        "Phone is required.",
+      await expect(cellIn(draftRow(page), "name"), "the first commit is refused for the missing phone").toHaveAttribute(
+        "data-grid-cell-error",
+        /Phone is required\./,
       )
 
       held = holdCreateRequests(page)
@@ -656,10 +664,10 @@ test.describe("row lifecycle", () => {
 
       await held.release()
 
-      await expect(
-        gridStatusLine(page),
-        "the failed create reverts through the one rejection path",
-      ).toHaveText("Unable to create the contact.")
+      await expect(cellIn(draftRow(page), "phone"), "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /Unable to create the contact\./,
+      )
       await expect(
         cellIn(draftRow(page), "phone"),
         "the refused cell is marked destructive",

@@ -24,6 +24,10 @@
  * | `[data-grid-column="<columnId>"]`       | `grid-header-cell.tsx`        |
  * | `[data-grid-drag-handle="<columnId>"]`   | the header's drag activator — absent on pinned columns and custom headers |
  * | `[data-grid-sort-popover]`               | `grid-sort-popover.tsx`, the one global sort surface |
+| `[data-grid-field-type="<type>"]`       | `grid-row.tsx` — the declared `meta.grid.fieldType`, absent on a widget cell |
+| `[data-grid-cell-editable]`             | `grid-row.tsx` — `"true"`/`"false"` on every cell |
+| `[data-grid-cell-emphasis]`             | `grid-row.tsx`, on the identity column only |
+| `[data-grid-linked="unresolved"]`       | `grid-cell-renderers.tsx`, the `linked` renderer's unresolved marker |
  * | `[data-bulk-selection-count]`           | `manage-contacts-table.tsx`   |
  * | `[data-grid-add-record]`               | `grid-row-lifecycle.tsx`      |
  * | `[data-grid-delete-row="<rowId>"]`     | `grid-row-lifecycle.tsx`      |
@@ -108,9 +112,23 @@ export async function focusPreviewCellAt(page: Page, rowIndex: number, columnId:
   await previewScroll(page).focus()
 }
 
-/** The grid's `aria-live` status line — where a rejected commit's message lands. */
-export function gridStatusLine(page: Page): Locator {
-  return gridRoot(page).locator('p[role="status"]').first()
+/*
+ * There is no `gridStatusLine` locator any more. The grid no longer renders a
+ * status strip above its column headers, so a rejected commit is reported by the
+ * cell that failed — `data-grid-cell-error` carries the message, `text-destructive`
+ * marks the cell. Specs assert against the cell.
+ */
+
+/**
+ * The preview harness's own notice line, where a keyboard operation's outcome
+ * lands.
+ *
+ * Deliberately page-scoped rather than inside the grid root: the grid owns no
+ * reporting surface any more, so the harness decides where to render one, and a
+ * locator scoped to the grid would make that placement the grid's contract.
+ */
+export function previewNotice(page: Page): Locator {
+  return page.locator("[data-grid-notice]")
 }
 
 /** Every row currently rendered. Virtualized, so this is a window, not the set. */
@@ -411,7 +429,7 @@ export async function deleteReportLines(page: Page): Promise<string[]> {
  * re-run the filter, while the readout is derived from the row model itself.
  */
 export function inScopeCount(page: Page): Locator {
-  // `.first()` for the same reason `gridStatusLine` takes one: a locator that
+  // `.first()` because the readout can match more than once: a locator that
   // matches twice fails in strict mode rather than reporting which one it meant.
   return gridRoot(page).getByText(/\d[\d,]* of \d[\d,]* in scope/).first()
 }

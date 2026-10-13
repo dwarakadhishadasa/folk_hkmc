@@ -27,6 +27,31 @@ export type GridDensity = "default" | "dense"
 export type GridColumnAlign = "left" | "right" | "center"
 
 /**
+ * What a cell *holds*, as opposed to `GridEditorKey`, which is how it is edited.
+ *
+ * These are deliberately separate keys on `GridColumnMeta`. The joined accessor
+ * columns — a row's locations, who collected it — carry no editor and no stored
+ * value, because their value is derived at render time from ids the consumer has
+ * already resolved. A renderer keyed on `editor` renders nothing for them, which
+ * is why they fell through to bare text while a stored field rendered a pill.
+ *
+ * `linked` is the type those columns declare. The grid renders it as a single
+ * label and never invents one: an id with no matching lookup must arrive from
+ * the consumer already carrying its own honest marker, because whether a miss
+ * means "unresolved" is the consumer's lookup that knows, and this module has no
+ * vocabulary for any entity.
+ */
+export type GridFieldType =
+  | "text"
+  | "select"
+  | "multiselect"
+  | "date"
+  | "number"
+  | "boolean"
+  | "linked"
+  | "longtext"
+
+/**
  * The `meta.grid` extension the grid reads off every column def.
  *
  * `editable` gates the `e` key. `filter` chooses the per-column filter control
@@ -52,12 +77,40 @@ export interface GridColumnMeta {
   editable?: boolean
   editor?: GridEditorKey
   editorOptions?: GridEditorOptions
+  /**
+   * What the cell holds, resolved against `grid-cell-renderers.tsx`.
+   *
+   * Independent of `editor` on purpose — see `GridFieldType`. A column with
+   * neither key renders `cell.text` unadorned, which is the correct outcome
+   * rather than a fallback.
+   */
+  fieldType?: GridFieldType
+  /**
+   * The marker a linked accessor substitutes for an id its lookup cannot
+   * resolve, so the `linked` renderer can mark it as unresolved rather than
+   * guessing.
+   *
+   * The wording belongs to the consumer because the grid has no vocabulary for
+   * any entity — "Unknown location" is meaningful in a contacts table and
+   * meaningless in a primitive. Supplying it also keeps the two sides from
+   * drifting: a consumer that reworded its marker would otherwise stop being
+   * recognised, silently, with the raw id back on screen.
+   */
+  unresolvedText?: string
   filter?: "text" | "number"
   align?: GridColumnAlign
   tabular?: boolean
   frozen?: boolean
   selectable?: boolean
   hideable?: boolean
+  /**
+   * Marks the one column per row that carries the row's identity, so a scan
+   * finds it without reading every value.
+   *
+   * Weight and space only. A colour here would be a second accent competing
+   * with selection and focus, which `design-constraints.md` forbids outright.
+   */
+  emphasis?: boolean
 }
 
 /**
@@ -271,7 +324,7 @@ export interface GridCellEditorView<TData = unknown> {
  */
 export interface GridCellView<TData = unknown> {
   columnId: string
-  /** Already-resolved display text, including the empty-value placeholder. */
+  /** Already-resolved display text. Empty means empty; nothing stands in for it. */
   text: string
   /**
    * The consumer's own `columnDef.cell` output, when it supplied one. Supplied
@@ -281,6 +334,25 @@ export interface GridCellView<TData = unknown> {
   render?: ReactNode
   align: GridColumnAlign
   tabular: boolean
+  /**
+   * What the cell holds, for the renderer registry. Absent for a column that
+   * declares no `fieldType`, and for a column supplying its own widget — a
+   * widget has already chosen its appearance and is left alone.
+   */
+  fieldType?: GridFieldType
+  /**
+   * Whether the column can be edited, which is what separates a read-only value
+   * from an editable one on screen.
+   *
+   * Read from `meta.grid.editable` rather than inferred from `editor` above:
+   * the two are separate declarations, and a column can legitimately be
+   * read-only while still rendering an editor's closed display.
+   */
+  editable: boolean
+  /** The row's identity column. See `GridColumnMeta.emphasis`. */
+  emphasis: boolean
+  /** See `GridColumnMeta.unresolvedText`; only meaningful for a `linked` cell. */
+  unresolvedText?: string
   isFocused: boolean
   /**
    * Inside the current cell range, which is not the same thing as the focused

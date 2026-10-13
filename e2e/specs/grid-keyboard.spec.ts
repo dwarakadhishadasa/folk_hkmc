@@ -47,7 +47,6 @@ import {
   cellIn,
   filterGlobally,
   focusPreviewCellAt,
-  gridStatusLine,
   openCellEditor,
   openPreviewGrid,
   previewScroll,
@@ -56,7 +55,6 @@ import {
   selectedCells,
 } from "../fixtures/manage-grid"
 
-const GRID_EMPTY_TEXT = "—" // `GRID_EMPTY_TEXT` in components/grid/use-grid-keyboard.ts
 
 /** The in-cell editor the keyboard hook mounts. */
 function cellEditor(page: Page) {
@@ -179,7 +177,9 @@ test.describe("grid keyboard completion", () => {
 
     await expect(cellEditor(page), "a printable character must not open the editor").toHaveCount(0)
     await expect(cellAt(page, 0, "owner"), "and must not change the cell").toHaveText(before)
-    await expect(gridStatusLine(page), "and must not write").toHaveText("")
+    await expect(cellAt(page, 0, "owner"), "and must not leave it marked").not.toHaveClass(
+      /text-destructive/,
+    )
 
     // The opener that replaced it is asserted where it belongs — a
     // double-click — in `grid-edit-model.spec.ts`, and by every conversion in
@@ -246,13 +246,17 @@ test.describe("grid keyboard completion", () => {
   test("key 7 — Delete clears through the revertable path and skips what it must", async ({ page }) => {
     await openPreviewGrid(page)
 
-    // Happy path: Delete empties the cell and the placeholder shows.
+    // Happy path: Delete empties the cell and it renders nothing.
+    //
+    // CHANGED by premium-grid story 3 (CAP-3, blank-not-dash). This asserted the
+    // em-dash `GRID_EMPTY_TEXT`, which the grid no longer has: an empty value now
+    // renders as nothing rather than as a placeholder glyph, because punctuation
+    // is not a subtle way to show absence. The contract changed deliberately, so
+    // the assertion changed with it \u2014 this is the recorded exception, not a
+    // weakened gate.
     await focusPreviewCellAt(page, 2, "owner")
     await page.keyboard.press("Delete")
-    await expect(
-      cellAt(page, 2, "owner"),
-      "a cleared cell shows the empty placeholder",
-    ).toHaveText(GRID_EMPTY_TEXT)
+    await expect(cellAt(page, 2, "owner"), "a cleared cell renders nothing").toHaveText("")
 
     // Read-only and checkbox cells are skipped, silently: clearing a frozen
     // identity or a boolean is not a cell write.
@@ -287,7 +291,10 @@ test.describe("grid keyboard completion", () => {
     await expect(failingCell, "a rejected clear marks the cell destructive").toHaveClass(
       /text-destructive/,
     )
-    await expect(gridStatusLine(page)).toContainText("locked in the harness")
+    await expect(failingCell, "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /locked in the harness/,
+    )
   })
 
   test("key 8 — Tab out of the editor commits first, then moves", async ({ page }) => {

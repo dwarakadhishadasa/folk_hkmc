@@ -28,6 +28,13 @@ export interface GridPreviewRow {
   emailAddress: string
   /** A `public.users`-shaped id; the `user` editor resolves it against `users`. */
   assignee: string | null
+  /**
+   * An id the `site` accessor resolves against `SITE_NAMES`.
+   *
+   * Never read directly: the column is an `accessorFn`, so what the grid holds is
+   * the resolved label. `site-missing` resolves to nothing on purpose.
+   */
+  site: string
 }
 
 /** One person the `user` editor can pick. Supplied by the route, like the rows. */
@@ -50,6 +57,13 @@ const columnHelper = createColumnHelper<GridPreviewRow>()
  *
  * `flagged` stays last. `grid-keyboard.spec.ts` addresses it as the grid's last
  * cell for `End` and `Tab`, so a column added after it would silently move that.
+ *
+ * This harness is also where the *joined accessor* case is demonstrable. The
+ * contacts table's `location` column cannot carry an unresolvable reference in a
+ * test, because `bulk-fixtures.spec.ts:571` asserts every seeded contact's
+ * location resolves to a real row — planting a dangling id there to prove a
+ * display rule would break a live data invariant. `site` below is the same
+ * shape, with the dangling case built in.
  */
 function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<GridPreviewRow>[] {
   return [
@@ -59,42 +73,50 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
       size: 140,
       // The frozen first column: this is what preserves row identity while
       // scrolling right, so it is deliberately not editable.
-      meta: { grid: { align: "left" as const } },
+      meta: { grid: { fieldType: "text", align: "left" as const } },
     }),
     columnHelper.accessor("owner", {
       id: "owner",
       header: "Owner",
       size: 200,
-      meta: { grid: { editable: true, filter: "text" as const } },
+      meta: { grid: { editable: true, fieldType: "text", filter: "text" as const } },
     }),
     columnHelper.accessor("region", {
       id: "region",
       header: "Region",
       size: 130,
-      meta: { grid: { filter: "text" as const } },
+      meta: { grid: { fieldType: "text", filter: "text" as const } },
     }),
     columnHelper.accessor("status", {
       id: "status",
       header: "Status",
       size: 120,
-      meta: { grid: { filter: "text" as const } },
+      meta: { grid: { fieldType: "text", filter: "text" as const } },
     }),
     columnHelper.accessor("volume", {
       id: "volume",
       header: "Volume",
       size: 120,
-      meta: { grid: { filter: "number" as const, align: "right" as const, tabular: true } },
+      meta: {
+          grid: {
+            fieldType: "number",
+            filter: "number" as const,
+            align: "right" as const,
+            tabular: true,
+          },
+        },
     }),
     columnHelper.accessor("score", {
       id: "score",
       header: "Score",
       size: 110,
-      meta: { grid: { align: "right" as const, tabular: true } },
+      meta: { grid: { fieldType: "number", align: "right" as const, tabular: true } },
     }),
     columnHelper.accessor("updatedAt", {
       id: "updatedAt",
       header: "Updated",
       size: 130,
+      meta: { grid: { fieldType: "date" } },
     }),
     columnHelper.accessor("notes", {
       id: "notes",
@@ -102,7 +124,7 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
       size: 260,
       // Editable and long: this is the column that shows the fixed row height
       // contract truncating on one line rather than wrapping.
-      meta: { grid: { editable: true } },
+      meta: { grid: { editable: true, fieldType: "longtext" } },
     }),
     // The five editors with no writable real-world column: a schema change to
     // demonstrate them on real data is forbidden, so they ship here instead of as
@@ -115,6 +137,7 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
         grid: {
           editable: true,
           editor: "currency",
+          fieldType: "number",
           align: "right",
           tabular: true,
           filter: "number",
@@ -130,6 +153,7 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
         grid: {
           editable: true,
           editor: "number",
+          fieldType: "number",
           align: "right",
           tabular: true,
           filter: "number",
@@ -141,21 +165,46 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
       id: "website",
       header: "Website",
       size: 220,
-      meta: { grid: { editable: true, editor: "url" } },
+      meta: { grid: { editable: true, editor: "url", fieldType: "text" } },
     }),
 
     columnHelper.accessor("emailAddress", {
       id: "emailAddress",
       header: "Email",
       size: 220,
-      meta: { grid: { editable: true, editor: "email" } },
+      meta: { grid: { editable: true, editor: "email", fieldType: "text" } },
     }),
 
     columnHelper.accessor("assignee", {
       id: "assignee",
       header: "Assignee",
       size: 170,
-      meta: { grid: { editable: true, editor: "user", editorOptions: { users } } },
+      meta: {
+        grid: {
+          editable: true,
+          editor: "user",
+          fieldType: "linked",
+          // The `user` editor resolves the id itself, so this column's own
+          // display never shows a raw id and never needs a marker.
+          unresolvedText: "Unknown person",
+          editorOptions: { users },
+        },
+      },
+    }),
+
+    // The joined-accessor case: no editor, no stored value, a label resolved at
+    // render time from an id. This is the shape that renders nothing at all when a
+    // renderer is keyed on the editor alone, and it is why it lives here rather
+    // than in the contacts table — see the factory's doc comment.
+    //
+    // `SITE_NAMES` deliberately omits `site-missing`, so one row in three is a
+    // dangling reference and proves the unresolved marker without a fixture
+    // having to plant one.
+    columnHelper.accessor((row) => SITE_NAMES.get(row.site) ?? UNRESOLVED_SITE, {
+      id: "site",
+      header: "Site",
+      size: 170,
+      meta: { grid: { fieldType: "linked", unresolvedText: UNRESOLVED_SITE, filter: "text" } },
     }),
 
     columnHelper.accessor("flagged", {
@@ -165,10 +214,28 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
       // `editor: "checkbox"` is what the `Space` toggle reads, and the registry
       // supplies the display widget — the one editor whose control is the cell
       // itself, so it commits on click as well as on `Space`.
-      meta: { grid: { editable: true, editor: "checkbox" } },
+      //
+      // Last, because `grid-keyboard.spec.ts` addresses it as the grid's final
+      // cell for `End` and `Tab`. Anything added after it moves that silently.
+      meta: { grid: { editable: true, editor: "checkbox", fieldType: "boolean" } },
     }),
   ]
 }
+
+/**
+ * The lookup a joined accessor resolves against, and the marker for a miss.
+ *
+ * The wording is this harness's, exactly as a real table's would be: the grid's
+ * `linked` renderer receives the marker through `meta.grid.unresolvedText`
+ * rather than recognising a shape, so nothing here has to match anything there.
+ */
+const UNRESOLVED_SITE = "Unknown site"
+
+const SITE_NAMES: ReadonlyMap<string, string> = new Map([
+  ["site-north", "North Annexe"],
+  ["site-quarry-road", "Quarry Road"],
+  // The id `site-missing` points at is deliberately absent.
+])
 
 /** The URL codec's list, derived so it cannot drift from the defs above. */
 const PREVIEW_COLUMN_IDS = buildPreviewColumns([])
@@ -234,6 +301,10 @@ export function GridPreview({
   const [density, setDensity] = useState<GridDensity>("default")
   const [panelKey, setPanelKey] = useState<PreviewPanelKey>("ready")
   const [retryCount, setRetryCount] = useState(0)
+  // Keyboard-operation notices: a copy the browser refused, a paste that skipped
+  // read-only cells. The grid renders no status strip of its own — see
+  // `Grid`'s `onNotice` — so the harness is what puts them on screen.
+  const [notice, setNotice] = useState<string | null>(null)
 
   const {
     state,
@@ -321,6 +392,7 @@ export function GridPreview({
         }}
         onClearFilters={clearFilters}
         panel={forcedPanel}
+        onNotice={setNotice}
         onCellCommit={(commit) => {
           if (commit.value === commit.previousValue) {
             return
@@ -362,6 +434,21 @@ export function GridPreview({
           )
         }}
       />
+
+      {/*
+        At the foot of the page, not above the column headers where the grid's
+        old strip sat: the grid itself owns no reporting surface any more, so
+        this is the preview's, and its position is deliberate rather than
+        incidental.
+      */}
+      <p
+        data-grid-notice=""
+        role="status"
+        aria-live="polite"
+        className="text-muted-foreground min-h-[20px] text-[13px]"
+      >
+        {notice ?? ""}
+      </p>
     </div>
   )
 }

@@ -16,8 +16,6 @@ import type {
 import type { GridEditorContext, GridEditorDefinition } from "@/components/grid/grid-editor-types"
 import { resolveGridEditor } from "@/components/grid/grid-editors"
 
-/** Displayed in place of an empty value, matching the existing table convention. */
-export const GRID_EMPTY_TEXT = "\u2014"
 
 /**
  * Separates the row id from the column id in `data-grid-cell`.
@@ -108,9 +106,9 @@ function readFailureMessage(cause: unknown): string {
  * `cell: props => props.renderValue()?.toString() ?? null` for **every** column,
  * so `columnDef.cell` is never absent. Trusting it made `render` defined for
  * every accessor column, and because `GridRow` prefers `render` over `text`,
- * `cell.text` — which carries the optimistic override, the `GRID_EMPTY_TEXT`
- * placeholder and the `title` tooltip — became dead, and an in-flight edit kept
- * showing the prior value until the write resolved.
+ * `cell.text` — which carries the optimistic override and the `title` tooltip —
+ * became dead, and an in-flight edit kept showing the prior value until the write
+ * resolved.
  */
 function renderCellNode<TData>(
   cell: Cell<TData, unknown>,
@@ -150,12 +148,24 @@ export interface UseGridKeyboardOptions<TData> {
    * the column id, which is what the fallback below uses.
    */
   columnLabelById?: ReadonlyMap<string, string>
+  /**
+   * Receives a keyboard operation's outcome message.
+   *
+   * Only for messages with no surviving on-screen signal: a copy the browser
+   * refused, a paste that skipped read-only cells. A rejected cell commit is
+   * *not* routed here — that message rides the cell itself, as its title and
+   * its destructive colour.
+   *
+   * The grid used to own a status line to render these into. It does not any
+   * more, so nothing is shown unless the consumer supplies this and renders
+   * something; dropping it silently turns a failed copy into no feedback at
+   * all.
+   */
+  onNotice?: (message: string) => void
 }
 
 export interface GridKeyboardApi<TData> {
   focusedRowIndex: number
-  /** Message for the `aria-live` status region; null when there is nothing to say. */
-  statusMessage: string | null
   /**
    * Marks a column as focused after a pointer interaction on that cell.
    *
@@ -207,18 +217,8 @@ export interface GridKeyboardApi<TData> {
    * the rendered window, which is the dependency that proves it moved.
    */
   focusRowCell: (rowId: string) => boolean
-  /**
-   * Writes the grid's `aria-live` status line directly.
-   *
-   * For messages that are not about a cell — a row lifecycle action the keyboard
-   * model could not carry out, say. Anything about a cell goes through the
-   * commit path so it keeps its revert.
-   */
-  setStatusMessage: (message: string | null) => void
   isRowFocused: (row: Row<TData>) => boolean
   isRowEditing: (row: Row<TData>) => boolean
-  /** Whether any cell is open, which is what the edit-hint line keys off. */
-  isCellEditing: boolean
   /** DOM id of the focused row, referenced by the container's activedescendant. */
   focusedRowDomId: string | undefined
   getCellView: (row: Row<TData>, cell: Cell<TData, unknown>) => GridCellView<TData>
@@ -244,6 +244,7 @@ export function useGridKeyboard<TData>({
   onEditError,
   consumerRenderedCells,
   columnLabelById,
+  onNotice,
 }: UseGridKeyboardOptions<TData>): GridKeyboardApi<TData> {
   const domId = useId()
   const focusedRowDomId = `${domId}-focused-row`
@@ -253,7 +254,6 @@ export function useGridKeyboard<TData>({
   const [editing, setEditing] = useState<GridCellCoordinate | null>(null)
   const [draft, setDraft] = useState("")
   const [overrides, setOverrides] = useState<Record<string, CellOverride>>({})
-  const [statusMessage, setStatusMessage] = useState<string | null>(null)
   /**
    * Where a range selection started. `null` until a cell is pointed at.
    *
@@ -797,7 +797,6 @@ export function useGridKeyboard<TData>({
         ...previous,
         [key]: { value: previousText, error: message },
       }))
-      setStatusMessage(message)
 
       onEditError?.({
         rowId: target.rowId,
@@ -839,7 +838,6 @@ export function useGridKeyboard<TData>({
       }
 
       setOverrides((previous) => ({ ...previous, [key]: { value: displayValue } }))
-      setStatusMessage(null)
 
       let pending: void | Promise<void>
 
@@ -997,7 +995,7 @@ export function useGridKeyboard<TData>({
         rowId: row.id,
         columnId,
         row: row.original,
-        text: raw.length > 0 ? raw : GRID_EMPTY_TEXT,
+        text: raw,
         getValue: () => cell.getValue(),
         draft: currentDraft,
         setDraft: setEditorDraft,
@@ -1254,8 +1252,10 @@ export function useGridKeyboard<TData>({
   /**
    * Copies the live range — or the single focused cell when no range is
    * active — as tab-separated text, one line per row. A missing cell
-   * contributes an empty field, never the `GRID_EMPTY_TEXT` placeholder: the
-   * placeholder is a display affordance and must not leak into the clipboard.
+   * contributes an empty field. The grid renders an empty value as nothing at
+   * all, so there is no display affordance for a placeholder to leak from — but
+   * the assertion that it stays empty lives here, at the serializer, and not only
+   * at the cell.
    */
   const copySelection = useCallback((): boolean => {
     if (visibleRows.length === 0 || visibleColumnIds.length === 0 || clampedRowIndex < 0) {
@@ -1315,19 +1315,20 @@ export function useGridKeyboard<TData>({
     const text = lines.join("\n")
 
     if (typeof navigator === "undefined" || !navigator.clipboard) {
-      setStatusMessage("Copy is not available in this browser.")
+      onNotice?.("Copy is not available in this browser.")
       return false
     }
 
     void navigator.clipboard
       .writeText(text)
-      .catch(() => setStatusMessage("Copy failed: the browser refused clipboard access."))
+      .catch(() => onNotice?.("Copy failed: the browser refused clipboard access."))
 
     return true
   }, [
     clampedRowIndex,
     columnIndexById,
     focusedColumnId,
+    onNotice,
     overrides,
     rowCellText,
     selectionBounds,
@@ -1404,9 +1405,7 @@ export function useGridKeyboard<TData>({
       }
 
       if (skipped > 0) {
-        setStatusMessage(
-          `Skipped ${skipped} read-only cell${skipped === 1 ? "" : "s"}; ${committed} pasted.`,
-        )
+        onNotice?.(`Skipped ${skipped} read-only cell${skipped === 1 ? "" : "s"}; ${committed} pasted.`)
       }
 
       return true
@@ -1417,6 +1416,7 @@ export function useGridKeyboard<TData>({
       commitCellInput,
       consumerRenderedCells,
       focusedColumnId,
+      onNotice,
       visibleColumnIds,
       visibleRows,
     ],
@@ -1895,12 +1895,24 @@ export function useGridKeyboard<TData>({
         columnIndex >= selectionBounds.firstColumn &&
         columnIndex <= selectionBounds.lastColumn
 
+      const consumerCell = renderCellNode(cell, consumerRenderedCells)
+
       return {
         columnId: cell.column.id,
-        text: text.length > 0 ? text : GRID_EMPTY_TEXT,
-        render: renderCellNode(cell, consumerRenderedCells),
+        text,
+        render: consumerCell,
         align: meta?.align ?? "left",
         tabular: meta?.tabular === true,
+        // Read here rather than in `grid-row.tsx` so the row only ever renders
+        // what it is handed, exactly as `editor` below is built here.
+        //
+        // A column supplying its own `cell` widget is excluded: the widget has
+        // already chosen this cell's appearance, and a data renderer over a
+        // control would be restyling a button as if it were a value.
+        fieldType: consumerCell ? undefined : meta?.fieldType,
+        unresolvedText: meta?.unresolvedText,
+        editable: meta?.editable === true,
+        emphasis: meta?.emphasis === true,
         isFocused: isRowFocused(row) && focusedColumnId === cell.column.id,
         isSelected,
         editing: isEditingCell,
@@ -1938,15 +1950,12 @@ export function useGridKeyboard<TData>({
 
   return {
     focusedRowIndex: clampedRowIndex,
-    statusMessage,
     focusCell,
     onCellDoubleClick,
     focusRow,
     focusRowCell,
-    setStatusMessage,
     isRowFocused,
     isRowEditing,
-    isCellEditing: editing !== null,
     focusedRowDomId: clampedRowIndex >= 0 ? focusedRowDomId : undefined,
     getCellView,
     containerProps: {

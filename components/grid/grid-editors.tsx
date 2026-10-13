@@ -50,13 +50,18 @@ import type {
 } from "@/components/grid/grid-editor-types"
 
 /**
- * `GRID_EMPTY_TEXT`, mirrored rather than imported.
+ * Whether a cell's display text is empty.
  *
- * `use-grid-keyboard.ts` owns the constant and this module is imported *by* that
- * hook, so importing it here would be a cycle. The value is asserted against it
- * in `e2e/specs/grid-editors.spec.ts`.
+ * The grid renders an empty value as nothing at all, so "empty" is now just the
+ * empty string \u2014 there is no placeholder glyph for a display to compare
+ * against. These call sites used to test a mirrored `EMPTY_TEXT` constant, which
+ * existed only because `use-grid-keyboard.ts` owned one while this module is
+ * imported *by* that hook. With no glyph to look for, the test needs no shared
+ * constant, and the import cycle it worked around is gone with it.
  */
-const EMPTY_TEXT = "\u2014"
+function isBlank(text: string): boolean {
+  return text.length === 0
+}
 
 /** The join `rowCellText` applies to an array value; `multiselect` reads it back. */
 const LIST_SEPARATOR = ", "
@@ -688,7 +693,7 @@ function CheckboxControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
 
 const selectEditor: GridEditorDefinition<unknown> = {
   renderDisplay: (ctx) =>
-    ctx.text === EMPTY_TEXT ? undefined : (
+    isBlank(ctx.text) ? undefined : (
       <OpenableDisplay kind="select">
         <Pill>{ctx.text}</Pill>
       </OpenableDisplay>
@@ -748,7 +753,7 @@ function SelectControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
 
 const multiselectEditor: GridEditorDefinition<unknown> = {
   renderDisplay: (ctx) =>
-    ctx.text === EMPTY_TEXT ? undefined : (
+    isBlank(ctx.text) ? undefined : (
       <OpenableDisplay kind="multiselect" className="gap-1">
         {ctx.text
           .split(LIST_SEPARATOR)
@@ -789,7 +794,7 @@ const multiselectEditor: GridEditorDefinition<unknown> = {
 
 function MultiselectControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
   const [selected, setSelected] = useState<string[]>(() =>
-    ctx.text === EMPTY_TEXT ? [] : ctx.text.split(LIST_SEPARATOR).filter(Boolean),
+    isBlank(ctx.text) ? [] : ctx.text.split(LIST_SEPARATOR).filter(Boolean),
   )
   const [query, setQuery] = useState("")
   const options = readOptions(ctx)

@@ -73,7 +73,6 @@ import {
   cellIn,
   filterGlobally,
   focusPreviewCellAt,
-  gridStatusLine,
   openCellEditor,
   openCellEditorAtCorner,
   openContactsGrid,
@@ -275,7 +274,9 @@ test.describe("typed editor — text, on /manage", () => {
         .poll(async () => (await readContactColumn([target.id], "name")).get(target.id))
         .toBe(renamed)
       await expect(cellIn(rowById(page, target.id), "name")).toHaveText(renamed)
-      await expect(gridStatusLine(page)).toHaveText("")
+      await expect(cellIn(rowById(page, target.id), "name"), "a committed cell is left unmarked").not.toHaveClass(
+        /text-destructive/,
+      )
     } finally {
       await page.unroute(SINGLE_CONTACT_ROUTE)
       await restoreContactColumn(original, "name")
@@ -301,7 +302,10 @@ test.describe("typed editor — text, on /manage", () => {
       const cell = cellIn(rowById(page, target.id), "name")
       await expect(cell, "a rejected cell reverts").toHaveText(target.name)
       await expect(cell, "a rejected cell is marked destructive").toHaveClass(/text-destructive/)
-      await expect(gridStatusLine(page)).toContainText("Name is required.")
+      await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /Name is required\./,
+      )
       expect((await readContactColumn([target.id], "name")).get(target.id)).toBe(original.get(target.id))
     } finally {
       await restoreContactColumn(original, "name")
@@ -377,7 +381,15 @@ test.describe("typed editor — longtext, on /manage", () => {
     const target = await inScopeRow(39)
     const original = await readContactColumn([target.id], "notes")
     const stored = (original.get(target.id) as string | null) ?? ""
-    const before = stored.length > 0 ? stored : "—"
+    // CHANGED by premium-grid story 3 (CAP-3, blank-not-dash): an empty stored
+    // value used to be stood in for by an em-dash. The grid renders nothing now, so
+    // the pre-edit baseline for a blank cell is the empty string.
+    const before = stored//
+    // CHANGED by premium-grid story 3 (CAP-3, blank-not-dash). This stood in an
+    // em-dash for an empty stored value; the grid now renders nothing, so the
+    // reverted cell is genuinely empty. Recorded contract change, not a weakened
+    // gate: what the test proves is that the rejection reverted the cell and
+    // marked it destructive, and both still hold.
 
     await focusContactsCell(page, target.id, target.name, "notes")
 
@@ -397,7 +409,10 @@ test.describe("typed editor — longtext, on /manage", () => {
       const cell = cellIn(rowById(page, target.id), "notes")
       await expect(cell, "a rejected draft reverts to the stored value").toHaveText(before)
       await expect(cell, "a rejected draft is marked destructive").toHaveClass(/text-destructive/)
-      await expect(gridStatusLine(page)).toContainText("2000 characters or fewer")
+      await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /2000 characters or fewer/,
+      )
       expect((await readContactColumn([target.id], "notes")).get(target.id)).toBe(
         original.get(target.id),
       )
@@ -489,7 +504,10 @@ test.describe("typed editor — select, on /manage", () => {
       const cell = cellIn(rowById(page, target.id), "source")
       await expect(cell, "a rejected draft reverts to the stored value").toHaveText(before)
       await expect(cell, "a rejected draft is marked destructive").toHaveClass(/text-destructive/)
-      await expect(gridStatusLine(page)).toContainText("is not an option for Source")
+      await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /is not an option for Source/,
+      )
       expect((await readContactColumn([target.id], "source")).get(target.id)).toBe(before)
     } finally {
       await restoreContactColumn(original, "source")
@@ -585,7 +603,10 @@ test.describe("typed editor — multiselect, on /manage", () => {
       // A paste is the only route to an arbitrary draft here: the control is a
       // checklist, so there is no field a wrong value could be typed into.
       await pasteIntoFocusedCell(page, "not-a-real-book")
-      await expect(gridStatusLine(page)).toContainText("is not an option")
+      await expect(cellIn(rowById(page, target.id), "booksRead"), "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /is not an option/,
+      )
 
       const cell = cellIn(rowById(page, target.id), "booksRead")
       await expect(cell, "a rejected draft reverts to the stored value").toHaveText(before)
@@ -676,9 +697,12 @@ test.describe("typed editor — date, on /manage", () => {
       await field.press("Enter")
 
       const cell = cellIn(rowById(page, target.id), "initialContact")
-      await expect(cell, "the rejected draft leaves the cell empty, as it was").toHaveText("—")
+      await expect(cell, "the rejected draft leaves the cell empty, as it was").toHaveText("")
       await expect(cell, "a rejected draft is marked destructive").toHaveClass(/text-destructive/)
-      await expect(gridStatusLine(page)).toContainText("must be a real date")
+      await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+        "data-grid-cell-error",
+        /must be a real date/,
+      )
       expect((await readContactColumn([target.id], "initial_contact")).get(target.id)).toBe(
         original.get(target.id),
       )
@@ -751,7 +775,10 @@ test.describe("typed editor — checkbox, on /dev/grid-preview", () => {
     await expect(cell, "a rejected toggle marks the cell destructive").toHaveClass(
       /text-destructive/,
     )
-    await expect(gridStatusLine(page)).toContainText("locked in the harness")
+    await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /locked in the harness/,
+    )
   })
 
   test("in flight — the toggle shows before the write resolves", async ({ page }) => {
@@ -794,7 +821,9 @@ test.describe("typed editor — currency, on /dev/grid-preview", () => {
       cellAt(page, 0, "amount"),
       "the currency display renders the committed minor units",
     ).toContainText("1,234.50")
-    await expect(gridStatusLine(page)).toHaveText("")
+    await expect(cellAt(page, 0, "amount"), "a committed cell is left unmarked").not.toHaveClass(
+      /text-destructive/,
+    )
   })
 
   test("rejection — a third decimal place reverts in the cell", async ({ page }) => {
@@ -811,7 +840,10 @@ test.describe("typed editor — currency, on /dev/grid-preview", () => {
     const cell = cellAt(page, 0, "amount")
     await expect(cell, "a rejected draft reverts to the stored amount").toHaveText(before)
     await expect(cell, "a rejected draft is marked destructive").toHaveClass(/text-destructive/)
-    await expect(gridStatusLine(page)).toContainText("at most two decimal places")
+    await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /at most two decimal places/,
+    )
   })
 
   test("in flight — the typed amount shows before the write resolves", async ({ page }) => {
@@ -870,7 +902,10 @@ test.describe("typed editor — number, on /dev/grid-preview", () => {
     const cell = cellAt(page, 0, "quantity")
     await expect(cell, "a rejected draft reverts to the stored number").toHaveText(before)
     await expect(cell, "a rejected draft is marked destructive").toHaveClass(/text-destructive/)
-    await expect(gridStatusLine(page)).toContainText("must be a number")
+    await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /must be a number/,
+    )
   })
 
   test("in flight — the typed number shows before the write resolves", async ({ page }) => {
@@ -935,7 +970,10 @@ test.describe("typed editor — url, on /dev/grid-preview", () => {
     const cell = cellAt(page, 0, "website")
     await expect(cell, "a rejected draft reverts to the stored URL").toHaveText(before)
     await expect(cell, "a rejected draft is marked destructive").toHaveClass(/text-destructive/)
-    await expect(gridStatusLine(page)).toContainText("must be a full URL")
+    await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /must be a full URL/,
+    )
   })
 
   test("in flight — the typed URL shows before the write resolves", async ({ page }) => {
@@ -977,7 +1015,9 @@ test.describe("typed editor — email, on /dev/grid-preview", () => {
     await page.keyboard.press("Enter")
 
     await expect(cellAt(page, 0, "emailAddress")).toHaveText(ADDRESS)
-    await expect(gridStatusLine(page)).toHaveText("")
+    await expect(cellAt(page, 0, "emailAddress"), "a committed cell is left unmarked").not.toHaveClass(
+      /text-destructive/,
+    )
   })
 
   test("rejection — an address with no domain reverts in the cell", async ({ page }) => {
@@ -994,7 +1034,10 @@ test.describe("typed editor — email, on /dev/grid-preview", () => {
     const cell = cellAt(page, 0, "emailAddress")
     await expect(cell, "a rejected draft reverts to the stored address").toHaveText(before)
     await expect(cell, "a rejected draft is marked destructive").toHaveClass(/text-destructive/)
-    await expect(gridStatusLine(page)).toContainText("must be an email address")
+    await expect(cell, "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /must be an email address/,
+    )
   })
 
   test("in flight — the typed address shows before the write resolves", async ({ page }) => {
@@ -1055,7 +1098,10 @@ test.describe("typed editor — user, on /dev/grid-preview", () => {
     // The control is a searchable list, so the only way to hand it a wrong value
     // is to paste one; a paste goes through the same `parse` as typing.
     await pasteIntoFocusedCell(page, "not-a-known-user")
-    await expect(gridStatusLine(page)).toContainText("is not a known Assignee")
+    await expect(cellAt(page, 0, "assignee"), "the refusal rides the cell itself").toHaveAttribute(
+      "data-grid-cell-error",
+      /is not a known Assignee/,
+    )
 
     const cell = cellAt(page, 0, "assignee")
     await expect(cell, "a rejected draft reverts to the stored person").toHaveText(before)
