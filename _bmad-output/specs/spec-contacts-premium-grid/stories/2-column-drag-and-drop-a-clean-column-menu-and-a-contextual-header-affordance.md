@@ -2,7 +2,7 @@
 title: 'Column drag-and-drop, a clean column menu, and a contextual header affordance'
 type: 'feature'
 created: '2026-10-12'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'c7241e0dba6dd28496eac3b1aea8dbd763dd56cb'

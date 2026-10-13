@@ -2,7 +2,7 @@
 title: 'Double-click edit model, blur-commit, and retiring the keyboard openers'
 type: 'feature'
 created: '2026-10-12'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '065dec19d228188d45ebc4b12633a92b99cef5a6'
 review_loop_iteration: 0
 followup_review_recommended: false
