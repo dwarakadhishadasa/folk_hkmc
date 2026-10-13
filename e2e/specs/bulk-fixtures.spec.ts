@@ -28,6 +28,7 @@ import { expect, test } from "@playwright/test"
 import { STAFF_EMAILS } from "../../scripts/fixture-reference-data.mjs"
 import {
   BULK_LOCATION_NAMES,
+  BULK_SPEC_SOURCE,
   BULK_TAG,
   GENERATOR,
   PREVIEW_LOCATION_NAMES,
@@ -459,14 +460,11 @@ test("Preacher resolves names in scope: every location a readable contact points
   // this the seeder's two fixed contacts would fall out of scope and take most of
   // the manage-contacts suite with them. The union is additive for foreign
   // locations and authoritative for its own.
-  // Prefix match, not equality. The seeder now appends the Chennai temple name
-  // to the tagged location (`preview-fixture-location-1-folk-T. Nagar Temple`), so
-  // an exact match would find nothing and this would fail on a fixture that is
-  // present and correct. The index still pins it to location 1 rather than
-  // whichever row happens to sort first.
-  const seeded = allLocations.find((location) =>
-    location.name.startsWith(`${SEEDER_TAG}location-1-${PROGRAM}-`),
-  )
+  // CHANGED 2026-10-13: the seeder's locations are plain Chennai names now — no
+  // `preview-fixture-location-1-<program>` prefix, which is what let this be found
+  // at all. `PREVIEW_LOCATION_NAMES[0]` is the seeder's first location, the one it
+  // gives the Preacher alongside location 2.
+  const seeded = allLocations.find((location) => location.name === PREVIEW_LOCATION_NAMES[0])
   expect(seeded, "the seeder's location 1 should exist").toBeTruthy()
   expect(preacher, "the union must still include the seeded id").toContain(seeded!.id)
 })
@@ -558,17 +556,38 @@ test("Scope on both sides: the Preacher sees its assigned rows and not the Admin
   expect(ids.size).toBe(inScope.length + outOfScope.length)
 })
 
-test("Preacher can resolve names: a Preacher session renders names, not raw ids", async () => {
-  // The UI half of the widening: the grid's Location column is a joined accessor,
-  // so with the Preacher scoped to every generated location no cell degrades to
-  // the `?? id` fallback. `listProgramLocations` is what `loadManagePortalData`
-  // narrows for a preacher-mode session.
-  const [preacherIds, groups] = await Promise.all([readPreacherLocationIds(PROGRAM), contactsByLocationName(PROGRAM)])
+test("Preacher renders names: every joined location in a readable contact resolves to a name", async () => {
+  // CHANGED 2026-10-13. This row asserted that every location in the programme is
+  // inside the Preacher's scope, which was true only while the generator widened
+  // the scope to all of them. It is now a subset, on purpose, and the scope claim
+  // is asserted by the two rows above.
+  //
+  // What this row still owns is the rendering half: the grid's Location column is a
+  // joined accessor reading the same narrowed set `loadManagePortalData` narrows
+  // for a preacher-mode session, so every group it can resolve must carry a human
+  // name. Story 3 removed the `?? id` fallback, so a group keyed by a UUID is now
+  // an `Unknown location` marker — which is a *correct* render of an unresolvable
+  // reference, and the reason this row only claims what it can see.
+  const [preacherIds, readable] = await Promise.all([
+    readPreacherLocationIds(PROGRAM),
+    inScopeContacts(PROGRAM),
+  ])
 
   const scoped = new Set(preacherIds)
+  const groups = await contactsByLocationName(PROGRAM)
+
+  for (const contact of readable) {
+    for (const id of contact.location_ids ?? []) {
+      expect(scoped.has(id), `${contact.name} points at ${id}, outside the Preacher's scope`).toBe(true)
+    }
+  }
+
+  // At least one location is in play, and every one a readable contact points at
+  // has rows to render — a column that resolved nothing would satisfy the loop
+  // above by having nothing to iterate.
+  expect(groups.length).toBeGreaterThan(0)
   for (const group of groups) {
-    expect(scoped.has(group.locationId), `${group.locationName} is outside the Preacher's scope`).toBe(true)
-    expect(group.contacts.length, `${group.locationName} has no rows to render`).toBeGreaterThan(0)
+    expect(group.locationName, `${group.locationId} did not resolve to a name`).not.toBe(group.locationId)
   }
 })
 
@@ -822,16 +841,19 @@ test("Wipe: --wipe removes only rows the generator created, the seeded rows surv
 // Missing prerequisite
 // ---------------------------------------------------------------------------
 
-test("Missing prerequisite: with no preview-fixture- locations the generator exits 1 naming pnpm seed:local and writes nothing", async () => {
+test("Missing prerequisite: with none of the preview seeder's locations the generator exits 1 naming pnpm seed:local and writes nothing", async () => {
   const db = bulkFixtureClient()
 
   // The other program is seeded but not exercised by this suite's app, so it is
   // the safe place to withdraw a prerequisite and put it back.
+  // CHANGED 2026-10-13: the seeder's locations carry plain Chennai names now, so
+  // the prerequisite is "one of `PREVIEW_LOCATION_NAMES` exists" — matched by name
+  // rather than by a `preview-fixture-` prefix that no longer exists.
   const { data: seededLocations, error } = await db
     .from("locations")
     .select("id,name")
     .eq("program_id", OTHER_PROGRAM)
-    .like("name", `${SEEDER_TAG}location-%`)
+    .in("name", [...PREVIEW_LOCATION_NAMES])
   if (error) throw new Error(`Reading ${OTHER_PROGRAM} locations failed: ${error.message}`)
 
   expect(seededLocations ?? [], `${OTHER_PROGRAM} should be seeded by pnpm seed:local`).not.toEqual([])
@@ -901,12 +923,12 @@ test("Scope on both sides: a non-Active staff row fails the DW-3 pre-write check
   // prerequisite. `status` is chosen over deleting the row because it is the
   // smaller violation — the row still exists, so the failure is DW-3's *status*
   // clause rather than its missing-row clause, and restoring is a single column.
-  // `fixtureEmail` is suite-wide (`folk`) and this row lives in the other
-  // programme, so the address comes from the shared fixture table rather than
-  // from a constructed string. CHANGED 2026-10-13: the seeder's addresses are now
-  // plausible names on a reserved `.test` domain, and a locally-constructed
-  // address no longer matched — the DW-3 row below would have been reading a user
-  // that does not exist, which is a different failure from the one this row tests.
+  // `fixtureEmail` is suite-wide (`folk`) and this row reads the *other* programme,
+  // which is a real seeded one — so its address comes from the shared table rather
+  // than from a constructed string. CHANGED 2026-10-13: the seeder's addresses are
+  // plausible names on a reserved `.test` domain, and a locally-constructed address
+  // no longer matched, so this read returned `null` and failed on a fixture that
+  // was present and correct.
   const email = STAFF_EMAILS[OTHER_PROGRAM].Preacher
   const { data: preacher, error: readError } = await db
     .from("users")
@@ -996,7 +1018,7 @@ test("Specs clean up after themselves: cleanupTaggedContacts removes a row the s
   // distinguishable from a generated one by the same column the cleanup helper
   // checks.
   const name = `Spec-created contact ${id.slice(0, 8)}`
-  const source = `${BULK_TAG}-spec-created`
+  const source = BULK_SPEC_SOURCE
 
   const created = await db
     .from("contacts")
@@ -1134,13 +1156,23 @@ test("DW-3: a public.users row whose id is not its auth id is refused before any
     // Admin addresses carrying each other's ids — so neither row's id is the auth
     // id its own email names.
     //
-    // The addresses must be the *seeder's* convention, because that is the only
-    // thing the generator looks staff up by (`preview-fixture-<role>-<program>`).
-    // An address of this row's own invention would leave the generator looking for
-    // a row that does not exist, and it would refuse for the missing-prerequisite
-    // reason instead of the DW-3 one under test.
+    // The addresses must be the *seeder's* convention for this program, because
+    // that is the only thing the generator looks staff up by. An address of this
+    // row's own invention would leave the generator looking for a row that does
+    // not exist, and it would refuse for the missing-prerequisite reason instead of
+    // the DW-3 one under test.
+    //
+    // CHANGED 2026-10-13: built from the shared table's shape rather than the old
+    // `preview-fixture-<role>-<program>@example.com` string. `THROWAWAY_PROGRAM` is
+    // not a seeded program so it has no entry in `STAFF_EMAILS`, and the generator
+    // derives an address for it from the same per-program convention — so the
+    // address is constructed here from that convention rather than read from a
+    // table that does not and never will contain this program.
+    const throwawayEmail = (role: string) =>
+      `${role}@${THROWAWAY_PROGRAM}.fixture.test`
+
     for (const role of ["preacher", "admin"] as const) {
-      const email = `preview-fixture-${role}-${THROWAWAY_PROGRAM}@example.com`
+      const email = throwawayEmail(role)
       const { data, error } = await db.auth.admin.createUser({
         email,
         password,

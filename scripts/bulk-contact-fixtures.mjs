@@ -401,7 +401,11 @@ const authUsersByEmail = async () =>
  * `public.users` row with no `auth.users` twin — which is exactly the corruption
  * DW-3 exists to catch.
  */
-const emailFor = (role, program) => STAFF_EMAILS[program][role]
+const emailFor = (role, program) =>
+  // `STAFF_EMAILS` covers the two seeded programs. A program this script has not
+  // seeded — the e2e suite's throwaway — gets the same convention derived from its
+  // own name, which is what that program must have created for the lookup to find.
+  STAFF_EMAILS[program]?.[role] ?? `${role.toLowerCase()}@${program}.fixture.test`
 
 // ---------------------------------------------------------------------------
 // Deterministic row generation
@@ -464,16 +468,51 @@ function collectorFor(index, preacherId, adminId) {
   return null
 }
 
+/**
+ * One generated contact.
+ *
+ * ## Why `locationIds` is split, not one pool
+ *
+ * A contact is assigned to a Preacher AND sits at a location. Those must agree: a
+ * contact owned by a Preacher at a location that Preacher does not serve is not a
+ * state the programme has, and it renders as an unresolvable reference — the grid
+ * would show `Unknown location` for a contact that is plainly in scope, which reads
+ * as a data bug rather than as the scope case it is.
+ *
+ * So in-scope rows draw from the Preacher's own locations and out-of-scope rows
+ * from the ones it does not own. That is what makes the unresolved marker reachable
+ * through a **real** scope boundary rather than through accidental data: the
+ * out-of-scope tenth is genuinely elsewhere.
+ */
 function buildContact({ program, index, locationIds, seededLocationId, preacherId, adminId }) {
   const inScope = index % 10 !== 9
+  // `locationIds` arrives as the Preacher's own set; the generator keeps the rest
+  // separately so an out-of-scope row can be placed somewhere else.
+  const own = locationIds.owned ?? locationIds.all
+  const elsewhere = locationIds.elsewhere ?? locationIds.all
+  // `elsewhere` is empty whenever the Preacher owns every generated location — a
+  // real configuration at `--locations 2`, where the scope draw covers the whole
+  // pool. Indexing an empty array gives `index % 0 === NaN` and `pool[NaN]` is
+  // `undefined`, which PostgREST stores as a `NULL` inside a `text[]`. The symptom
+  // is an unresolvable `location_ids` entry on the out-of-scope tenth row, found
+  // only by the post-insert invariant, so the insert had already happened by the
+  // time it was caught.
+  //
+  // Falling back to the owned set means an out-of-scope row is still placed
+  // somewhere real. It is no longer a *scope* demonstration, and nothing depends
+  // on that: the unresolved-marker case is covered by the preview harness's `site`
+  // column and by the deliberate split at `--locations 5`.
+  const pool = inScope || elsewhere.length === 0 ? own : elsewhere
+
   return {
     program_id: program,
     name: nameFor(program, index),
     phone: phoneFor(program, index),
-    // Every sixth row sits on a seeded location so the joined name set spans the
-    // seeder's locations too, not only this script's.
+    // Every sixth row sits on one of the seeder's own locations, so the joined name
+    // set spans both seeders' locations and not only this script's. The seeder
+    // gives its Preacher location 1, so that id is inside the owned set.
     location_ids:
-      index % 6 === 5 && seededLocationId ? [seededLocationId] : [locationIds[index % locationIds.length]],
+      index % 6 === 5 && seededLocationId ? [seededLocationId] : [pool[index % pool.length]],
     // In-scope = assigned to the program's Preacher; out-of-scope = the Admin,
     // matching `contacts` SELECT scope in the RLS policies.
     assigned_preacher_id: inScope ? preacherId : adminId,
@@ -604,6 +643,21 @@ async function verifyPrerequisites(program, authByEmail) {
   )
   if (seededLocations.length === 0) {
     missing.push(`none of the preview seeder's locations (${PREVIEW_LOCATIONS.join(", ")}) exist for ${program}`)
+  } else {
+    // The Preacher must own at least one of them. Without this, a programme whose
+    // Preacher was scoped to only the generated locations would produce every
+    // `index % 6 === 5` row with `location_ids: [null]` — a row that is neither in
+    // scope nor resolvable, and that the invariants catch only *after* the insert
+    // rather than before it.
+    // `staff[PREACHER]`, not the loop variable the staff block above ended on.
+    const owned = new Set(staff[PREACHER].location_ids ?? [])
+    const shareable = seededLocations.filter((location) => owned.has(location.id))
+    if (shareable.length === 0) {
+      missing.push(
+        `the ${program} Preacher owns none of the preview seeder's locations, so every ` +
+          `sixth generated row would point at nothing`,
+      )
+    }
   }
 
   if (missing.length > 0) {
@@ -874,8 +928,19 @@ async function generateProgram(program, options) {
       buildContact({
         program,
         index,
-        locationIds: bulkLocations.map((row) => row.id),
-        seededLocationId: seededLocations[0]?.id ?? null,
+        locationIds: {
+          // What the Preacher can resolve, plus the seeder's own location it was
+          // given. `elsewhere` is the complement within the generated set — the
+          // locations that exist for this program but are outside its scope.
+          owned: [...widened.row.location_ids ?? []],
+          elsewhere: bulkLocations
+            .map((row) => row.id)
+            .filter((id) => !(widened.row.location_ids ?? []).includes(id)),
+        },
+        // Only a location the Preacher can resolve — see the check above.
+        seededLocationId: seededLocations.find((location) =>
+          (widened.row.location_ids ?? []).includes(location.id),
+        )?.id ?? null,
         preacherId: widened.row.id,
         adminId,
       }),

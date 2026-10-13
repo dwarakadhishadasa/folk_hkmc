@@ -72,6 +72,17 @@ export const PREVIEW_LOCATION_NAMES = ["T. Nagar Temple", "Velachery Temple"] as
 export const BULK_TAG = "preview-fixture-bulk"
 
 /**
+ * The `source` a **spec-created** row carries.
+ *
+ * Suffix-distinct from `BULK_TAG` on purpose: the cleanup helper deletes rows whose
+ * `source` starts with `BULK_TAG`, which is how it keeps a spec from deleting a row
+ * it does not own. If a spec-created row carried the bare marker, that check would
+ * accept it and the guard would prove nothing — the helper would be deleting the
+ * very rows it exists to refuse.
+ */
+export const BULK_SPEC_SOURCE = `${BULK_TAG}-spec-created`
+
+/**
  * The preview seeder's contact-name prefix, which it still uses.
  *
  * Its two fixed contacts, two sessions and their attendance keep the tag: they are
@@ -527,14 +538,14 @@ export async function cleanupTaggedContacts(ids: readonly string[]): Promise<str
   const untagged = ids
     .filter((id) => {
       const row = found.get(id)
-      return row !== undefined && row.source !== BULK_TAG
+      return row !== undefined && !String(row.source ?? "").startsWith(BULK_TAG)
     })
     .map((id) => `${id} (${found.get(id)?.name})`)
 
   if (untagged.length) {
     throw new Error(
       `cleanupTaggedContacts refuses to delete ${untagged.length} contact(s) it does not own: ${untagged.join(", ")}. ` +
-        `It only removes rows whose source is "${BULK_TAG}".`,
+        `It only removes rows whose source starts with "${BULK_TAG}".`,
     )
   }
 
