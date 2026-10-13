@@ -52,18 +52,27 @@ scrolled away.
 | `editable: true` | Gates the double-click that opens the editor — and it is the *only* opener. Also the only thing that should be in `PATCH_KEY_BY_COLUMN`. |
 | `editor: <GridEditorKey>` | Names the typed editor the cell renders and parses with. Resolved through the registry in `components/grid/grid-editors.tsx`. |
 | `editorOptions` | Presentation-only configuration for that editor: `options`, `users`, `currency`, `locale`. |
-| `filter: "text" \| "number"` | Chooses the per-column filter control and supplies its `filterFn` |
+| `filter: "text" \| "number"` | Supplies the column's value type and its `filterFn` |
 | `align`, `tabular` | Reaches the cell directly |
 | `frozen: true` | Joins the pinned run |
 | `selectable: true` | Row-selection control: joins the pinned run ahead of the identity column |
 | `hideable: false` | Removed from the visibility menu |
 
+`filter` used to do a second job — choosing the per-column filter popover
+control. That control is gone: headers carry no funnel button, and the filter
+conditions bar (story 6 of the premium-grid spec) reads this key only as a
+value type when it lands. What survives is the first job, supplying `filterFn`
+so `f.<colId>` keeps filtering after the control moved.
+
 For the select column set `enableSorting: false` and `enableHiding: false` on the def as well; the
 metadata expresses intent, the flags express behaviour.
 
 **A column in the pinned run cannot be hidden or reordered.** `columnOrder` is always writable in
-TanStack — there is no flag to turn off — so the grid gates Move left / Move right on pinned
-membership, exactly as it gates the visibility menu. Reordering `select` drops it out of the run and
+TanStack — there is no flag to turn off — so the grid withholds the drag
+activator from pinned members (no handle, no `useDraggable`), exactly as it
+gates the visibility menu, and rejects any drop whose *resulting order* would
+interleave a scrolling column into the run (`isPinnedRunIntact` in `grid.tsx`,
+validated before commit, never just the drop target). Reordering `select` drops it out of the run and
 takes the identity column with it; reordering the identity column lets it scroll away. Either one
 undoes the reason the run exists.
 
@@ -73,8 +82,11 @@ A cell widget is `columnDef.cell`, a header widget is `columnDef.header`. `flexR
 from `@tanstack/react-table` and is what `grid.tsx` calls. Do not add a `renderCell` prop: it would
 be a second contract for one job.
 
-A header widget suppresses that header's sort button, filter popover, column menu and resize
-handle. A header that is a control must not also be a sort button.
+A header widget suppresses that header's column menu, drag activator and resize
+handle. A header that is a control must not also be a sort button — and since
+no header label is a sort button anymore (sorting lives in the one global sort
+popover, opened from the column menu), the reverse holds too: the label is
+text plus a sort indicator, never a control of its own.
 
 **Omit `cell` on every plain value column — and know that omitting it is the whole point.**
 TanStack's `_getDefaultColumnDef()` supplies `cell: props => props.renderValue()?.toString() ?? null`
@@ -396,12 +408,16 @@ name — density and row selection are the two deliberate exceptions, and both a
 what keeps `?mode=admin|preacher` byte-identical across every write. Never add a URL write that
 strips it.
 
+`sort` is written by the global sort popover (one field plus one direction, cleared to absent);
+`cols` is written once per header drop through the transient handle, and only when the resulting
+order differs and leaves the pinned run intact. Neither is ever written per frame.
+
 ## 8. Porting checklist
 
 - [ ] Refactored in place; the caller and the prop signature did not change.
 - [ ] `sort`, `q`, `f.*`, `cols`, `hide`, `size.*` round-trip; `?mode=` survives.
 - [ ] Identity column pinned as part of the leading run; one 1px divider, no scroll shadow; no
-      pinned column is hideable or reorderable.
+      pinned column is hideable, draggable, or a valid drop target for a scrolling column.
 - [ ] `select` first, row action last.
 - [ ] Editable columns appear in `meta.grid.editable` **and** `PATCH_KEY_BY_COLUMN`.
 - [ ] Editable columns name an `meta.grid.editor` where a typed control fits, and still
@@ -434,6 +450,9 @@ Known gaps at the time of writing:
   `Cmd`/`Ctrl`+`K`; it is still to come.
 - No `Select`-based column filter. The contacts port replaced a sentinel-valued dropdown with
   per-column filter popovers, which compose with the global filter instead of replacing it.
+  The popovers are now removed again — headers carry no filter control until the filter
+  conditions bar (premium-grid story 6) lands, and `f.<colId>` round-trips through the URL
+  meanwhile.
 - The favorite star is no longer the only row action — the row lifecycle's delete control sits in its
   own `actions` column. A row-action *menu* is the obvious next primitive if more per-row actions
   appear.

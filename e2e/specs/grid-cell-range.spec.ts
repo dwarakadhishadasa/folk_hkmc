@@ -234,12 +234,13 @@ test.describe("cell range selection", () => {
     await expect(selectedCells(page)).toHaveCount(2)
     const beforeSort = await renderedRowIds(page)
 
-    // Two clicks: none → ascending → descending. Generated names sort by their
-    // zero-padded index, so the first click is frequently a no-op against the
-    // default order and the second certainly is not. Clicking twice is what makes
-    // the reorder asserted below a certainty rather than a coin flip.
-    await toggleSort(page, NAME_COLUMN, "Name")
-    await toggleSort(page, NAME_COLUMN, "Name")
+    // DELIBERATE CONTRACT CHANGE (story 2 of spec-contacts-premium-grid,
+    // CAP-14 / CAP-17): the header label is not a sort button, so this sorts
+    // through the column menu's absolute-direction items rather than by
+    // toggling a label button. Descending certainly reorders the ten
+    // zero-padded generated names, which arrive in ascending payload order.
+    await toggleSort(page, NAME_COLUMN, "Name", "asc")
+    await toggleSort(page, NAME_COLUMN, "Name", "desc")
 
     await expect
       .poll(() => renderedRowIds(page), {

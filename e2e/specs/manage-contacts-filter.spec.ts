@@ -40,6 +40,7 @@ import {
   readContactNames,
   renderedRows,
   restoreContactNames,
+  toggleSort,
 } from "../fixtures/manage-grid"
 
 /** One of the five generated locations, addressed by the fragment that is unique to it. */
@@ -87,18 +88,13 @@ test.describe("filtering, sorting and the empty scope", () => {
     const broadVisible = await filterGlobally(page, BROAD_NEEDLE)
     expect(broadVisible).toBeGreaterThan(expected.size)
 
-    // The header's own filter control, not a URL written by hand.
-    await headerCell(page, "location").getByRole("button", { name: /^Filter Location$/ }).click()
-    // The popover trigger carries the same accessible name as the input it labels,
-    // so the role is what disambiguates the field from the button that opened it.
-    const columnFilter = page.getByRole("textbox", { name: "Filter Location" })
-    await expect(columnFilter).toBeVisible()
-
-    // Typed rather than filled, for the reason `filterGlobally` documents: a
-    // `fill` can leave React's state untouched while the input *looks* filled.
-    await columnFilter.click()
-    await columnFilter.pressSequentially(LOCATION_NEEDLE)
-
+    // DELIBERATE CONTRACT CHANGE (story 2 of spec-contacts-premium-grid,
+    // CAP-14): the header's per-column filter popover is removed — headers
+    // carry no funnel button until the filter conditions bar (story 6) lands.
+    // What this row covers is the narrowing semantics and the `f.location`
+    // round-trip, not the retired control, so the filter is driven through the
+    // URL it round-trips through instead.
+    await page.goto(manageContactsUrl({ params: { q: BROAD_NEEDLE, "f.location": LOCATION_NEEDLE } }))
     await expect
       .poll(() => new URL(page.url()).searchParams.get("f.location"), {
         message: "the per-column filter must reach the URL before the count is read",
@@ -108,6 +104,10 @@ test.describe("filtering, sorting and the empty scope", () => {
     // Exactly the rows whose joined location names contain the text, on top of
     // the global filter that is still active.
     await expectVisibleCount(page, expected.size)
+    // The count comes from the row model; the rows themselves are virtualized
+    // and can lag it by a paint after a fresh navigation, so wait for the
+    // window before reading cells.
+    await expect(renderedRows(page).first()).toBeVisible()
     // Every rendered cell shows a location the needle matched, and no cell shows a
     // raw id — a stale `location_ids` entry would degrade to a UUID here.
     const rendered = renderedRows(page)
@@ -120,9 +120,7 @@ test.describe("filtering, sorting and the empty scope", () => {
 
     // Clearing it restores the broader view, which is what makes the control a
     // filter rather than a one-way narrowing.
-    await columnFilter.click()
-    await columnFilter.press("ControlOrMeta+a")
-    await columnFilter.press("Backspace")
+    await page.goto(manageContactsUrl({ params: { q: BROAD_NEEDLE } }))
     await expectVisibleCount(page, broadVisible)
     await expect
       .poll(() => new URL(page.url()).searchParams.get("f.location"), {
@@ -179,10 +177,14 @@ test.describe("filtering, sorting and the empty scope", () => {
         })
         .toBe(SORTS_FIRST_NAME)
 
-      // Now sort. The renamed row sorts ahead of index 0000 and ahead of the seeded
+      // Now sort — through the column menu, not the header label. DELIBERATE
+      // CONTRACT CHANGE (story 2 of spec-contacts-premium-grid, CAP-14 /
+      // CAP-17): the label stopped being a sort button, so the old
+      // `Sort by Name` click is now a menu item plus the sort popover. The
+      // renamed row sorts ahead of index 0000 and ahead of the seeded
       // rows even though it was third in payload order — which can only be true if
       // the sort read the committed value rather than the pre-edit one.
-      await headerCell(page, "name").getByRole("button", { name: "Sort by Name" }).click()
+      await toggleSort(page, "name", "Name", "asc")
 
       await expect(headerCell(page, "name")).toHaveAttribute("aria-sort", "ascending")
       await expect

@@ -339,3 +339,6 @@ status: open
 - source_spec: `_bmad-output/specs/spec-contacts-date-types/stories/3-migrate-the-four-date-columns-to-date-and-tighten-the-validators.md`
   summary: Local stack needs a managed supabase:reset once the storage image defect is fixed
   evidence: Reset fails on vendor storage-api:v1.79.28 fresh-init (pre-existing, before any user migration); the hand-rebuilt stack lacks the schema_migrations ledger rows and the contact-photos bucket row. Settles when a managed reset succeeds and the story's Verification section re-runs clean.
+- source_spec: `_bmad-output/specs/spec-contacts-premium-grid/stories/2-column-drag-and-drop-a-clean-column-menu-and-a-contextual-header-affordance.md`
+  summary: Toolbar Sort control opening the global sort popover (CAP-17's toolbar entry point) lands in story 7, not story 2
+  evidence: Story 2 spec exceeded the 1600-token scope standard (~2280); Dwaraka chose Split + option C on 2026-10-12, keeping the menu-opened popover in story 2 and deferring only the toolbar control to story 7 which already claims CAP-17's Sort control

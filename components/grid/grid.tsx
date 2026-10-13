@@ -22,6 +22,15 @@ import type {
   TableState,
 } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
+import type { DragEndEvent } from "@dnd-kit/core"
 
 import { GridHeaderCell } from "@/components/grid/grid-header-cell"
 import { GridPanel, gridPanelKey } from "@/components/grid/grid-panel"
@@ -40,6 +49,7 @@ import type {
   GridRowLifecycle,
   GridTransientHandle,
 } from "@/components/grid/grid-types"
+import type { GridSortField } from "@/components/grid/grid-sort-popover"
 import { useGridKeyboard } from "@/components/grid/use-grid-keyboard"
 import { cn } from "@/lib/utils"
 
@@ -259,8 +269,8 @@ function resolveFrozenRun<TData extends RowData>(headers: Header<TData, unknown>
  * `cells` counts any renderer at all, because any renderer replaces the value
  * the grid would otherwise print. `headers` counts only a function or an
  * element, because a *string* header is the label the header cell already
- * renders — treating it as a widget would suppress sort, filter, menu and resize
- * on every labelled column.
+ * renders — treating it as a widget would suppress the menu, drag activator
+ * and resize on every labelled column.
  */
 function resolveConsumerRenderers<TData extends RowData>(definitions: GridColumnDef<TData>[]) {
   const cells = new Set<string>()
@@ -288,7 +298,9 @@ function resolveConsumerRenderers<TData extends RowData>(definitions: GridColumn
  *
  * A string header is the label path the cell already renders, so only a
  * function or element header counts as a consumer-rendered body — that is how
- * the cell knows to suppress its own sort button, filter, menu and resize.
+ * the cell knows to suppress its own menu, drag activator and resize. (No
+ * header label is a sort button, and headers carry no filter control — those
+ * surfaces live in the sort popover and the filter conditions bar.)
  */
 function renderHeaderNode<TData extends RowData>(
   header: Header<TData, unknown>,
@@ -312,6 +324,43 @@ function renderHeaderNode<TData extends RowData>(
  */
 function forUrlWriter(state: Partial<TableState>): TableState {
   return state as TableState
+}
+
+/**
+ * Builds the order a header drop commits, or null when the drop names a
+ * column that is not in the order.
+ *
+ * The dragged id is removed from the **full** order and re-inserted at the
+ * drop target's slot, so hidden columns keep their positions — the same
+ * hidden-skipping walk the old `moveColumn` stepper did one step at a time,
+ * generalized to an arbitrary drop. A naive index splice over visible columns
+ * alone would collapse those slots.
+ */
+export function resolveColumnDropOrder(
+  fullOrder: readonly string[],
+  activeId: string,
+  overId: string,
+): string[] | null {
+  if (!fullOrder.includes(activeId) || !fullOrder.includes(overId)) {
+    return null
+  }
+
+  const next = fullOrder.filter((id) => id !== activeId)
+  next.splice(next.indexOf(overId), 0, activeId)
+  return next
+}
+
+/**
+ * Whether a candidate order leaves the leading pinned run intact.
+ *
+ * The frozen `left` offsets accumulate in `columnOrder`, so an order that
+ * interleaves a scrolling column into the run yields a sticky column whose
+ * `left` does not match its real position — invisible statically, broken
+ * while scrolling. The drop is therefore validated against the *resulting*
+ * order, never against the drop target alone.
+ */
+export function isPinnedRunIntact(next: readonly string[], pinnedIds: readonly string[]): boolean {
+  return pinnedIds.every((id, index) => next[index] === id)
 }
 
 /**
@@ -352,7 +401,7 @@ export interface GridProps<TData extends RowData> {
   ariaLabel: string
   density: GridDensity
   onDensityChange: (density: GridDensity) => void
-  /** Escape hatch from `useGridViewState`: a resize drag writes the URL once. */
+  /** Escape hatch from `useGridViewState`: a resize or reorder drag writes the URL once. */
   transient?: GridTransientHandle
   onCellCommit?: GridCellCommitHandler<TData>
   onEditError?: GridEditErrorHandler<TData>
@@ -778,60 +827,76 @@ export function Grid<TData extends RowData>({
     return () => window.removeEventListener("blur", onWindowBlur)
   }, [transient])
 
-  const moveColumn = useCallback(
-    (columnId: string, direction: -1 | 1) => {
+  const commitColumnDrop = useCallback(
+    (activeId: string, overId: string): boolean => {
       const fullOrder = table.getState().columnOrder ?? columnIds
-      const visible = new Set(table.getVisibleLeafColumns().map((column) => column.id))
-      const from = fullOrder.indexOf(columnId)
+      const next = resolveColumnDropOrder(fullOrder, activeId, overId)
 
-      if (from === -1) {
-        return
+      if (!next || next.every((id, index) => fullOrder[index] === id)) {
+        return false
       }
 
-      let target = from
-
-      // Step over hidden columns so "move left" means the previous *visible* column.
-      for (let step = 0; step < Math.abs(direction); step += 1) {
-        let candidate = target + direction
-
-        while (candidate >= 0 && candidate < fullOrder.length && !visible.has(fullOrder[candidate])) {
-          candidate += direction
-        }
-
-        if (candidate < 0 || candidate >= fullOrder.length) {
-          return
-        }
-
-        target = candidate
+      // The pinned run is validated against the resulting order, not the drop
+      // target: see `isPinnedRunIntact`.
+      if (!isPinnedRunIntact(next, frozenColumnIds)) {
+        return false
       }
 
-      if (target === from) {
-        return
-      }
-
-      const next = [...fullOrder]
-      next.splice(from, 1)
-      next.splice(target, 0, columnId)
       table.setColumnOrder(next)
+      return true
     },
-    [columnIds, table],
+    [columnIds, frozenColumnIds, table],
   )
 
-  const filterValueByColumn = useMemo(() => {
-    const values = new Map<string, string>()
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(KeyboardSensor),
+  )
 
-    for (const filter of state.columnFilters ?? []) {
-      values.set(filter.id, filter.value === undefined || filter.value === null ? "" : String(filter.value))
-    }
+  const handleDragStart = useCallback(() => {
+    // A drag writes nothing per frame; the drop commits once, like the width
+    // drag's `begin` / `commit` pair.
+    transient?.begin()
+  }, [transient])
 
-    return values
-  }, [state.columnFilters])
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const activeId = String(event.active.id)
+      const overId = event.over ? String(event.over.id) : null
+
+      if (overId === null || overId === activeId) {
+        transient?.cancel()
+        return
+      }
+
+      if (commitColumnDrop(activeId, overId)) {
+        transient?.commit()
+      } else {
+        // Unchanged or rejected: no write, so the URL keeps no `cols` it did
+        // not already carry.
+        transient?.cancel()
+      }
+    },
+    [commitColumnDrop, transient],
+  )
+
+  const handleDragCancel = useCallback(() => {
+    transient?.cancel()
+  }, [transient])
 
   const toolbarColumns: GridToolbarColumn[] = columnIds.map((id) => ({
     id,
     label: labelById.get(id) ?? id,
     visible: visibleIndexById.has(id),
   }))
+
+  const sortableColumns: GridSortField[] = headerHeaders
+    .filter((header) => header.column.getCanSort())
+    .map((header) => ({
+      id: header.column.id,
+      label: labelById.get(header.column.id) ?? header.column.id,
+    }))
 
   const rowHeight = GRID_ROW_HEIGHT[density]
   const totalSize = table.getTotalSize()
@@ -913,6 +978,12 @@ export function Grid<TData extends RowData>({
         className="focus-visible:ring-ring/50 max-h-[70vh] overflow-auto outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
         {...keyboard.containerProps}
       >
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
         <table
           data-grid-table=""
           style={{ width: totalSize, tableLayout: "fixed" }}
@@ -928,17 +999,17 @@ export function Grid<TData extends RowData>({
                 const column = header.column
                 const stickyLeft =
                   frozenColumns.find((entry) => entry.columnId === column.id)?.left ?? null
-                const filterKind = column.columnDef.meta?.grid?.filter ?? null
-                const visibleIndex = visibleIndexById.get(column.id) ?? 0
                 const isSelectable = column.columnDef.meta?.grid?.selectable === true
                 // TanStack has no reorder flag of its own — `columnOrder` is always
-                // writable — so this is the only gate. Reordering a pinned column
-                // breaks the run it belongs to: moving the select column out of it
-                // takes the identity column with it, and moving the identity column
-                // itself lets it scroll away, which is the one thing the pinned run
-                // exists to prevent. Hiding is gated the same way, one line below.
+                // writable — so the drag is the only gate. A pinned column carries
+                // no activator at all: moving the select column out of the run
+                // takes the identity column with it, and moving the identity
+                // column itself lets it scroll away, which is the one thing the
+                // pinned run exists to prevent. Hiding is gated the same way,
+                // one line below. A drop that would interleave a scrolling
+                // column into the run is rejected against the resulting order
+                // in `commitColumnDrop` above.
                 const isPinned = frozenColumnIds.includes(column.id)
-                const canReorder = !isSelectable && !isPinned
 
                 return (
                   <GridHeaderCell
@@ -950,28 +1021,17 @@ export function Grid<TData extends RowData>({
                     stickyLeft={stickyLeft}
                     sortDirection={column.getIsSorted()}
                     isSortable={column.getCanSort()}
-                    onSortToggle={() => {
-                      column.toggleSorting()
-                    }}
-                    filterKind={filterKind}
-                    filterValue={filterValueByColumn.get(column.id) ?? ""}
-                    onFilterChange={(value) => {
-                      column.setFilterValue(value.length === 0 ? undefined : value)
-                    }}
                     canHide={
                       column.getCanHide() &&
                       column.columnDef.meta?.grid?.hideable !== false &&
                       !isPinned
                     }
-                    canMoveLeft={canReorder && visibleIndex > 0}
-                    canMoveRight={
-                      canReorder && visibleIndex > -1 && visibleIndex < visibleColumnIds.length - 1
-                    }
-                    onMoveLeft={() => {
-                      moveColumn(column.id, -1)
-                    }}
-                    onMoveRight={() => {
-                      moveColumn(column.id, 1)
+                    canDrag={!isSelectable && !isPinned}
+                    suppressMenu={isSelectable}
+                    sortableColumns={sortableColumns}
+                    sorting={table.getState().sorting ?? []}
+                    onSortingChange={(sorting) => {
+                      table.setSorting(sorting)
                     }}
                     onHide={() => {
                       column.toggleVisibility(false)
@@ -1029,6 +1089,7 @@ export function Grid<TData extends RowData>({
             ) : null}
           </tbody>
         </table>
+        </DndContext>
       </div>
     </div>
   )

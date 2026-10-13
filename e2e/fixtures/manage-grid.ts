@@ -22,6 +22,8 @@
  * | `[data-grid-cell="<id>~<columnId>"]`    | `gridCellKey`, same file      |
  * | `[data-grid-cell-selected]`             | `grid-row.tsx`, cell range only |
  * | `[data-grid-column="<columnId>"]`       | `grid-header-cell.tsx`        |
+ * | `[data-grid-drag-handle="<columnId>"]` | the header's drag activator — absent on pinned columns and custom headers |
+ * | `[data-grid-sort-popover]`            | `grid-sort-popover.tsx`, the one global sort surface |
  * | `[data-bulk-selection-count]`           | `manage-contacts-table.tsx`   |
  * | `[data-grid-add-record]`               | `grid-row-lifecycle.tsx`      |
  * | `[data-grid-delete-row="<rowId>"]`     | `grid-row-lifecycle.tsx`      |
@@ -205,14 +207,102 @@ export async function openCellEditorAtCorner(cell: Locator): Promise<void> {
   await cell.dblclick({ position: { x: 2, y: 2 } })
 }
 
-/** Toggle a column's sort, moving none → ascending → descending → none. */
-export async function toggleSort(page: Page, columnId: string, label: string): Promise<void> {
-  await headerCell(page, columnId).getByRole("button", { name: `Sort by ${label}` }).click()
+/**
+ * Sort a column through the column menu and the global sort popover.
+ *
+ * DELIBERATE CONTRACT CHANGE (story 2 of spec-contacts-premium-grid, CAP-14 /
+ * CAP-17): the header label is no longer a sort button, so there is no
+ * `Sort by <label>` button to click. Sorting now goes through the header's
+ * `Column options for <label>` menu — `Sort ascending` / `Sort descending` —
+ * each of which applies the sort immediately and opens the sort popover
+ * prefilled. The popover is dismissed before returning so later assertions see
+ * the settled grid, not an open overlay.
+ */
+export async function toggleSort(
+  page: Page,
+  columnId: string,
+  label: string,
+  direction: "asc" | "desc" = "asc",
+): Promise<void> {
+  await openColumnMenu(page, columnId, label)
+  await page
+    .getByRole("menuitem", { name: direction === "asc" ? "Sort ascending" : "Sort descending" })
+    .click()
+  await expect(sortPopover(page)).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(sortPopover(page)).toBeHidden()
 }
 
 /** The header cell for a column. */
 export function headerCell(page: Page, columnId: string): Locator {
   return page.locator(`[data-grid-column="${columnId}"]`)
+}
+
+/** Visible header columns left to right, as `data-grid-column` ids. */
+export async function headerColumnIds(page: Page): Promise<string[]> {
+  return page.locator("[data-grid-column]").evaluateAll((headers) =>
+    headers.map((header) => header.getAttribute("data-grid-column") ?? ""),
+  )
+}
+
+/** A column's drag activator. Absent on pinned columns and custom headers. */
+export function dragHandle(page: Page, columnId: string): Locator {
+  return page.locator(`[data-grid-drag-handle="${columnId}"]`)
+}
+
+/**
+ * Drag one header onto another with stepped pointer moves.
+ *
+ * Manual rather than `dragTo`: `@dnd-kit/core`'s pointer sensor measures the
+ * drag across move events, and Playwright's single-jump `dragTo` never
+ * activates it — the drop silently no-ops with no `cols` written. Twenty-five
+ * steps cross any header width in this grid.
+ */
+export async function dragHeaderTo(page: Page, fromColumnId: string, toColumnId: string): Promise<void> {
+  const fromBox = await dragHandle(page, fromColumnId).boundingBox()
+  const toBox = await headerCell(page, toColumnId).boundingBox()
+
+  if (!fromBox) {
+    throw new Error(`No drag activator rendered for column "${fromColumnId}".`)
+  }
+  if (!toBox) {
+    throw new Error(`No header rendered for column "${toColumnId}".`)
+  }
+
+  await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + fromBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height / 2, { steps: 25 })
+  await page.mouse.up()
+}
+
+/** A column's menu control. Absent on the selection column and custom headers. */
+export function columnMenuTrigger(page: Page, columnId: string, label: string): Locator {
+  return headerCell(page, columnId).getByRole("button", { name: `Column options for ${label}` })
+}
+
+/** Open a column's menu: the three-item surface (two sorts + hide). */
+export async function openColumnMenu(page: Page, columnId: string, label: string): Promise<void> {
+  await columnMenuTrigger(page, columnId, label).click()
+}
+
+/** The global sort popover. Opened from a column menu's sort items in this story. */
+export function sortPopover(page: Page): Locator {
+  return page.locator("[data-grid-sort-popover]")
+}
+
+/** The popover's field dropdown trigger. */
+export function sortFieldTrigger(page: Page): Locator {
+  return sortPopover(page).getByRole("combobox", { name: "Sort field" })
+}
+
+/** The popover's direction dropdown trigger. */
+export function sortDirectionTrigger(page: Page): Locator {
+  return sortPopover(page).getByRole("combobox", { name: "Sort direction" })
+}
+
+/** The popover's quiet clear control. */
+export function clearSortButton(page: Page): Locator {
+  return sortPopover(page).getByRole("button", { name: "Clear sort" })
 }
 
 export function searchBox(page: Page): Locator {

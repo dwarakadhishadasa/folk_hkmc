@@ -2,14 +2,15 @@
 
 import { useState } from "react"
 import type { ReactNode } from "react"
+import { useDraggable, useDroppable } from "@dnd-kit/core"
+import type { SortingState } from "@tanstack/react-table"
 import {
   ArrowDown,
+  ArrowDownWideNarrow,
   ArrowUp,
+  ArrowUpNarrowWide,
   ChevronsUpDown,
-  Filter,
   MoreHorizontal,
-  MoveLeft,
-  MoveRight,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -20,11 +21,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { GRID_BASE_FONT_CLASS } from "@/components/grid/grid-row"
-import { useUrlBackedDraft } from "@/components/grid/use-grid-view-state"
+import { GridSortPopover, type GridSortField } from "@/components/grid/grid-sort-popover"
 
 export interface GridHeaderCellProps {
   label: string
@@ -36,23 +35,31 @@ export interface GridHeaderCellProps {
   stickyLeft: number | null
   sortDirection: "asc" | "desc" | false
   isSortable: boolean
-  onSortToggle: () => void
-  filterKind: "text" | "number" | null
-  filterValue: string
-  onFilterChange: (value: string) => void
   canHide: boolean
-  canMoveLeft: boolean
-  canMoveRight: boolean
-  onMoveLeft: () => void
-  onMoveRight: () => void
   onHide: () => void
+  /**
+   * Whether this header carries a drag activator. False for every column in
+   * the pinned run: a pinned column is not draggable — no handle, no
+   * activator — because moving it would undo the reason the run exists.
+   */
+  canDrag: boolean
+  /**
+   * Whether the menu control is withheld. True for the selection column; a
+   * header supplying its own control (`render`) never reaches the menu at all.
+   */
+  suppressMenu: boolean
+  /** Sortable columns for the sort popover's field dropdown. */
+  sortableColumns: readonly GridSortField[]
+  /** The grid's live sorting, shared with the sort popover. */
+  sorting: SortingState
+  onSortingChange: (sorting: SortingState) => void
   /** `Header.getResizeHandler()`, attached to mouse and touch start. */
   resizeHandler: (event: unknown) => void
   /**
    * The consumer's own `columnDef.header` output, when it supplied one — a
    * select-all control, typically. Supplying it turns the cell into a plain
-   * container: sort, filter, column menu and resize are suppressed, because a
-   * header that is a control must not also be a sort button.
+   * container: column menu and resize are suppressed, because a header that is
+   * a control must not also be a sort button.
    */
   render?: ReactNode
 }
@@ -69,55 +76,20 @@ function SortIndicator({ direction }: { direction: "asc" | "desc" | false }) {
   return <ChevronsUpDown aria-hidden="true" className="size-3.5 opacity-40" />
 }
 
-interface GridColumnFilterInputProps {
-  columnId: string
-  label: string
-  kind: "text" | "number"
-  value: string
-  onChange: (value: string) => void
-}
-
 /**
- * The per-column filter text. The field keeps an in-flight draft; see
- * `useUrlBackedDraft` for why it is not bound straight to the URL.
- */
-function GridColumnFilterInput({ columnId, label, kind, value, onChange }: GridColumnFilterInputProps) {
-  const [focused, setFocused] = useState(false)
-  const [draft, handleChange] = useUrlBackedDraft(value, onChange, focused)
-
-  return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={`grid-filter-${columnId}`} className="text-muted-foreground text-[13px] font-medium">
-        Filter {label}
-      </label>
-      <Input
-        id={`grid-filter-${columnId}`}
-        value={draft}
-        onFocus={() => {
-          setFocused(true)
-        }}
-        onBlur={() => {
-          setFocused(false)
-        }}
-        onChange={(event) => handleChange(event.target.value)}
-        placeholder={kind === "number" ? "Minimum value" : "Contains…"}
-        inputMode={kind === "number" ? "numeric" : "text"}
-        className="h-8 text-[13px]"
-      />
-      <p className="text-muted-foreground text-xs">
-        {kind === "number" ? "Keeps rows at or above this value." : "Keeps rows containing this text."}
-      </p>
-    </div>
-  )
-}
-
-/**
- * Sticky header cell: sortable label, per-column filter popover, column menu and
- * resize handle — or, when `render` is supplied, just the consumer's node.
+ * Sticky header cell: label, sort indicator, column menu and resize handle —
+ * or, when `render` is supplied, just the consumer's node.
  *
- * Column order moves through Move left / Move right rather than drag-and-drop:
- * it is deterministic, keyboard-operable, and serializes straight to `cols`
- * with no new dependency.
+ * Column order moves by drag-and-drop via `@dnd-kit/core` (pointer, touch and
+ * keyboard sensors, committed once on drop through the transient handle — see
+ * `grid.tsx`). The label is deliberately not a sort button: sorting lives in
+ * the one global sort popover, opened from the column menu's two sort items
+ * (the toolbar entry point lands in story 7), so a header is never both a
+ * control and a sort button.
+ *
+ * The menu control reveals on hover and keyboard focus through an
+ * opacity treatment that leaves it focusable and tappable at rest — never
+ * `display:none`, which would lock touch users out of a header with no hover.
  */
 export function GridHeaderCell({
   label,
@@ -127,112 +99,134 @@ export function GridHeaderCell({
   stickyLeft,
   sortDirection,
   isSortable,
-  onSortToggle,
-  filterKind,
-  filterValue,
-  onFilterChange,
   canHide,
-  canMoveLeft,
-  canMoveRight,
-  onMoveLeft,
-  onMoveRight,
   onHide,
+  canDrag,
+  suppressMenu,
+  sortableColumns,
+  sorting,
+  onSortingChange,
   resizeHandler,
   render,
 }: GridHeaderCellProps) {
   const isFrozen = stickyLeft !== null
   const hasCustomHeader = render !== undefined && render !== null
-  const isFiltered = filterKind !== null && filterValue.trim().length > 0
+  const showMenu = !hasCustomHeader && !suppressMenu
   const ariaSort = sortDirection === "asc" ? "ascending" : sortDirection === "desc" ? "descending" : "none"
+
+  const [sortPopoverOpen, setSortPopoverOpen] = useState(false)
+
+  // Called under `DndContext` (see `grid.tsx`); disabled — never absent — for
+  // pinned columns and custom headers, so hook order stays stable.
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: columnId,
+    disabled: !canDrag || hasCustomHeader,
+  })
+  const { setNodeRef: setDropRef } = useDroppable({
+    id: columnId,
+    disabled: hasCustomHeader,
+  })
+
+  const openSortPopover = (direction: "asc" | "desc") => {
+    // The menu item both applies and prefills: the popover then shows exactly
+    // what the grid is doing, and its selects adjust from there.
+    onSortingChange([{ id: columnId, desc: direction === "desc" }])
+    // Deferred past the menu's close, which returns focus into the closing
+    // menu and then to its trigger — both outside this popover. Opening on the
+    // next frame lets that settle before the popover mounts; the popover's own
+    // `onFocusOutside` prevention (see `grid-sort-popover.tsx`) covers the
+    // stragglers, so the surface survives its own entry instead of flashing
+    // open and vanishing with the sort applied but unreachable.
+    requestAnimationFrame(() => {
+      setSortPopoverOpen(true)
+    })
+  }
 
   return (
     <th
+      ref={hasCustomHeader ? undefined : setDropRef}
       scope="col"
       data-grid-column={columnId}
       aria-sort={ariaSort}
-      style={{ width, height: rowHeight, left: stickyLeft ?? undefined }}
+      style={{
+        width,
+        height: rowHeight,
+        left: stickyLeft ?? undefined,
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+      }}
       className={cn(
         GRID_BASE_FONT_CLASS,
         "bg-card text-muted-foreground sticky top-0 border-b border-r border-border p-0 font-medium",
         isFrozen ? "z-30" : "z-20",
+        isDragging && "z-40 opacity-80",
       )}
     >
       {hasCustomHeader ? (
         <div className="flex h-full items-center justify-center px-1">{render}</div>
       ) : (
         <>
-          <div className="flex h-full items-center gap-0.5 px-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={!isSortable}
-              onClick={onSortToggle}
-              aria-label={`Sort by ${label}`}
-              className={cn(
-                "h-6 min-w-0 flex-1 justify-start gap-1 px-1 text-[13px] font-medium",
-                sortDirection && "text-foreground",
-              )}
-            >
-              <span className="truncate">{label}</span>
-              {isSortable ? <SortIndicator direction={sortDirection} /> : null}
-            </Button>
+          <div className="group relative flex h-full items-center gap-0.5 px-1">
+            {canDrag ? (
+              <span
+                ref={setNodeRef}
+                {...attributes}
+                {...listeners}
+                role="button"
+                tabIndex={0}
+                aria-label={`Drag to reorder ${label}`}
+                data-grid-drag-handle={columnId}
+                className="flex h-6 min-w-0 flex-1 cursor-grab items-center gap-1 rounded-sm px-1 text-[13px] font-medium outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50 active:cursor-grabbing"
+              >
+                <span className="truncate">{label}</span>
+                <SortIndicator direction={sortDirection} />
+              </span>
+            ) : (
+              <span className="flex h-6 min-w-0 flex-1 items-center gap-1 px-1 text-[13px] font-medium">
+                <span className="truncate">{label}</span>
+                <SortIndicator direction={sortDirection} />
+              </span>
+            )}
 
-            {filterKind !== null ? (
-              <Popover>
-                <PopoverTrigger asChild>
+            {showMenu ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="size-6"
-                    aria-label={isFiltered ? `Edit filter for ${label}` : `Filter ${label}`}
+                    aria-label={`Column options for ${label}`}
+                    className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
                   >
-                    <Filter
-                      aria-hidden="true"
-                      className={cn("size-3.5", isFiltered ? "text-foreground" : "opacity-50")}
-                    />
+                    <MoreHorizontal aria-hidden="true" className="size-3.5 opacity-60" />
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-64 p-3">
-                  <GridColumnFilterInput
-                    columnId={columnId}
-                    label={label}
-                    kind={filterKind}
-                    value={filterValue}
-                    onChange={onFilterChange}
-                  />
-                </PopoverContent>
-              </Popover>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-44">
+                  <DropdownMenuItem disabled={!isSortable} onSelect={() => openSortPopover("asc")}>
+                    <ArrowUpNarrowWide aria-hidden="true" />
+                    Sort ascending
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={!isSortable} onSelect={() => openSortPopover("desc")}>
+                    <ArrowDownWideNarrow aria-hidden="true" />
+                    Sort descending
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem disabled={!canHide} onSelect={onHide}>
+                    Hide column
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : null}
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="size-6"
-                  aria-label={`Column options for ${label}`}
-                >
-                  <MoreHorizontal aria-hidden="true" className="size-3.5 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-44">
-                <DropdownMenuItem disabled={!canMoveLeft} onSelect={onMoveLeft}>
-                  <MoveLeft aria-hidden="true" />
-                  Move left
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={!canMoveRight} onSelect={onMoveRight}>
-                  <MoveRight aria-hidden="true" />
-                  Move right
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled={!canHide} onSelect={onHide}>
-                  Hide column
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {showMenu ? (
+              <GridSortPopover
+                open={sortPopoverOpen}
+                onOpenChange={setSortPopoverOpen}
+                anchor={<span aria-hidden="true" className="absolute bottom-0 left-0 size-0" />}
+                fields={sortableColumns}
+                sorting={sorting}
+                onSortingChange={onSortingChange}
+              />
+            ) : null}
           </div>
 
           <div

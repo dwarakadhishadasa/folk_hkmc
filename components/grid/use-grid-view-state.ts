@@ -22,10 +22,11 @@ export interface GridViewStateController {
   clearFilters: () => void
   /**
    * Escape hatch for in-flight interaction. A column-resize drag holds its
-   * width in component state and defers the URL write to pointer-up, so a drag
-   * does not emit hundreds of router transitions and hundreds of history
-   * entries. Committed state is always the URL: `commit` writes the final
-   * value once, and `cancel` restores the URL-derived width.
+   * width in component state and defers the URL write to pointer-up, and a
+   * column-reorder drag buffers its drop the same way, so a drag does not
+   * emit hundreds of router transitions and hundreds of history entries.
+   * Committed state is always the URL: `commit` writes the final value once,
+   * and `cancel` restores the URL-derived width.
    */
   beginTransientChange: () => void
   commitTransientChange: () => void

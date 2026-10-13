@@ -6,6 +6,8 @@ export {
   gridGlobalFilterFn,
   gridNumberFilterFn,
   gridTextFilterFn,
+  isPinnedRunIntact,
+  resolveColumnDropOrder,
   type GridColumnDef,
   type GridProps,
 } from "@/components/grid/grid"
@@ -77,4 +79,5 @@ export {
   useGridRowLifecycle,
   type GridRowDeleteOutcome,
 } from "@/components/grid/grid-row-lifecycle"
+export { GridSortPopover, type GridSortField, type GridSortPopoverProps } from "@/components/grid/grid-sort-popover"
 export { GridPreview, type GridPreviewRow } from "@/components/grid/grid-preview"
