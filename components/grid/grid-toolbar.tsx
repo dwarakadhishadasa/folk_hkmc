@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { GridDensity } from "@/components/grid/grid-types"
-import { GRID_BASE_FONT_CLASS } from "@/components/grid/grid-row"
+import { GRID_BASE_FONT_CLASS, GRID_DENSITY_OPTIONS } from "@/components/grid/grid-row"
 import { useUrlBackedDraft } from "@/components/grid/use-grid-view-state"
 
 export interface GridToolbarColumn {
@@ -154,12 +154,26 @@ export function GridToolbar({
       </DropdownMenu>
 
       <Select value={density} onValueChange={(value) => onDensityChange(value as GridDensity)}>
-        <SelectTrigger size="sm" aria-label="Row density" className="h-7 w-28 text-[13px]">
+        {/* `w-32 px-2`, not `w-28`: the trigger spends its width on chrome (padding +
+            `gap-2` + a 16px chevron) and shadcn clips the value with
+            `line-clamp-1`, so the widest label — "Default rows", measured at 80px
+            — needed 128px and had 112. It rendered as "Default ro⌄". A density
+            readout that is clipped cannot be checked by eye against the rendered
+            height, which is the only thing it is for. `px-2` rather than shadcn's
+            `px-3` buys the last 8px without widening the control past `w-32`, and
+            matches the Columns and Add record buttons beside it. Story 7
+            compacts this band and may re-tune it. */}
+        <SelectTrigger size="sm" aria-label="Row density" className="h-7 w-32 px-2 text-[13px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="default">Default rows</SelectItem>
-          <SelectItem value="dense">Dense rows</SelectItem>
+          {/* One option per record entry, so adding a density is one line in
+              `GRID_DENSITY_OPTIONS` rather than a fourth place to remember. */}
+          {GRID_DENSITY_OPTIONS.map((option) => (
+            <SelectItem key={option.density} value={option.density}>
+              {option.label}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
 

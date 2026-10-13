@@ -23,8 +23,11 @@ export { GridPanel, gridPanelKey, type GridPanelProps } from "@/components/grid/
 export {
   GridRow,
   GRID_BASE_FONT_CLASS,
+  GRID_DEFAULT_DENSITY,
+  GRID_DENSITY_OPTIONS,
   GRID_ROW_HEIGHT,
   GRID_SKELETON_ROWS,
+  type GridDensityOption,
   type GridRowProps,
 } from "@/components/grid/grid-row"
 export { GridToolbar, type GridToolbarColumn, type GridToolbarProps } from "@/components/grid/grid-toolbar"

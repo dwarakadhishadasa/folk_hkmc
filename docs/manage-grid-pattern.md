@@ -460,7 +460,76 @@ strips it.
 `cols` is written once per header drop through the transient handle, and only when the resulting
 order differs and leaves the pinned run intact. Neither is ever written per frame.
 
-## 8. Porting checklist
+## 8. The cell-metrics contract
+
+The numbers the grid renders at, and the four states a cell can be in. Both are
+asserted in `e2e/specs/grid-cell-metrics.spec.ts`; this section is what that file
+is reading.
+
+### Where the numbers live
+
+One record, `GRID_DENSITY_OPTIONS` in `grid-row.tsx`, carries each option's
+`{ density, label, height }`. Everything else is derived from it:
+
+| Derived | Used by |
+| --- | --- |
+| `GRID_ROW_HEIGHT` | `grid-row.tsx` (`<tr>` height), `grid-panel.tsx`, `grid.tsx` (the virtualizer's `estimateSize`) |
+| `GRID_DEFAULT_DENSITY` | every consumer's `useState`, so the trigger's initial readout cannot disagree with the initial height |
+| the control's options | `grid-toolbar.tsx` renders them by mapping the record |
+
+They used to be written in four unrelated places — a height map, two `useState`
+literals and two `SelectItem` children — which meant the control could read
+"Default rows" over a grid drawing 28px and nothing would fail. **An option that
+exists has a height, and a height that changes moves its label with it.**
+
+### What is fixed, and why it is fixed
+
+| Token | Value | Where |
+| --- | --- | --- |
+| Grid base font | **13px** | `GRID_BASE_FONT_CLASS` on the `<tr>`, `text-[13px]` on every `<td>` |
+| Default row height | **32px** | `GRID_DENSITY_OPTIONS[0].height` |
+| Dense row height | **28px** | `GRID_DENSITY_OPTIONS[1].height`, a user option only |
+| Cell padding | **8px** horizontal | `px-2` on the `<td>` |
+| Active indicator | **1px inset** ring | `ring-1 ring-inset` — inset, so it occupies no layout box |
+
+Fixed row heights are **load-bearing**, not a preference: the virtualizer
+estimates from `GRID_ROW_HEIGHT`, so a row that grew would leave the scroll
+geometry permanently wrong. Nothing may grow a cell — long text truncates to one
+line and `title` carries the full value, and anything that needs more room (a
+textarea, a calendar, a searchable list) opens in a `Popover` portal.
+
+### The four states, and the attribute each is named by
+
+| State | Named by | Driven by |
+| --- | --- | --- |
+| row hover | **nothing** — CSS `:hover` on the row | the pointer |
+| active cell | `data-grid-cell-active` on the `<td>` | `focusedRowId` + `focusedColumnId`, i.e. React state |
+| cell range | `data-grid-cell-selected` on the `<td>` | the selection model |
+| row selected | `data-state="selected"` on the `<tr>` | the consumer's checkboxes |
+| editing | the editor control inside the cell | the double-click that opened it |
+
+**Active is React state, never CSS.** A `:hover`-driven "active" cannot be moved
+with an arrow key and cannot be read by a test. It is presence-only, like
+`-selected` and `-emphasis`, so "exactly one cell is active" is a `toHaveCount(1)`
+rather than a scan for `="false"`.
+
+Read the attribute, not the class. `ring-1` is a Tailwind detail: renaming the ring
+to a `box-shadow` would break a spec that was never about rings. The same seam
+already exists as `data-grid-cell-editable`, `data-grid-cell-emphasis` and
+`data-grid-field-type` for the same reason.
+
+The four are independent signals. An active cell sits inside a range, on a
+selected row, or under an open editor, and none of those implies another.
+**Appearance is not asserted** — `design-constraints.md` bans shadows and
+stripes, which is exactly the CSS a hardcoded assertion would freeze; the
+mandated *numbers* above are asserted, and the colours are graded by eye.
+
+One consequence worth knowing before you write a gesture: the range's `extent`
+tracks the focus, and a plain pointer-down re-anchors. So a plain double-click
+drops the range, and an open editor with a live range survives only when the
+double-click carries `Shift`.
+
+## 9. Porting checklist
 
 - [ ] Refactored in place; the caller and the prop signature did not change.
 - [ ] `sort`, `q`, `f.*`, `cols`, `hide`, `size.*` round-trip; `?mode=` survives.
@@ -485,11 +554,15 @@ order differs and leaves the pinned run intact. Neither is ever written per fram
       mutation channel.
 - [ ] Delete confirms before acting, names the row, and reports one outcome line per row.
 - [ ] No `useMemo` sort or filter of the row set, no `components/ui/table`, no second table.
+- [ ] Density initialised from `GRID_DEFAULT_DENSITY`, never from a `"default"` literal, and no second
+      place names a density's label (§8).
+- [ ] Nothing grows a cell or a row: long values truncate with a `title`, and anything that needs more
+      room opens in a `Popover` (§8).
 - [ ] Nothing under `components/grid/` imports `@/components/manage/*` or names `/api/manage`. The
       primitives are consumed by four tables; anything table-specific in them stops them being
       primitives.
 
-## 9. Report divergence
+## 10. Report divergence
 
 **A port that cannot follow this document says so in its story, rather than quietly absorbing the
 difference.** Record what did not carry over, what was forced, and what later tables should expect

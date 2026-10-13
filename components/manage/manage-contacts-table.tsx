@@ -16,6 +16,7 @@ import type {
 import {
   Grid,
   GridRowDeleteControl,
+  GRID_DEFAULT_DENSITY,
   useGridViewState,
   type GridCellCommit,
   type GridColumnDef,
@@ -415,7 +416,7 @@ function BulkReportPanel({
 }
 
 export function ManageContactsTable({ payload }: { payload: ManagePortalPayload }) {
-  const [density, setDensity] = useState<GridDensity>("default")
+  const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [pendingContactId, setPendingContactId] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)

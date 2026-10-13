@@ -21,6 +21,7 @@
  * | `tr[data-grid-row="<id>"]`              | `components/grid/grid-row.tsx`|
  * | `[data-grid-cell="<id>~<columnId>"]`    | `gridCellKey`, same file      |
  * | `[data-grid-cell-selected]`             | `grid-row.tsx`, cell range only |
+ * | `[data-grid-cell-active]`               | `grid-row.tsx` — the active cell: the one the pointer or an arrow is on. Exactly one at a time, and **not** the ring class beside it |
  * | `[data-grid-column="<columnId>"]`       | `grid-header-cell.tsx`        |
  * | `[data-grid-drag-handle="<columnId>"]`   | the header's drag activator — absent on pinned columns and custom headers |
  * | `[data-grid-sort-popover]`               | `grid-sort-popover.tsx`, the one global sort surface |
@@ -171,6 +172,20 @@ export function selectedCells(page: Page): Locator {
   return gridRoot(page).locator("[data-grid-cell-selected]")
 }
 
+/**
+ * The active cell — the one the pointer or an arrow is on.
+ *
+ * A third thing that is not selection. `data-state="selected"` is the
+ * consumer's *row* selection, `data-grid-cell-selected` is the grid's cell
+ * *range*, and this is the single cell focus rests on; an active cell can sit
+ * inside a range, on a selected row, or under an open editor. It is
+ * presence-only (`="true"` or absent, never `="false"`), which is what makes
+ * "exactly one active cell" a `toHaveCount(1)` rather than a scan.
+ */
+export function activeCells(page: Page): Locator {
+  return gridRoot(page).locator("[data-grid-cell-active]")
+}
+
 /** The rendered rows' `data-grid-row` ids, in viewport order. */
 export async function renderedRowIds(page: Page): Promise<string[]> {
   return renderedRows(page).evaluateAll((rows) =>
@@ -208,9 +223,14 @@ export async function focusCellAt(page: Page, rowIndex: number, columnId: string
  * The double-click also does the focusing: `GridRow`'s `onPointerDown` fires on
  * the way down and moves the focus model onto the cell, so a spec no longer needs
  * a separate click to point the grid at a column before opening it.
+ *
+ * `modifiers` is optional and changes what the *pointer-down* does, not what the
+ * double-click does — `Shift`+double-click extends the cell range to that cell
+ * instead of re-anchoring on it, which is the only way a live range and an open
+ * editor exist at the same time (`grid-cell-metrics.spec.ts`'s metrics 4).
  */
-export async function openCellEditor(cell: Locator): Promise<void> {
-  await cell.dblclick()
+export async function openCellEditor(cell: Locator, modifiers?: ReadonlyArray<"Alt" | "Control" | "Meta" | "Shift">): Promise<void> {
+  await cell.dblclick(modifiers ? { modifiers: [...modifiers] } : undefined)
 }
 
 /**

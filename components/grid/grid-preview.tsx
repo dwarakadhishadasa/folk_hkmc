@@ -5,6 +5,7 @@ import { createColumnHelper } from "@tanstack/react-table"
 
 import { Button } from "@/components/ui/button"
 import { Grid, type GridColumnDef } from "@/components/grid/grid"
+import { GRID_DEFAULT_DENSITY } from "@/components/grid/grid-row"
 import type { GridDensity, GridPanelState } from "@/components/grid/grid-types"
 import { useGridViewState } from "@/components/grid/use-grid-view-state"
 
@@ -298,7 +299,7 @@ export function GridPreview({
   // Local row state, not grid state: it is what an in-memory commit mutates, and
   // it is seeded from the server-generated rows so nothing is fetched here.
   const [data, setData] = useState(rows)
-  const [density, setDensity] = useState<GridDensity>("default")
+  const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
   const [panelKey, setPanelKey] = useState<PreviewPanelKey>("ready")
   const [retryCount, setRetryCount] = useState(0)
   // Keyboard-operation notices: a copy the browser refused, a paste that skipped

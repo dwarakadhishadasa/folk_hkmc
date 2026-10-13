@@ -17,10 +17,74 @@ import { cn } from "@/lib/utils"
  */
 export const GRID_BASE_FONT_CLASS = "text-[13px]"
 
-export const GRID_ROW_HEIGHT: Record<GridDensity, number> = {
-  default: 32,
-  dense: 28,
+/**
+ * One row-density option, and everything the two halves of the contract need.
+ *
+ * `label` is what the density trigger reads while the option is selected;
+ * `height` is what the row actually renders. They used to live apart — two
+ * `SelectItem` children in `grid-toolbar.tsx` and one height map here — which
+ * meant the control could read "Default rows" over a grid drawing 28px, and
+ * nothing failed. Hoisting both onto one record keyed by the option's own value
+ * makes that unrepresentable: an option that exists has a height, and a height
+ * that changes moves its label with it.
+ */
+export interface GridDensityOption {
+  /** The option's control value, and the key `GRID_ROW_HEIGHT` is derived by. */
+  density: GridDensity
+  /** What the density trigger reads while this option is selected. */
+  label: string
+  /**
+   * The rendered row height, in px. Load-bearing rather than cosmetic: the
+   * virtualizer estimates from it (`grid.tsx`), so it and the estimate cannot
+   * disagree. `design-constraints.md` mandates both numbers.
+   */
+  height: number
 }
+
+/**
+ * Every density the grid offers, in the order the control lists them.
+ *
+ * **The first entry is the default**, and `GRID_DEFAULT_DENSITY` reads it from
+ * here rather than from a `"default"` literal in each consumer — which is the
+ * other half of the same drift, since a consumer's initial state and the
+ * control's initial readout are two more places the value was written down.
+ */
+export const GRID_DENSITY_OPTIONS = [
+  { density: "default", label: "Default rows", height: 32 },
+  { density: "dense", label: "Dense rows", height: 28 },
+] as const satisfies readonly GridDensityOption[]
+
+/** The density every consumer initialises from, and OQ-4's 32px default. */
+export const GRID_DEFAULT_DENSITY = GRID_DENSITY_OPTIONS[0].density
+
+/**
+ * The height map, derived rather than written.
+ *
+ * Kept a `Record<GridDensity, number>` because `grid.tsx` (twice) and
+ * `grid-panel.tsx` index it by the live density, and a derived array would force
+ * a lookup at each of those sites for no gain. The cast is what
+ * `Object.fromEntries` needs to say "these keys are all of `GridDensity`" —
+ * `_EveryDensityHasAnOption` below is what makes that claim true.
+ */
+export const GRID_ROW_HEIGHT: Record<GridDensity, number> = Object.fromEntries(
+  GRID_DENSITY_OPTIONS.map((option) => [option.density, option.height]),
+) as Record<GridDensity, number>
+
+/**
+ * Compile-time proof that `GRID_DENSITY_OPTIONS` covers every `GridDensity`.
+ *
+ * `Object.fromEntries` happily returns a map missing a key, and the failure it
+ * produces is a `style={{ height: undefined }}` on a real row — a silently
+ * collapsed table rather than a compile error. A density added to the union and
+ * not to the record above fails here instead: `Assert<T extends true>` is what
+ * turns the `false` branch into an error rather than into a type nobody reads.
+ */
+type Assert<T extends true> = T
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _EveryDensityHasAnOption = Assert<
+  Exclude<GridDensity, (typeof GRID_DENSITY_OPTIONS)[number]["density"]> extends never ? true : false
+>
 
 export const GRID_SKELETON_ROWS = 8
 
@@ -226,6 +290,14 @@ export function GridRow<TData>({
             key={cell.columnId}
             data-grid-cell={gridCellKey(row.id, cell.columnId)}
             data-grid-cell-selected={cell.isSelected ? "true" : undefined}
+            // The **active** cell — the one the pointer or an arrow is on — named
+            // as a seam rather than asserted through the ring class beside it.
+            // `ring-1` is a Tailwind detail: renaming it to a `box-shadow`
+            // silently breaks a spec that was never about rings, while this
+            // attribute is the statement that exactly one cell is active at a
+            // time. Presence-only, like `-selected` and `-emphasis`, so "exactly
+            // one" is a count rather than a scan for `="false"`.
+            data-grid-cell-active={cell.isFocused ? "true" : undefined}
             // The two attributes a spec reads to tell an editable cell from a
             // read-only one, and to find the identity column. Both are on every
             // cell rather than only on the ones carrying a class, so the
@@ -269,6 +341,22 @@ export function GridRow<TData>({
               onCellDoubleClick(row.id, cell.columnId)
             }}
             className={cn(
+              // The metrics contract is the **32px row**, and the padding and line
+              // box that reach it are not the ones `Visual-Design/
+              // contacts-grid-states-v1.html:62-67` prints.
+              //
+              // That comp rule reads `padding: 4px 8px` + `line-height: 24px` +
+              // `height: 32px`, and 4 + 24 + 4 = 32 — but it is a different table
+              // structure. Applied here on top of `[&>td]:border-b`, it measures
+              // **35px**: in a CSS table `height` is a minimum and never clamps a
+              // cell whose padding and border already exceed it, which is the
+              // trap UX-DR19 records. So this cell carries the 8px horizontal
+              // padding and the middle alignment, and deliberately **no** vertical
+              // padding and **no** explicit line height — inheriting the page's is
+              // what keeps the row at exactly 32px.
+              //
+              // `pnpm test:e2e grid-cell-metrics` is what pins that, by measuring
+              // the row rather than reading a class.
               "truncate px-2 align-middle text-[13px]",
               ALIGN_CLASS[cell.align],
               cell.tabular && "tabular-nums",
