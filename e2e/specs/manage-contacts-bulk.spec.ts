@@ -60,8 +60,18 @@ import {
 } from "../fixtures/manage-grid"
 import { storageStatePath } from "../fixtures/roles"
 
-/** Ten generated rows, indices 0000–0009; enough to pick five from. */
-const TEN_ROWS = "preview-fixture-bulk-folk-000"
+/**
+ * Ten generated rows, indices 0240–0249; enough to pick five from.
+ *
+ * `phone` rather than `name`: the generator stopped writing an index marker into
+ * `name` and tags rows in `source` instead, so the old
+ * `preview-fixture-bulk-folk-000` needle matched nothing. `phoneFor` is
+ * `PHONE_PREFIX` plus the zero-padded index
+ * (`bulk-contact-fixtures.mjs:441`), so this prefix is exactly ten rows at the
+ * default `--count 250`. Index 0000 has no phone, so the low band cannot be
+ * addressed this way.
+ */
+const TEN_ROWS = "810000024"
 
 const BULK_ENDPOINT = "/api/manage/contacts/bulk"
 

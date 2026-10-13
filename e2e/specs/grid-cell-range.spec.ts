@@ -53,8 +53,27 @@ import {
   toggleSort,
 } from "../fixtures/manage-grid"
 
-/** The ten generated contacts indexed 0000–0009. See the module comment. */
-const TEN_ROWS = "preview-fixture-bulk-folk-000"
+/**
+ * The ten generated contacts indexed 0240–0249.
+ *
+ * The generator no longer writes an index marker into `name` — rows carry real
+ * names and are tagged in `source` (`bulk-contacts.ts:70`) — so the old
+ * `preview-fixture-bulk-folk-000` name needle matched nothing and every test in
+ * this file addressed zero rows.
+ *
+ * **`phone` is the deterministic discriminator instead.** `phoneFor` is
+ * `PHONE_PREFIX[program]` plus the index zero-padded to eight digits
+ * (`bulk-contact-fixtures.mjs:441`), so the contiguous prefix `810000024` covers
+ * exactly indexes 0240–0249: ten rows, and ten at the generator's default
+ * `--count 250`.
+ *
+ * Chosen over the lower band deliberately. Index 0000 has no phone at all —
+ * `phoneFor` returns `""` there, because `phone TEXT NOT NULL` with
+ * `UNIQUE (phone, program_id)` permits exactly one phone-less contact per
+ * programme — so no phone prefix can reach the first ten. This band has no such
+ * hole, which is what keeps `expectVisibleCount(page, 10)` honest.
+ */
+const TEN_ROWS = "810000024"
 
 const NAME_COLUMN = "name"
 const PHONE_COLUMN = "phone"

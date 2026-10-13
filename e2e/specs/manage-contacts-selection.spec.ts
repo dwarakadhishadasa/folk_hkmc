@@ -38,12 +38,19 @@ import {
 const MIN_ROWS_FOR_MIXED = 40
 
 /**
- * Ten generated rows, indices 0000–0009.
+ * Ten generated rows, indices 0240–0249.
  *
- * `-000` matches exactly ten of the 250 because the index is zero-padded to four
- * digits, so `-0010-` cannot be confused with `-0010` — the needle is safe.
+ * `-000` used to match exactly ten because the index was zero-padded into the
+ * *name*. It no longer is — the generator writes real names and tags rows in
+ * `source` (`bulk-contacts.ts:70`) — so the old needle matched nothing.
+ *
+ * `phone` carries the index instead: `PHONE_PREFIX` plus eight zero-padded digits
+ * (`bulk-contact-fixtures.mjs:441`), making `810000024` exactly indexes 0240–0249
+ * at the default `--count 250`. The low band is unusable: index 0000 has no phone,
+ * because `phoneFor` returns `""` there so that a `UNIQUE (phone, program_id)`
+ * index still permits one phone-less contact.
  */
-const TEN_ROWS = "preview-fixture-bulk-folk-000"
+const TEN_ROWS = "810000024"
 
 /** Click the checkbox on the nth rendered row, in viewport order. */
 async function selectRenderedRow(page: Page, index: number): Promise<void> {
