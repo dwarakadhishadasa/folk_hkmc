@@ -149,6 +149,15 @@ export function GridFilterPopover({
     onConnectiveChange,
   )
 
+  /**
+   * Every column the list currently filters on, built ONCE per render.
+   *
+   * Each row's field list derives its disabled set from this, and `FilterValueControl`
+   * commits on every keystroke — so building the set per row made an n-row list cost
+   * O(n²) on every paint.
+   */
+  const filteredColumnIds = new Set(renderedConditions.map((condition) => condition.columnId))
+
   const replace = (next: GridFilterCondition) => {
     commitConditions(
       conditionsRef.current.map((condition) =>
@@ -256,6 +265,12 @@ export function GridFilterPopover({
             const takesValue = operator?.valueShape !== "none"
             const invalid = isConditionValueInvalid(condition, fieldType)
 
+            // A column some OTHER row already filters on is disabled below. The row's
+            // own column is excluded deliberately: disabling it would grey the value
+            // this row is already showing and block every same-row re-pick.
+            const columnTakenElsewhere = (columnId: string) =>
+              columnId !== condition.columnId && filteredColumnIds.has(columnId)
+
             return (
               <div key={condition.columnId} className="flex items-center gap-2" data-grid-filter-condition={condition.columnId}>
                 {index === 0 ? (
@@ -327,8 +342,23 @@ export function GridFilterPopover({
                     <SelectValue placeholder="Choose a field" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* THIS OPTION LIST IS THE ONLY GATE. `onValueChange` below does
+                     * not re-check that the picked column is free, because Radix's
+                     * `handleSelect` is `if (!disabled)` — a disabled item never
+                     * reaches it. Drop the `disabled` without adding the check there
+                     * and this control can build two conditions with one id again.
+                     *
+                     * Disabled rather than absent: the column is not withdrawn from
+                     * view, only marked unavailable, which is what
+                     * `grid-header-cell.tsx:216` and `grid-toolbar.tsx:210` do for the
+                     * menu items they cannot offer. */}
                     {fields.map((entry) => (
-                      <SelectItem key={entry.id} value={entry.id} className="text-[13px]">
+                      <SelectItem
+                        key={entry.id}
+                        value={entry.id}
+                        disabled={columnTakenElsewhere(entry.id)}
+                        className="text-[13px]"
+                      >
                         {entry.label}
                       </SelectItem>
                     ))}

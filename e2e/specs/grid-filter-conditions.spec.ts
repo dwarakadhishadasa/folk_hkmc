@@ -383,6 +383,113 @@ test.describe("CAP-12 — the filter conditions popover", () => {
     await expect(operator).toHaveText("is")
   })
 
+  /**
+   * `columnId` is a condition's identity — `grid-filter-operators.ts:60` states
+   * there is at most one condition per column — so the field Select must not offer
+   * a column another row is already filtering on. It offered every column, and the
+   * pick was accepted: rows `Name` + `Phone` with row 2 set to `Name` produced two
+   * conditions sharing one id, which collides on the row's `key` and paints the
+   * same column twice.
+   *
+   * **THE URL COULD NOT SHOW IT.** `serializeGridViewState` writes into a
+   * `Record<string, string>`, so the two collapse to a single `f.name` param and the
+   * list reads back with one row — the duplicate lived only in the popover's mirror,
+   * where nothing contradicted it. The console check below is the only place React
+   * itself reports it, and React drops that warning from a production build, so it
+   * asserts because the suite boots the app in development; against a built app it
+   * is a check that cannot fail, and the row assertions are what carry the claim.
+   *
+   * Disabled rather than absent, which is what `grid-header-cell.tsx:216` and
+   * `grid-toolbar.tsx:210` do for menu items they cannot offer: the column is not
+   * withdrawn from the operator's view, only marked unavailable.
+   *
+   * Four things are claimed here, and the middle two are the ones that are easy to
+   * get backwards: the exclusion is PER ROW and not global (row 1's list disables
+   * `Phone` while row 2's disables `Name`), and it is RECOMPUTED from the live list
+   * rather than snapshotted — a set captured once at mount would satisfy every
+   * earlier assertion and still be wrong here.
+   */
+  test("a column already filtered by another row is disabled in the field list", async ({ page }) => {
+    const consoleOutput: string[] = []
+
+    page.on("console", (message) => {
+      if (message.type() === "error" || message.type() === "warning") {
+        consoleOutput.push(`${message.type()}: ${message.text()}`)
+      }
+    })
+
+    await gotoGrid(page, { params: { "f.name": "contains:a", "f.phone": "contains:9" } })
+    await openPopover(page)
+
+    const rows = popover(page).locator("[data-grid-filter-condition]")
+
+    await expect(rows).toHaveCount(2)
+
+    // --- row 2's list ---
+    await conditionRow(page, "phone").locator("[data-grid-filter-field]").click()
+
+    const list = page.getByRole("listbox")
+    const option = (label: string) => list.getByRole("option", { name: label, exact: true })
+
+    // Row 1's column. Offering it on row 2 is an offer to build two conditions
+    // with one identity.
+    await expect(option("Name")).toHaveAttribute("aria-disabled", "true")
+
+    // Row 2's OWN column is in the taken set by definition, so the exclusion has
+    // to be of every row but this one — otherwise the row's current value is
+    // greyed and the same-row re-pick stops working.
+    await expect(option("Phone")).not.toHaveAttribute("aria-disabled", "true")
+
+    // A column nobody is filtering on is offered normally.
+    await expect(option("Notes")).not.toHaveAttribute("aria-disabled", "true")
+
+    // The pick that used to build the duplicate, forced past the
+    // `pointer-events-none` a disabled item carries. What lands the click is not the
+    // point — the point is that no pick reaches `onValueChange`, so the rows are
+    // asserted rather than the absence of an error.
+    await option("Name").click({ force: true })
+    await page.keyboard.press("Escape")
+
+    await expect(rows).toHaveCount(2)
+    await expect(conditionRow(page, "name")).toHaveCount(1)
+
+    // --- row 1's list: the same rule from the other side ---
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+
+    await expect(option("Phone")).toHaveAttribute("aria-disabled", "true")
+    await expect(option("Name")).not.toHaveAttribute("aria-disabled", "true")
+
+    await page.keyboard.press("Escape")
+
+    // --- a real pick, made with a disabled option on screen ---
+    // Every other field pick in this file runs against an empty taken set, so
+    // nothing else covers choosing from a list that has something unavailable in it.
+    await conditionRow(page, "phone").locator("[data-grid-filter-field]").click()
+    await option("Notes").click()
+
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.notes")).toBe("contains:")
+    expect(
+      new URL(page.url()).searchParams.get("f.phone"),
+      "the row's old column must not survive the switch",
+    ).toBeNull()
+    await expect(conditionRow(page, "notes")).toHaveCount(1)
+
+    // --- the set is recomputed, not snapshotted ---
+    // `Phone` was taken when this list was first opened and is free now, because
+    // row 2 has moved to `Notes`. A set built once would still disable it.
+    await conditionRow(page, "notes").locator("[data-grid-filter-field]").click()
+
+    await expect(option("Name")).toHaveAttribute("aria-disabled", "true")
+    await expect(option("Notes")).not.toHaveAttribute("aria-disabled", "true")
+    await expect(option("Phone")).not.toHaveAttribute("aria-disabled", "true")
+
+    await page.keyboard.press("Escape")
+
+    const duplicateKeys = consoleOutput.filter((text) => /same key/i.test(text))
+
+    expect(duplicateKeys, `console output:\n${consoleOutput.join("\n")}`).toEqual([])
+  })
+
   test("a multiselect offers the four set operations", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
