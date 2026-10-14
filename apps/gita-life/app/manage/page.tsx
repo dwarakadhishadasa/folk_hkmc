@@ -34,9 +34,18 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
 
     return (
       <StaffAuthShell staff={staff}>
-        <div className="min-h-screen bg-background">
+        {/*
+          `h-dvh` + `overflow-hidden`, and `main` a bounded flex column: this is
+          where the height the grid fills is established. Nothing below may assert
+          a viewport fraction — the offset above the grid is not a constant (the
+          header height, a tab row that wraps at narrow widths, and a scope notice
+          that renders only in preacher mode all move it), so the chain has to
+          carry the height down instead. Each tab is then its own scroller, and
+          Contacts is the one surface with a single one.
+        */}
+        <div className="flex h-dvh flex-col overflow-hidden bg-background">
           <Header />
-          <main className="container mx-auto px-4 py-6 sm:py-8">
+          <main className="container mx-auto flex min-h-0 flex-1 flex-col px-4 py-6 sm:py-8">
             <ManagePortal payload={payload} initialView={initialView} />
           </main>
         </div>

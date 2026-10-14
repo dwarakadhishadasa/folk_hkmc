@@ -385,7 +385,20 @@ function BulkReportPanel({
   return (
     <section
       aria-label="Bulk action results"
-      className="rounded-md border border-border bg-card px-3 py-2 text-[13px]"
+      // Bounded rather than moved. `shrink-0` keeps the panel whole — it is the
+      // record of what just happened, and crushing it would hide the outcomes —
+      // while `max-h-[40%]` is a fraction of *this container* (the grid's frame
+      // measures against a definite height, so the percentage resolves) rather
+      // than of the viewport, whose offset above the grid is not a constant. At
+      // 200 rows the list scrolls inside the panel and the grid shrinks instead
+      // of vanishing.
+      //
+      // The percentage is on the section, not on the `<ul>`: a percentage
+      // `max-height` whose containing block has an auto height computes to
+      // `none`, and the panel's own height is content-driven. Verified in
+      // Chromium — `max-h-[40%]` on the list alone grows the panel to ~4,400px
+      // and collapses the grid to 0.
+      className="flex max-h-[40%] shrink-0 flex-col rounded-md border border-border bg-card px-3 py-2 text-[13px]"
     >
       <div className="flex items-start justify-between gap-3">
         <p role="status" className="font-medium">
@@ -402,7 +415,10 @@ function BulkReportPanel({
         </Button>
       </div>
 
-      <ul aria-live="polite" className="text-muted-foreground mt-1 divide-y divide-border">
+      <ul
+        aria-live="polite"
+        className="text-muted-foreground mt-1 min-h-0 flex-1 divide-y divide-border overflow-y-auto"
+      >
         {report.rows.map((row) => (
           <li key={row.contactId} className="flex items-baseline gap-2 py-1">
             <span aria-hidden="true">{row.ok ? "✓" : "✕"}</span>
@@ -1158,9 +1174,15 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
     })
   }, [])
 
+  /*
+   * `flex min-h-0 flex-1 flex-col` — the last hop before the grid, and the one
+   * that makes the grid's `flex-1` mean anything. `space-y-3` → `gap-3` is the
+   * same rhythm. The `role="status"` notice is *above* the grid, so it stays
+   * visible in a bounded layout rather than scrolling out with the rows.
+   */
   return (
-    <div className="space-y-3">
-      <h2 className="font-[family-name:var(--font-poppins)] text-lg font-semibold text-[var(--program-text)]">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <h2 className="shrink-0 font-[family-name:var(--font-poppins)] text-lg font-semibold text-[var(--program-text)]">
         Contacts
       </h2>
 
@@ -1169,8 +1191,8 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
           role="status"
           className={
             notice.kind === "error"
-              ? "text-sm font-medium text-red-700"
-              : "text-sm font-medium text-[var(--muted-foreground)]"
+              ? "shrink-0 text-sm font-medium text-red-700"
+              : "shrink-0 text-sm font-medium text-[var(--muted-foreground)]"
           }
         >
           {notice.message}

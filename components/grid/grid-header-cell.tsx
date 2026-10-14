@@ -156,7 +156,11 @@ export function GridHeaderCell({
       }}
       className={cn(
         GRID_BASE_FONT_CLASS,
-        "bg-card text-muted-foreground sticky top-0 border-b border-r border-border p-0 font-medium",
+        // `bg-muted`, not the body's `bg-card`: the header row was the same
+        // surface as the data, so the sticky row had nothing to read against
+        // while the body scrolled under it. Token-only — a comparison of two
+        // elements' computed backgrounds is what a spec asserts, never a hex.
+        "bg-muted text-muted-foreground sticky top-0 border-b border-r border-border p-0 font-medium",
         isFrozen ? "z-30" : "z-20",
         isDragging && "z-40 opacity-80",
       )}

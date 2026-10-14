@@ -532,6 +532,8 @@ double-click carries `Shift`.
 ## 9. Porting checklist
 
 - [ ] Refactored in place; the caller and the prop signature did not change.
+- [ ] **The grid fills the frame, and every ancestor between `main` and `<Grid>` carries the
+      height to it** — see §10. A missing `min-h-0` on any hop is the whole failure.
 - [ ] `sort`, `q`, `f.*`, `cols`, `hide`, `size.*` round-trip; `?mode=` survives.
 - [ ] Identity column pinned as part of the leading run; one 1px divider, no scroll shadow; no
       pinned column is hideable, draggable, or a valid drop target for a scrolling column.
@@ -562,7 +564,57 @@ double-click carries `Shift`.
       primitives are consumed by four tables; anything table-specific in them stops them being
       primitives.
 
-## 10. Report divergence
+## 10. The grid fills the frame; its ancestors carry the height
+
+**`<Grid>` takes the height it is given. It does not decide its own.** The scroll container is
+`min-h-0 flex-1 overflow-auto` inside a `flex min-h-0 flex-1 flex-col` root, which means the grid
+has no opinion about the viewport — and *cannot* have one, because the space above it is not a
+constant.
+
+The chain on `/manage?view=contacts`, from the shell inward:
+
+| Hop | Carries |
+| --- | --- |
+| `apps/*/app/manage/page.tsx` shell | `flex h-dvh flex-col overflow-hidden` — the only place the viewport is named |
+| …its `main` | `flex min-h-0 flex-1 flex-col` |
+| `manage-portal.tsx` root | `flex min-h-0 flex-1 flex-col gap-6` |
+| its `Tabs` | `min-h-0 flex-1` |
+| the contacts `TabsContent` | `flex min-h-0 flex-col` — **no `overflow-auto`** |
+| `manage-contacts-table.tsx` root | `flex min-h-0 flex-1 flex-col gap-3` |
+| `grid.tsx` root → scroll container | `flex min-h-0 flex-1 flex-col` → `min-h-0 flex-1 overflow-auto` |
+
+The other four tabs **do** take `overflow-auto`: they exceed the viewport and would otherwise be
+clipped by the bounded shell. Contacts is the exception, because a second scroller above the grid is
+the nested scrollbar this chain exists to remove.
+
+### Two mistakes, both of which compile and both of which ship
+
+**A missing `min-h-0` is silent.** A flex item defaults to `min-height: auto`, which refuses to shrink
+below content. Drop one `min-h-0` and that hop stops being bounded and grows to its content instead —
+the page scrolls again, and it reads as "the page scrolls again" rather than as a missing class.
+`flex-1` alone is not enough either: `flex-1` distributes *free* space, it never creates a bound.
+
+**A viewport fraction is a guess.** The offset above the grid moves with the page header height, with a
+tab row that wraps at narrow widths, and with a scope notice that renders only in preacher mode. So
+`max-h-[70vh]` is wrong in principle, and a `calc(100dvh - X)` substitute is the same guess with more
+arithmetic. `harness-guards.spec.ts` bans the `vh` **unit** under `components/grid/` — not the one
+literal value, so the `calc` form cannot come back through the side door.
+
+### Why the cap was not simply deleted
+
+With the cap gone and nothing above it establishing a height, the container becomes the virtualizer's
+full extent (~8,000px at 250 rows). It then never scrolls vertically, so `position: sticky; top: 0` on
+the header has no scrollport and the header scrolls away — and the horizontal scrollbar lands at the
+bottom of that 8,000px, which is the clipped-final-column complaint arriving by a different route.
+
+The header is `bg-muted` against the body's `bg-card`. That is a comparison to assert, never a literal
+— see §8 on why appearance is graded by eye and only the mandated numbers are frozen.
+
+`grid-scroll-surface.spec.ts` covers this: one scroll container on the page, the container's bottom
+inside the viewport, the header still flush after scrolling to the bottom, the final column reachable
+when scrolled right, and the bulk report bounded rather than crushing the grid.
+
+## 11. Report divergence
 
 **A port that cannot follow this document says so in its story, rather than quietly absorbing the
 difference.** Record what did not carry over, what was forced, and what later tables should expect
@@ -573,6 +625,15 @@ Known gaps at the time of writing:
 
 - No command palette, and no `/manage` table jump. `design-constraints.md` requires
   `Cmd`/`Ctrl`+`K`; it is still to come.
+- **A ported table must carry the height to its grid** (§10). A new surface under `/manage` inherits
+  the bounded shell for free, but only the contacts tab has the chain today — a second grid needs the
+  same hops, or it reintroduces the page-level scroller.
+- **`openContactsGrid` waits for `data-grid-panel="ready"` and a non-zero count, neither of which is
+  the rendered row window.** Read geometry immediately after it returns and the scroll container
+  measures ~32px with an `innerHeight`-tall document, because the virtualizer has not rendered yet.
+  Every geometry assertion must wait for `tr[data-grid-row]` to exist first — see
+  `waitForRenderedRows` in `grid-scroll-surface.spec.ts`, and the same poll in
+  `grid-cell-metrics.spec.ts`.
 - No `Select`-based column filter. The contacts port replaced a sentinel-valued dropdown with
   per-column filter popovers, which compose with the global filter instead of replacing it.
   The popovers are now removed again — headers carry no filter control until the filter

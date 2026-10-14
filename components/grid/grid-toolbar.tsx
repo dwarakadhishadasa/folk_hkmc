@@ -89,7 +89,11 @@ export function GridToolbar({
   return (
     <div
       data-grid-toolbar=""
-      className={`${GRID_BASE_FONT_CLASS} bg-card flex flex-wrap items-center gap-2 border-b border-border px-2 py-1.5`}
+      // `shrink-0` because the frame is a bounded flex column now: a flex item
+      // defaults to `flex-shrink: 1`, so a short row set would otherwise
+      // compress the toolbar's own controls instead of the scroll container
+      // giving up the space.
+      className={`${GRID_BASE_FONT_CLASS} bg-card flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-2 py-1.5`}
     >
       <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
         <Search

@@ -86,7 +86,7 @@ test("the run-artifact directories are ignored, and only at the repo root", () =
   expect(ignored("e2e/.auth/admin.json"), "/e2e/.auth/ holds live Supabase session tokens").toBe(true)
 })
 
-test("the grid stays token-clean: no raw colour and no theme toggle under components/grid/", () => {
+test("the grid stays token-clean and viewport-free: no raw colour, no theme toggle and no vh under components/grid/", () => {
   // The theme story is a token question, not a rewrite, and this is what keeps
   // it one. A raw hex, an `rgb()`, a `white`/`black` literal or a `dark:`
   // variant under `components/grid/` would bypass the `.dark` block entirely,
@@ -109,6 +109,24 @@ test("the grid stays token-clean: no raw colour and no theme toggle under compon
     )
     expect(text, `components/grid/${name} owns a theme toggle`).not.toMatch(
       /theme-toggle|ThemeToggle/,
+    )
+    // **No viewport unit anywhere under `components/grid/`.** The scroll
+    // container used to be capped at `max-h-[70vh]`, and that cap was the cause of
+    // both a nested scrollbar and a clipped final column: a viewport-fractioned
+    // inner scroller inside a page that also scrolls produces a frame whose
+    // geometry moves with the viewport, and the last column's right edge is
+    // exactly where the horizontal scrollbar's thumb sits. The grid now takes the
+    // height it is *given* (`flex-1` inside a bounded flex column), and there is
+    // no honest reason for the primitive to know about the viewport at all.
+    //
+    // Banning the **unit** rather than the one literal value is the point: it also
+    // rejects the `calc(100dvh - X)` substitution, which is the same guess with
+    // more arithmetic — the offset above the grid is not a constant (the header
+    // height, a tab row that wraps at narrow widths, and a scope notice that only
+    // renders in preacher mode all move it). Asserting `70vh` alone would let that
+    // form straight through.
+    expect(text, `components/grid/${name} asserts a viewport fraction`).not.toMatch(
+      /\d\s*(?:d?vh|d?vw|svh|lvh)\b/,
     )
   }
 })

@@ -343,9 +343,17 @@ export function GridPreview({
     }
   }, [panelKey, retryCount])
 
+  /*
+   * Bounded like `/manage`, for the same reason and with the same chain. The
+   * harness renders 500 rows, so without a bound the grid is ~16,000px tall and
+   * the page — not the grid — is what scrolls: `sticky top-0` has no scrollport,
+   * and the horizontal scrollbar lands 15,000px down. This is the second of the
+   * two `<Grid>` call sites, so it is the second place the frame has to be
+   * established.
+   */
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex shrink-0 flex-wrap items-center gap-3">
         <div
           role="group"
           aria-label="Force panel state"
@@ -446,7 +454,7 @@ export function GridPreview({
         data-grid-notice=""
         role="status"
         aria-live="polite"
-        className="text-muted-foreground min-h-[20px] text-[13px]"
+        className="text-muted-foreground min-h-[20px] shrink-0 text-[13px]"
       >
         {notice ?? ""}
       </p>

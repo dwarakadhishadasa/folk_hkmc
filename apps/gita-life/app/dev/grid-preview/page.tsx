@@ -95,7 +95,12 @@ export default function GridPreviewPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl space-y-4 px-4 py-8">
+    /*
+     * Bounded to the viewport, like `/manage`: this route hosts a `<Grid>` with
+     * 500 rows, and the grid only scrolls when something above it established a
+     * height. The static `space-y-4` became `gap-4` — same rhythm, no compaction.
+     */
+    <main className="mx-auto flex h-dvh max-w-7xl flex-col gap-4 overflow-hidden px-4 py-8">
       <header className="space-y-1">
         <h1 className="text-xl font-semibold">Grid preview</h1>
         <p className="text-muted-foreground text-sm">

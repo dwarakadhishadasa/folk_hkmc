@@ -79,6 +79,19 @@ export const GRID_MIN_COLUMN_WIDTH = 72
 export const GRID_OVERSCAN = 12
 
 /**
+ * Stable identity for the grid's drag context.
+ *
+ * dnd-kit's `useUniqueId` assigns ids from a module-level counter when the
+ * context has no `id`, and the server and the browser keep separate counters —
+ * so without this the drag handle's `aria-describedby` differs between the two
+ * renders and React logs a hydration mismatch on every `/manage` load. A
+ * constant is the honest fix: a value derived per grid would be stable only if
+ * both sides mounted the same number of grids, which is the assumption that
+ * breaks. See the note at the `<DndContext>` for the mechanism.
+ */
+const DND_CONTEXT_ID = "grid-dnd"
+
+/**
  * NOTE: the Panel 5 edit hint ("Enter saves · Escape discards · clicking away
  * also saves") was removed along with the status strip. The edit model is still
  * what it was — clicking away *does* commit — but the grid no longer says so, so
@@ -942,10 +955,33 @@ export function Grid<TData extends RowData>({
    * grid cannot create or destroy rows" answer — a provider that always
    * existed would make an inert affordance indistinguishable from an absent one.
    */
+  /**
+   * The frame is a bounded flex column, so the scroll container takes the height
+   * it is *given* rather than asserting a viewport fraction of its own.
+   *
+   * It used to be capped at a fraction of the viewport, and that cap was the
+   * whole of the nested scrollbar and the clipped final column: a
+   * viewport-height-capped inner scroller inside a page that also scrolls gives
+   * a viewport-dependent frame, and the last column's right edge is exactly
+   * where the horizontal scrollbar's thumb sits. The fraction is deliberately
+   * unrecoverable — `harness-guards.spec.ts` scans this directory as text and
+   * bans the viewport unit outright, so it cannot be quietly reinstated here and
+   * neither can a `calc` of one against a hardcoded offset. (That guard matches
+   * the unit, so this comment deliberately spells neither, or it would fail its
+   * own rule.)
+   * `flex-1` alone would not be a fix either — free space is distributed, never
+   * created — so `min-h-0` here and on every ancestor between `main` and this
+   * element is load-bearing: a flex item's default `min-height: auto` refuses to
+   * shrink below its content, and a chain missing it silently grows the page
+   * again.
+   */
   const grid = (
     <div
       data-grid-root=""
-      className={cn("bg-card overflow-hidden rounded-md border border-border", className)}
+      className={cn(
+        "bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border",
+        className,
+      )}
     >
       <GridToolbar
         columns={toolbarColumns}
@@ -974,15 +1010,45 @@ export function Grid<TData extends RowData>({
 
       
 
+      {/*
+        The one scroll container in the primitive, and the element the virtualizer
+        measures against. `data-grid-scroll` is a new seam on this element — it
+        did not repurpose an existing one — and it exists for the *count* of
+        scroll containers, which `role`/`aria-label`/`tabIndex` cannot answer:
+        they identify which element this is, not how many others scroll.
+      */}
       <div
         ref={scrollRef}
+        data-grid-scroll=""
         role="group"
         aria-label={ariaLabel}
         tabIndex={0}
-        className="focus-visible:ring-ring/50 max-h-[70vh] overflow-auto outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
+        className="focus-visible:ring-ring/50 min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
         {...keyboard.containerProps}
       >
+        {/*
+          A literal `id`, not a generated one. `useDraggable` puts an
+          `aria-describedby` on its activator built from
+          `useUniqueId("DndDescribedBy", id)`, and that helper falls back to a
+          **module-level counter** when `id` is absent:
+
+              const id = ids[prefix] == null ? 0 : ids[prefix] + 1;
+              ids[prefix] = id;
+              return prefix + "-" + id;
+
+          Server and browser keep separate counters, so the server rendered
+          `DndDescribedBy-0` where the client produced `DndDescribedBy-3` — a
+          hydration mismatch on every `/manage` load, thrown from the drag
+          handle's `{...attributes}` spread. Supplying `id` short-circuits the
+          counter (`if (value) return value`), which makes both renders agree.
+
+          Constant rather than derived from `ariaLabel`: a per-grid suffix would
+          work only if the number of grids on the page were identical on both
+          sides, which is exactly the assumption that broke. The id is internal
+          to dnd-kit and never rendered as markup.
+        */}
         <DndContext
+          id={DND_CONTEXT_ID}
           sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}

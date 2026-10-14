@@ -17,6 +17,7 @@
  * | Selector                                | Source                        |
  * | --------------------------------------- | ----------------------------- |
  * | `[data-grid-root]`                      | `components/grid/grid.tsx`    |
+ * | `[data-grid-scroll]`                    | `grid.tsx`'s scroll container — the seam for the *count* of scroll containers, which `role`/`aria-label` cannot answer |
  * | `[role=group][aria-label=Contacts]`     | `grid.tsx`'s scroll container |
  * | `tr[data-grid-row="<id>"]`              | `components/grid/grid-row.tsx`|
  * | `[data-grid-cell="<id>~<columnId>"]`    | `gridCellKey`, same file      |
@@ -80,6 +81,64 @@ export function gridRoot(page: Page): Locator {
 /** The keyboard-owning scroll container, which is what `j`/`k` and `Tab` listen on. */
 export function gridScroll(page: Page): Locator {
   return page.getByRole("group", { name: "Contacts" })
+}
+
+/**
+ * The scroll container, addressed by its `data-grid-scroll` seam.
+ *
+ * Deliberately *not* an alias of `gridScroll`: the accessible-name locator
+ * answers "which element is the grid's scroller", and this one answers "how many
+ * elements on this page scroll". A spec that reused the role locator for a
+ * document-wide count would be measuring the query it already assumed.
+ */
+export function gridScrollSurface(page: Page): Locator {
+  return page.locator("[data-grid-scroll]")
+}
+
+/**
+ * Every element in the document that both *overflows* and has a scrolling
+ * `overflow`, described rather than merely counted.
+ *
+ * "Scrolling" means `auto`/`scroll`/`overlay` on either axis **and** actual
+ * overflow on that axis — an `overflow-auto` element that fits is not a second
+ * scrollbar, and counting it would make the single-scroller claim a claim about
+ * CSS classes rather than about what the operator can scroll. `overflow: hidden`
+ * is excluded for the same reason: it clips without offering a scrollbar.
+ *
+ * The returned descriptors are what a failure message needs, because "expected 1
+ * element, got 4" without saying which four is a debugging session rather than
+ * an assertion.
+ */
+export async function scrollingElements(page: Page): Promise<
+  Array<{ tag: string; id: string; role: string; label: string; testId: string; className: string }>
+> {
+  return page.evaluate(() => {
+    const scrolling = new Set(["auto", "scroll", "overlay"])
+
+    return Array.from(document.querySelectorAll<HTMLElement>("*")).flatMap((element) => {
+      const style = getComputedStyle(element)
+      const x = scrolling.has(style.overflowX) ? element.scrollWidth > element.clientWidth : false
+      const y = scrolling.has(style.overflowY) ? element.scrollHeight > element.clientHeight : false
+
+      if (!x && !y) return []
+
+      return [
+        {
+          tag: element.tagName.toLowerCase(),
+          id: element.id,
+          role: element.getAttribute("role") ?? "",
+          label: element.getAttribute("aria-label") ?? "",
+          testId:
+            element.getAttribute("data-grid-scroll") !== null
+              ? "data-grid-scroll"
+              : element.getAttribute("data-grid-root") !== null
+                ? "data-grid-root"
+                : "",
+          className: element.className?.toString().slice(0, 120) ?? "",
+        },
+      ]
+    })
+  })
 }
 
 /** The preview harness's scroll container — the same keyboard contract, no contacts. */

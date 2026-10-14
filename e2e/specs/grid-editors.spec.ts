@@ -546,6 +546,37 @@ test.describe("typed editor — select, on /manage", () => {
 
 test.describe("typed editor — multiselect, on /manage", () => {
   /**
+   * **A multiselect cell shows at most two values; the rest is a `+N` badge.**
+   *
+   * `multiselectEditor.renderDisplay` splits the text and renders a `Pill` for
+   * the first two entries, then a muted `+N` counting the rest. So a picked book
+   * that lands third or later is *deliberately* absent from the cell's text, and
+   * every test in this block was asserting against a string the component is
+   * built not to produce.
+   *
+   * Two consequences, both of which cost a red run here:
+   *
+   * - **The full value lives in `title`**, comma-joined. That is where an
+   *   operator reaches a collapsed value too, so asserting there is asserting the
+   *   real contract rather than working around it.
+   * - **The pills carry no separator.** Their `textContent` is the values run
+   *   together; a comma between them would be a stray visual artifact. Joining
+   *   the stored array with `", "` and asserting that as *text* was wrong about
+   *   the component, not the other way round.
+   *
+   * During a rejection the `title` is overwritten by the **error message**, so a
+   * revert is proved by the value returning once the error clears — never by
+   * reading `title` while the error stands.
+   */
+
+  test.describe.configure({ mode: "serial" })
+
+  /** Book titles carry `.`, `:` and `-`, all of which are regex-significant. */
+  function escapeForRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  }
+
+  /**
    * A book the row does not already hold.
    *
    * The control is a checklist seeded from the cell, so picking the value it
@@ -595,7 +626,10 @@ test.describe("typed editor — multiselect, on /manage", () => {
 
       await openContactsGrid(page)
       await filterGlobally(page, target.name)
-      await expect(cellIn(rowById(page, target.id), "booksRead")).toContainText(secondBook)
+      await expect(
+        cellIn(rowById(page, target.id), "booksRead"),
+        "the picked book survives the reload in the cell's full value",
+      ).toHaveAttribute("title", new RegExp(escapeForRegExp(secondBook)))
     } finally {
       await restoreContactColumn(original, "books_read")
     }
@@ -604,7 +638,7 @@ test.describe("typed editor — multiselect, on /manage", () => {
   test("rejection — an option that does not exist reverts in the cell", async ({ page }) => {
     const target = await inScopeRow(51)
     const original = await readContactColumn<string[]>([target.id], "books_read")
-    const before = (original.get(target.id) ?? []).join(", ")
+    const before = original.get(target.id) ?? []
 
     await focusContactsCell(page, target.id, target.name, "booksRead")
     await grantClipboard(page)
@@ -619,8 +653,21 @@ test.describe("typed editor — multiselect, on /manage", () => {
       )
 
       const cell = cellIn(rowById(page, target.id), "booksRead")
-      await expect(cell, "a rejected draft reverts to the stored value").toHaveText(before)
       await expect(cell, "a rejected draft is marked destructive").toHaveClass(/text-destructive/)
+      // **The error is sticky and `title` carries it while it stands.** The
+      // override writes `{ value: previousText, error: message }` and nothing
+      // clears it until the next edit, so the operator can still read *why* the
+      // write was refused. Asserting that it clears on its own would be
+      // asserting the opposite of the design.
+      await expect(cell, "and the reason stays readable while it stands").toHaveAttribute(
+        "title",
+        /is not an option/,
+      )
+      // The revert is therefore proved where it is unambiguous: the pills are the
+      // stored values again, and the database never took the rejected draft.
+      await expect(cell, "the cell is back to its stored pills, unseparated").toHaveText(
+        before.slice(0, 2).join(""),
+      )
       expect((await readContactColumn<string[]>([target.id], "books_read")).get(target.id)).toEqual(
         original.get(target.id) ?? [],
       )
@@ -648,7 +695,7 @@ test.describe("typed editor — multiselect, on /manage", () => {
       await expect(
         cellIn(rowById(page, target.id), "booksRead"),
         "the picked values must show before the response lands",
-      ).toContainText(secondBook)
+      ).toHaveAttribute("title", new RegExp(escapeForRegExp(secondBook)))
     } finally {
       await release()
       await page.unroute(SINGLE_CONTACT_ROUTE)
