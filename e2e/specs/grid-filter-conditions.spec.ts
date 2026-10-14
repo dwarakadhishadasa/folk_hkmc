@@ -38,6 +38,7 @@ import { BULK_CONTACT_COLUMNS, bulkFixtureClient, type BulkContact } from "../fi
 import {
   expectVisibleCount,
   headerCell,
+  inScopeCounts,
   manageContactsUrl,
   openColumnMenu,
   openContactsGrid,
@@ -353,7 +354,65 @@ test.describe("CAP-12 — the filter conditions popover", () => {
     await expect(operator).toHaveText("is")
   })
 
-  test("`is any of` intersects rather than substring-matching each element", async ({ page }) => {
+  test("a multiselect offers the four set operations", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Books Read", exact: true }).click()
+
+    await conditionRow(page, "booksRead").locator("[data-grid-filter-operator]").click()
+    const labels = (await page.getByRole("listbox").getByRole("option").allInnerTexts()).map((t) => t.trim())
+    await page.keyboard.press("Escape")
+
+    expect(labels).toEqual([
+      "has all of",
+      "has any of",
+      "is exactly",
+      "has none of",
+      "is empty",
+      "is not empty",
+    ])
+  })
+
+  test("a single select offers is / is not and nothing set-shaped", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Source", exact: true }).click()
+
+    await conditionRow(page, "source").locator("[data-grid-filter-operator]").click()
+    const labels = (await page.getByRole("listbox").getByRole("option").allInnerTexts()).map((t) => t.trim())
+    await page.keyboard.press("Escape")
+
+    // `any of` / `none of` on a one-valued column would be a different operator
+    // wearing the same clothes.
+    expect(labels).toEqual(["is", "is not", "is empty", "is not empty"])
+  })
+
+  test("a renamed multiselect operator still reads a shared link", async ({ page }) => {
+    const rows = await scopedContacts()
+    const withBooks = rows.filter((row) => (row.books_read ?? []).length > 0)
+    expect(withBooks.length, "the fixture must seed books_read").toBeGreaterThan(0)
+    const title = withBooks[0].books_read![0]
+
+    // `anyOf` became `hasAnyOf`. A link written before the rename must keep
+    // meaning "holds any of", not quietly become a legacy bare value.
+    await gotoGrid(page, { params: { "f.booksRead": `anyOf:${title}` } })
+    const expected = withBooks.filter((row) => (row.books_read ?? []).includes(title)).length
+    expect(expected).toBeGreaterThan(0)
+    await expectVisibleCount(page, expected)
+
+    await openPopover(page)
+    await expect(conditionRow(page, "booksRead").locator("[data-grid-filter-operator]")).toHaveText(
+      "has any of",
+    )
+  })
+
+  test("`has any of` intersects rather than substring-matching each element", async ({ page }) => {
     const rows = await scopedContacts()
     const withBooks = rows.filter((row) => (row.books_read ?? []).length > 0)
     expect(withBooks.length, "the fixture must seed books_read").toBeGreaterThan(0)
@@ -365,15 +424,71 @@ test.describe("CAP-12 — the filter conditions popover", () => {
     const prefix = title.slice(0, Math.max(2, title.length - 2))
     expect(prefix, "the needle must be a strict prefix of a real title").not.toBe(title)
 
-    await gotoGrid(page, { params: { "f.booksRead": `anyOf:${prefix}` } })
+    await gotoGrid(page, { params: { "f.booksRead": `hasAnyOf:${prefix}` } })
     await expectVisibleCount(page, 0)
 
     // The exact title does match, so the zero above is the comparison and not a
     // column that silently filters nothing.
     const exactCount = withBooks.filter((row) => (row.books_read ?? []).includes(title)).length
     expect(exactCount, "the exact title must match something").toBeGreaterThan(0)
-    await gotoGrid(page, { params: { "f.booksRead": `anyOf:${title}` } })
+    await gotoGrid(page, { params: { "f.booksRead": `hasAnyOf:${title}` } })
     await expectVisibleCount(page, exactCount)
+  })
+
+  test("`has all of`, `is exactly` and `has none of` are three different questions", async ({ page }) => {
+    const rows = await scopedContacts()
+    // A row carrying at least two distinct titles, so "all of A" and "exactly A"
+    // can disagree — which is the whole reason the rename happened.
+    const multi = rows.find((row) => new Set(row.books_read ?? []).size >= 2)
+    expect(multi, "the fixture must seed a row with two books").toBeTruthy()
+
+    const [first] = multi!.books_read!
+    const allOf = await visibleCountWith("hasAnyOf", first)
+    expect(allOf, "the exact title must match rows").toBeGreaterThan(0)
+
+    const exactly = await visibleCountWith("isExactly", first)
+    // `is exactly [one title]` matches only rows whose whole list is that one.
+    const expectedExactly = rows.filter(
+      (row) => (row.books_read ?? []).length === 1 && (row.books_read ?? [])[0] === first,
+    ).length
+    expect(exactly).toBe(expectedExactly)
+    expect(
+      exactly,
+      "`is exactly` must not mean `has all of`",
+    ).toBeLessThanOrEqual(allOf)
+
+    const noneOf = await visibleCountWith("hasNoneOf", first)
+    expect(
+      rows.length - noneOf,
+      "`has none of` must exclude exactly the rows `has any of` includes",
+    ).toBe(allOf)
+
+    async function visibleCountWith(operator: string, value: string): Promise<number> {
+      await gotoGrid(page, { params: { "f.booksRead": `${operator}:${value}` } })
+      // The count readout, not a row tally: it reports the filtered total
+      // including anything virtualised out of the DOM.
+      await expectVisibleCount(page, rows.filter(predicateFor(operator, value)).length)
+      return (await inScopeCounts(page)).visible
+    }
+
+    function predicateFor(operator: string, value: string): (row: BulkContact) => boolean {
+      return (row) => {
+        const cell = row.books_read ?? []
+
+        switch (operator) {
+          case "hasAnyOf":
+            return cell.includes(value)
+          case "hasAllOf":
+            return cell.every((entry) => entry === value)
+          case "isExactly":
+            return cell.length === 1 && cell[0] === value
+          case "hasNoneOf":
+            return !cell.includes(value)
+          default:
+            return false
+        }
+      }
+    }
   })
 
   test("one connective governs the whole list", async ({ page }) => {
@@ -729,5 +844,174 @@ test.describe("CAP-12 — the four reported defects", () => {
       "true",
     )
     await expectVisibleCount(page, 0)
+  })
+})
+
+/**
+ * Dwaraka's follow-up, 2026-10-14: an unfinished condition should not outlive
+ * the popover, the choice controls should look like dropdowns, and the stack
+ * should grow downward.
+ */
+test.describe("CAP-12 — the follow-up requests", () => {
+  test("an unfinished condition is removed when the popover closes", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await expect(conditionRow(page, "name")).toBeVisible()
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.name"))
+      .toBe("contains:")
+
+    // Walk away without typing anything.
+    await popover(page).getByRole("button", { name: "Close filters" }).click()
+    await expect(popover(page)).toHaveCount(0)
+
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.name"), {
+        message: "an abandoned, unfilled condition must not survive the close",
+      })
+      .toBeNull()
+    await expect(filterControl(page)).toHaveText(/^Filter$/)
+  })
+
+  test("`is empty` is complete without a value and must survive the close", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-operator]").click()
+    await page.getByRole("option", { name: "is empty", exact: true }).click()
+
+    await popover(page).getByRole("button", { name: "Close filters" }).click()
+    await expect(popover(page)).toHaveCount(0)
+
+    // The condition has no value BY DESIGN. Pruning it would delete the one
+    // operator whose whole meaning is an absent value.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.name"))
+      .toBe("isEmpty:")
+    await openPopover(page)
+    await expect(conditionRow(page, "name")).toBeVisible()
+  })
+
+  test("a filled condition and an unfinished one: only the unfinished one goes", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    const value = conditionRow(page, "name").locator("[data-grid-filter-value]")
+    await value.click()
+    await value.fill("a")
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.name")).toBe("contains:a")
+
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.phone"))
+      .toBe("contains:")
+
+    await popover(page).getByRole("button", { name: "Close filters" }).click()
+
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.name")).toBe("contains:a")
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.phone"))
+      .toBeNull()
+  })
+
+  test("a single select's value is chosen from a dropdown", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Source", exact: true }).click()
+
+    const row = conditionRow(page, "source")
+    await expect(row.locator("[data-grid-filter-value]")).toHaveText("Choose a value")
+
+    await row.locator("[data-grid-filter-value]").click()
+    const listbox = page.getByRole("listbox")
+    await expect(listbox).toBeVisible()
+    const options = (await listbox.getByRole("option").allInnerTexts()).map((t) => t.trim())
+    expect(options.length, "the dropdown must offer the column's own options").toBeGreaterThan(0)
+
+    await listbox.getByRole("option").first().click()
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.source"))
+      .toBe(`is:${options[0]}`)
+    await expect(row.locator("[data-grid-filter-value]")).toHaveText(options[0])
+  })
+
+  test("a multiselect's values are ticked in a dropdown", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Books Read", exact: true }).click()
+
+    const row = conditionRow(page, "booksRead")
+    // A dropdown, not the inline checkbox box the first build rendered into the
+    // row — which was taller than its own slot and broke the row's alignment.
+    const trigger = row.locator("[data-grid-filter-multi-trigger]")
+    await expect(trigger).toHaveText("Choose values")
+
+    await trigger.click()
+    const list = page.locator("[data-grid-filter-multi]")
+    await expect(list).toBeVisible()
+
+    const labels = (await list.getByRole("checkbox").allInnerTexts()).map((t) => t.trim())
+    expect(labels.length, "the dropdown must offer the column's own options").toBeGreaterThan(1)
+
+    await list.getByText(labels[0], { exact: true }).click()
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.booksRead"))
+      .toBe(`hasAllOf:${labels[0]}`)
+
+    await list.getByText(labels[1], { exact: true }).click()
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.booksRead"))
+      .toBe(`hasAllOf:${labels[0]}|${labels[1]}`)
+    await expect(trigger).toContainText(labels[0])
+    await expect(trigger).toContainText(labels[1])
+  })
+
+  test("conditions stack downward, in the order they were added", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+
+    // `name` sorts early in the grid's column order, which is exactly what made
+    // the parse rebuild the list in column order and insert this row at the top.
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.name"))
+      .toBe("contains:")
+    // `+ Add condition` offers the row's identity column first.
+    await expect(conditionRow(page, "name").locator("[data-grid-filter-field]")).toHaveText("Name")
+
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.phone")).toBe("contains:")
+
+    const order = await popover(page)
+      .locator("[data-grid-filter-condition]")
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-grid-filter-condition")))
+
+    // Top to bottom: Name, then Phone. A parse that iterated column order would
+    // yield this pair in whichever order the grid happens to sort them.
+    expect(order).toEqual(["name", "phone"])
+  })
+
+  test("the stack survives a reload in the order it was built", async ({ page }) => {
+    await gotoGrid(page, {
+      params: { "f.name": "contains:a", "f.phone": "contains:9", "f.notes": "contains:z" },
+    })
+    await openPopover(page)
+
+    const order = await popover(page)
+      .locator("[data-grid-filter-condition]")
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-grid-filter-condition")))
+
+    // The query string's own key order, which is the order they were added.
+    expect(order).toEqual(["name", "phone", "notes"])
   })
 })

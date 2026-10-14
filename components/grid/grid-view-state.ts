@@ -194,31 +194,69 @@ export function parseGridViewState(
     const columnFilters: ColumnFiltersState = []
     let filterConnective: GridFilterConnective = "all"
 
-    for (const id of columnIds) {
-      const matchAny = params.get(`fa.${id}`)
+    /**
+     * Conditions come back in the order they were ADDED, not in column order.
+     *
+     * Iterating `columnIds` here rebuilt the list in the grid's column order, so
+     * a condition added for an early-sorted column landed near the TOP of the
+     * stack instead of the bottom — the list appeared to insert itself in the
+     * middle. The query string is written in condition order by
+     * `serializeGridViewState`, and `URLSearchParams` preserves insertion order,
+     * so reading the params back in key order recovers exactly that.
+     */
+    const order: string[] = []
+    const byColumn = new Map<string, { raw: string; any: boolean }>()
 
-      if (matchAny !== null) {
-        filterConnective = "any"
-        const condition = decodeCondition(matchAny, id, fieldTypes[id])
+    for (const key of params.keys()) {
+      const any = key.startsWith("fa.")
 
-        if (condition) {
-          columnFilters.push({ id, value: condition })
-        }
-
+      if (!any && !key.startsWith("f.")) {
         continue
       }
 
-      const raw = params.get(`f.${id}`)
+      const id = key.slice(any ? 3 : 2)
+      const existing = byColumn.get(id)
+
+      // `fa.` still wins over `f.` for the same column, but the position is the
+      // first appearance of either — two entries for one column would also
+      // collide on the popover's `key`, which is the column id.
+      if (existing?.any) {
+        continue
+      }
+
+      const raw = params.get(key)
 
       // The guard is on the TOKEN, not on the trimmed value. That is the whole
       // fix for the empty-value defect: `isEmpty:` is non-empty as a whole, so
       // `Notes · is empty` round-trips instead of vanishing on reload.
-      if (raw !== null && raw.length > 0) {
-        const condition = decodeCondition(raw, id, fieldTypes[id])
+      if (raw === null || raw.length === 0) {
+        continue
+      }
 
-        if (condition) {
-          columnFilters.push({ id, value: condition })
-        }
+      if (!existing) {
+        order.push(id)
+      }
+
+      byColumn.set(id, { raw, any })
+    }
+
+    if ([...byColumn.values()].some((entry) => entry.any)) {
+      filterConnective = "any"
+    }
+
+    for (const id of order) {
+      const entry = byColumn.get(id)
+
+      // A stale column id is dropped rather than thrown on: a shared link
+      // outlives the column it names.
+      if (!entry || !known.has(id)) {
+        continue
+      }
+
+      const condition = decodeCondition(entry.raw, id, fieldTypes[id])
+
+      if (condition) {
+        columnFilters.push({ id, value: condition })
       }
     }
 

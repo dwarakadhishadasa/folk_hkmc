@@ -1,10 +1,11 @@
 "use client"
 
-import { useId, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { format, isValid, parseISO } from "date-fns"
 import type { DateRange } from "react-day-picker"
 
 import { Calendar } from "@/components/ui/calendar"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 /**
@@ -56,6 +57,18 @@ function parseBoundary(raw: string): { from?: Date; to?: Date } {
     from: isValid(from) ? from : undefined,
     to: isValid(to) ? to : undefined,
   }
+}
+
+export interface GridFilterMultiSelectControlProps {
+  /** The selected options. A list, never a single value. */
+  value: readonly string[]
+  options: readonly string[]
+  invalid: boolean
+  /** The column's label, for the trigger's accessible name. */
+  label: string
+  /** The visual language, built by the caller from its own slot constants. */
+  className: string
+  onCommit: (value: string[]) => void
 }
 
 export interface GridFilterDateControlProps {
@@ -184,6 +197,85 @@ export function GridFilterDateControl({
             setOpen(false)
           }}
         />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/**
+ * The multi-value control: a DROPDOWN of checkboxes, not an inline list.
+ *
+ * The first build rendered the options straight into the row, which gave a
+ * checkbox list taller than its own 154px slot and pushed the condition's other
+ * controls out of alignment. A dropdown keeps the row one line tall and leaves
+ * the option list room to be long.
+ *
+ * **NO APPLY BUTTON.** The commit is each tick, because the count in the
+ * toolbar is the feedback — a button would mean the value on screen and the
+ * value being filtered could disagree, which is the same class of bug as a
+ * field showing something other than what it holds.
+ *
+ * Membership is EXACT. Substring-per-element is what made "EC" match "ECE".
+ */
+export function GridFilterMultiSelectControl({
+  value,
+  options,
+  invalid,
+  label,
+  className,
+  onCommit,
+}: GridFilterMultiSelectControlProps) {
+  const selected = useMemo(() => new Set(value), [value])
+  const text = options.filter((option) => selected.has(option)).join(", ")
+  const [open, setOpen] = useState(false)
+  const listId = useId()
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-label={`${label} values`}
+          aria-invalid={invalid || undefined}
+          data-grid-filter-value=""
+          data-grid-filter-multi-trigger=""
+          className={`${className} text-left ${text.length > 0 ? "" : "text-muted-foreground"}`}
+        >
+          <span className="truncate">{text.length > 0 ? text : "Choose values"}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        id={listId}
+        align="start"
+        side="bottom"
+        data-grid-filter-multi=""
+        className="w-56 p-1"
+      >
+        {options.map((option) => (
+          <label
+            key={option}
+            className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-[13px]"
+          >
+            <Checkbox
+              checked={selected.has(option)}
+              onCheckedChange={(checked) => {
+                const next = new Set(selected)
+
+                if (checked === true) {
+                  next.add(option)
+                } else {
+                  next.delete(option)
+                }
+
+                onCommit([...next])
+              }}
+            />
+            <span className="truncate">{option}</span>
+          </label>
+        ))}
       </PopoverContent>
     </Popover>
   )

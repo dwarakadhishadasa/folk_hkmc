@@ -609,6 +609,10 @@ export function Grid<TData extends RowData>({
             label,
             fieldType,
             options: definition.meta?.grid?.editorOptions?.options,
+            // `emphasis` is already the column carrying the row's identity, so
+            // `+ Add condition` can prefer it without a second notion of
+            // "primary" existing in two places.
+            primary: definition.meta?.grid?.emphasis === true,
           },
         ]
       }),

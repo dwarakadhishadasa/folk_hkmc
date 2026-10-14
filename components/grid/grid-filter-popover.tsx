@@ -18,11 +18,12 @@ import {
 import {
   emptyCondition,
   filterOperatorsFor,
+  isConditionUnfilled,
   isConditionValueInvalid,
   type GridFilterCondition,
   type GridFilterConnective,
 } from "@/components/grid/grid-filter-operators"
-import { GridFilterDateControl } from "@/components/grid/grid-filter-value"
+import { GridFilterDateControl, GridFilterMultiSelectControl } from "@/components/grid/grid-filter-value"
 import type { GridFieldType } from "@/components/grid/grid-types"
 
 /** One column the popover can name, with whatever its value control needs. */
@@ -32,6 +33,14 @@ export interface GridFilterField {
   fieldType: GridFieldType
   /** Option labels for a select or multiselect value control. */
   options?: readonly string[]
+  /**
+   * The row's identity column, offered first by `+ Add condition`.
+   *
+   * Carried in from `meta.grid.emphasis`, which is already documented as "the
+   * one column per row that carries the row's identity". The filter surface has
+   * no business inventing a second notion of "primary".
+   */
+  primary?: boolean
 }
 
 export interface GridFilterPopoverProps {
@@ -122,7 +131,12 @@ export function GridFilterPopover({
 
   const addCondition = () => {
     const taken = new Set(conditions.map((condition) => condition.columnId))
-    const next = fields.find((field) => !taken.has(field.id))
+    const available = fields.filter((field) => !taken.has(field.id))
+
+    // The identity column first, then the rest in column order. A newly added
+    // condition is almost always about finding a person, and the first row
+    // otherwise opens on whatever column happens to sort first.
+    const next = available.find((field) => field.primary) ?? available[0]
 
     if (!next) {
       return
@@ -131,8 +145,40 @@ export function GridFilterPopover({
     onConditionsChange([...conditions, emptyCondition(next.id, next.fieldType)])
   }
 
+  /**
+   * Drops conditions the operator started and never finished.
+   *
+   * A `none`-shape operator is COMPLETE without a value — `is empty` is the
+   * whole condition — so only value-taking operators with a blank value are
+   * removed. Without this, closing the popover over a half-built row leaves it
+   * sitting there inert, reading as a filter that is on.
+   */
+  const pruneUnfilled = () => {
+    const kept = conditions.filter(
+      (condition) =>
+        !isConditionUnfilled(condition, fieldById.get(condition.columnId)?.fieldType),
+    )
+
+    if (kept.length !== conditions.length) {
+      onConditionsChange(kept)
+    }
+  }
+
+  /**
+   * Every close path goes through here — the `×`, a pointer-down outside, and
+   * Escape — so pruning cannot be routed around by the one control a user is
+   * most likely to reach for.
+   */
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      pruneUnfilled()
+    }
+
+    onOpenChange(next)
+  }
+
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{anchor}</PopoverTrigger>
       <PopoverContent
         align="start"
@@ -164,7 +210,7 @@ export function GridFilterPopover({
             aria-label="Close filters"
             className="size-6 text-muted-foreground hover:text-foreground"
             onClick={() => {
-              onOpenChange(false)
+              handleOpenChange(false)
             }}
           >
             <X aria-hidden="true" className="size-3.5" />
@@ -487,43 +533,17 @@ function FilterValueControl({
   }
 
   if (shape === "multi-option-list") {
-    const selected = new Set(Array.isArray(condition.value) ? condition.value : [])
-
-    // A multi-selectable option list, rendered inline. Membership is EXACT:
-    // substring-per-element matching is what made "EC" match "ECE".
     return (
-      <div
-        className={`${CONTROL} ${SLOT_VALUE} shrink-0 overflow-y-auto py-1`}
-        role="group"
-        aria-label={`${field?.label ?? "Value"} values`}
-      >
-        {(field?.options ?? []).map((option) => {
-          const checked = selected.has(option)
-
-          return (
-            <label
-              key={option}
-              className="flex cursor-pointer items-center gap-1.5 py-0.5 text-[12px]"
-            >
-              <Checkbox
-                checked={checked}
-                onCheckedChange={(value) => {
-                  const next = new Set(selected)
-
-                  if (value === true) {
-                    next.add(option)
-                  } else {
-                    next.delete(option)
-                  }
-
-                  onCommit([...next])
-                }}
-              />
-              <span className="truncate">{option}</span>
-            </label>
-          )
-        })}
-      </div>
+      <GridFilterMultiSelectControl
+        value={Array.isArray(condition.value) ? condition.value : []}
+        options={field?.options ?? []}
+        invalid={invalid}
+        label={field?.label ?? "Value"}
+        className={`${CONTROL} ${SLOT_VALUE} shrink-0 ${invalid ? "border-destructive" : ""}`}
+        onCommit={(value) => {
+          onCommit(value)
+        }}
+      />
     )
   }
 

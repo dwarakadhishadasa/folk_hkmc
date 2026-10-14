@@ -110,11 +110,35 @@ const BOOLEAN_OPERATORS: readonly GridFilterOperator[] = [
   { id: "is", label: "is", valueShape: "boolean" },
 ]
 
-const CHOICE_OPERATORS: readonly GridFilterOperator[] = [
+/**
+ * A single-valued choice: `is` and `is not` and nothing else.
+ *
+ * `anyOf` / `noneOf` are NOT here even though they used to be, because a single
+ * select holds one value and "any of one value" is a different operator wearing
+ * the same clothes. The multiselect set is where set membership belongs.
+ */
+const SELECT_OPERATORS: readonly GridFilterOperator[] = [
   { id: "is", label: "is", valueShape: "option-list" },
   { id: "isNot", label: "is not", valueShape: "option-list" },
-  { id: "anyOf", label: "is any of", valueShape: "multi-option-list" },
-  { id: "noneOf", label: "is none of", valueShape: "multi-option-list" },
+  { id: "isEmpty", label: NO_VALUE_OPERATORS.isEmpty, valueShape: "none" },
+  { id: "isNotEmpty", label: NO_VALUE_OPERATORS.isNotEmpty, valueShape: "none" },
+]
+
+/**
+ * A multi-valued choice. Four set operations, because a cell holding several
+ * values can be asked four genuinely different questions about which of them
+ * are present.
+ *
+ * `hasAllOf` and `isExactly` are NOT the same and must not collapse into one:
+ * a cell holding `[A, B]` satisfies `hasAllOf: A|B` and is not `[A, B]`. The
+ * old `is` meant `isExactly` and its `isNot` meant "not exactly", so the rename
+ * makes both distinctions legible instead of leaving them to be inferred.
+ */
+const MULTISELECT_OPERATORS: readonly GridFilterOperator[] = [
+  { id: "hasAllOf", label: "has all of", valueShape: "multi-option-list" },
+  { id: "hasAnyOf", label: "has any of", valueShape: "multi-option-list" },
+  { id: "isExactly", label: "is exactly", valueShape: "multi-option-list" },
+  { id: "hasNoneOf", label: "has none of", valueShape: "multi-option-list" },
   { id: "isEmpty", label: NO_VALUE_OPERATORS.isEmpty, valueShape: "none" },
   { id: "isNotEmpty", label: NO_VALUE_OPERATORS.isNotEmpty, valueShape: "none" },
 ]
@@ -133,8 +157,21 @@ export const GRID_FILTER_OPERATORS_BY_FIELD_TYPE: Record<
   number: NUMBER_OPERATORS,
   date: DATE_OPERATORS,
   boolean: BOOLEAN_OPERATORS,
-  select: CHOICE_OPERATORS,
-  multiselect: CHOICE_OPERATORS,
+  select: SELECT_OPERATORS,
+  multiselect: MULTISELECT_OPERATORS,
+}
+
+/**
+ * Operators this build RENAMED, so a shared link written before the rename
+ * still means something instead of quietly becoming a different filter.
+ *
+ * `anyOf` / `noneOf` became `hasAnyOf` / `hasNoneOf` when the multiselect set
+ * split from the select set. A link carrying `f.booksRead=anyOf:EC` must keep
+ * meaning "holds any of EC", which after the rename is `hasAnyOf:EC`.
+ */
+const RENAMED_OPERATORS: Readonly<Record<string, string>> = {
+  anyOf: "hasAnyOf",
+  noneOf: "hasNoneOf",
 }
 
 /** Every operator id across every field type — the codec's vocabulary. */
@@ -149,7 +186,7 @@ const OPERATOR_IDS: ReadonlySet<string> = new Set(
  * field type, so `decodeCondition` can round-trip a value without being handed
  * the column's type — the URL codec parses before it knows any column metadata.
  */
-const LIST_OPERATORS: ReadonlySet<string> = new Set(["anyOf", "noneOf"])
+const LIST_OPERATORS: ReadonlySet<string> = new Set(["hasAllOf", "hasAnyOf", "hasNoneOf", "isExactly"])
 
 export function filterOperatorsFor(fieldType: GridFieldType | undefined): readonly GridFilterOperator[] {
   return fieldType ? GRID_FILTER_OPERATORS_BY_FIELD_TYPE[fieldType] : TEXT_OPERATORS
@@ -279,21 +316,34 @@ export function decodeCondition(raw: string, columnId: string, fieldType?: GridF
   const separator = raw.indexOf(OPERATOR_SEPARATOR)
   const head = separator === -1 ? "" : raw.slice(0, separator)
 
-  if (separator === -1 || !OPERATOR_IDS.has(head)) {
-    const operator = legacyOperatorFor(fieldType)
+  // A head this build renamed, resolved ONLY when the column's own type offers
+  // the new id — so a select column reading `anyOf:` does not inherit a
+  // multiselect operator it has never heard of and match nothing.
+  const renamed = RENAMED_OPERATORS[head]
+  const operator =
+    renamed !== undefined && findFilterOperator(fieldType, renamed) ? renamed : undefined
 
-    return raw.length > 0 ? { columnId, operator, value: raw } : null
+  if (separator === -1 || (operator === undefined && !OPERATOR_IDS.has(head))) {
+    const legacy = legacyOperatorFor(fieldType)
+
+    // A renamed head that this column does not offer is stripped rather than
+    // left inside the value: keeping `anyOf:` as part of the needle would
+    // filter for a string the operator never typed.
+    const value = renamed !== undefined && separator !== -1 ? raw.slice(separator + 1) : raw
+
+    return value.length > 0 ? { columnId, operator: legacy, value } : null
   }
 
+  const resolved = operator ?? head
   const rest = raw.slice(separator + 1)
 
-  if (LIST_OPERATORS.has(head)) {
+  if (LIST_OPERATORS.has(resolved)) {
     const value = splitList(rest)
 
-    return value.length > 0 ? { columnId, operator: head, value } : null
+    return value.length > 0 ? { columnId, operator: resolved, value } : null
   }
 
-  return { columnId, operator: head, value: unescapeListEntry(rest) }
+  return { columnId, operator: resolved, value: unescapeListEntry(rest) }
 }
 
 // ---------------------------------------------------------------------------
@@ -448,6 +498,35 @@ export function isConditionValueInvalid(
 }
 
 /**
+ * Whether a condition is one the operator started and never finished.
+ *
+ * `is empty` is NOT unfinished despite having no value — it is the whole
+ * condition. What counts as unfinished is an operator that takes a value, whose
+ * value is blank, and which the operator then walked away from: closing the
+ * popover over it should not leave a dead row behind that reads as a filter.
+ *
+ * An unknown operator is left alone rather than called unfinished. It is
+ * reported through `aria-invalid` instead, and pruning it would silently
+ * discard whatever a shared link asked for.
+ */
+export function isConditionUnfilled(
+  condition: GridFilterCondition,
+  fieldType: GridFieldType | undefined,
+): boolean {
+  const operator = findFilterOperator(fieldType, condition.operator)
+
+  if (!operator || operator.valueShape === "none") {
+    return false
+  }
+
+  if (Array.isArray(condition.value)) {
+    return condition.value.length === 0
+  }
+
+  return condition.value.trim().length === 0
+}
+
+/**
  * Whether one row satisfies one condition.
  *
  * A condition with an unusable value matches nothing, and a null cell is
@@ -556,15 +635,6 @@ export function evaluateCondition(
     case "select": {
       const cell = String(cellValue ?? "").trim().toLowerCase()
       const needle = raw.trim().toLowerCase()
-      const wanted = Array.isArray(condition.value) ? condition.value : [raw]
-
-      if (operator.valueShape === "multi-option-list") {
-        // Intersection by exact element membership. The substring-per-element
-        // behaviour this replaces made "EC" match "ECE".
-        const hit = cell.length > 0 && wanted.some((entry) => entry.trim().toLowerCase() === cell)
-
-        return operator.id === "noneOf" ? !hit : hit
-      }
 
       return operator.id === "isNot" ? cell !== needle : cell === needle
     }
@@ -572,20 +642,23 @@ export function evaluateCondition(
     case "multiselect": {
       const cell = stringEntries(cellValue)
       const wanted = stringEntries(condition.value)
+      // EXACT element membership. Substring-per-element is what made "EC" match
+      // "ECE", and it is the reason these are set operations and not text ones.
+      const every = wanted.length > 0 && wanted.every((entry) => cell.includes(entry))
+      const some = wanted.some((entry) => cell.includes(entry))
 
-      if (operator.valueShape === "multi-option-list") {
-        const hit = cell.some((entry) => wanted.includes(entry))
-
-        return operator.id === "noneOf" ? !hit : hit
+      switch (operator.id) {
+        case "hasAllOf":
+          return every
+        case "hasAnyOf":
+          return some
+        case "isExactly":
+          return wanted.length > 0 && every && cell.length === wanted.length
+        case "hasNoneOf":
+          return !some
+        default:
+          return false
       }
-
-      if (wanted.length === 0) {
-        return false
-      }
-
-      const every = cell.length === wanted.length && wanted.every((entry) => cell.includes(entry))
-
-      return operator.id === "isNot" ? !every : every
     }
 
     default: {
