@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 
@@ -121,16 +121,42 @@ export function GridFilterPopover({
 }: GridFilterPopoverProps) {
   const fieldById = new Map(fields.map((field) => [field.id, field]))
 
+  /**
+   * The freshest conditions, for the close-time prune.
+   *
+   * A condition change does not reach this component's `conditions` prop
+   * immediately — it round-trips through the URL, which in dev takes a second or
+   * two. So choosing an operator and closing straight after left the prune
+   * reading the PREVIOUS conditions, and it deleted the row the operator had
+   * just made complete: pick `is empty`, hit the `×`, and the `is empty` filter
+   * vanished because the prune still saw `contains` with a blank value.
+   *
+   * Every local change records its result here synchronously, so the prune sees
+   * what the operator just did. The effect re-syncs from the prop, which is what
+   * keeps Back, a shared link and `Clear all` honest — those change the
+   * conditions from outside and never pass through here.
+   */
+  const conditionsRef = useRef(conditions)
+
+  useEffect(() => {
+    conditionsRef.current = conditions
+  }, [conditions])
+
+  const commit = (next: GridFilterCondition[]) => {
+    conditionsRef.current = next
+    onConditionsChange(next)
+  }
+
   const replace = (next: GridFilterCondition) => {
-    onConditionsChange(
-      conditions.map((condition) =>
+    commit(
+      conditionsRef.current.map((condition) =>
         condition.columnId === next.columnId ? next : condition,
       ),
     )
   }
 
   const addCondition = () => {
-    const taken = new Set(conditions.map((condition) => condition.columnId))
+    const taken = new Set(conditionsRef.current.map((condition) => condition.columnId))
     const available = fields.filter((field) => !taken.has(field.id))
 
     // The identity column first, then the rest in column order. A newly added
@@ -142,7 +168,7 @@ export function GridFilterPopover({
       return
     }
 
-    onConditionsChange([...conditions, emptyCondition(next.id, next.fieldType)])
+    commit([...conditionsRef.current, emptyCondition(next.id, next.fieldType)])
   }
 
   /**
@@ -154,13 +180,14 @@ export function GridFilterPopover({
    * sitting there inert, reading as a filter that is on.
    */
   const pruneUnfilled = () => {
-    const kept = conditions.filter(
+    const current = conditionsRef.current
+    const kept = current.filter(
       (condition) =>
         !isConditionUnfilled(condition, fieldById.get(condition.columnId)?.fieldType),
     )
 
-    if (kept.length !== conditions.length) {
-      onConditionsChange(kept)
+    if (kept.length !== current.length) {
+      commit(kept)
     }
   }
 
@@ -275,8 +302,8 @@ export function GridFilterPopover({
                     // new id — `replace` looks its target up by `columnId`, and on
                     // a field change those two differ, so replacing by the new id
                     // matches nothing and silently leaves the old condition alone.
-                    onConditionsChange(
-                      conditions.map((entry) =>
+                    commit(
+                      conditionsRef.current.map((entry) =>
                         entry.columnId === condition.columnId
                           ? { ...fresh, value: keepList ? condition.value : fresh.value }
                           : entry,
@@ -345,7 +372,9 @@ export function GridFilterPopover({
                   aria-label={`Delete ${field?.label ?? condition.columnId} condition`}
                   className="text-muted-foreground hover:text-destructive size-8 shrink-0"
                   onClick={() => {
-                    onConditionsChange(conditions.filter((entry) => entry.columnId !== condition.columnId))
+                    commit(
+                      conditionsRef.current.filter((entry) => entry.columnId !== condition.columnId),
+                    )
                   }}
                 >
                   <Trash2 aria-hidden="true" className="size-4" strokeWidth={1.5} />
@@ -517,6 +546,7 @@ function FilterValueControl({
       >
         <SelectTrigger
           aria-label={`${field?.label ?? "Value"} value`}
+          data-grid-filter-value=""
           className={`${TRIGGER} ${SLOT_FIELD} shrink-0`}
         >
           <SelectValue placeholder="Choose a value" />

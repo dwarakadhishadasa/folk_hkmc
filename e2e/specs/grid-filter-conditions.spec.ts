@@ -526,15 +526,33 @@ test.describe("CAP-12 — the filter conditions popover", () => {
   })
 
   test("a null date cell is excluded rather than compared", async ({ page }) => {
-    // No seeder writes a date column, so every row's date is null. `is after`
-    // with a real boundary must exclude all of them and not crash.
     const rows = await scopedContacts()
-    await gotoGrid(page, { params: { "f.dateOfBirth": "after:2020-01-01" } })
-    await expectVisibleCount(page, 0)
-    expect(rows.length).toBeGreaterThan(0)
+    const boundary = "2020-01-01"
 
-    // And the honest negative control: a boundary that excludes everything by the
-    // same rule would look identical if the null branch were silently true.
+    // Computed from the data, NOT from an assumption that no row has a date. An
+    // earlier version of this test asserted 0 because it believed the seeder
+    // never wrote `dateOfBirth`; it now writes two, so the assertion failed for
+    // a reason that had nothing to do with the code under test.
+    const withDate = rows.filter((row) => (row.date_of_birth ?? "") !== "")
+    const withoutDate = rows.filter((row) => (row.date_of_birth ?? "") === "")
+    const afterBoundary = withDate.filter((row) => String(row.date_of_birth).slice(0, 10) > boundary)
+
+    // The test is only meaningful if nulls actually exist here -- otherwise
+    // "nulls are excluded" is true of an empty set and proves nothing.
+    expect(withoutDate.length, "the fixture must seed null dates for this test to mean anything").toBeGreaterThan(0)
+
+    await gotoGrid(page, { params: { "f.dateOfBirth": `after:${boundary}` } })
+    await expectVisibleCount(page, afterBoundary.length)
+
+    // The null rows are the point: they are excluded, never compared. If the
+    // null branch were absent they would either crash or be silently included.
+    expect(
+      afterBoundary.length,
+      "a null date must not be compared against the boundary",
+    ).toBeLessThan(withoutDate.length)
+
+    // And the honest negative control: a condition that IS satisfiable on the
+    // same data, so the count above is a comparison rather than an accident.
     await gotoGrid(page, { params: { "f.name": "isEmpty:" } })
     const withoutName = rows.filter((row) => (row.name ?? "").trim().length === 0)
     await expectVisibleCount(page, withoutName.length)
@@ -815,7 +833,14 @@ test.describe("CAP-12 — the four reported defects", () => {
     await expect(calendar).toBeVisible()
 
     const days = calendar.locator("td:not([data-outside]) button[data-day]")
-    await days.nth(2).click()
+    // Resolved BY DAY, not by index: the first click re-renders the calendar, and
+    // an index-based locator re-resolves against the new DOM — pointing at a
+    // different day, or at a node that was detached mid-click.
+    const first = await days.nth(2).getAttribute("data-day")
+    const second = await days.nth(6).getAttribute("data-day")
+    expect(first && second, "the calendar must name its days").toBeTruthy()
+
+    await calendar.locator(`button[data-day="${first}"]`).click()
 
     // The first click alone must NOT commit a half-built range: a span with one
     // end is unparseable and would match nothing while looking finished.
@@ -825,7 +850,7 @@ test.describe("CAP-12 — the four reported defects", () => {
       "one click is not yet a span",
     ).not.toMatch(/\.\./)
 
-    await days.nth(6).click()
+    await calendar.locator(`button[data-day="${second}"]`).click()
 
     await expect(calendar).toHaveCount(0)
     await expect
@@ -942,7 +967,27 @@ test.describe("CAP-12 — the follow-up requests", () => {
     await expect(row.locator("[data-grid-filter-value]")).toHaveText(options[0])
   })
 
-  test("a multiselect's values are ticked in a dropdown", async ({ page }) => {
+  test("a freshly added multiselect condition survives the URL round trip", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Books Read", exact: true }).click()
+
+    // The regression: a set operator's empty value encodes to `hasAllOf:`, and a
+    // decoder that treated an empty list as "no condition" dropped the row the
+    // moment the debounced write landed — picking the column looked impossible.
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.booksRead")).toBe("hasAllOf:")
+    await expect(conditionRow(page, "booksRead")).toBeVisible()
+    await expect(conditionRow(page, "booksRead").locator("[data-grid-filter-operator]")).toHaveText(
+      "has all of",
+    )
+    // Still inert, not filtering everything out.
+    await expectVisibleCount(page, (await scopedContacts()).length)
+})
+
+test("a multiselect's values are ticked in a dropdown", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
     await popover(page).getByRole("button", { name: "Add condition" }).click()
@@ -960,7 +1005,9 @@ test.describe("CAP-12 — the follow-up requests", () => {
     const list = page.locator("[data-grid-filter-multi]")
     await expect(list).toBeVisible()
 
-    const labels = (await list.getByRole("checkbox").allInnerTexts()).map((t) => t.trim())
+    // The checkbox itself carries no text -- the label is a sibling span -- so
+    // the option text has to be read from the rows, not from the checkboxes.
+    const labels = (await list.locator("label > span").allInnerTexts()).map((t) => t.trim())
     expect(labels.length, "the dropdown must offer the column's own options").toBeGreaterThan(1)
 
     await list.getByText(labels[0], { exact: true }).click()
@@ -974,6 +1021,61 @@ test.describe("CAP-12 — the follow-up requests", () => {
       .toBe(`hasAllOf:${labels[0]}|${labels[1]}`)
     await expect(trigger).toContainText(labels[0])
     await expect(trigger).toContainText(labels[1])
+  })
+
+  test("a long list of chosen values truncates instead of overflowing", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Books Read", exact: true }).click()
+
+    const trigger = conditionRow(page, "booksRead").locator("[data-grid-filter-multi-trigger]")
+    await trigger.click()
+    const list = page.locator("[data-grid-filter-multi]")
+    await expect(list).toBeVisible()
+
+    const labels = (await list.locator("label > span").allInnerTexts()).map((t) => t.trim())
+    // Enough of them that the joined text cannot possibly fit 154px.
+    const chosen = labels.slice(0, Math.min(4, labels.length))
+    expect(chosen.length, "the fixture must offer several books").toBeGreaterThanOrEqual(3)
+
+    for (const label of chosen) {
+      await list.getByText(label, { exact: true }).click()
+    }
+
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.booksRead")).toBe(
+      `hasAllOf:${chosen.join("|")}`,
+    )
+
+    // The visible text is clipped to the control's own box. An inline span
+    // ignores `overflow: hidden`, so this is what regressed: the value spilled
+    // out over its neighbours as soon as a couple of books were ticked.
+    //
+    // **MEASURED BY CONTAINMENT, NOT BY `scrollWidth`.** The first version of
+    // this assertion read `span.scrollWidth - el.clientWidth`, which is
+    // inverted and passed on the very bug it was written to catch. `scrollWidth`
+    // is CONTENT width whether or not the content is clipped, so a correctly
+    // truncated span reports the full text width and the assertion went red on
+    // the fix; and `scrollWidth` is 0 for a non-replaced INLINE element, so the
+    // inline span — the defect — reported 0 and passed. It cannot distinguish a
+    // spilling value from a clipped one, because a clipped value and a spilling
+    // one have the same content width. The question this test actually asks is
+    // whether the span's PAINTED box sits inside the control, so it compares
+    // right edges. Do not restore `scrollWidth` here.
+    const overflow = await trigger.evaluate((el) => {
+      const span = el.querySelector("span")
+
+      if (span === null) {
+        return -1
+      }
+
+      return span.getBoundingClientRect().right - el.getBoundingClientRect().right
+    })
+
+    expect(overflow, "the value must not be wider than its own control").toBeLessThanOrEqual(0)
+    await expect(trigger).toHaveAttribute("title", chosen.join(", "))
   })
 
   test("conditions stack downward, in the order they were added", async ({ page }) => {

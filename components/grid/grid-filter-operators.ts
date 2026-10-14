@@ -296,7 +296,9 @@ export function encodeCondition(condition: GridFilterCondition): string {
  * `call: 9900` does not become an operator called `call`.
  *
  * Returns `null` only when the token cannot name a condition at all: an empty
- * token, or an empty list for `anyOf`.
+ * token. An empty VALUE and an empty LIST both decode, because `+ Add
+ * condition` produces exactly those for a value-taking and a set operator
+ * respectively.
  *
  * A `none`-shape operator (`isEmpty:`) is never an empty token and always
  * decodes — that is the whole point of the operator travelling inside the value,
@@ -338,9 +340,13 @@ export function decodeCondition(raw: string, columnId: string, fieldType?: GridF
   const rest = raw.slice(separator + 1)
 
   if (LIST_OPERATORS.has(resolved)) {
-    const value = splitList(rest)
-
-    return value.length > 0 ? { columnId, operator: resolved, value } : null
+    // An empty list DECODES, as an empty value does. `+ Add condition` on a
+    // multiselect produces exactly `hasAllOf:` — the type's first operator is a
+    // set operator and nothing has been ticked yet — and returning `null` here
+    // made that condition vanish on the way back through the URL, so picking a
+    // multiselect column looked like it was not possible at all. Inert, not
+    // invalid: it matches every row until something is ticked.
+    return { columnId, operator: resolved, value: splitList(rest) }
   }
 
   return { columnId, operator: resolved, value: unescapeListEntry(rest) }

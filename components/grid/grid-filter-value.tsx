@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useMemo, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import { format, isValid, parseISO } from "date-fns"
 import type { DateRange } from "react-day-picker"
 
@@ -150,18 +150,21 @@ export function GridFilterDateControl({
           data-grid-filter-calendar-trigger=""
           className={`${className} text-left ${text ? "" : "text-muted-foreground"}`}
         >
-          <span className="truncate">{text ?? (range ? "Choose a range" : "Choose a date")}</span>
+          {/* `block`, because `truncate` does nothing on an inline element. See
+           * the same note on the multi-select trigger. */}
+          <span className="block truncate">{text ?? (range ? "Choose a range" : "Choose a date")}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
         id={calendarId}
         align="start"
         side="bottom"
+        collisionPadding={8}
         data-grid-filter-calendar=""
-        className="w-auto p-0"
-        // The calendar is wider than the slot it serves and must not be clipped
-        // by it, so it is allowed to overflow rather than being sized to the
-        // trigger's 154px column.
+        // Same clamp as the multi-select list, and for the same reason: a
+        // calendar on a low row must scroll inside the room Radix has rather
+        // than flip upward and run off the top of the viewport.
+        className="max-h-[var(--radix-popover-content-available-height)] w-auto overflow-y-auto p-0"
       >
         <Calendar
           mode="range"
@@ -217,6 +220,82 @@ export function GridFilterDateControl({
  *
  * Membership is EXACT. Substring-per-element is what made "EC" match "ECE".
  */
+
+/**
+ * Keeps the ticked set on screen while the URL catches up with it.
+ *
+ * This is the list-shaped twin of `useConditionValueDraft` in
+ * `grid-filter-popover.tsx`, and it is a deliberate sibling rather than a shared
+ * generic: that hook compares with `===`, and a list needs a key, and one
+ * caller does not justify the equality parameter a generic would have to thread
+ * through. Keep them in step by hand.
+ *
+ * **WITHOUT THIS, TICKING SEVERAL OPTIONS LOSES ALL BUT THE LAST.** Each tick
+ * committed `new Set(value) ± one`, where `value` is the URL-backed prop. The
+ * commit reaches the URL behind the 250 ms debounce plus a `router.replace`, so
+ * for a quarter second after a tick `value` is still the PREVIOUS set — and
+ * ticking four options in under a second made every tick build on a stale
+ * empty set, each overwriting the last, leaving exactly one option chosen. The
+ * list showed four boxes ticked while the URL held one, which is the worst
+ * shape this surface has: the control and the filter disagreeing, with the
+ * count in the toolbar agreeing with neither until the last write landed.
+ *
+ * So: the draft is authoritative, surrendered only once the committed set has
+ * caught up with it. A focus flag is not enough — closing the list can beat the
+ * write — and neither is "reconcile whenever they differ", because during that
+ * 250 ms they legitimately differ. Identical reasoning to the text draft; read
+ * that hook's comment for the full argument.
+ */
+function useMultiSelectDraft(
+  committed: readonly string[],
+  onCommit: (value: string[]) => void,
+): [Set<string>, (next: Set<string>) => void] {
+  // Order is part of the identity: `encodeCondition` joins the array in order,
+  // so a reorder is a real change to the committed token and must not be
+  // mistaken for the write having caught up. A NUL cannot appear in an option.
+  const committedKey = committed.join("\u0000")
+
+  const [draft, setDraft] = useState<Set<string>>(() => new Set(committed))
+  const [draftKey, setDraftKey] = useState(committedKey)
+  const [pending, setPending] = useState(false)
+
+  // Catch up on anything that arrived from OUTSIDE this control — Back, Forward,
+  // a shared link, `Clear all`, a URL edit — while nothing of ours is in flight.
+  //
+  // Reconstructed from the KEY rather than from `committed`, so the dependency
+  // list is exactly what this reads. `committed` is a fresh array on every
+  // render, and depending on its identity would reconcile the draft away on
+  // every render instead of only when the committed set actually changed — and
+  // an empty key is unambiguously the empty set, because an empty option cannot
+  // survive the codec (`splitList` drops empty entries).
+  useEffect(() => {
+    if (!pending) {
+      setDraft(new Set(committedKey.length === 0 ? [] : committedKey.split("\u0000")))
+      setDraftKey(committedKey)
+    }
+  }, [committedKey, pending])
+
+  // Our own write landed. Dropping the flag is what hands the display back to
+  // the committed set instead of leaving two sources of truth in step.
+  useEffect(() => {
+    if (pending && committedKey === draftKey) {
+      setPending(false)
+    }
+  }, [committedKey, draftKey, pending])
+
+  return [
+    draft,
+    (next: Set<string>) => {
+      const value = [...next]
+
+      setDraft(next)
+      setDraftKey(value.join("\u0000"))
+      setPending(true)
+      onCommit(value)
+    },
+  ]
+}
+
 export function GridFilterMultiSelectControl({
   value,
   options,
@@ -225,7 +304,7 @@ export function GridFilterMultiSelectControl({
   className,
   onCommit,
 }: GridFilterMultiSelectControlProps) {
-  const selected = useMemo(() => new Set(value), [value])
+  const [selected, commitSelected] = useMultiSelectDraft(value, onCommit)
   const text = options.filter((option) => selected.has(option)).join(", ")
   const [open, setOpen] = useState(false)
   const listId = useId()
@@ -243,16 +322,31 @@ export function GridFilterMultiSelectControl({
           data-grid-filter-value=""
           data-grid-filter-multi-trigger=""
           className={`${className} text-left ${text.length > 0 ? "" : "text-muted-foreground"}`}
+          // The full list is always reachable, because the visible one is
+          // truncated to whatever fits the slot.
+          title={text.length > 0 ? text : undefined}
         >
-          <span className="truncate">{text.length > 0 ? text : "Choose values"}</span>
+          {/* `block` is load-bearing, not decoration. `truncate` is
+           * `overflow: hidden; text-overflow: ellipsis; white-space: nowrap`, and
+           * none of those do anything on an INLINE element — the text simply
+           * spilled out of the 154px slot and over its neighbours as soon as a
+           * few books were ticked. */}
+          <span className="block truncate">{text.length > 0 ? text : "Choose values"}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
         id={listId}
         align="start"
         side="bottom"
+        collisionPadding={8}
         data-grid-filter-multi=""
-        className="w-56 p-1"
+        // The height clamp is load-bearing. Radix flips this list upward when the
+        // row sits low, but flipping alone does not make it FIT: a 15-option list
+        // is ~480px and only ~400px was above the trigger, so it ran off the top
+        // of the viewport and its first options could not be clicked at all.
+        // `--radix-popover-content-available-height` is the room Radix actually
+        // has, so the list scrolls inside it instead of escaping the screen.
+        className="max-h-[var(--radix-popover-content-available-height)] w-56 overflow-y-auto p-1"
       >
         {options.map((option) => (
           <label
@@ -262,6 +356,9 @@ export function GridFilterMultiSelectControl({
             <Checkbox
               checked={selected.has(option)}
               onCheckedChange={(checked) => {
+                // `selected` is the DRAFT, not the URL-backed prop, so a second
+                // tick in the same tick-window builds on the first instead of
+                // overwriting it. See `useMultiSelectDraft`.
                 const next = new Set(selected)
 
                 if (checked === true) {
@@ -270,7 +367,7 @@ export function GridFilterMultiSelectControl({
                   next.delete(option)
                 }
 
-                onCommit([...next])
+                commitSelected(next)
               }}
             />
             <span className="truncate">{option}</span>
