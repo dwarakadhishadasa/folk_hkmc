@@ -8,6 +8,8 @@ import {
   applyGridParams,
   parseGridViewState,
   serializeGridViewState,
+  type GridColumnFieldTypes,
+  type GridFilterConnective,
   type GridViewState,
 } from "@/components/grid/grid-view-state"
 
@@ -16,9 +18,13 @@ export const GRID_FILTER_DEBOUNCE_MS = 250
 export interface GridViewStateController {
   /** URL-derived table state. The URL is the only source of truth. */
   state: Partial<TableState>
+  /** Governs the whole condition list — one connective, never per condition. */
+  filterConnective: GridFilterConnective
   /** TanStack's controlled `onStateChange`, accepting both updater forms. */
   onStateChange: OnChangeFn<TableState>
-  /** Clears `q`, every `f.<colId>` and `sort` from the URL. */
+  /** Writes a connective without disturbing the conditions it governs. */
+  setFilterConnective: (connective: GridFilterConnective) => void
+  /** Clears `q`, every `f.<colId>`, every `fa.<colId>` and `sort`. */
   clearFilters: () => void
   /**
    * Escape hatch for in-flight interaction. A column-resize drag holds its
@@ -36,6 +42,12 @@ export interface GridViewStateController {
 export interface UseGridViewStateOptions {
   /** Column ids in default display order. The URL codec validates against this. */
   columnIds: readonly string[]
+  /**
+   * Column ids to their `meta.grid.fieldType`. The codec needs it to read a bare,
+   * operator-less token: `contains` for text and `gte` for a number are different
+   * readings of the same legacy link.
+   */
+  fieldTypes?: GridColumnFieldTypes
 }
 
 const COLUMN_KEY_SEPARATOR = "\u0000"
@@ -49,11 +61,12 @@ function splitColumnKey(columnKey: string): string[] {
 }
 
 /** Only the grid-owned slice of the table state survives a URL round trip. */
-function pickGridState(state: Partial<TableState>): GridViewState {
+function pickGridState(state: Partial<TableState>, connective: GridFilterConnective): GridViewState {
   return {
     sorting: state.sorting ?? [],
     globalFilter: typeof state.globalFilter === "string" ? state.globalFilter : "",
     columnFilters: state.columnFilters ?? [],
+    filterConnective: connective,
     columnOrder: state.columnOrder ?? [],
     columnVisibility: state.columnVisibility ?? {},
     columnSizing: state.columnSizing ?? {},
@@ -70,6 +83,7 @@ function sameExceptFilters(previous: GridViewState, next: GridViewState): boolea
 
 export function useGridViewState({
   columnIds,
+  fieldTypes,
 }: UseGridViewStateOptions): GridViewStateController {
   const router = useRouter()
   const pathname = usePathname()
@@ -80,10 +94,19 @@ export function useGridViewState({
   // column set actually changes.
   const columnKey = joinColumnKey(columnIds)
 
-  const state = useMemo<Partial<TableState>>(
-    () => parseGridViewState(searchParams, splitColumnKey(columnKey)),
-    [searchParams, columnKey],
+  const parsed = useMemo(
+    () => parseGridViewState(searchParams, splitColumnKey(columnKey), fieldTypes),
+    // `columnKey` rather than `columnIds`: consumers pass a fresh array literal
+    // each render, and re-parsing the query on every render would make the parse
+    // outrun the debounced write that is meant to feed it.
+    [searchParams, columnKey, fieldTypes],
   )
+
+  // The connective is not table state — TanStack has no such field — so it is
+  // read here and threaded into every write explicitly rather than smuggled
+  // through the state object the table also receives.
+  const { filterConnective, ...tableState } = parsed
+  const state: Partial<TableState> = tableState
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const transientRef = useRef(false)
@@ -98,10 +121,10 @@ export function useGridViewState({
   }, [])
 
   const write = useCallback(
-    (next: Partial<TableState>, mode: "push" | "replace") => {
+    (next: Partial<TableState>, mode: "push" | "replace", connective: GridFilterConnective) => {
       const query = applyGridParams(
         searchParams,
-        serializeGridViewState(pickGridState(next), columnIds),
+        serializeGridViewState(pickGridState(next, connective), columnIds),
       ).toString()
 
       if (query === searchParams.toString()) {
@@ -120,14 +143,14 @@ export function useGridViewState({
   )
 
   const scheduleFilterWrite = useCallback(
-    (next: Partial<TableState>) => {
+    (next: Partial<TableState>, connective: GridFilterConnective) => {
       if (debounceRef.current !== null) {
         clearTimeout(debounceRef.current)
       }
 
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null
-        write(next, "replace")
+        write(next, "replace", connective)
       }, GRID_FILTER_DEBOUNCE_MS)
     },
     [write],
@@ -145,27 +168,40 @@ export function useGridViewState({
         return
       }
 
-      const previous = pickGridState(state)
-      const resolved = pickGridState(next)
+      const previous = pickGridState(state, filterConnective)
+      const resolved = pickGridState(next, filterConnective)
 
       if (sameExceptFilters(previous, resolved)) {
-        write(next, "push")
+        write(next, "push", filterConnective)
       } else {
-        scheduleFilterWrite(next)
+        scheduleFilterWrite(next, filterConnective)
       }
     },
-    [scheduleFilterWrite, state, write],
+    [filterConnective, scheduleFilterWrite, state, write],
+  )
+
+  const setFilterConnective = useCallback(
+    (next: GridFilterConnective) => {
+      // A `push`, not a debounced `replace`: switching the connective is a
+      // discrete act that moves every condition between the `f.` and `fa.` key
+      // families at once, so it belongs in history rather than in a typing-style
+      // debounce window.
+      write(state, "push", next)
+    },
+    [state, write],
   )
 
   const clearFilters = useCallback(() => {
-    // Clears `q`, every `f.<colId>` and `sort`, and deliberately keeps the
-    // arrangement (`cols`, `hide`, `size.*`): an operator who filtered their way
-    // down to one view and cleared the filter text did not ask to lose it.
+    // Clears `q`, every `f.<colId>`, every `fa.<colId>` and `sort`, and
+    // deliberately keeps the arrangement (`cols`, `hide`, `size.*`): an operator
+    // who filtered their way down to one view and cleared the filter text did not
+    // ask to lose it. Back to match-all for the same reason — the connective
+    // governs a list that no longer exists.
     const query = applyGridParams(
       searchParams,
       serializeGridViewState(
         {
-          ...pickGridState(state),
+          ...pickGridState(state, "all"),
           sorting: [],
           globalFilter: "",
           columnFilters: [],
@@ -189,9 +225,9 @@ export function useGridViewState({
     pendingRef.current = null
 
     if (pending) {
-      write(pending, "push")
+      write(pending, "push", filterConnective)
     }
-  }, [write])
+  }, [filterConnective, write])
 
   const cancelTransientChange = useCallback(() => {
     transientRef.current = false
@@ -200,7 +236,9 @@ export function useGridViewState({
 
   return {
     state,
+    filterConnective,
     onStateChange,
+    setFilterConnective,
     clearFilters,
     beginTransientChange,
     commitTransientChange,

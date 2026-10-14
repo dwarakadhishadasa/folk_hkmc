@@ -223,6 +223,30 @@ Suite determinism PASSED — 2 consecutive green runs.
 190 tests, twice, with no manual reset between the runs — which is the bar this
 map set for itself and not a new one.
 
+### Row 17 re-verified under CAP-12 — the filter moved, the verdict did not
+
+`spec-contacts-premium-grid` story 6 replaced the filter **surface**: the
+per-column popovers are gone, and filtering is one popover anchored under the
+toolbar's Filter control holding a visible list of `Field · operator · value`
+conditions joined by one all-or-nothing connective. It also changed the
+**encoding** — `f.<colId>` now carries `<operator>:<value>` rather than a bare
+value — which is what makes an empty value (`Notes · is empty`) round-trip at
+all, where it was previously dropped in both directions.
+
+Row 17's claim is untouched: it narrows on the joined location name, composes
+with the global filter, and round-trips through the URL. What changed is that the
+URL it round-trips through is read as a **legacy operator-less token** — `contains`
+for a text column — so an existing shared link still narrows to the same rows.
+Row 17's evidence is that same assertion, re-run under the new codec.
+
+A new spec, `e2e/specs/grid-filter-conditions.spec.ts` (18 tests), carries the
+CAP-12 claims themselves — the operator registry per field type, the disabled
+value control, the reset on a field change, `is any of` intersection, the two
+source defects, match-all and match-any, and the unparseable-date branch that
+must match nothing AND say so. Like the CAP-10 spec above it sits **outside**
+this 19-row map: none of the 19 rows is about the filter surface, and adding a
+twentieth row for it would claim coverage this foundation never specified.
+
 
 ## The blocking prerequisite: row volume — **now exists**
 

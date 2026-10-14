@@ -56,21 +56,26 @@ const DEFAULT_ORDER = [
 ]
 
 test.describe("column menu, drag-and-drop and the sort popover", () => {
-  test("menu 1 — the column menu holds exactly Sort ascending, Sort descending, Hide column", async ({
+  test("menu 1 — the column menu holds exactly Sort ascending, Sort descending, Hide column, Filter", async ({
     page,
   }) => {
     await openContactsGrid(page)
     await openColumnMenu(page, "phone", "Phone")
 
+    // FOUR, not three. CAP-14 names exactly these four, and the fourth arrived
+    // with the filter conditions popover: story 2 shipped three deliberately, so
+    // that no menu item ever pointed at a filter surface that did not exist yet.
     const items = page.getByRole("menuitem")
-    await expect(items).toHaveCount(3)
+    await expect(items).toHaveCount(4)
     await expect(items.nth(0)).toHaveAccessibleName("Sort ascending")
     await expect(items.nth(1)).toHaveAccessibleName("Sort descending")
     await expect(items.nth(2)).toHaveAccessibleName("Hide column")
+    await expect(items.nth(3)).toHaveAccessibleName("Filter")
 
-    // The removed Move items and the story-6 Filter item must not be here: a
-    // Filter item would point at a surface that does not exist yet.
-    await expect(page.getByRole("menuitem", { name: /Move left|Move right|Filter/ })).toHaveCount(0)
+    // The removed Move items stay gone. `Filter` is asserted above instead:
+    // it is no longer a promise of a future surface, it is the item that opens
+    // the one toolbar-anchored popover.
+    await expect(page.getByRole("menuitem", { name: /Move left|Move right/ })).toHaveCount(0)
     await page.keyboard.press("Escape")
   })
 
@@ -296,10 +301,10 @@ test.describe("column menu, drag-and-drop and the sort popover", () => {
       })
       .toBe("notes")
 
-    // The menu is one of three items even on the last action: reopening
+    // The menu carries all four items even on the last action: reopening
     // elsewhere still shows the full surface.
     await openColumnMenu(page, "phone", "Phone")
-    await expect(page.getByRole("menuitem")).toHaveCount(3)
+    await expect(page.getByRole("menuitem")).toHaveCount(4)
     await page.keyboard.press("Escape")
   })
 })

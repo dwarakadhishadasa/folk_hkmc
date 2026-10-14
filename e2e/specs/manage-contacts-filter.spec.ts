@@ -88,12 +88,18 @@ test.describe("filtering, sorting and the empty scope", () => {
     const broadVisible = await filterGlobally(page, BROAD_NEEDLE)
     expect(broadVisible).toBeGreaterThan(expected.size)
 
-    // DELIBERATE CONTRACT CHANGE (story 2 of spec-contacts-premium-grid,
-    // CAP-14): the header's per-column filter popover is removed — headers
-    // carry no funnel button until the filter conditions bar (story 6) lands.
-    // What this row covers is the narrowing semantics and the `f.location`
-    // round-trip, not the retired control, so the filter is driven through the
-    // URL it round-trips through instead.
+    // STILL DRIVEN THROUGH THE URL, and deliberately so. The header's per-column
+    // filter popover is gone (story 2, CAP-14) and the toolbar conditions popover
+    // that replaced it (story 6, CAP-12) does not offer `location` as a
+    // composition-driven control this spec could rely on. What this row covers is
+    // the narrowing semantics and the `f.location` round-trip, not the control
+    // that sets them — so the filter is driven the way a shared link drives it.
+    //
+    // `f.location` is now a bare-LEGACY token: story 6 puts the operator inside
+    // the value, and an operator-less token still reads as `contains`, which is
+    // exactly what this assertion and the counts below were written against.
+    // Nothing rewrites the URL on load, so the param keeps its literal spelling
+    // here — and that is the point: an existing shared link still works.
     await page.goto(manageContactsUrl({ params: { q: BROAD_NEEDLE, "f.location": LOCATION_NEEDLE } }))
     await expect
       .poll(() => new URL(page.url()).searchParams.get("f.location"), {

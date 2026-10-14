@@ -159,6 +159,16 @@
   --color-ivory: var(--ivory);
   --color-charcoal: var(--charcoal);
   --color-teal: var(--teal);
+
+  /* An overlay surface floating over content — the filter popover, and the
+   * filter conditions the reference composition draws on it. The elevation is
+   * tinted with the royal navy rather than black so the shadow reads as the
+   * same surface receding, not as a grey haze. A token rather than a literal so
+   * `components/grid/` can use it: that directory is scanned as text and banned
+   * from raw colour, `rgb(` and `rgba(` outright. */
+  --shadow-overlay:
+    0 10px 25px -5px rgba(15, 30, 84, 0.12),
+    0 8px 10px -6px rgba(15, 30, 84, 0.08);
 }
 
 @layer base {

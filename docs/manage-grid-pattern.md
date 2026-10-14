@@ -55,7 +55,7 @@ scrolled away.
 | `fieldType: <GridFieldType>` | Names what the cell **holds**, resolved through the registry in `components/grid/grid-cell-renderers.tsx`. Independent of `editor` — see below. |
 | `unresolvedText` | The marker a `linked` accessor substitutes for an id its lookup cannot resolve. Pairs with `fieldType: "linked"`. |
 | `emphasis: true` | Marks the one column per row that carries the row's identity. Weight and space only, never a colour. |
-| `filter: "text" \| "number"` | Supplies the column's value type and its `filterFn` |
+| `fieldType` is also the filter registry key | Every column declaring a `fieldType` is filterable, and `grid-filter-operators.ts` decides its operator set from it. It is read again for a bare, operator-less URL token. |
 | `align`, `tabular` | Reaches the cell directly |
 | `frozen: true` | Joins the pinned run |
 | `selectable: true` | Row-selection control: joins the pinned run ahead of the identity column |
@@ -106,11 +106,14 @@ so rewording the marker cannot silently stop it being recognised.
 Never derive a label from the id. `?? id` printed a raw UUID into the cell, into
 its `title`, and out through the clipboard; that fallback is what this replaced.
 
-`filter` used to do a second job — choosing the per-column filter popover
-control. That control is gone: headers carry no funnel button, and the filter
-conditions bar (story 6 of the premium-grid spec) reads this key only as a
-value type when it lands. What survives is the first job, supplying `filterFn`
-so `f.<colId>` keeps filtering after the control moved.
+`filter` is gone. It used to do two jobs: choose the per-column filter popover
+control, and supply a value type. The control went with the per-column popover
+(CAP-14) and the value type went with the operator, which now travels inside the
+filter condition itself — so the second job had nothing left to do.
+`gridConditionFilter(fieldType)` is the single per-column filter fn, and
+`gridTextFilterFn` / `gridNumberFilterFn` are deleted along with the key.
+`fieldType` already answered the same question for every column; two keys holding
+one fact is how they drift.
 
 For the select column set `enableSorting: false` and `enableHiding: false` on the def as well; the
 metadata expresses intent, the flags express behaviour.
@@ -447,7 +450,8 @@ name — density and row selection are the two deliberate exceptions, and both a
 | --- | --- |
 | `sort` | `colId:asc[,colId:desc]` in priority order |
 | `q` | Global filter text |
-| `f.<colId>` | Per-column filter |
+| `f.<colId>` | One condition, ANDed across columns. Value is `<operator>:<value>` — see below |
+| `fa.<colId>` | One condition, ORed across columns. Present only when the connective is match-any |
 | `cols` | Ordered, comma-joined column ids |
 | `hide` | Hidden column ids, comma-joined |
 | `size.<colId>` | Committed column width in integer px |
@@ -455,6 +459,19 @@ name — density and row selection are the two deliberate exceptions, and both a
 `applyGridParams` starts from a copy of the live params and touches only grid-owned keys, which is
 what keeps `?mode=admin|preacher` byte-identical across every write. Never add a URL write that
 strips it.
+
+**A condition token is `<operator>:<value>`, and the operator must travel.** The token is split on
+the FIRST `:`, so a value containing `:` needs no escaping and `is:call: 9900` recovers `call: 9900`.
+This is what makes an empty value round-trip: `isEmpty:` is eight characters, so it is never
+indistinguishable from an absent condition. An operator-less token is legacy and still reads — as
+`contains`, or `gte` for a number, because that is what the old per-column filters did to it.
+`fa.` must stay in `GRID_PARAM_PREFIXES`: `applyGridParams` deletes every grid-owned key before
+writing, so an unregistered prefix is silently erased on the first write.
+
+**The connective is carried by the prefix, not by a flag.** `f.` means all-of, `fa.` means any-of,
+and match-any is on exactly when some `fa.` key exists. A `fm=any` param would be a second way to
+say the same thing and the two could disagree. Because one connective governs the whole list, both
+cases are sets of columns: nothing is order-sensitive and no list is ever parsed.
 
 `sort` is written by the global sort popover (one field plus one direction, cleared to absent);
 `cols` is written once per header drop through the transient handle, and only when the resulting
@@ -634,11 +651,20 @@ Known gaps at the time of writing:
   Every geometry assertion must wait for `tr[data-grid-row]` to exist first — see
   `waitForRenderedRows` in `grid-scroll-surface.spec.ts`, and the same poll in
   `grid-cell-metrics.spec.ts`.
-- No `Select`-based column filter. The contacts port replaced a sentinel-valued dropdown with
-  per-column filter popovers, which compose with the global filter instead of replacing it.
-  The popovers are now removed again — headers carry no filter control until the filter
-  conditions bar (premium-grid story 6) lands, and `f.<colId>` round-trips through the URL
-  meanwhile.
+- The per-column filter popovers are gone and are not coming back. Filtering is one popover anchored
+  under the toolbar's Filter control, holding a visible list of `Field · operator · value` conditions
+  joined by one all-or-nothing connective. Headers carry no filter control at all (CAP-14), and the
+  column menu's fourth item opens that same popover with its column pre-filled rather than opening a
+  popover of its own.
+- **No relative-date presets reach the URL.** A date condition serializes an ABSOLUTE `YYYY-MM-DD`
+  boundary, computed when the preset is chosen, so a shared link does not quietly mean something
+  different tomorrow and no assertion depends on the wall clock. A `within` condition carries a range,
+  `from..to`.
+- **Match-any is evaluated outside TanStack.** The per-column chain ANDs column filters and this
+  version of the table exposes no row-id hook, so in match-any mode the union is computed over the
+  source rows and the table is handed the survivors with an empty `columnFilters`, leaving the global
+  `q` filter to compose on top. The `no-records` / `no-matches` distinction therefore reads the
+  SOURCE row count, not what the table was handed.
 - The favorite star is no longer the only row action — the row lifecycle's delete control sits in its
   own `actions` column. A row-action *menu* is the obvious next primitive if more per-row actions
   appear.

@@ -3,14 +3,28 @@ export {
   GRID_DEFAULT_COLUMN_WIDTH,
   GRID_MIN_COLUMN_WIDTH,
   GRID_OVERSCAN,
+  gridConditionFilter,
   gridGlobalFilterFn,
-  gridNumberFilterFn,
-  gridTextFilterFn,
   isPinnedRunIntact,
   resolveColumnDropOrder,
   type GridColumnDef,
   type GridProps,
 } from "@/components/grid/grid"
+export {
+  GRID_FILTER_OPERATORS_BY_FIELD_TYPE,
+  decodeCondition,
+  emptyCondition,
+  encodeCondition,
+  evaluateCondition,
+  filterOperatorsFor,
+  findFilterOperator,
+  isConditionValueInvalid,
+  type GridFilterCondition,
+  type GridFilterConnective,
+  type GridFilterOperator,
+  type GridFilterValueShape,
+} from "@/components/grid/grid-filter-operators"
+export { GridFilterPopover, type GridFilterField } from "@/components/grid/grid-filter-popover"
 export { GRID_EDITOR_KEYS, resolveGridEditor } from "@/components/grid/grid-editors"
 export type {
   GridEditorContext,

@@ -10,6 +10,7 @@ import {
   ArrowUp,
   ArrowUpNarrowWide,
   ChevronsUpDown,
+  ListFilter,
   MoreHorizontal,
 } from "lucide-react"
 
@@ -37,6 +38,12 @@ export interface GridHeaderCellProps {
   isSortable: boolean
   canHide: boolean
   onHide: () => void
+  /**
+   * Opens the ONE toolbar-anchored filter popover with this column's condition
+   * pre-filled. It deliberately does not open a popover of its own: the thirteen
+   * per-column funnels this replaces must not come back.
+   */
+  onFilter: (columnId: string) => void
   /**
    * Whether this header carries a drag activator. False for every column in
    * the pinned run: a pinned column is not draggable — no handle, no
@@ -101,6 +108,7 @@ export function GridHeaderCell({
   isSortable,
   canHide,
   onHide,
+  onFilter,
   canDrag,
   suppressMenu,
   sortableColumns,
@@ -216,6 +224,10 @@ export function GridHeaderCell({
                   <DropdownMenuSeparator />
                   <DropdownMenuItem disabled={!canHide} onSelect={onHide}>
                     Hide column
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onFilter(columnId)}>
+                    <ListFilter aria-hidden="true" />
+                    Filter
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

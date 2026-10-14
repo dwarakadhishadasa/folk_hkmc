@@ -314,6 +314,11 @@ export async function openCellEditorAtCorner(cell: Locator): Promise<void> {
  * each of which applies the sort immediately and opens the sort popover
  * prefilled. The popover is dismissed before returning so later assertions see
  * the settled grid, not an open overlay.
+ *
+ * The menu holds FOUR items since premium-grid story 6 — Sort ascending, Sort
+ * descending, Hide column, Filter — and this helper addresses items by name, not
+ * by index, so the fourth changed nothing here. Assert the count where the count
+ * is the claim: `grid-column-drag-menu.spec.ts`.
  */
 export async function toggleSort(
   page: Page,

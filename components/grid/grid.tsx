@@ -40,9 +40,17 @@ import {
   GridRowLifecycleProvider,
 } from "@/components/grid/grid-row-lifecycle"
 import { GridToolbar, type GridToolbarColumn } from "@/components/grid/grid-toolbar"
+import {
+  emptyCondition,
+  evaluateCondition,
+  type GridFilterCondition,
+  type GridFilterConnective,
+} from "@/components/grid/grid-filter-operators"
+import type { GridFilterField } from "@/components/grid/grid-filter-popover"
 import type {
   GridCellCommitHandler,
   GridDensity,
+  GridFieldType,
   GridEditErrorHandler,
   GridFrozenColumn,
   GridPanelState,
@@ -146,47 +154,27 @@ export function gridGlobalFilterFn<TData extends RowData>(
   return normalizeFilterValue(cellValue).includes(needle)
 }
 
-/** `meta.grid.filter === "text"`: normalized substring. */
-export function gridTextFilterFn<TData extends RowData>(
-  row: Row<TData>,
-  columnId: string,
-  value: unknown,
-): boolean {
-  return gridGlobalFilterFn(row, columnId, value)
-}
-
 /**
- * `meta.grid.filter === "number"`: keeps rows at or above the entered value.
+ * Builds a column's filter fn. Every filterable column resolves through this and
+ * no longer chooses its own comparison — the operator travels inside the
+ * condition, so the comparison is decided by the condition, not the column.
  *
- * The built-in `auto` resolution would pick `equalsNumber` for a numeric column
- * and compare it against a string, which matches nothing, so the numeric filter
- * has to be explicit.
+ * The field type is bound here rather than read off the row per row: `Row` does
+ * not expose its column, and a per-row lookup to reach one would be a map access
+ * on the hottest path in the table for a value that never changes.
  */
-export function gridNumberFilterFn<TData extends RowData>(
-  row: Row<TData>,
-  columnId: string,
-  value: unknown,
-): boolean {
-  const raw = String(value ?? "").trim()
+export function gridConditionFilter<TData extends RowData>(
+  fieldType: GridFieldType | undefined,
+): (row: Row<TData>, columnId: string, value: unknown) => boolean {
+  return (row, columnId, value) => {
+    const condition = value as GridFilterCondition | undefined
 
-  if (raw.length === 0) {
-    return true
+    if (!condition || typeof condition.operator !== "string") {
+      return true
+    }
+
+    return evaluateCondition(row.getValue(columnId), condition, fieldType)
   }
-
-  const threshold = Number(raw)
-
-  if (!Number.isFinite(threshold)) {
-    return true
-  }
-
-  const cellValue = row.getValue(columnId)
-  const numeric = typeof cellValue === "number" ? cellValue : Number(cellValue)
-
-  if (!Number.isFinite(numeric)) {
-    return false
-  }
-
-  return numeric >= threshold
 }
 
 /**
@@ -340,6 +328,31 @@ function forUrlWriter(state: Partial<TableState>): TableState {
 }
 
 /**
+ * Reads one cell out of a raw row, the same way TanStack would.
+ *
+ * `ColumnDef` is a union over its accessor forms, so `in` is what narrows it —
+ * a cast would hide a consumer whose def matches neither and silently read
+ * `undefined` for every row. Grid defs are flat leaves, so the depth argument is
+ * always 0.
+ */
+function columnAccessor<TData extends RowData>(
+  definition: GridColumnDef<TData>,
+): (row: TData) => unknown {
+  if ("accessorFn" in definition && typeof definition.accessorFn === "function") {
+    const accessorFn = definition.accessorFn
+
+    return (row) => accessorFn(row, 0)
+  }
+
+  const id = definition.id ?? ""
+  const accessorKey = "accessorKey" in definition && typeof definition.accessorKey === "string"
+    ? definition.accessorKey
+    : id
+
+  return (row) => (row as Record<string, unknown>)[accessorKey]
+}
+
+/**
  * Builds the order a header drop commits, or null when the drop names a
  * column that is not in the order.
  *
@@ -414,6 +427,12 @@ export interface GridProps<TData extends RowData> {
   /** Controlled table state. `useGridViewState` supplies it, URL-derived. */
   state: Partial<TableState>
   onStateChange: OnChangeFn<TableState>
+  /**
+   * Match-all or match-any across the condition list. One value for the whole
+   * list — never per condition.
+   */
+  filterConnective?: GridFilterConnective
+  onFilterConnectiveChange?: (connective: GridFilterConnective) => void
   /**
    * Receives the resolved selection whenever it changes.
    *
@@ -492,6 +511,8 @@ export function Grid<TData extends RowData>({
   getRowId,
   state,
   onStateChange,
+  filterConnective = "all",
+  onFilterConnectiveChange = () => {},
   onRowSelectionChange,
   ariaLabel,
   density,
@@ -516,18 +537,14 @@ export function Grid<TData extends RowData>({
       columns.map((definition, index) => {
         const id = resolveColumnId(definition, index)
         const withId = { ...definition, id } as GridColumnDef<TData>
-        const filterKind = withId.meta?.grid?.filter
+        const fieldType = withId.meta?.grid?.fieldType
 
         return {
           ...withId,
           size: withId.size ?? GRID_DEFAULT_COLUMN_WIDTH,
-          filterFn:
-            withId.filterFn ??
-            (filterKind === "number"
-              ? gridNumberFilterFn
-              : filterKind === "text"
-                ? gridTextFilterFn
-                : undefined),
+          // Every column that declares a `fieldType` is filterable. A column
+          // with no `fieldType` has no operators and stays unfiltered.
+          filterFn: withId.filterFn ?? (fieldType ? gridConditionFilter(fieldType) : undefined),
         } as GridColumnDef<TData>
       }),
     [columns],
@@ -537,6 +554,21 @@ export function Grid<TData extends RowData>({
     () => columnDefinitions.map((definition) => definition.id ?? "").filter((id) => id.length > 0),
     [columnDefinitions],
   )
+
+  const fieldTypeByColumnId = useMemo(() => {
+    const types: Record<string, GridFieldType> = {}
+
+    for (const definition of columnDefinitions) {
+      const id = definition.id ?? ""
+      const fieldType = definition.meta?.grid?.fieldType
+
+      if (id.length > 0 && fieldType) {
+        types[id] = fieldType
+      }
+    }
+
+    return types
+  }, [columnDefinitions])
 
   const consumerRenderers = useMemo(() => resolveConsumerRenderers(columns), [columns])
 
@@ -550,6 +582,135 @@ export function Grid<TData extends RowData>({
 
     return labels
   }, [columnDefinitions])
+
+  /**
+   * The columns the popover may name: every one that declares a `fieldType`.
+   * Built from the grid's own defs rather than supplied by the consumer, so a
+   * column cannot be filterable without the operators that make it filterable.
+   *
+   * `options` comes from `editorOptions` because that is where a select or
+   * multiselect column already declares its allowed values — a second copy of
+   * that list in the filter surface is a second thing to forget to update.
+   */
+  const filterFields = useMemo<GridFilterField[]>(
+    () =>
+      columnDefinitions.flatMap((definition) => {
+        const id = definition.id ?? ""
+        const fieldType = definition.meta?.grid?.fieldType
+        const label = labelById.get(id) ?? definition.header
+
+        if (id.length === 0 || !fieldType || typeof label !== "string") {
+          return []
+        }
+
+        return [
+          {
+            id,
+            label,
+            fieldType,
+            options: definition.meta?.grid?.editorOptions?.options,
+          },
+        ]
+      }),
+    [columnDefinitions, labelById],
+  )
+
+  const [filterOpen, setFilterOpen] = useState(false)
+
+  // The column id lives on the TanStack filter entry and the rest of the
+  // condition lives in its value; the two are reunited here so nothing downstream
+  // has to know that split. `state` is read rather than `tableState`, because in
+  // match-any mode the table's copy has been emptied on purpose.
+  const parsedConditions = useMemo<GridFilterCondition[]>(
+    () =>
+      (state.columnFilters ?? []).flatMap((entry) => {
+        const value = entry.value as GridFilterCondition
+
+        return value && typeof value.operator === "string" ? [{ ...value, columnId: entry.id }] : []
+      }),
+    [state.columnFilters],
+  )
+
+  const handleConditionsChange = useCallback(
+    (next: GridFilterCondition[]) => {
+      // Spreads `state`, not `tableState`: in match-any mode `tableState` has
+      // emptied `columnFilters`, and writing that back would erase every
+      // condition the moment one of them was edited.
+      onStateChange(
+        forUrlWriter({
+          ...state,
+          columnFilters: next.map((condition) => ({ id: condition.columnId, value: condition })),
+        }),
+      )
+    },
+    [onStateChange, state],
+  )
+
+  /**
+   * The column menu's Filter item: add this column's condition if it has none,
+   * then open the ONE toolbar-anchored popover with it selected. It never opens a
+   * popover of its own — the thirteen per-column funnels this replaces must not
+   * come back, and a second surface would be a second truth.
+   *
+   * Deferred a frame for the same reason `openSortPopover` is: the menu's close
+   * returns focus to its trigger, which is outside the popover, and opening in
+   * the same tick lets Radix read that focus return as a dismiss.
+   */
+  const handleFilterColumn = useCallback(
+    (columnId: string) => {
+      if (!parsedConditions.some((condition) => condition.columnId === columnId)) {
+        const fieldType = fieldTypeByColumnId[columnId]
+
+        handleConditionsChange([...parsedConditions, emptyCondition(columnId, fieldType)])
+      }
+
+      requestAnimationFrame(() => {
+        setFilterOpen(true)
+      })
+    },
+    [fieldTypeByColumnId, handleConditionsChange, parsedConditions],
+  )
+
+  /**
+   * Match-ANY needs the union of the conditions, which the per-column chain
+   * cannot produce — TanStack ANDs column filters and this version has no
+   * `filterFromRowIds` hook. So in match-any mode the union is evaluated here
+   * against the source rows and the table is handed the surviving rows with an
+   * EMPTY `columnFilters`, leaving the global `q` filter to compose on top
+   * exactly as it does in match-all mode.
+   *
+   * Both modes run the same `evaluateCondition`; the only difference is whether
+   * the AND happens in TanStack or here.
+   */
+  const conditionedRows = useMemo<TData[]>(() => {
+    if (filterConnective !== "any" || parsedConditions.length === 0) {
+      return rows
+    }
+
+    const readById = new Map<string, (row: TData) => unknown>()
+    const typeById = new Map<string, GridFieldType | undefined>()
+
+    for (const definition of columnDefinitions) {
+      const id = definition.id ?? ""
+
+      if (id.length === 0) {
+        continue
+      }
+
+      typeById.set(id, definition.meta?.grid?.fieldType)
+      readById.set(id, columnAccessor(definition))
+    }
+
+    return rows.filter((row) =>
+      parsedConditions.some((condition) =>
+        evaluateCondition(
+          readById.get(condition.columnId)?.(row),
+          condition,
+          typeById.get(condition.columnId),
+        ),
+      ),
+    )
+  }, [columnDefinitions, filterConnective, parsedConditions, rows])
 
   /**
    * The width being dragged, held locally for the duration of one gesture. The
@@ -572,14 +733,17 @@ export function Grid<TData extends RowData>({
       ...state,
       sorting: state.sorting ?? [],
       globalFilter: state.globalFilter ?? "",
-      columnFilters: state.columnFilters ?? [],
+      // Match-any has already been applied to `conditionedRows`, and TanStack
+      // would AND anything left in here on top of it — so the table is told there
+      // are no column filters. `state` keeps them for the indicator and the URL.
+      columnFilters: filterConnective === "any" ? [] : state.columnFilters ?? [],
       columnOrder: state.columnOrder ?? columnIds,
       columnVisibility: state.columnVisibility ?? {},
       columnSizing: dragWidth
         ? { ...committedColumnSizing, [dragWidth.columnId]: dragWidth.size }
         : committedColumnSizing,
     }
-  }, [columnIds, dragWidth, state])
+  }, [columnIds, dragWidth, filterConnective, state])
 
   const tableRef = useRef<Table<TData> | null>(null)
 
@@ -678,7 +842,7 @@ export function Grid<TData extends RowData>({
   )
 
   const table = useReactTable({
-    data: rows,
+    data: conditionedRows,
     columns: columnDefinitions,
     getRowId,
     state: tableState,
@@ -725,6 +889,10 @@ export function Grid<TData extends RowData>({
       return { kind: "ready" }
     }
 
+    // `rows` is the SOURCE count, not what the table was handed: in match-any mode
+    // `conditionedRows` is what TanStack holds, so reading its length here would
+    // report a filter that matched nothing as "no records" — the wrong panel, and
+    // the wrong answer to "did my filter do anything".
     return { kind: "empty", reason: rows.length === 0 ? "no-records" : "no-matches" }
   }, [panel, rowModel.length, rows.length])
 
@@ -997,6 +1165,13 @@ export function Grid<TData extends RowData>({
         visibleCount={rowModel.length}
         totalCount={rows.length}
         frozenColumnIds={frozenColumnIds}
+        filterFields={filterFields}
+        conditions={parsedConditions}
+        onConditionsChange={handleConditionsChange}
+        filterConnective={filterConnective}
+        onFilterConnectiveChange={onFilterConnectiveChange}
+        filterOpen={filterOpen}
+        onFilterOpenChange={setFilterOpen}
         rowAction={
           rowLifecycle ? (
             <GridRowAddControl
@@ -1106,6 +1281,7 @@ export function Grid<TData extends RowData>({
                     onHide={() => {
                       column.toggleVisibility(false)
                     }}
+                    onFilter={handleFilterColumn}
                     resizeHandler={header.getResizeHandler()}
                     render={renderHeaderNode(header, consumerRenderers.headers)}
                   />

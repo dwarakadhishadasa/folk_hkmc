@@ -9,7 +9,8 @@
  * | -------------- | ---------------------------------------------------- |
  * | `sort`         | `colId:asc[,colId:desc]` in priority order           |
  * | `q`            | global filter text                                   |
- * | `f.<colId>`    | per-column filter                                    |
+ * | `f.<colId>`    | one condition, ANDed across columns                  |
+ * | `fa.<colId>`   | one condition, ORed across columns                   |
  * | `cols`         | ordered, comma-joined column ids                     |
  * | `hide`         | hidden column ids, comma-joined                      |
  * | `size.<colId>` | committed column width in integer px                 |
@@ -23,6 +24,18 @@
  *    grid-owned keys. `?mode=admin|preacher` is the CAP-10 carrier; dropping it
  *    would silently promote a Preacher following a shared link into admin
  *    scope, and this grid is the one thing on a `/manage` page rewriting URLs.
+ *
+ * **The connective is carried by the prefix, not by a flag.** `f.` means "all of
+ * these", `fa.` means "any of these", and match-any is on exactly when some `fa.`
+ * key is present. A `fm=any` param would be a second way to say the same thing
+ * and the two could disagree — a link could carry `fm=any` and no `fa.` keys,
+ * which means nothing. Because one connective governs the whole list, both cases
+ * are SETS of columns: nothing is order-sensitive, and no list is ever parsed.
+ *
+ * **A condition token is never empty.** `f.<colId>` holds `<operator>:<value>`,
+ * so `is empty` serializes as `isEmpty:` — eight characters — and survives the
+ * length guards that used to drop it in both directions. See
+ * `grid-filter-operators.ts` for the token grammar.
  */
 
 import type {
@@ -32,16 +45,34 @@ import type {
   VisibilityState,
 } from "@tanstack/react-table"
 
+import {
+  decodeCondition,
+  encodeCondition,
+  type GridFilterCondition,
+  type GridFilterConnective,
+} from "@/components/grid/grid-filter-operators"
+import type { GridFieldType } from "@/components/grid/grid-types"
+
 /** Exact query keys the grid owns. */
 export const GRID_PARAM_KEYS = ["q", "sort", "cols", "hide"] as const
 
-/** Query key prefixes the grid owns. */
-export const GRID_PARAM_PREFIXES = ["f.", "size."] as const
+/**
+ * Query key prefixes the grid owns.
+ *
+ * `fa.` joins `f.` and `size.` because it is a filter prefix. Omitting it does not
+ * merely fail to read — `applyGridParams` deletes every grid-owned key before
+ * writing, so an unregistered prefix is silently erased on the first write.
+ */
+export const GRID_PARAM_PREFIXES = ["f.", "fa.", "size."] as const
+
+export type { GridFilterCondition, GridFilterConnective }
 
 export interface GridViewState {
   sorting: SortingState
   globalFilter: string
   columnFilters: ColumnFiltersState
+  /** Governs the whole `columnFilters` list. Never per condition. */
+  filterConnective: GridFilterConnective
   /** Always a complete permutation of the known column ids, in display order. */
   columnOrder: string[]
   /** Absent key means visible; only explicitly hidden ids are present. */
@@ -54,10 +85,14 @@ const EMPTY_VIEW_STATE: GridViewState = {
   sorting: [],
   globalFilter: "",
   columnFilters: [],
+  filterConnective: "all",
   columnOrder: [],
   columnVisibility: {},
   columnSizing: {},
 }
+
+/** Column ids to the field type that decides an operator-less token's meaning. */
+export type GridColumnFieldTypes = Readonly<Record<string, GridFieldType | undefined>>
 
 export function isGridParamKey(key: string): boolean {
   return (
@@ -72,6 +107,35 @@ function splitList(value: string): string[] {
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0)
+}
+
+/**
+ * Narrows a TanStack column-filter value to a condition.
+ *
+ * TanStack types that value as `unknown`, so anything can arrive here — including
+ * the bare strings this module used to write. Anything without an operator is
+ * treated as a legacy bare value and given the connective's default meaning by
+ * `decodeCondition` on the next read, so a value that entered from outside the
+ * popover is never silently dropped.
+ */
+function asCondition(value: unknown): GridFilterCondition | null {
+  if (typeof value === "string") {
+    return value.length > 0 ? { columnId: "", operator: "contains", value } : null
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const candidate = value as Partial<GridFilterCondition>
+
+    if (typeof candidate.operator === "string" && candidate.operator.length > 0) {
+      return {
+        columnId: candidate.columnId ?? "",
+        operator: candidate.operator,
+        value: candidate.value ?? "",
+      }
+    }
+  }
+
+  return null
 }
 
 function parseSizingValue(raw: string | null): number | null {
@@ -98,6 +162,7 @@ function parseSizingValue(raw: string | null): number | null {
 export function parseGridViewState(
   params: URLSearchParams,
   columnIds: readonly string[],
+  fieldTypes: GridColumnFieldTypes = {},
 ): GridViewState {
   const known = new Set(columnIds)
 
@@ -123,12 +188,37 @@ export function parseGridViewState(
       }
     }
 
+    // Match-any wins over match-all rather than merging: one connective governs
+    // the whole list, so a link carrying both prefixes is not two lists to
+    // reconcile — it is one list whose connective is `any`.
     const columnFilters: ColumnFiltersState = []
+    let filterConnective: GridFilterConnective = "all"
+
     for (const id of columnIds) {
+      const matchAny = params.get(`fa.${id}`)
+
+      if (matchAny !== null) {
+        filterConnective = "any"
+        const condition = decodeCondition(matchAny, id, fieldTypes[id])
+
+        if (condition) {
+          columnFilters.push({ id, value: condition })
+        }
+
+        continue
+      }
+
       const raw = params.get(`f.${id}`)
 
-      if (raw !== null && raw.trim().length > 0) {
-        columnFilters.push({ id, value: raw })
+      // The guard is on the TOKEN, not on the trimmed value. That is the whole
+      // fix for the empty-value defect: `isEmpty:` is non-empty as a whole, so
+      // `Notes · is empty` round-trips instead of vanishing on reload.
+      if (raw !== null && raw.length > 0) {
+        const condition = decodeCondition(raw, id, fieldTypes[id])
+
+        if (condition) {
+          columnFilters.push({ id, value: condition })
+        }
       }
     }
 
@@ -168,6 +258,7 @@ export function parseGridViewState(
       sorting,
       globalFilter: params.get("q") ?? "",
       columnFilters,
+      filterConnective,
       columnOrder: ordered,
       columnVisibility,
       columnSizing,
@@ -201,16 +292,24 @@ export function serializeGridViewState(
     params.q = globalFilter
   }
 
+  const connective = state.filterConnective ?? "all"
+  const conditionPrefix = connective === "any" ? "fa." : "f."
+
   for (const filter of state.columnFilters ?? []) {
     if (!known.has(filter.id) || filter.value === undefined || filter.value === null) {
       continue
     }
 
-    const value = String(filter.value)
+    // A condition that failed to decode is not written back. The old code wrote
+    // any non-empty string, which is how a stale or foreign value became a URL
+    // the next reload had to interpret again.
+    const condition = asCondition(filter.value)
 
-    if (value.length > 0) {
-      params[`f.${filter.id}`] = value
+    if (!condition) {
+      continue
     }
+
+    params[`${conditionPrefix}${filter.id}`] = encodeCondition(condition)
   }
 
   const order = (state.columnOrder ?? []).filter((id) => known.has(id))

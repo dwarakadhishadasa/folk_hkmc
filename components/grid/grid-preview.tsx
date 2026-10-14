@@ -80,19 +80,19 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
       id: "owner",
       header: "Owner",
       size: 200,
-      meta: { grid: { editable: true, fieldType: "text", filter: "text" as const } },
+      meta: { grid: { editable: true, fieldType: "text" } },
     }),
     columnHelper.accessor("region", {
       id: "region",
       header: "Region",
       size: 130,
-      meta: { grid: { fieldType: "text", filter: "text" as const } },
+      meta: { grid: { fieldType: "text" } },
     }),
     columnHelper.accessor("status", {
       id: "status",
       header: "Status",
       size: 120,
-      meta: { grid: { fieldType: "text", filter: "text" as const } },
+      meta: { grid: { fieldType: "text" } },
     }),
     columnHelper.accessor("volume", {
       id: "volume",
@@ -101,7 +101,6 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
       meta: {
           grid: {
             fieldType: "number",
-            filter: "number" as const,
             align: "right" as const,
             tabular: true,
           },
@@ -141,7 +140,6 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
           fieldType: "number",
           align: "right",
           tabular: true,
-          filter: "number",
         },
       },
     }),
@@ -157,7 +155,6 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
           fieldType: "number",
           align: "right",
           tabular: true,
-          filter: "number",
         },
       },
     }),
@@ -205,7 +202,7 @@ function buildPreviewColumns(users: readonly GridPreviewUser[]): GridColumnDef<G
       id: "site",
       header: "Site",
       size: 170,
-      meta: { grid: { fieldType: "linked", unresolvedText: UNRESOLVED_SITE, filter: "text" } },
+      meta: { grid: { fieldType: "linked", unresolvedText: UNRESOLVED_SITE } },
     }),
 
     columnHelper.accessor("flagged", {

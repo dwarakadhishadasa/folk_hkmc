@@ -54,13 +54,17 @@ export type GridFieldType =
 /**
  * The `meta.grid` extension the grid reads off every column def.
  *
- * `editable` gates the `e` key. `filter` chooses the per-column filter control
- * (`number` filters compare numerically, `text` filters substring-match).
- * `align` and `tabular` are presentation-only and reach the cell directly.
+ * `editable` gates the `e` key. `align` and `tabular` are presentation-only and
+ * reach the cell directly.
  *
  * `frozen` pins the column to the left edge while the table scrolls sideways;
  * `selectable` marks the column as the row-selection control; `hideable: false`
  * opts a column out of the visibility menu.
+ *
+ * `fieldType` is also the FILTER registry key. It used to have a second key
+ * beside it, `filter: "text" | "number"`, whose only remaining job was choosing
+ * a comparison — and that job is gone, because the operator now travels inside
+ * the filter condition. Declaring the same fact twice is how two keys drift.
  *
  * `editor` names the typed editor for the cell and is resolved against the
  * registry in `grid-editors.tsx`. It is a closed union rather than `string`, so
@@ -71,7 +75,9 @@ export type GridFieldType =
  *
  * `editorOptions` is presentation-only configuration for that editor — the
  * allowed options, the known users, a currency code. Like every other key here
- * it describes how the cell is edited and never carries a value.
+ * it describes how the cell is edited and never carries a value. The filter
+ * surface reads `options` from here rather than asking a consumer to declare
+ * the same option list twice.
  */
 export interface GridColumnMeta {
   editable?: boolean
@@ -97,7 +103,6 @@ export interface GridColumnMeta {
    * recognised, silently, with the raw id back on screen.
    */
   unresolvedText?: string
-  filter?: "text" | "number"
   align?: GridColumnAlign
   tabular?: boolean
   frozen?: boolean
@@ -128,7 +133,7 @@ export interface GridFrozenColumn {
 
 /**
  * Teaches TanStack about `meta.grid`, which is how a column def declares that
- * it is editable, filterable, numeric or right-aligned. Augmenting the library's
+ * it is editable, typed, numeric or right-aligned. Augmenting the library's
  * interface keeps `column.columnDef.meta?.grid` typed everywhere the grid reads
  * it instead of casting at each site.
  */

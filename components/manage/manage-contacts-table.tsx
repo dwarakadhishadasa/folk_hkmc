@@ -21,6 +21,7 @@ import {
   type GridCellCommit,
   type GridColumnDef,
   type GridDensity,
+  type GridFieldType,
   type GridRowLifecycle,
 } from "@/components/grid"
 import { Button } from "@/components/ui/button"
@@ -458,14 +459,6 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
 
   const contacts = mirror.rows
 
-  const {
-    state: viewState,
-    onStateChange,
-    clearFilters,
-    beginTransientChange,
-    commitTransientChange,
-    cancelTransientChange,
-  } = useGridViewState({ columnIds: COLUMN_IDS })
 
   const locationNameById = useMemo(
     () => new Map(payload.locations.map((location) => [location.id, location.name])),
@@ -870,7 +863,6 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
             // colour: a second accent would compete with selection and focus,
             // which `design-constraints.md` reserves outright.
             emphasis: true,
-            filter: "text",
             hideable: false,
           },
         },
@@ -880,7 +872,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         id: PHONE_COLUMN_ID,
         header: COLUMN_LABELS[PHONE_COLUMN_ID],
         size: 140,
-        meta: { grid: { editable: true, editor: "text", fieldType: "text", filter: "text" } },
+        meta: { grid: { editable: true, editor: "text", fieldType: "text" } },
       }),
 
       // Joined rather than an array so both the per-column text filter and the
@@ -901,7 +893,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
           header: COLUMN_LABELS[LOCATION_COLUMN_ID],
           size: 180,
           meta: {
-            grid: { fieldType: "linked", unresolvedText: UNRESOLVED_LOCATION, filter: "text" },
+            grid: { fieldType: "linked", unresolvedText: UNRESOLVED_LOCATION },
           },
         },
       ),
@@ -935,7 +927,6 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
             editable: true,
             editor: "multiselect",
             fieldType: "multiselect",
-            filter: "text",
             editorOptions: { options: payload.booksReadOptions },
           },
         },
@@ -961,14 +952,14 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         id: TOTAL_COLUMN_ID,
         header: COLUMN_LABELS[TOTAL_COLUMN_ID],
         size: 130,
-        meta: { grid: { fieldType: "number", filter: "number", align: "right", tabular: true } },
+        meta: { grid: { fieldType: "number", align: "right", tabular: true } },
       }),
 
       columnHelper.accessor("past60DayAttendanceCount", {
         id: PAST_60_COLUMN_ID,
         header: COLUMN_LABELS[PAST_60_COLUMN_ID],
         size: 110,
-        meta: { grid: { fieldType: "number", filter: "number", align: "right", tabular: true } },
+        meta: { grid: { fieldType: "number", align: "right", tabular: true } },
       }),
 
       // Read as an ISO date by the server, so it sorts correctly as text.
@@ -1007,7 +998,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
           header: COLUMN_LABELS[COLLECTED_BY_COLUMN_ID],
           size: 160,
           meta: {
-            grid: { fieldType: "linked", unresolvedText: UNRESOLVED_STAFF, filter: "text" },
+            grid: { fieldType: "linked", unresolvedText: UNRESOLVED_STAFF },
           },
         },
       ),
@@ -1086,6 +1077,42 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
     sourceOptions,
     toggleFavorite,
   ])
+  /**
+   * Column ids to their `meta.grid.fieldType`, read off the defs. The URL codec
+   * needs this to give a bare, operator-less token the right meaning; declaring
+   * it again here would be a second place for the same fact to go stale.
+   */
+  const fieldTypes = useMemo(
+    () =>
+      columns.reduce<Record<string, GridFieldType>>((types, definition, index) => {
+        const id = definition.id ?? COLUMN_IDS[index]
+        const fieldType = definition.meta?.grid?.fieldType
+
+        if (fieldType && id) {
+          types[id] = fieldType
+        }
+
+        return types
+      }, {}),
+    [columns],
+  )
+
+
+  /**
+   * URL-backed grid state. Declared after the column defs because the codec reads
+   * their `fieldType` to give a bare, operator-less filter token its meaning, and
+   * nothing between here and there reads the state it produces.
+   */
+  const {
+    state: viewState,
+    filterConnective,
+    onStateChange,
+    setFilterConnective,
+    clearFilters,
+    beginTransientChange,
+    commitTransientChange,
+    cancelTransientChange,
+  } = useGridViewState({ columnIds: COLUMN_IDS, fieldTypes })
 
   const selectedCount = useMemo(
     () =>
@@ -1205,6 +1232,8 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         getRowId={(contact) => contact.id}
         state={{ ...viewState, rowSelection }}
         onStateChange={onStateChange}
+        filterConnective={filterConnective}
+        onFilterConnectiveChange={setFilterConnective}
         onRowSelectionChange={setRowSelection}
         ariaLabel="Contacts"
         density={density}
