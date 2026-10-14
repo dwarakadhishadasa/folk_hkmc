@@ -2,7 +2,7 @@
 title: 'Filter popover: a column can only carry one condition'
 type: 'bugfix'
 created: '2026-10-14'
-status: 'ready-for-dev'
+status: 'done'
 route: 'oneshot'
 review_loop_iteration: 0
 baseline_commit: '0a37e6fad25a9b3cb210e9d5c9e5380322d03b57'
