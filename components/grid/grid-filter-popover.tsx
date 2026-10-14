@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { ReactNode } from "react"
+import type { ReactNode, RefObject } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import {
   emptyCondition,
+  encodeCondition,
   filterOperatorsFor,
   isConditionUnfilled,
   isConditionValueInvalid,
@@ -122,33 +123,34 @@ export function GridFilterPopover({
   const fieldById = new Map(fields.map((field) => [field.id, field]))
 
   /**
-   * The freshest conditions, for the close-time prune.
+   * The conditions the rows render from, and the list every writer in this file
+   * builds on — one value, so the rows and the writers cannot disagree about
+   * what the list is. See `useConditionMirror`.
    *
-   * A condition change does not reach this component's `conditions` prop
-   * immediately — it round-trips through the URL, which in dev takes a second or
-   * two. So choosing an operator and closing straight after left the prune
-   * reading the PREVIOUS conditions, and it deleted the row the operator had
-   * just made complete: pick `is empty`, hit the `×`, and the `is empty` filter
-   * vanished because the prune still saw `contains` with a blank value.
-   *
-   * Every local change records its result here synchronously, so the prune sees
-   * what the operator just did. The effect re-syncs from the prop, which is what
-   * keeps Back, a shared link and `Clear all` honest — those change the
-   * conditions from outside and never pass through here.
+   * `conditionsRef` survives inside it: the write base for `replace`,
+   * `addCondition` and the close-time prune, not a display buffer, and written
+   * synchronously by every commit. What it no longer is is a ref BESIDE the
+   * prop, which is why the rows render from the same thing the writers read.
    */
-  const conditionsRef = useRef(conditions)
+  const [renderedConditions, conditionsRef, commitConditions] = useConditionMirror(
+    conditions,
+    onConditionsChange,
+  )
 
-  useEffect(() => {
-    conditionsRef.current = conditions
-  }, [conditions])
-
-  const commit = (next: GridFilterCondition[]) => {
-    conditionsRef.current = next
-    onConditionsChange(next)
-  }
+  /**
+   * The connective is the same lag for a different reason: `setFilterConnective`
+   * PUSHES rather than debouncing, so the prop comes back a whole router
+   * transition later and the trigger reads `and` while the grid is already on
+   * `or`. Its identity is its own value, so its key needs no help.
+   */
+  const [renderedConnective, , commitConnective] = usePendingMirror<GridFilterConnective>(
+    connective,
+    (value) => value,
+    onConnectiveChange,
+  )
 
   const replace = (next: GridFilterCondition) => {
-    commit(
+    commitConditions(
       conditionsRef.current.map((condition) =>
         condition.columnId === next.columnId ? next : condition,
       ),
@@ -156,7 +158,8 @@ export function GridFilterPopover({
   }
 
   const addCondition = () => {
-    const taken = new Set(conditionsRef.current.map((condition) => condition.columnId))
+    const current = conditionsRef.current
+    const taken = new Set(current.map((condition) => condition.columnId))
     const available = fields.filter((field) => !taken.has(field.id))
 
     // The identity column first, then the rest in column order. A newly added
@@ -168,7 +171,7 @@ export function GridFilterPopover({
       return
     }
 
-    commit([...conditionsRef.current, emptyCondition(next.id, next.fieldType)])
+    commitConditions([...current, emptyCondition(next.id, next.fieldType)])
   }
 
   /**
@@ -187,7 +190,7 @@ export function GridFilterPopover({
     )
 
     if (kept.length !== current.length) {
-      commit(kept)
+      commitConditions(kept)
     }
   }
 
@@ -245,7 +248,7 @@ export function GridFilterPopover({
         </div>
 
         <div className="space-y-2.5" data-grid-filter-conditions="">
-          {conditions.map((condition, index) => {
+          {renderedConditions.map((condition, index) => {
             const field = fieldById.get(condition.columnId)
             const fieldType = field?.fieldType
             const operators = filterOperatorsFor(fieldType)
@@ -263,7 +266,10 @@ export function GridFilterPopover({
                     Where
                   </div>
                 ) : (
-                  <Select value={connective} onValueChange={(value) => onConnectiveChange(value as GridFilterConnective)}>
+                  <Select
+                    value={renderedConnective}
+                    onValueChange={(value) => commitConnective(value as GridFilterConnective)}
+                  >
                     <SelectTrigger
                       data-grid-filter-connective=""
                       aria-label="Match all or any of these conditions"
@@ -302,7 +308,11 @@ export function GridFilterPopover({
                     // new id — `replace` looks its target up by `columnId`, and on
                     // a field change those two differ, so replacing by the new id
                     // matches nothing and silently leaves the old condition alone.
-                    commit(
+                    //
+                    // Off the mirror, not the prop: three field picks in a row each
+                    // build on the last, and the prop is still the list from before
+                    // the first of them until the debounced write lands.
+                    commitConditions(
                       conditionsRef.current.map((entry) =>
                         entry.columnId === condition.columnId
                           ? { ...fresh, value: keepList ? condition.value : fresh.value }
@@ -372,8 +382,10 @@ export function GridFilterPopover({
                   aria-label={`Delete ${field?.label ?? condition.columnId} condition`}
                   className="text-muted-foreground hover:text-destructive size-8 shrink-0"
                   onClick={() => {
-                    commit(
-                      conditionsRef.current.filter((entry) => entry.columnId !== condition.columnId),
+                    commitConditions(
+                      conditionsRef.current.filter(
+                        (entry) => entry.columnId !== condition.columnId,
+                      ),
                     )
                   }}
                 >
@@ -401,7 +413,13 @@ export function GridFilterPopover({
             size="sm"
             className="text-muted-foreground hover:text-destructive h-7 px-0 text-[12px] font-normal"
             onClick={() => {
-              onConditionsChange([])
+              // Through the one writer, like every other change in this file, and
+              // that is the point of moving it: `Clear all` is a local change to
+              // the list, so the rows go on the click rather than a transition
+              // later, and a close straight afterwards prunes against the cleared
+              // list instead of resurrecting what was just cleared. The URL write
+              // is unchanged — it is the same `onConditionsChange([])`.
+              commitConditions([])
             }}
           >
             Clear all
@@ -419,6 +437,167 @@ interface FilterValueControlProps {
   takesValue: boolean
   invalid: boolean
   onCommit: (value: string | string[]) => void
+}
+
+/**
+ * What one mirror hands back, in the order the caller destructures it.
+ *
+ * **A tuple, not an object, and the lint rule is why.** `react-hooks/refs` taints
+ * every property read off a value that holds a ref somewhere inside it, so an
+ * object carrying `value`, `ref` and `commit` together makes
+ * `mirror.value.map(...)` in the render body a ref access and the build fails.
+ * Three positions keep the render-side read off the tainted value.
+ */
+type PendingMirror<T> = readonly [
+  /**
+   * The value to render: authoritative while a local write of ours is in flight,
+   * reconciled from the prop the moment nothing is.
+   */
+  value: T,
+  /**
+   * The same value, for the writers that need it NOW.
+   *
+   * `setState` is asynchronous, so a handler that read `value` would build on the
+   * PREVIOUS one — which is how three field picks inside one debounce window
+   * leave the URL carrying only the first. This is the same guarantee
+   * `conditionsRef` existed for, and it is now the mirror's own field rather than
+   * a second copy of it.
+   */
+  ref: RefObject<T>,
+  /**
+   * The sole writer, and it writes in this order: the mirror, then the ref, then
+   * the parent. The ref is synchronous and the parent is not, so anything that
+   * reads the list later in the same tick — `replace`, the close-time prune — sees
+   * what was just written rather than what was last rendered.
+   */
+  commit: (next: T) => void,
+]
+
+/**
+ * Holds a URL-backed value on screen while the URL catches up with it.
+ *
+ * Every control in this popover writes through the URL: a condition change behind
+ * the 250 ms debounce in `use-grid-view-state.ts`, a connective change behind a
+ * whole `router.push` transition. For that window the prop is the value BEFORE
+ * the change, so a control bound straight to it cannot show what was just picked —
+ * the field Select snapped back to the previous column, the operator Select to the
+ * previous operator, and the connective to `and`, each for as long as the write
+ * took. That is a quarter second at best and a second or two in dev.
+ *
+ * So the mirror is authoritative, and it is surrendered only once the committed
+ * value has caught up with it. Reconciling on focus is not enough — closing the
+ * popover or a dropdown can beat the write — and neither is "reconcile whenever
+ * they differ", because during that window they legitimately differ and adopting
+ * the prop would undo the write mid-flight. Identical reasoning to
+ * `useConditionValueDraft` and `useMultiSelectDraft`; read the first for the full
+ * argument.
+ *
+ * `identity` is how the committed value is COMPARED, and it is a parameter
+ * because the right comparison is the one the codec preserves, not the one that
+ * is easiest to write — see `conditionsListKey`. `onCommit` fires on EVERY
+ * commit; the debounce downstream is what stops that being a router call per
+ * character, and this hook has no business adding a second debounce of its own.
+ */
+function usePendingMirror<T>(
+  committed: T,
+  identity: (value: T) => string,
+  onCommit: (value: T) => void,
+): PendingMirror<T> {
+  const committedKey = identity(committed)
+
+  const [value, setValue] = useState<T>(() => committed)
+  const [valueKey, setValueKey] = useState(committedKey)
+  const [pending, setPending] = useState(false)
+  const ref = useRef(value)
+
+  // Catch up on anything that arrived from OUTSIDE this mirror — Back, Forward, a
+  // shared link, `Clear filters`, a URL edit — while nothing of ours is in flight.
+  //
+  // The KEY decides whether there is anything to catch up to; `committed` is only
+  // what gets read. A fresh array on every render must not be the trigger, or the
+  // mirror re-adopts one every render — the "reconcile whenever they differ"
+  // mistake with its guard taken out, and the rows churn under the operator's
+  // hands.
+  useEffect(() => {
+    if (pending || committedKey === valueKey) {
+      return
+    }
+
+    setValue(committed)
+    setValueKey(committedKey)
+    ref.current = committed
+  }, [committed, committedKey, pending, valueKey])
+
+  // Our own write landed. Dropping the flag is what hands the display back to the
+  // committed value instead of leaving two sources of truth in step.
+  useEffect(() => {
+    if (pending && committedKey === valueKey) {
+      setPending(false)
+    }
+  }, [committedKey, valueKey, pending])
+
+  return [
+    value,
+    ref,
+    (next: T) => {
+      setValue(next)
+      setValueKey(identity(next))
+      setPending(true)
+      ref.current = next
+      onCommit(next)
+    },
+  ]
+}
+
+/**
+ * How two condition lists are compared: each condition's column id and its
+ * SERIALIZED token, as one JSON string.
+ *
+ * **NOT `JSON.stringify` of the list itself, and that is load-bearing.** A list
+ * reaches this component by two routes that do not agree about its shape: the
+ * commit the mirror has just made, and the URL that commit travelled through.
+ * `emptyCondition` gives a single-valued select column `value: []` — the shape
+ * its first operator declares — and the codec writes that as `f.source=is:` and
+ * reads it back as `value: ""`, because `is` is not a set operator and an array
+ * cannot survive as an array. A key taken from the raw list therefore differs
+ * across that round trip for good: the mirror decides its own write never landed,
+ * stops reconciling, and leaves `Clear all` and Back showing rows the URL has
+ * already thrown away.
+ *
+ * The serialized token is the one identity the codec preserves in both
+ * directions, so a key built from it is equal exactly when the display and the
+ * URL agree — which is the whole question the mirror is asking. Order is part of
+ * it: the query string's own key order is the order the rows stack in, so a
+ * reorder is a real change to what the URL will carry.
+ *
+ * `JSON.stringify` of the pairs rather than a separator-joined string, so a value
+ * carrying the separator cannot make two different lists compare equal.
+ */
+function conditionsListKey(conditions: readonly GridFilterCondition[]): string {
+  return JSON.stringify(conditions.map((condition) => [condition.columnId, encodeCondition(condition)]))
+}
+
+/**
+ * The conditions the rows render from, and the base `replace`, `addCondition`,
+ * `pruneUnfilled` and the field Select all build on.
+ *
+ * Before this, the freshest list lived in a ref alone — a write base with no
+ * display behind it. Choosing an operator and closing straight after left the
+ * prune reading the PREVIOUS conditions, so it deleted the row the operator had
+ * just made complete: pick `is empty`, hit the `×`, and the `is empty` filter
+ * vanished because the prune still saw `contains` with a blank value. The mirror
+ * keeps that guarantee and gives it a display, and it is one value rather than a
+ * ref beside the prop — the rows and the writers cannot drift apart.
+ *
+ * The parent is handed its OWN copy of the list: it writes it straight into
+ * TanStack's `columnFilters`, and a mirror that handed over the array it renders
+ * from would be one mutation away from having its own rows change underneath it.
+ */
+function useConditionMirror(
+  committed: readonly GridFilterCondition[],
+  onCommit: (next: GridFilterCondition[]) => void,
+): PendingMirror<readonly GridFilterCondition[]> {
+  return usePendingMirror(committed, conditionsListKey, (next) => onCommit([...next]))
 }
 
 /**

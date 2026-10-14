@@ -101,6 +101,35 @@ async function openPopover(page: Page): Promise<void> {
   await expect(popover(page)).toBeVisible()
 }
 
+/**
+ * Every control in the popover row, plus the query string, read in ONE
+ * `page.evaluate`.
+ *
+ * **Why a raw `evaluate` and not `expect(locator).toHaveText(...)`.** A web-first
+ * assertion retries, so it passes on the slow build too: the field Select used to
+ * settle on the right text a quarter second later, so "it eventually reads Phone"
+ * proves nothing about whether it read Phone *immediately*. What these specs claim
+ * is the pair — the trigger has moved AND the URL has not — and the pair is only
+ * honest if both sides are read at the same instant, one JS turn, with no retry in
+ * between. The window is the 250 ms debounce plus a router transition; the read
+ * lands within a few milliseconds of the click that armed it.
+ *
+ * `valueDisabled` is in the same read because the value control's SHAPE is part of
+ * the claim: an operator that takes no value renders a greyed control, and whether
+ * that happened on this paint is the same question.
+ */
+async function choiceState(
+  page: Page,
+): Promise<{ field: string; operator: string; connective: string; valueDisabled: boolean; search: string }> {
+  return page.evaluate(() => ({
+    field: document.querySelector("[data-grid-filter-field]")?.textContent?.trim() ?? "",
+    operator: document.querySelector("[data-grid-filter-operator]")?.textContent?.trim() ?? "",
+    connective: document.querySelector("[data-grid-filter-connective]")?.textContent?.trim() ?? "",
+    valueDisabled: document.querySelector("[data-grid-filter-value-disabled]") !== null,
+    search: window.location.search,
+  }))
+}
+
 test.describe("CAP-12 — the filter conditions popover", () => {
   test("the toolbar control names the columns it is filtering, and no header carries an indicator", async ({
     page,
@@ -828,6 +857,12 @@ test.describe("CAP-12 — the four reported defects", () => {
     await row.locator("[data-grid-filter-operator]").click()
     await page.getByRole("option", { name: "is within", exact: true }).click()
 
+    // Let both local writes land before the calendar is opened. This assertion
+    // below reads the query string directly, and a URL that has not been written
+    // yet answers `null` — which is not the same thing as "not a span". It also
+    // means the two clicks that follow are not racing a landing write.
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.dateOfBirth")).toBe("within:")
+
     await row.locator("[data-grid-filter-calendar-trigger]").click()
     const calendar = page.locator("[data-grid-filter-calendar]")
     await expect(calendar).toBeVisible()
@@ -1115,5 +1150,184 @@ test("a multiselect's values are ticked in a dropdown", async ({ page }) => {
 
     // The query string's own key order, which is the order they were added.
     expect(order).toEqual(["name", "phone", "notes"])
+  })
+})
+/**
+ * The three choice controls — field, operator, connective — render from a local
+ * mirror, so the option just picked is on screen before the URL carries it.
+ *
+ * Everything in here is about the ORDER of two things that used to be the wrong
+ * way round. The commit is immediate and local; the URL is a debounced
+ * `router.replace` for a condition change and a whole `router.push` transition
+ * for the connective. The controls rendered straight from the prop, so each one
+ * showed the value from BEFORE the pick for as long as the write took — the
+ * field Select snapping back to the previous column, the operator Select to the
+ * previous operator, the connective to `and`.
+ *
+ * The risk of fixing that is a second source of truth, and it is the one thing
+ * that would make this worse than the bug: a display that stops believing the URL
+ * is a display that keeps showing conditions a shared link, Back or `Clear
+ * filters` has already removed. So the last test here is the one that matters
+ * most — it drives an external change and asserts the mirror follows it.
+ */
+test.describe("CAP-12 — the choice controls lead the URL", () => {
+  test("the field trigger shows a newly picked field before the URL changes", async ({ page }) => {
+    await gotoGrid(page, { params: { "f.name": "contains:a" } })
+    await openPopover(page)
+
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Phone", exact: true }).click()
+
+    const picked = await choiceState(page)
+
+    expect(picked.field, "the field trigger leads the URL").toBe("Phone")
+    // The URL is still the pre-pick query — that is what makes the assertion
+    // above mean anything. On the old build this read "Name", and would have
+    // started reading "Phone" only once these two lines became false.
+    expect(new URLSearchParams(picked.search).get("f.name")).toBe("contains:a")
+    expect(new URLSearchParams(picked.search).get("f.phone")).toBeNull()
+
+    // And it settles under the URL rather than snapping back: the row moves to
+    // the new column, carrying the same operator and an empty value.
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.phone")).toBe("contains:")
+    await expect(conditionRow(page, "phone").locator("[data-grid-filter-field]")).toHaveText("Phone")
+    await expect(conditionRow(page, "phone").locator("[data-grid-filter-operator]")).toHaveText("contains")
+  })
+
+  test("the operator trigger shows a newly picked operator, and the value control changes shape", async ({
+    page,
+  }) => {
+    await gotoGrid(page, { params: { "f.name": "contains:a" } })
+    await openPopover(page)
+
+    await conditionRow(page, "name").locator("[data-grid-filter-operator]").click()
+    await page.getByRole("option", { name: "is empty", exact: true }).click()
+
+    const picked = await choiceState(page)
+
+    expect(picked.operator, "the operator trigger leads the URL").toBe("is empty")
+    expect(new URLSearchParams(picked.search).get("f.name")).toBe("contains:a")
+    // The control renders the NEW operator's shape on this paint rather than the
+    // text box that belonged to the operator just replaced: `is empty` takes no
+    // value, so it is greyed out — present, not absent.
+    expect(picked.valueDisabled, "the value control follows the operator's shape").toBe(true)
+
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.name")).toBe("isEmpty:")
+    await expect(conditionRow(page, "name").locator("[data-grid-filter-operator]")).toHaveText("is empty")
+  })
+
+  test("the connective trigger shows the new connective before the URL carries it", async ({ page }) => {
+    await gotoGrid(page, { params: { "f.name": "contains:a", "f.phone": "contains:9" } })
+    await openPopover(page)
+
+    await popover(page).locator("[data-grid-filter-connective]").first().click()
+    await page.getByRole("option", { name: "or", exact: true }).click()
+
+    const picked = await choiceState(page)
+
+    // The connective is the same lag for a different reason — `setFilterConnective`
+    // PUSHES rather than debouncing, so the prop is a whole router transition
+    // away — which is why it needs the mirror as much as the two Selects do.
+    expect(picked.connective, "the connective trigger leads the URL").toBe("or")
+    // `f.` means match-all and `fa.` match-any, so the keys have not moved yet.
+    expect(new URLSearchParams(picked.search).get("f.name")).toBe("contains:a")
+    expect(new URLSearchParams(picked.search).get("fa.name")).toBeNull()
+
+    // **AND NOTHING ABOUT WHERE THAT WRITE LANDS IS ASSERTED HERE.** Switching the
+    // connective in the popover loses every condition: the push writes the `fa.`
+    // family correctly, and the table's own match-any state then hands TanStack an
+    // EMPTY `columnFilters` (`grid.tsx:743`), which the next state change writes
+    // back over the URL. Reproduced on `c5d9b71` with no mirror in the file, and it
+    // lives in the write layer this story is forbidden to touch — so the test above
+    // claims the control, and the defect is left for whoever owns `write`.
+  })
+
+  test("three field picks inside one debounce window all display, and the URL carries the last", async ({
+    page,
+  }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.name")).toBe("contains:")
+
+    // Each pick is read back in the instant it is made, so a build that displays
+    // only after the write lands fails on the SECOND pick rather than quietly
+    // passing on the last. The picks are issued faster than the 250 ms debounce
+    // and nothing here waits for the URL; that they share one window is what the
+    // debounce is for, and the assertions do not depend on it.
+    //
+    // `Source` sits in the middle on purpose. It is a single-valued select, so
+    // `emptyCondition` hands it `value: []` while the codec reads the same token
+    // back as `value: ""` — a round trip that is invisible in the UI and breaks
+    // any comparison made on the raw list rather than on what the URL will carry.
+    const picks: ReadonlyArray<readonly [string, string]> = [
+      ["phone", "Phone"],
+      ["source", "Source"],
+      ["notes", "Notes"],
+    ]
+
+    let columnId = "name"
+
+    for (const [nextColumn, label] of picks) {
+      await conditionRow(page, columnId).locator("[data-grid-filter-field]").click()
+      await page.getByRole("option", { name: label, exact: true }).click()
+
+      const picked = await choiceState(page)
+
+      expect(picked.field, `the ${label} pick must display on the next paint`).toBe(label)
+      columnId = nextColumn
+    }
+
+    // One surviving write, carrying the last pick and neither of the others: each
+    // pick replaced the same condition rather than adding to a list the prop had
+    // not caught up with.
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.notes")).toBe("contains:")
+    await expect(new URL(page.url()).searchParams.get("f.phone")).toBeNull()
+    await expect(new URL(page.url()).searchParams.get("f.source")).toBeNull()
+    await expect(popover(page).locator("[data-grid-filter-condition]")).toHaveCount(1)
+    await expect(conditionRow(page, "notes").locator("[data-grid-filter-field]")).toHaveText("Notes")
+  })
+
+  test("Back restores the previous conditions, so the mirror is not the only truth", async ({ page }) => {
+    // `Clear filters` is a PUSH and the only control in the grid that puts a
+    // change in history — a condition change is a debounced `replace`, so nothing
+    // else here can build the entry Back needs. It is also only reachable from the
+    // no-matches panel, which is why the grid is landed on a filter that matches
+    // nothing.
+    await gotoGrid(page, { params: { "f.name": "contains:zzz-no-such-name-zzz" } })
+    await expectVisibleCount(page, 0)
+    await openPopover(page)
+
+    // A local change that lands, so the mirror has been through a full round trip
+    // and has handed the display back to the prop before Back arrives. The value
+    // is filled on purpose: an unfinished condition is pruned on close, and a
+    // pruned row would leave nothing for Back to restore.
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Notes", exact: true }).click()
+
+    const value = conditionRow(page, "notes").locator("[data-grid-filter-value]")
+    await value.click()
+    await value.pressSequentially("zzz")
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.notes")).toBe("contains:zzz")
+
+    await popover(page).getByRole("button", { name: "Close filters" }).click()
+    await expect(popover(page)).toHaveCount(0)
+
+    await page.getByRole("button", { name: "Clear filters" }).click()
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.notes")).toBeNull()
+    await expectVisibleCount(page, (await scopedContacts()).length)
+
+    await page.goBack()
+
+    await expect.poll(() => new URL(page.url()).searchParams.get("f.notes")).toBe("contains:zzz")
+    await expectVisibleCount(page, 0)
+
+    // The rows are rendered from the mirror, so a mirror that had stopped
+    // reconciling shows an EMPTY list here — and passes both assertions above.
+    // This is the assertion that keeps the mirror subordinate to the URL.
+    await openPopover(page)
+    await expect(conditionRow(page, "notes")).toBeVisible()
+    await expect(conditionRow(page, "notes").locator("[data-grid-filter-field]")).toHaveText("Notes")
+    await expect(conditionRow(page, "notes").locator("[data-grid-filter-value]")).toHaveValue("zzz")
   })
 })

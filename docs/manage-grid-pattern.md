@@ -477,6 +477,16 @@ cases are sets of columns: nothing is order-sensitive and no list is ever parsed
 `cols` is written once per header drop through the transient handle, and only when the resulting
 order differs and leaves the pinned run intact. Neither is ever written per frame.
 
+**The filter popover's rows render from a local mirror; the URL is still the only truth.** `f.*` and
+the connective arrive a write late — behind the 250 ms filter debounce and behind a whole
+`router.push` transition respectively — so the field, operator and connective controls hold the value
+they just wrote in component state (`usePendingMirror` / `useConditionMirror` in
+`grid-filter-popover.tsx`) and surrender it the moment the committed prop catches up. Nothing about
+ownership changes: the mirror is written only by local changes, Back, a shared link and `Clear all`
+reconcile it, and the close-time prune reads the same value the rows render. **Do not remove the
+mirror as redundant** — the prop alone is what these rows used to render from, and it cannot show the
+option that was just picked.
+
 ## 8. The cell-metrics contract
 
 The numbers the grid renders at, and the four states a cell can be in. Both are

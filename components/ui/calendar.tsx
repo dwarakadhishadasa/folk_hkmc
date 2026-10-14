@@ -125,46 +125,10 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        Root: ({ className, rootRef, ...props }) => {
-          return (
-            <div
-              data-slot="calendar"
-              ref={rootRef}
-              className={cn(className)}
-              {...props}
-            />
-          )
-        },
-        Chevron: ({ className, orientation, ...props }) => {
-          if (orientation === 'left') {
-            return (
-              <ChevronLeftIcon className={cn('size-4', className)} {...props} />
-            )
-          }
-
-          if (orientation === 'right') {
-            return (
-              <ChevronRightIcon
-                className={cn('size-4', className)}
-                {...props}
-              />
-            )
-          }
-
-          return (
-            <ChevronDownIcon className={cn('size-4', className)} {...props} />
-          )
-        },
+        Root: CalendarRoot,
+        Chevron: CalendarChevron,
         DayButton: CalendarDayButton,
-        WeekNumber: ({ children, ...props }) => {
-          return (
-            <td {...props}>
-              <div className="flex size-(--cell-size) items-center justify-center text-center">
-                {children}
-              </div>
-            </td>
-          )
-        },
+        WeekNumber: CalendarWeekNumber,
         ...components,
       }}
       {...props}
@@ -211,3 +175,60 @@ function CalendarDayButton({
 }
 
 export { Calendar, CalendarDayButton }
+
+/**
+ * `components.Root` / `.Chevron` / `.WeekNumber` are declared HERE, at module
+ * scope, and not inline in the `components` object.
+ *
+ * **React matches an element by the IDENTITY of its component type, so an inline
+ * arrow function is a different component on every render.** Defined in the render
+ * body, these three made React unmount and remount the entire day-picker subtree
+ * whenever `Calendar` re-rendered — every day cell destroyed and rebuilt, with no
+ * error and no visual difference, because the rebuild happens in one paint.
+ *
+ * That is invisible until something is holding a node across the re-render, and a
+ * pointer is exactly that. A user who clicks a day while any ancestor re-renders
+ * has their click dispatched into a detached tree: `grid-filter-popover`'s date
+ * control lost the day button under the cursor whenever the URL write it was
+ * waiting for landed, so the click did nothing at all and the calendar stayed open.
+ * `e2e/specs/grid-filter-conditions.spec.ts` saw it first as
+ * "element was detached from the DOM, retrying" on its range test.
+ *
+ * `DayButton` was already module-scope and is the reason the churn was invisible
+ * in a profile: one of the four was stable, which is not the same as none being
+ * unstable. Keep these out of the render body.
+ */
+function CalendarRoot({
+  className,
+  rootRef,
+  ...props
+}: React.ComponentProps<'div'> & { rootRef?: React.Ref<HTMLDivElement> }) {
+  return <div data-slot="calendar" ref={rootRef} className={cn(className)} {...props} />
+}
+
+function CalendarChevron({
+  className,
+  orientation,
+  ...props
+}: React.ComponentProps<typeof ChevronLeftIcon> & {
+  orientation?: 'up' | 'down' | 'left' | 'right'
+}) {
+  const Icon =
+    orientation === 'left'
+      ? ChevronLeftIcon
+      : orientation === 'right'
+        ? ChevronRightIcon
+        : ChevronDownIcon
+
+  return <Icon className={cn('size-4', className)} {...props} />
+}
+
+function CalendarWeekNumber({ children, ...props }: React.ComponentProps<'td'>) {
+  return (
+    <td {...props}>
+      <div className="flex size-(--cell-size) items-center justify-center text-center">
+        {children}
+      </div>
+    </td>
+  )
+}
