@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 
@@ -22,6 +22,7 @@ import {
   type GridFilterCondition,
   type GridFilterConnective,
 } from "@/components/grid/grid-filter-operators"
+import { GridFilterDateControl } from "@/components/grid/grid-filter-value"
 import type { GridFieldType } from "@/components/grid/grid-types"
 
 /** One column the popover can name, with whatever its value control needs. */
@@ -109,7 +110,6 @@ export function GridFilterPopover({
   onConditionsChange,
   onConnectiveChange,
 }: GridFilterPopoverProps) {
-  const [draft, setDraft] = useState<Record<string, string>>({})
   const fieldById = new Map(fields.map((field) => [field.id, field]))
 
   const replace = (next: GridFilterCondition) => {
@@ -148,7 +148,14 @@ export function GridFilterPopover({
           event.preventDefault()
         }}
       >
-        <div className="text-muted-foreground flex items-center justify-between pb-3 text-[12px] font-medium">
+        {/* The rule BELOW the header belongs to the header. It used to sit on the
+         * conditions list instead, which drew a second rule immediately below it
+         * once the footer added its own — two hairlines under the conditions
+         * where the composition has one above and one below. */}
+        <div
+          className="text-muted-foreground border-border mb-3 flex items-center justify-between border-b pb-3 text-[12px] font-medium"
+          data-grid-filter-header=""
+        >
           <span>In this view, show contacts</span>
           <Button
             type="button"
@@ -164,7 +171,7 @@ export function GridFilterPopover({
           </Button>
         </div>
 
-        <div className="border-border mb-3 space-y-2.5 border-b">
+        <div className="space-y-2.5" data-grid-filter-conditions="">
           {conditions.map((condition, index) => {
             const field = fieldById.get(condition.columnId)
             const fieldType = field?.fieldType
@@ -274,15 +281,12 @@ export function GridFilterPopover({
                 </Select>
 
                 <FilterValueControl
+                  key={`${condition.columnId}:${condition.operator}`}
                   condition={condition}
                   field={field}
                   fieldType={fieldType}
                   takesValue={takesValue}
                   invalid={invalid}
-                  draft={draft[condition.columnId] ?? ""}
-                  onDraftChange={(value) => {
-                    setDraft((current) => ({ ...current, [condition.columnId]: value }))
-                  }}
                   onCommit={(value) => {
                     replace({ ...condition, value })
                   }}
@@ -305,7 +309,7 @@ export function GridFilterPopover({
           })}
         </div>
 
-        <div className="border-border mt-3 flex items-center justify-between border-t pt-3">
+        <div className="border-border mt-3 flex items-center justify-between border-t pt-3" data-grid-filter-footer="">
           <Button
             type="button"
             variant="ghost"
@@ -339,15 +343,78 @@ interface FilterValueControlProps {
   fieldType: GridFieldType | undefined
   takesValue: boolean
   invalid: boolean
-  draft: string
-  onDraftChange: (value: string) => void
   onCommit: (value: string | string[]) => void
+}
+
+/**
+ * The committed value a text or number control edits.
+ *
+ * An `isEmpty`-shaped operator holds `""` by construction, so treating it as a
+ * text draft is harmless — the control that would show it is the disabled one,
+ * which renders before this is ever read.
+ */
+function editableText(condition: GridFilterCondition): string {
+  return Array.isArray(condition.value) ? condition.value[0] ?? "" : condition.value
+}
+
+/**
+ * Keeps a text or number value on screen while the URL catches up with it.
+ *
+ * A filter commit reaches the URL behind the 250 ms debounce in
+ * `use-grid-view-state.ts`, so for a quarter second after a keystroke the
+ * committed value is still the PREVIOUS one. A control bound straight to it
+ * would drop characters, and one that reconciles on blur would blank the field
+ * the moment focus left — which is exactly the bug that emptied this control:
+ * the first build kept a draft, cleared it to `""` on blur, and so showed the
+ * placeholder over a value that was still filtering.
+ *
+ * So: the draft is authoritative, and it is surrendered only once the committed
+ * value has caught up with it. A focus flag is not enough — blur can beat the
+ * write — and neither is "reconcile whenever they differ", because during that
+ * 250 ms they legitimately differ.
+ */
+function useConditionValueDraft(committed: string, onCommit: (value: string) => void): [string, (value: string) => void] {
+  const [draft, setDraft] = useState(committed)
+  const [pending, setPending] = useState(false)
+
+  // Catch up on anything that arrived from OUTSIDE this control — Back, Forward,
+  // a shared link, `Clear all`, a URL edit — while nothing of ours is in flight.
+  useEffect(() => {
+    if (!pending) {
+      setDraft(committed)
+    }
+  }, [committed, pending])
+
+  // Our own write landed. Dropping the flag is what hands the display back to
+  // the committed value instead of leaving two sources of truth in step.
+  useEffect(() => {
+    if (pending && committed === draft) {
+      setPending(false)
+    }
+  }, [committed, draft, pending])
+
+  return [
+    draft,
+    (next: string) => {
+      setDraft(next)
+      setPending(true)
+      // Committed on EVERY keystroke, not on Enter. The debounce downstream is
+      // what stops that being a router call per character; there was no reason
+      // to make Enter the trigger as well.
+      onCommit(next)
+    },
+  ]
 }
 
 /**
  * The value control, rendered from the operator's declared `valueShape` rather
  * than from a switch on operator ids — so an operator that changes its shape
  * changes its control without anyone remembering to update a second place.
+ *
+ * Keyed by `columnId:operator` by its caller. That remount is deliberate: it is
+ * how a field or operator change discards a draft that belonged to the previous
+ * shape, rather than leaving a half-typed number sitting in a field that now
+ * holds a date.
  */
 function FilterValueControl({
   condition,
@@ -355,12 +422,13 @@ function FilterValueControl({
   fieldType,
   takesValue,
   invalid,
-  draft,
-  onDraftChange,
   onCommit,
 }: FilterValueControlProps) {
   const operator = filterOperatorsFor(fieldType).find((entry) => entry.id === condition.operator)
   const shape = operator?.valueShape ?? "text"
+  const [draft, commitDraft] = useConditionValueDraft(editableText(condition), (value) => {
+    onCommit(value)
+  })
 
   if (!takesValue || shape === "none") {
     return (
@@ -459,35 +527,42 @@ function FilterValueControl({
     )
   }
 
-// Free text, not `type="date"`: the serialized form IS the ISO string, and a
-  // native date input would hide it behind a locale-formatted value the operator
-  // cannot see is what actually filters. `numeric` is only a keypad hint.
+if (shape === "date" || shape === "date-range") {
+    // A calendar, not a text field: the operator picks a day and the ISO string
+    // is derived from it. An unparseable value is still possible — it can arrive
+    // in a shared URL — so `invalid` is passed through to `aria-invalid` rather
+    // than being treated as unreachable.
+    return (
+      <GridFilterDateControl
+        value={editableText(condition)}
+        range={shape === "date-range"}
+        invalid={invalid}
+        label={field?.label ?? "Value"}
+        className={`${CONTROL} ${SLOT_VALUE} shrink-0 ${invalid ? "border-destructive" : ""}`}
+        onCommit={(value) => {
+          onCommit(value)
+        }}
+      />
+    )
+  }
+
+  // `numeric` is only a keypad hint. Free text rather than `type="number"`,
+  // because `type="number"` silently discards a value it cannot parse, and a
+  // filter that discards what was typed gives no indication why it stopped
+  // filtering.
   const inputMode = shape === "number" ? "numeric" : undefined
 
   return (
     <Input
       value={draft}
       onChange={(event) => {
-        onDraftChange(event.target.value)
-      }}
-      // The draft is authoritative while the field has focus and reconciled on
-      // blur, so a keystroke inside the URL write's debounce window is not lost.
-      onFocus={() => {
-        onDraftChange(String(Array.isArray(condition.value) ? condition.value[0] ?? "" : condition.value))
-      }}
-      onBlur={() => {
-        onDraftChange("")
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          onCommit(draft)
-        }
+        commitDraft(event.target.value)
       }}
       inputMode={inputMode}
       aria-label={`${field?.label ?? "Value"} value`}
       aria-invalid={invalid || undefined}
       aria-disabled={!takesValue || undefined}
-      placeholder={shape === "date-range" ? "2026-01-01..2026-01-31" : "Enter a value"}
+      placeholder="Enter a value"
       data-grid-filter-value=""
       className={`${CONTROL} ${SLOT_VALUE} shrink-0 ${invalid ? "border-destructive" : ""}`}
     />

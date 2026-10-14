@@ -72,6 +72,7 @@ context:
 **New files**
 - `components/grid/grid-filter-operators.ts` — the registry. `GridFilterOperator { id, label, valueShape }` and `FILTER_OPERATORS_BY_FIELD_TYPE: Record<GridFieldType, readonly GridFilterOperator[]>`, plus `encodeCondition` / `decodeCondition` (the `op:value` codec, incl. the `|` list escaping) and `evaluateCondition(cellValue, condition, fieldType)`. Pure and React-free.
 - `components/grid/grid-filter-popover.tsx` — the popover. Mirror `grid-sort-popover.tsx` exactly: `anchor: ReactNode`, controlled `open`, `data-grid-filter-popover=""`, `align="start" side="bottom"`, and the `onFocusOutside` prevention that keeps it alive when a column menu opens it. One row per condition (Field select · operator Select · value control · delete) plus `+ Add condition`.
+- `components/grid/grid-filter-value.tsx` — **defect fix (AC-D4).** The `date` / `date-range` value control, split out of `grid-filter-popover.tsx` so the nested calendar is a component boundary rather than another branch in a function that already holds five shapes.
 - `e2e/specs/grid-filter-conditions.spec.ts` — the new coverage.
 
 **Changed files**
@@ -96,16 +97,29 @@ context:
 
 ## Tasks & Acceptance
 
+**Defect fixes** — reported by Dwaraka against the first build, 2026-10-14. All four are in `grid-filter-popover.tsx` and none touch the codec or the evaluator.
+
+- [x] **AC-D1 / AC-D2 — the value field.** Delete the hand-rolled `draft: Record<string, string>` state in `GridFilterPopover` and the `draft` / `onDraftChange` props it threads into `FilterValueControl`. Inside `FilterValueControl`, call `useConditionValueDraft(committed, onCommit)` with a local `pending` flag. Delete the `onKeyDown` Enter handler: the hook commits on every change. Keep `onBlur` free of any commit.
+- [x] **AC-D4 — the date value control.** `grid-filter-value.tsx`, per Defect-fix decisions below.
+- [x] **AC-D3 — one rule below the conditions.** Move the header's hairline onto the header itself and remove the conditions container's `border-b`, so the header's rule and the footer's are the only two. Added `data-grid-filter-header` / `-conditions` / `-footer` so the invariant is assertable rather than inferred.
+- [x] `e2e/specs/grid-filter-conditions.spec.ts` -- one test per AC-D below, in addition to the matrix rows.
+
+**Defect-fix decisions (Dwaraka, 2026-10-14):**
+- **The calendar is a Radix popover with no text field and no "Set" button.** Clicking a day sets the value. This reverses the free-text `Input` the first build used for `date`, and the comment at the old `:462-464` explaining why — delete that comment rather than leaving it to contradict the code.
+- **The previous/next month arrows must work.** `components/ui/calendar.tsx` renders `button_previous` / `button_next` and defaults `captionLayout="label"`, so arrows come from react-day-picker and need no wrapper change. A nested popover inside the filter popover is fine: the outer `onFocusOutside` is already `preventDefault`ed, and Radix tracks the nested layer as a branch so a pointer-down in the calendar does not dismiss the parent.
+- **`is within` is a range calendar**: first click sets the start, second sets the end, committing `YYYY-MM-DD..YYYY-MM-DD` once both exist. The intermediate single-click state shows `from` alone in the trigger.
+- **An unparseable date can no longer be typed, but it can still arrive by URL.** `isConditionValueInvalid` and `aria-invalid` stay exactly as they are — a hand-edited `f.dateOfBirth=after:not-a-date` must still mark the row rather than silently match nothing.
+
 **Execution:**
-- [ ] `components/grid/grid-filter-operators.ts` -- registry, codec, evaluator. Pure, React-free, no runtime imports, so it is safe from a server component.
-- [ ] `components/grid/grid-view-state.ts` -- add the `fa.` prefix; route both filter families through `decodeCondition`/`encodeCondition`; guard on the token.
-- [ ] `components/grid/grid.tsx` -- delete the two old filter fns and the `filterKind` branch; resolve one condition fn per column; add the match-any `filterFromRowIds` path.
-- [ ] `components/grid/grid-filter-popover.tsx` + `components/grid/grid-toolbar.tsx` -- the popover and its Filter control / indicator.
-- [ ] `components/grid/grid-header-cell.tsx` -- the fourth menu item.
-- [ ] `components/grid/grid-types.ts`, `components/grid/index.ts`, `components/manage/manage-contacts-table.tsx`, `components/grid/grid-preview.tsx` -- retire the `filter` meta key and re-export.
-- [ ] `e2e/specs/grid-filter-conditions.spec.ts` -- one test per I/O matrix row plus the operator-registry sweep.
-- [ ] `e2e/specs/grid-column-drag-menu.spec.ts`, `e2e/specs/manage-contacts-filter.spec.ts`, `e2e/fixtures/manage-grid.ts` -- follow the changed encoding and the fourth menu item.
-- [ ] `docs/manage-grid-pattern.md`, `matrix-coverage-map.md`, `docs/architecture/testing.md`, `CONTRIBUTING.md`, `docs/development-guide.md` -- the same commit, per AR2.
+- [x] `components/grid/grid-filter-operators.ts` -- registry, codec, evaluator. Pure, React-free, no runtime imports, so it is safe from a server component.
+- [x] `components/grid/grid-view-state.ts` -- add the `fa.` prefix; route both filter families through `decodeCondition`/`encodeCondition`; guard on the token.
+- [x] `components/grid/grid.tsx` -- delete the two old filter fns and the `filterKind` branch; resolve one condition fn per column; add the match-any `filterFromRowIds` path.
+- [x] `components/grid/grid-filter-popover.tsx` + `components/grid/grid-toolbar.tsx` -- the popover and its Filter control / indicator.
+- [x] `components/grid/grid-header-cell.tsx` -- the fourth menu item.
+- [x] `components/grid/grid-types.ts`, `components/grid/index.ts`, `components/manage/manage-contacts-table.tsx`, `components/grid/grid-preview.tsx` -- retire the `filter` meta key and re-export.
+- [x] `e2e/specs/grid-filter-conditions.spec.ts` -- one test per I/O matrix row plus the operator-registry sweep.
+- [x] `e2e/specs/grid-column-drag-menu.spec.ts`, `e2e/specs/manage-contacts-filter.spec.ts`, `e2e/fixtures/manage-grid.ts` -- follow the changed encoding and the fourth menu item.
+- [x] `docs/manage-grid-pattern.md`, `matrix-coverage-map.md`, `docs/architecture/testing.md`, `CONTRIBUTING.md`, `docs/development-guide.md` -- the same commit, per AR2.
 
 **Acceptance Criteria:**
 - Given a text column, when the operator select is read, then it offers exactly contains / does not contain / is / is not / is empty / is not empty.
@@ -123,10 +137,37 @@ context:
 - Given two conditions, when the connective is match all, then only rows satisfying both appear; when match any, then rows satisfying either appear — and the connective lives in ONE state value, not per row.
 - Given an active filter, when the toolbar renders, then it names the columns in saffron and no column header carries an indicator.
 - Given `f.location=<needle>`, when the grid loads and writes state, then the condition filters on the joined name ANDs with `q` — matrix row 17 stays Covered.
+- **AC-D1.** Given a condition whose committed value is `Velachery`, when its value field is focused, blurred, focused again, and blurred again, then it reads `Velachery` every time and the placeholder never returns.
+- **AC-D1.** Given a condition whose value was cleared, when it renders, then it shows the placeholder — the placeholder means "no value", never "a value that failed to display".
+- **AC-D2.** Given a text condition with an empty value, when one character is typed, then the condition's value is that character and the toolbar's matching-row count has changed — with no Enter pressed and no blur.
+- **AC-D2.** Given a half-typed value inside the 250 ms debounce window, when the window closes, then the final keystrokes are all present. No keystroke is dropped.
+- **AC-D2.** Given a date, boolean, option-list or multi-option-list condition, when the value is chosen, then the condition commits on the choice itself.
+- **AC-D2.** Given a condition with a live-updating value, when the popover is closed and reopened, then the value is still there.
+- **AC-D3.** Given the popover with two or more conditions, when it renders, then exactly one hairline sits above the first condition and exactly one below the last, and no rule sits between the last condition and the footer.
+- **AC-D4.** Given a date field's condition, when the value control renders, then it is a trigger showing the date — or a placeholder — and there is no text field and no Set/Apply button anywhere in the popover.
+- **AC-D4.** Given the calendar is open, when the previous-month arrow is clicked and then the next-month arrow, then the caption shows the prior month and then returns to the current one.
+- **AC-D4.** Given the calendar is open, when a day is clicked, then the condition's value is that day as `YYYY-MM-DD`, the trigger shows it, and the popover closes.
+- **AC-D4.** Given `f.dateOfBirth=after:2026-01-15` in the URL, when the popover opens, then the trigger reads that date and the calendar marks it selected.
+- **AC-D4.** Given `is within` on a date field, when a first and then a second day are clicked, then the value is `YYYY-MM-DD..YYYY-MM-DD` and rows inside that span match.
+- **AC-D4.** Given a hand-edited `f.dateOfBirth=after:not-a-date`, when the popover opens, then the condition row is `aria-invalid` and no row matches — the picker makes it untypeable, not unreachable.
 
 ## Implementation Notes
 
+## Implementation Notes
+
+**`useConditionValueDraft`, not `useUrlBackedDraft`.** The spec's first cut proposed reusing the search box's hook, and that was wrong — read `use-grid-view-state.ts:268` again: it reconciles the draft from the committed value whenever `focused` is false, and a blur can beat the 250 ms debounced write. So the hook has exactly the defect being fixed, latent in the search box today. The replacement reconciles on `pending` (is a write of mine still in flight?) rather than on focus, which is why it cannot lose a keystroke in either direction. `useUrlBackedDraft` is left alone; changing it would move the search box's behaviour inside a popover-defect story.
+
+**Remount as a reset mechanism.** `FilterValueControl` is keyed `columnId:operator`. A field or operator change gives it a new key, so the draft and the `pending` flag are discarded by React rather than by an effect watching for the change — there is no window in which a stale draft is on screen. That is also why the `pending`-flag design is safe: the only realistic way for `committed` to change under an in-flight draft is Back or a link, and a remount covers the other two.
+
+**`role="combobox"` on the date trigger.** `aria-invalid` is not permitted on `role="button"`; `jsx-a11y/role-supports-aria-props` caught it. `combobox` is also the more honest role for a control that opens a popup and holds a value, and Radix's trigger already supplies `aria-haspopup="dialog"`. `aria-expanded` and `aria-controls` are declared explicitly against a `useId` content id because the linter cannot see Radix's runtime injection — which makes the trigger/content relationship real rather than assumed.
+
+**`data-outside` is on the `td`, not the button.** Verified against `react-day-picker@9.8.0` `dist/esm/DayPicker.js`: the day CELL carries `data-outside`/`data-selected`/`data-today`, and `data-day` is this repo's own `CalendarDayButton`. A `button[data-day]:not([data-outside])` selector silently matches every day including the greyed ones from the adjacent months, which would have made the range test click whatever the calendar happened to lay out.
+
+**Not verified by a browser.** No e2e run was made for these four fixes; see Verification below. `pnpm typecheck:workspace` and `pnpm test:static` are clean, and `pnpm test:e2e --list grid-filter-conditions` registers all 29 tests in the spec.
+
 ## Spec Change Log
+
+- **2026-10-14, four defects in the first build.** Dwaraka reported the committed value disappearing into its placeholder, filtering waiting on Enter, two rules under the conditions, and dates needing a picker. Root causes, all in `grid-filter-popover.tsx`: `draft` was the input's `value` and `onBlur` cleared it to `""`, so an unfocused field showed nothing but the placeholder; `onChange` wrote only local state, so `onCommit` fired on Enter and `onBlur` *discarded* rather than committed; the conditions container carried `border-b` while the footer carried `border-t`, drawing two rules where the composition has one above and one below; and the `date` shape fell through to the free-text `Input` the first build used deliberately. The value-field fix is to delete the hand-rolled draft and reuse `useUrlBackedDraft`, which the search box has used all along for exactly this reason — the fourth defect had been paid for once already. The picker replaces the free-text date with a Radix calendar popover on Dwaraka's instruction; the "untypeable, not unreachable" note on `aria-invalid` is recorded so the invalid-value branch is not deleted as dead code later.
 
 - **2026-10-14, visual verification.** Dwaraka ruled the reference PNG the source of truth for this story's surface and directed a screenshot-and-correct loop, overriding `visual-design.md:5,10`'s "direction, not pixel spec". The composition is now named in the frozen block with its values transcribed, and Verification carries the loop. Known-bad state avoided: shipping the popover from the prose alone, which is how the wrong control heights and a missing `Clear all` would have arrived.
 - **2026-10-14, close button.** `SPEC.md:138` ("no close button") contradicts `surface-and-toolbar.md:231` ("a close affordance and a 'Clear all'") and the composition, which has both. Shipped with the `×` and `Clear all`. Known-bad state avoided: dropping a control the composition shows because one summary line said to. Flagged to Dwaraka rather than silently resolved.
@@ -148,11 +189,15 @@ context:
 ## Verification
 
 **Commands:**
-- `pnpm test:static` -- expected: guardrails, typecheck, lint all clean.
-- `pnpm test:e2e grid-filter-conditions` -- expected: the new spec green, every I/O matrix row asserted.
-- `pnpm test:e2e manage-contacts-filter grid-column-drag-menu` -- expected: rows 17-19 and the menu specs green on the new encoding and four items.
-- `pnpm test:e2e` -- expected: full suite green. `components/grid/**` is shared, so `test:e2e:grid` + `test:e2e:manage` is the floor and this is the gate.
-- `pnpm test:e2e:determinism` -- expected: two runs agree. Required: specs and fixtures changed.
+- `pnpm test:static` -- **run, clean**: guardrails, typecheck and lint pass with 0 errors and the same 12 pre-existing warnings the tree carried before this work. No new warning was introduced.
+- `pnpm typecheck:workspace` -- **run, clean**.
+- `pnpm test:e2e --list grid-filter-conditions` -- **run**: 29 tests registered, the 10 new AC-D tests among them.
+- `pnpm test:e2e grid-filter-conditions` -- **NOT RUN.** The local stack was not started, so the 10 new tests and the 19 existing ones are unverified against a browser. This is the outstanding gap.
+- `pnpm test:e2e manage-contacts-filter grid-column-drag-menu` -- **NOT RUN.** Same reason. Both are affected: `manage-contacts-filter` asserts the encoded token and `grid-column-drag-menu` asserts the four menu items.
+- `pnpm test:e2e` -- **NOT RUN.**
+- `pnpm test:e2e:determinism` -- **NOT RUN.** Required before this lands: a spec file changed.
+
+**Known risk, unverified:** the date control is the only change with no existing test behind it, and the two things most likely to be wrong are (a) whether a Radix popover nested inside another Radix popover dismisses the parent when a day is clicked, and (b) whether `react-day-picker`'s controlled `mode="range"` reports a second click as a span or as a fresh single day. The code handles (b) itself rather than trusting RDP's anchor, but only a run proves it.
 
 **Screenshot loop** -- the gate `visual-design.md:5` describes as "recorded", done for real rather than asserted:
 - Run the local stack, open `/manage?view=contacts&mode=admin` at **1440x900** (the composition's own viewport) with the popover open and conditions composed, using the suite's `e2e/.auth/admin.json` storage state. Capture to `/tmp/opencode/story6/`.

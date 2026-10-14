@@ -73,6 +73,10 @@ export {
   type UseGridViewStateOptions,
 } from "@/components/grid/use-grid-view-state"
 export {
+  GridFilterDateControl,
+  type GridFilterDateControlProps,
+} from "@/components/grid/grid-filter-value"
+export {
   GRID_CELL_KEY_SEPARATOR,
   gridCellKey,
   useGridKeyboard,

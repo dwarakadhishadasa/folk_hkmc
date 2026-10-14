@@ -487,3 +487,247 @@ test.describe("CAP-12 — the filter conditions popover", () => {
     await expectVisibleCount(page, both.length)
   })
 })
+
+/**
+ * The four defects Dwaraka reported against the first build on 2026-10-14.
+ *
+ * Each of these was a value or a rule the operator could see was wrong, so each
+ * asserts the OBSERVABLE thing rather than the implementation: the field's text
+ * after a blur, the URL after a keystroke, the computed borders, the calendar.
+ */
+test.describe("CAP-12 — the four reported defects", () => {
+  test("AC-D1: a committed value survives focus and blur", async ({ page }) => {
+    const rows = await scopedContacts()
+    const name = rows.find((row) => (row.name ?? "").length > 3)!.name!
+
+    await gotoGrid(page, { params: { "f.name": `is:${name}` } })
+    await openPopover(page)
+
+    const value = conditionRow(page, "name").locator("[data-grid-filter-value]")
+    await expect(value).toHaveValue(name)
+
+    // Two full cycles. The first build cleared its draft to "" on blur, so the
+    // SECOND cycle is where the value was visibly gone and the placeholder back.
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+      await value.click()
+      await value.blur()
+      await expect(value, `cycle ${cycle + 1} must still read the committed value`).toHaveValue(name)
+    }
+
+    // And the condition is still doing its job, not merely displaying.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.name"))
+      .toBe(`is:${name}`)
+  })
+
+  test("AC-D1: an emptied value shows the placeholder, not a stale value", async ({ page }) => {
+    await gotoGrid(page, { params: { "f.name": "contains:abc" } })
+    await openPopover(page)
+
+    const value = conditionRow(page, "name").locator("[data-grid-filter-value]")
+    await value.click()
+    await value.fill("")
+    await value.blur()
+
+    await expect(value).toHaveValue("")
+    await expect(value).toHaveAttribute("placeholder", "Enter a value")
+    // An empty value is inert, not invalid — it must not paint the error border.
+    await expect(value).not.toHaveAttribute("aria-invalid", "true")
+  })
+
+  test("AC-D2: a keystroke filters, with no Enter and no blur", async ({ page }) => {
+    const rows = await scopedContacts()
+    const bulk = rows.filter((row) => row.source === "preview-fixture-bulk")
+    expect(bulk.length).toBeGreaterThan(10)
+    const name = bulk[0].name!
+    const partial = name.slice(0, 4)
+
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    const value = conditionRow(page, "name").locator("[data-grid-filter-value]")
+    await value.click()
+
+    // No `press("Enter")` and no `blur()` anywhere in this test. The URL must
+    // carry a partial value because the commit is the keystroke.
+    await value.fill(partial)
+
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.name"), { timeout: 5000 })
+      .toBe(`contains:${partial}`)
+
+    // And the grid actually narrowed, which is what "filtering" means. The URL
+    // alone would pass even if nothing evaluated the condition.
+    await expectVisibleCount(page, rows.filter((row) => (row.name ?? "").includes(partial)).length)
+  })
+
+  test("AC-D2: every keystroke inside the debounce window survives", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    const value = conditionRow(page, "name").locator("[data-grid-filter-value]")
+    await value.click()
+
+    // Typed faster than the 250 ms write debounce. A draft that reconciles from
+    // the URL mid-typing drops characters; this asserts the last one survives.
+    await value.pressSequentially("abcdefgh", { delay: 10 })
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.name"), { timeout: 5000 })
+      .toBe("contains:abcdefgh")
+
+    await value.blur()
+    await expect(value).toHaveValue("abcdefgh")
+  })
+
+  test("AC-D3: one rule above the conditions and one below", async ({ page }) => {
+    await gotoGrid(page, { params: { "f.name": "contains:a", "f.phone": "contains:9" } })
+    await openPopover(page)
+
+    /** Every horizontal rule on one element, in px. */
+    const rules = (attribute: string) =>
+      popover(page)
+        .locator(`[data-grid-filter-${attribute}]`)
+        .evaluate((el) => [
+          getComputedStyle(el).borderTopWidth,
+          getComputedStyle(el).borderBottomWidth,
+        ])
+
+    // The conditions list carries NO rule of its own. It used to carry a
+    // `border-b`, which put a second hairline directly under the conditions
+    // once the footer added its own `border-t`.
+    const [conditionsTop, conditionsBottom] = await rules("conditions")
+    expect(conditionsBottom, "no rule between the conditions and the footer").toBe("0px")
+    expect(conditionsTop, "the header's rule belongs to the header").toBe("0px")
+
+    // The two that remain: the header's below it, the footer's above it.
+    const [headerTop, headerBottom] = await rules("header")
+    expect(headerBottom, "the header carries the rule above the conditions").not.toBe("0px")
+    expect(headerTop, "and nothing above the header").toBe("0px")
+
+    const [footerTop, footerBottom] = await rules("footer")
+    expect(footerTop, "the footer carries the rule below the conditions").not.toBe("0px")
+    expect(footerBottom, "and nothing below the footer").toBe("0px")
+  })
+
+  test("AC-D4: a date is picked from a calendar, not typed", async ({ page }) => {
+    await gotoGrid(page, { params: { "f.dateOfBirth": "after:2020-01-01" } })
+    await openPopover(page)
+
+    const row = conditionRow(page, "dateOfBirth")
+    const trigger = row.locator("[data-grid-filter-calendar-trigger]")
+
+    // The value arrived by URL, so the trigger renders it.
+    await expect(trigger).toContainText("2020")
+    await expect(row.locator('input[type="text"]')).toHaveCount(0)
+
+    await trigger.click()
+    const calendar = page.locator("[data-grid-filter-calendar]")
+    await expect(calendar).toBeVisible()
+
+    // No text field and no "Set"/"Apply" button anywhere in the calendar.
+    await expect(calendar.locator("input")).toHaveCount(0)
+    await expect(calendar.getByRole("button", { name: /^(set|apply|ok|done)$/i })).toHaveCount(0)
+  })
+
+  test("AC-D4: the month arrows move the month and come back", async ({ page }) => {
+    await gotoGrid(page, { params: { "f.dateOfBirth": "after:2020-01-01" } })
+    await openPopover(page)
+    await conditionRow(page, "dateOfBirth").locator("[data-grid-filter-calendar-trigger]").click()
+
+    const calendar = page.locator("[data-grid-filter-calendar]")
+    await expect(calendar).toBeVisible()
+
+    const caption = () => calendar.locator(".rdp-caption_label").innerText()
+    const start = await caption()
+    expect(start.trim().length, "the caption names a month").toBeGreaterThan(0)
+
+    await calendar.locator(".rdp-button_previous").click()
+    const previous = await caption()
+    expect(previous, "the previous arrow must move the caption").not.toBe(start)
+
+    await calendar.locator(".rdp-button_next").click()
+    expect(await caption(), "the next arrow must move it back").toBe(start)
+  })
+
+  test("AC-D4: clicking a day sets the value", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    const row = conditionRow(page, "name")
+    await row.locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Date of Birth", exact: true }).click()
+
+    const dateRow = conditionRow(page, "dateOfBirth")
+    await dateRow.locator("[data-grid-filter-calendar-trigger]").click()
+
+    const calendar = page.locator("[data-grid-filter-calendar]")
+    await expect(calendar).toBeVisible()
+
+    // `data-outside` is on the day CELL (the `td`), not on the button the
+    // calendar's DayButton renders — so it is excluded on the `td` or not at all,
+    // and an outside day would otherwise be clickable as day one.
+    const day = calendar.locator("td:not([data-outside]) button[data-day]").first()
+    const dayText = (await day.innerText()).trim()
+    expect(dayText.length, "a day cell must be named").toBeGreaterThan(0)
+    await day.click()
+
+    // The picker is the whole interaction: the calendar closed and the value
+    // landed, with no Set button to press.
+    await expect(calendar).toHaveCount(0)
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.dateOfBirth"))
+      .toMatch(/^is:\d{4}-\d{2}-\d{2}$/)
+    await expect(dateRow.locator("[data-grid-filter-calendar-trigger]")).not.toHaveText("Choose a date")
+  })
+
+  test("AC-D4: `is within` takes two clicks and serialises a span", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition" }).click()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Date of Birth", exact: true }).click()
+
+    const row = conditionRow(page, "dateOfBirth")
+    await row.locator("[data-grid-filter-operator]").click()
+    await page.getByRole("option", { name: "is within", exact: true }).click()
+
+    await row.locator("[data-grid-filter-calendar-trigger]").click()
+    const calendar = page.locator("[data-grid-filter-calendar]")
+    await expect(calendar).toBeVisible()
+
+    const days = calendar.locator("td:not([data-outside]) button[data-day]")
+    await days.nth(2).click()
+
+    // The first click alone must NOT commit a half-built range: a span with one
+    // end is unparseable and would match nothing while looking finished.
+    await expect(calendar).toBeVisible()
+    expect(
+      await new URL(page.url()).searchParams.get("f.dateOfBirth"),
+      "one click is not yet a span",
+    ).not.toMatch(/\.\./)
+
+    await days.nth(6).click()
+
+    await expect(calendar).toHaveCount(0)
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("f.dateOfBirth"))
+      .toMatch(/^within:\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/)
+  })
+
+  test("AC-D4: an unparseable date from a URL is still reported", async ({ page }) => {
+    await gotoGrid(page, { params: { "f.dateOfBirth": "after:not-a-date" } })
+    await openPopover(page)
+
+    // The picker makes this untypeable, not unreachable — a shared link can still
+    // carry it, and it must still be visible rather than silently matching nothing.
+    await expect(conditionRow(page, "dateOfBirth").locator("[data-grid-filter-value]")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    )
+    await expectVisibleCount(page, 0)
+  })
+})
