@@ -382,14 +382,54 @@ export function columnMenuTrigger(page: Page, columnId: string, label: string): 
   return headerCell(page, columnId).getByRole("button", { name: `Column options for ${label}` })
 }
 
-/** Open a column's menu: the three-item surface (two sorts + hide). */
+/**
+ * Open a column's menu. Three items: Sort ascending, Sort descending, Hide
+ * column — plus Filter when the column declares a `fieldType`. The two sort
+ * items do not open a popover of their own; they write `sorting` and then open
+ * the one global sort popover, prefilled.
+ */
 export async function openColumnMenu(page: Page, columnId: string, label: string): Promise<void> {
   await columnMenuTrigger(page, columnId, label).click()
 }
 
-/** The global sort popover. Opened from a column menu's sort items in this story. */
+/**
+ * The global sort popover. Opened from the column menu's sort items **and** from
+ * the toolbar's Sort control — three anchors, one component, one `sorting` state,
+ * so this locator resolves either way and a spec never has to know which opened it.
+ */
 export function sortPopover(page: Page): Locator {
   return page.locator("[data-grid-sort-popover]")
+}
+
+/** The toolbar's Sort trigger — the global entry point onto the popover above. */
+export function sortToolbarControl(page: Page): Locator {
+  return page.locator("[data-grid-sort-control]")
+}
+
+/**
+ * The *Hide fields* trigger (CAP-18). Named for the control, not for what it
+ * does: the list it opens shows every data field and the checkbox state is the
+ * visibility, so a control called "Columns" that only ever removes columns reads
+ * as a missing-fields bug.
+ */
+export function hideFieldsControl(page: Page): Locator {
+  return page.locator("[data-grid-hide-fields-control]")
+}
+
+/** The *Hide fields* popover: fourteen data fields, Name and Actions locked. */
+export function hideFieldsPopover(page: Page): Locator {
+  return page.locator("[data-grid-hide-fields-popover]")
+}
+
+/**
+ * One field's checkbox in the *Hide fields* popover, by its column label.
+ *
+ * The label element wraps the checkbox and its text, so `getByLabel` resolves the
+ * input the way a screen reader names it and the locator survives a row whose
+ * `<label>` becomes a `<div>` for a locked field.
+ */
+export function hideFieldToggle(page: Page, label: string): Locator {
+  return hideFieldsPopover(page).getByLabel(label, { exact: true })
 }
 
 /** The popover's field dropdown trigger. */
@@ -421,12 +461,25 @@ export function rowCheckbox(page: Page, contactName: string): Locator {
   return gridRoot(page).getByRole("checkbox", { name: `Select ${contactName}` })
 }
 
-/** The toolbar's selected-count readout. */
+/**
+ * The selected-count readout, in the contextual selection band.
+ *
+ * **Count 0 at rest.** The band renders only while rows are selected, so a spec
+ * that wants "no selection chrome anywhere" asserts this at `toHaveCount(0)`
+ * rather than reading a `0` off the page. Matrix row 12's claim is unchanged by
+ * that — the mechanism moved from "rendered and inert" to "not offered".
+ */
 export function selectionCount(page: Page): Locator {
   return page.locator("[data-bulk-selection-count]")
 }
 
-/** The bulk action's trigger. Disabled at 0 selected — matrix row 12. */
+/**
+ * The bulk action's trigger, in the same contextual band.
+ *
+ * Count 0 at rest, for the same reason as `selectionCount`: the band is absent,
+ * so there is nothing to assert disabled. Above zero it is enabled unless a run
+ * is in flight.
+ */
 export function bulkActionButton(page: Page): Locator {
   return page.getByRole("button", { name: /Add selected to favorites|Saving…/ })
 }

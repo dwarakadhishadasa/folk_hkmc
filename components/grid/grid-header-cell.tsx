@@ -89,10 +89,9 @@ function SortIndicator({ direction }: { direction: "asc" | "desc" | false }) {
  *
  * Column order moves by drag-and-drop via `@dnd-kit/core` (pointer, touch and
  * keyboard sensors, committed once on drop through the transient handle — see
- * `grid.tsx`). The label is deliberately not a sort button: sorting lives in
- * the one global sort popover, opened from the column menu's two sort items
- * (the toolbar entry point lands in story 7), so a header is never both a
- * control and a sort button.
+ * `grid.tsx`). The label is deliberately not a sort button: sorting lives in the
+ * one global sort popover, opened from this menu's two sort items and from the
+ * toolbar's Sort control, so a header is never both a control and a sort button.
  *
  * The menu control reveals on hover and keyboard focus through an
  * opacity treatment that leaves it focusable and tappable at rest — never

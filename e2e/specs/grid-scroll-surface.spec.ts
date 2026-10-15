@@ -406,18 +406,33 @@ test.describe("the grid's scroll surface", () => {
     expect(height, "a container with no height is not a scroll container at all").toBeGreaterThan(0)
 
     // **The part that distinguishes "fills the frame" from "is capped".** The
-    // container's height plus the toolbar's is the grid root's whole content box:
-    // there is nothing left over, so the height was distributed to it rather than
-    // stopped at a ceiling. A `max-h-[70vh]` cap in a frame taller than 70vh
-    // leaves a visible gap below the container, and this equality is what fails.
+    // container's height plus every band above it is the grid root's whole
+    // content box: there is nothing left over, so the height was distributed to
+    // it rather than stopped at a ceiling. A `max-h-[70vh]` cap in a frame taller
+    // than 70vh leaves a visible gap below the container, and this equality is
+    // what fails.
+    //
+    // **Every sibling, not just the toolbar.** At rest that is the same single
+    // sibling it always was; with rows selected the contextual selection band is
+    // a second one. The claim being protected is "no leftover gap", which is a
+    // property of the whole stack above the container — so naming one sibling
+    // would have made the assertion silently weaker the moment a second band
+    // appeared, which is precisely when it needs to hold.
     const consumed = await container.evaluate((element) => {
-      const toolbar = element.previousElementSibling
-      return toolbar ? element.offsetHeight + (toolbar as HTMLElement).offsetHeight : -1
+      let total = element.offsetHeight
+      let sibling = element.previousElementSibling
+
+      while (sibling) {
+        total += (sibling as HTMLElement).offsetHeight
+        sibling = sibling.previousElementSibling
+      }
+
+      return total
     })
 
     expect(
       consumed,
-      "the scroll container plus the toolbar must account for the grid frame exactly; a leftover gap is a cap, not a layout",
+      "the scroll container plus every band above it must account for the grid frame exactly; a leftover gap is a cap, not a layout",
     ).toBe(await root.evaluate((element) => element.clientHeight))
   })
 

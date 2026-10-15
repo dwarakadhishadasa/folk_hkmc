@@ -103,8 +103,8 @@ pnpm dev:local     # once per machine session
 | `pnpm test:e2e:guards` | `harness-guards` + `suite-determinism` + `mailpit-reader` | **21 s** (24 passed) |
 | `pnpm test:e2e:theme` | `theme-switch.spec.ts` | **38 s** (16 passed) |
 | `pnpm test:e2e:manage` | The six `manage-contacts-*.spec.ts` files | **2.1 min** (36 passed) |
-| `pnpm test:e2e:grid` | The four `grid-*.spec.ts` files | **3.2 min** (57 passed) |
-| `pnpm test:e2e` | **Full suite.** 163 specs + 3 setup. | ~5–7 min |
+| `pnpm test:e2e:grid` | The eleven `grid-*.spec.ts` files | **3.2 min** (182 passed) |
+| `pnpm test:e2e` | **Full suite.** 289 specs + 3 setup. | ~5–7 min |
 | `pnpm test:e2e:determinism` | Two full runs back to back, no reset | ~12 min |
 
 Costs are from a warm stack on this machine, one worker. Every run also pays
@@ -151,7 +151,7 @@ use, each including the 3 setup tests that every run pays for:
 
 | Filter | Script | Tests |
 |---|---|---|
-| `grid-` | `test:e2e:grid` | 57 in 7 files |
+| `grid-` | `test:e2e:grid` | 182 in 14 files |
 | `manage-contacts` | `test:e2e:manage` | 36 in 9 files |
 | `theme-switch` | `test:e2e:theme` | 16 in 4 files |
 | `harness-guards suite-determinism mailpit-reader` | `test:e2e:guards` | 24 in 6 files |
@@ -164,7 +164,7 @@ selects three files in one run.
 ## 4. Feature-to-test registry
 
 Every path below is verified to exist. Counts are from `pnpm test:e2e:list`
-(163 spec tests + 3 setup tests, 166 total).
+(289 spec tests + 3 setup tests, 292 total).
 
 ### Staff auth and session handling — `pnpm test:e2e smoke`
 
@@ -190,7 +190,7 @@ These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
 lives in
 [`matrix-coverage-map.md`](../../_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md).
 
-### Grid primitive — keyboard, editors, range, clipboard — `pnpm test:e2e:grid`
+### Grid primitive — keyboard, editors, range, clipboard, chrome — `pnpm test:e2e:grid`
 
 | Source | Spec | Tests |
 |---|---|---|
@@ -198,6 +198,14 @@ lives in
 | `components/grid/grid-editors.tsx`, `components/grid/grid-editor-types.ts` | `e2e/specs/grid-editors.spec.ts` | 37 |
 | `components/grid/grid.tsx`, `grid-row.tsx` | `e2e/specs/grid-cell-range.spec.ts` | 4 |
 | " | `e2e/specs/grid-clipboard.spec.ts` | 5 |
+| `components/grid/grid.tsx`, `grid-row.tsx`, `grid-cell-renderers.tsx` | `e2e/specs/grid-cell-renderers.spec.ts` | 12 |
+| " | `e2e/specs/grid-cell-metrics.spec.ts` | 6 |
+| `components/grid/grid-scroll-surface.spec.ts`'s surface: the frame, the scroll container and the bands above it | `e2e/specs/grid-scroll-surface.spec.ts` | 9 |
+| `components/grid/grid-header-cell.tsx`, `grid-toolbar.tsx` (CAP-18's column menu), `grid.tsx` drag handling | `e2e/specs/grid-column-drag-menu.spec.ts` | 11 |
+| `components/grid/grid-edit-model.spec.ts`'s model: `use-grid-keyboard.ts`, `grid-editors.tsx`, the optimistic override | `e2e/specs/grid-edit-model.spec.ts` | 24 |
+| `components/grid/grid-filter-popover.tsx`, `grid-filter-operators.ts`, `grid-view-state.ts` (`f.`/`fa.`) | `e2e/specs/grid-filter-conditions.spec.ts` | 45 |
+| `components/grid/grid-toolbar.tsx`, `grid-view-state.ts` (`hide`), `use-grid-view-state.ts`, `grid-sort-popover.tsx`, `grid-row-lifecycle.tsx` | `e2e/specs/grid-toolbar.spec.ts` | 18 |
+| " (contacts only — CAP-18's default field set and the selection band) | `e2e/specs/manage-contacts-selection.spec.ts` | 4 |
 
 `components/grid/**` is a **shared primitive**: it is imported by
 `components/manage/manage-contacts-table.tsx` and
@@ -222,7 +230,7 @@ the manage contacts specs — see §5.
 
 | Source | Spec | Tests |
 |---|---|---|
-| `scripts/bulk-contact-fixtures.mjs`, `e2e/fixtures/bulk-contacts.ts` | `e2e/specs/bulk-fixtures.spec.ts` | 35 |
+| `scripts/bulk-contact-fixtures.mjs`, `e2e/fixtures/bulk-contacts.ts` | `e2e/specs/bulk-fixtures.spec.ts` | 36 |
 
 ---
 

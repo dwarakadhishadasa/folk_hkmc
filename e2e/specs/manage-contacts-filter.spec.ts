@@ -245,9 +245,12 @@ test.describe("filtering, sorting and the empty scope", () => {
       await headerCheckbox.click({ force: true, timeout: 2_000 }).catch(() => undefined)
       await expect(headerCheckbox).toBeDisabled()
 
-      // The selection count agrees there is nothing to select.
-      await expect(page.locator("[data-bulk-selection-count]")).toHaveText("0 selected")
-      await expect(page.getByRole("button", { name: /Add selected to favorites/ })).toBeDisabled()
+      // The selection chrome agrees there is nothing to select. It is a
+      // contextual band that renders only above zero, so "agrees" is absence
+      // rather than a disabled control reading `0` — the claim is unchanged and
+      // the mechanism is the one recorded in `manage-contacts-selection.spec.ts`.
+      await expect(page.locator("[data-bulk-selection-count]")).toHaveCount(0)
+      await expect(page.getByRole("button", { name: /Add selected to favorites/ })).toHaveCount(0)
     } finally {
       const { error } = await db
         .from("contacts")

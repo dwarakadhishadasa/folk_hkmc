@@ -12,8 +12,19 @@
  * | `f.<colId>`    | one condition, ANDed across columns                  |
  * | `fa.<colId>`   | one condition, ORed across columns                   |
  * | `cols`         | ordered, comma-joined column ids                     |
- * | `hide`         | hidden column ids, comma-joined                      |
+ * | `hide`         | COMPLETE hidden set, comma-joined — see below        |
  * | `size.<colId>` | committed column width in integer px                 |
+ *
+ * **`hide` is a complete description, not a delta.** `params.has("hide")`
+ * decides, never emptiness: an ABSENT key means the consumer's
+ * `defaultHiddenColumnIds` apply, and a PRESENT key means exactly the ids it
+ * lists are hidden — including `hide=` with nothing after it, which is the one
+ * state a bare list cannot otherwise express ("nothing hidden"). Serialization
+ * writes the key whenever the effective set differs from the defaults, so
+ * un-hiding a default-hidden column is reversible: `hide=booksRead,...` says
+ * "these four", and dropping the key is what restores the defaults. A bare list
+ * keyed on non-emptiness would make the default set a lock rather than a
+ * default, and `hide=notes` would change meaning the moment a default appeared.
  *
  * Two invariants matter more than the table above:
  *
@@ -158,11 +169,17 @@ function parseSizingValue(raw: string | null): number | null {
  * Reads grid state out of a live query string. Unknown column ids are dropped
  * and ids missing from `cols` are re-appended in `columnIds` order, so a stale
  * shared link degrades to a valid arrangement instead of throwing.
+ *
+ * `defaultHiddenColumnIds` is a per-consumer product decision, supplied by the
+ * caller rather than fixed here: a grid with no defaults keeps every column
+ * visible, which is exactly what `grid-preview.tsx` wants. The KEY decides
+ * whether the defaults apply — see the `hide` note in this module's header.
  */
 export function parseGridViewState(
   params: URLSearchParams,
   columnIds: readonly string[],
   fieldTypes: GridColumnFieldTypes = {},
+  defaultHiddenColumnIds: readonly string[] = [],
 ): GridViewState {
   const known = new Set(columnIds)
 
@@ -276,10 +293,23 @@ export function parseGridViewState(
       }
     }
 
+    // Presence, not emptiness. `hide=notes` keeps meaning "only Notes hidden"
+    // whatever the defaults are, because a present key is a complete list; and
+    // `hide=` is the only encoding that can say "nothing hidden" — a default set
+    // that could not be un-hidden would be a lock, not a default.
     const columnVisibility: VisibilityState = {}
-    for (const id of splitList(params.get("hide") ?? "")) {
-      if (known.has(id)) {
-        columnVisibility[id] = false
+
+    if (params.has("hide")) {
+      for (const id of splitList(params.get("hide") ?? "")) {
+        if (known.has(id)) {
+          columnVisibility[id] = false
+        }
+      }
+    } else {
+      for (const id of defaultHiddenColumnIds) {
+        if (known.has(id)) {
+          columnVisibility[id] = false
+        }
       }
     }
 
@@ -302,18 +332,34 @@ export function parseGridViewState(
       columnSizing,
     }
   } catch {
-    // A malformed query string must never take the grid down.
-    return { ...EMPTY_VIEW_STATE, columnOrder: [...columnIds] }
+    // A malformed query string must never take the grid down. The defaults
+    // still apply here: "no readable `hide` key" must mean the same thing on
+    // the failure path as on the happy one, or a grid would jump from nine
+    // columns to fifteen on exactly the render where something already broke.
+    const columnVisibility: VisibilityState = {}
+
+    for (const id of defaultHiddenColumnIds) {
+      if (known.has(id)) {
+        columnVisibility[id] = false
+      }
+    }
+
+    return { ...EMPTY_VIEW_STATE, columnOrder: [...columnIds], columnVisibility }
   }
 }
 
 /**
  * Projects grid state onto the query params worth writing. Keys whose value
  * equals the default are omitted, and `applyGridParams` deletes them.
+ *
+ * `defaultHiddenColumnIds` must be the SAME list the caller parsed with, or the
+ * "unchanged, so write nothing" test below is measured against a set the grid
+ * is not actually showing.
  */
 export function serializeGridViewState(
   state: Partial<GridViewState>,
   columnIds: readonly string[],
+  defaultHiddenColumnIds: readonly string[] = [],
 ): Record<string, string> {
   const known = new Set(columnIds)
   const params: Record<string, string> = {}
@@ -361,7 +407,19 @@ export function serializeGridViewState(
   const hidden = Object.keys(state.columnVisibility ?? {})
     .filter((id) => known.has(id) && state.columnVisibility?.[id] === false)
 
-  if (hidden.length > 0) {
+  // Compared as SETS against the defaults, not as "is there anything hidden".
+  // `hidden` lists only what is hidden, so an un-hide has nowhere to go in a
+  // delta encoding, and "hide nothing" is the one state a bare list cannot
+  // express. Writing the complete set whenever it differs — `hide=` included —
+  // is what keeps the defaults a default: deleting the key is the only way back,
+  // and it happens automatically the moment the effective set equals them again.
+  const defaultHidden = new Set(defaultHiddenColumnIds)
+  const hiddenSet = new Set(hidden)
+  const matchesDefault =
+    hiddenSet.size === defaultHidden.size && [...hiddenSet].every((id) => defaultHidden.has(id))
+
+  if (!matchesDefault) {
+    // Deliberately emits `hide=` for the empty set rather than omitting the key.
     params.hide = hidden.join(",")
   }
 

@@ -456,6 +456,22 @@ export interface GridProps<TData extends RowData> {
   /** Consumer chrome rendered in the toolbar, after the density control. */
   toolbarExtra?: ReactNode
   /**
+   * Consumer chrome for a contextual band **between the toolbar and the scroll
+   * container** — the selection readout and its bulk action.
+   *
+   * `Grid` owns its own chrome, so the consumer never has to agree with it about
+   * where the band goes or how it is spaced; and a band that renders only while
+   * rows are selected is the grid's call to make, because the grid is what knows
+   * how many are selected. Return `null` from it at zero and the band is simply
+   * not in the frame: an absent sibling above the scroll container is the resting
+   * state, and `grid-scroll-surface.spec.ts` asserts that the siblings above the
+   * container plus the container itself still sum to the frame.
+   *
+   * Not URL state and not a status surface — a `role="status"` inside `gridRoot`
+   * is forbidden, so anything this band reports must report it elsewhere.
+   */
+  selectionActions?: ReactNode
+  /**
    * CAP-6 row lifecycle, opted into by supplying it. Omit it and the grid has
    * no add affordance, no delete affordance, no confirmation and no report —
    * the primitive never assumes a table can create or destroy a row.
@@ -523,6 +539,7 @@ export function Grid<TData extends RowData>({
   onClearFilters,
   emptyContent,
   toolbarExtra,
+  selectionActions,
   rowLifecycle,
   onRowRemoved,
   onUnreachableNewRow,
@@ -1099,11 +1116,28 @@ export function Grid<TData extends RowData>({
     transient?.cancel()
   }, [transient])
 
-  const toolbarColumns: GridToolbarColumn[] = columnIds.map((id) => ({
-    id,
-    label: labelById.get(id) ?? id,
-    visible: visibleIndexById.has(id),
-  }))
+  // The visibility list is the fourteen DATA fields, in column-definition
+  // order. The selection column is withheld because it is a control and not a
+  // field: a row of checkboxes in a list of fields is the kind of thing that
+  // looks like an affordance and is not one. `hideable` is resolved here rather
+  // than in the toolbar because it needs `getCanHide()`, which is table state.
+  const toolbarColumns: GridToolbarColumn[] = columnIds.flatMap((id) => {
+    const column = table.getColumn(id)
+    const definition = column?.columnDef
+
+    if (definition?.meta?.grid?.selectable === true) {
+      return []
+    }
+
+    return [
+      {
+        id,
+        label: labelById.get(id) ?? id,
+        visible: visibleIndexById.has(id),
+        hideable: column?.getCanHide() === true && definition?.meta?.grid?.hideable !== false,
+      },
+    ]
+  })
 
   const sortableColumns: GridSortField[] = headerHeaders
     .filter((header) => header.column.getCanSort())
@@ -1168,7 +1202,6 @@ export function Grid<TData extends RowData>({
         onDensityChange={onDensityChange}
         visibleCount={rowModel.length}
         totalCount={rows.length}
-        frozenColumnIds={frozenColumnIds}
         filterFields={filterFields}
         conditions={parsedConditions}
         onConditionsChange={handleConditionsChange}
@@ -1176,6 +1209,11 @@ export function Grid<TData extends RowData>({
         onFilterConnectiveChange={onFilterConnectiveChange}
         filterOpen={filterOpen}
         onFilterOpenChange={setFilterOpen}
+        sortFields={sortableColumns}
+        sorting={table.getState().sorting ?? []}
+        onSortingChange={(sorting) => {
+          table.setSorting(sorting)
+        }}
         rowAction={
           rowLifecycle ? (
             <GridRowAddControl
@@ -1187,7 +1225,31 @@ export function Grid<TData extends RowData>({
         toolbarExtra={toolbarExtra}
       />
 
-      
+      {/*
+        The contextual selection band, between the toolbar and the scroll
+        container and only while the consumer renders it.
+
+        It wears the toolbar band's own rhythm (`px-3.5 py-2.5`, `border-b`,
+        `bg-card`, `h-8` controls, `text-[13px]`) so it reads as a second line of
+        one surface rather than as a footer, which is what a differently-padded
+        strip at the bottom of a grid always starts to look like.
+
+        Placement is load-bearing in one direction: `grid-scroll-surface.spec.ts`
+        asserts that the siblings above the scroll container plus the container
+        itself sum to `gridRoot.clientHeight`, which is what keeps a leftover gap
+        from becoming a cap. A `shrink-0` band sits above a `flex-1` container in
+        a bounded column, so the container gives up the space rather than the
+        band compressing its own controls.
+      */}
+      {selectionActions ? (
+        <div
+          data-grid-selection-band=""
+          className={`${GRID_BASE_FONT_CLASS} bg-card flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3.5 py-2.5`}
+        >
+          {selectionActions}
+        </div>
+      ) : null}
+
 
       {/*
         The one scroll container in the primitive, and the element the virtualizer

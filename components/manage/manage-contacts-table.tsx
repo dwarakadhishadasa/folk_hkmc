@@ -111,6 +111,37 @@ const COLUMN_IDS: readonly string[] = [
   ACTIONS_COLUMN_ID,
 ]
 
+/**
+ * CAP-18's default field set: nine of the fourteen data fields, with these five
+ * off until asked for.
+ *
+ * A **contacts** decision, so it lives here and not in `components/grid/` — the
+ * primitive has no opinion about which of a table's fields matter, and
+ * `/dev/grid-preview` passes no defaults and keeps all fifteen of its columns.
+ *
+ * Two are here for a reason rather than for width:
+ * - `location` and `collectedBy` stay VISIBLE, because CAP-4's unresolved
+ *   marker is a `linked` cell and an operator can only chase a location they
+ *   can see.
+ * - `lastContactedOn` is hidden (OQ-16) — the attendance rollups
+ *   `totalAttendanceCount` / `past60DayAttendanceCount` carry the same question.
+ *
+ * **This is a default, not a lock, and the URL encoding is what makes it one.**
+ * An absent `hide` key applies this set; a present key — including `hide=` with
+ * nothing after it — replaces it entirely. Un-hiding a field from *Hide fields*
+ * therefore writes the complete still-hidden list, and re-hiding it drops the
+ * key so the defaults apply again. Without that, `serializeGridViewState` could
+ * only ever write ids whose visibility is `false`, and "hide nothing" would be
+ * inexpressible: the default set would be a one-way door.
+ */
+const GRID_DEFAULT_HIDDEN_COLUMNS: readonly string[] = [
+  SOURCE_COLUMN_ID,
+  BOOKS_READ_COLUMN_ID,
+  DATE_OF_BIRTH_COLUMN_ID,
+  LAST_CONTACTED_COLUMN_ID,
+  FAVORITE_COLUMN_ID,
+]
+
 const COLUMN_LABELS: Record<string, string> = {
   [NAME_COLUMN_ID]: "Name",
   [PHONE_COLUMN_ID]: "Phone",
@@ -1112,7 +1143,11 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
     beginTransientChange,
     commitTransientChange,
     cancelTransientChange,
-  } = useGridViewState({ columnIds: COLUMN_IDS, fieldTypes })
+  } = useGridViewState({
+    columnIds: COLUMN_IDS,
+    fieldTypes,
+    defaultHiddenColumnIds: GRID_DEFAULT_HIDDEN_COLUMNS,
+  })
 
   const selectedCount = useMemo(
     () =>
@@ -1123,25 +1158,46 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
     [contacts, rowSelection],
   )
 
-  const toolbarExtra = (
-    <div className="flex items-center gap-2">
-      <span className="text-muted-foreground text-[13px] tabular-nums" data-bulk-selection-count="">
-        {selectedCount} selected
-      </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-7 px-2 text-[13px]"
-        disabled={selectedCount === 0 || bulkRunning}
-        onClick={() => {
-          void runBulkFavorite()
-        }}
-      >
-        {bulkRunning ? "Saving…" : "Add selected to favorites"}
-      </Button>
-    </div>
-  )
+  /**
+   * Selection chrome, in the contextual band rather than in the toolbar.
+   *
+   * **At zero selected this returns `null`, and that is the whole decision.**
+   * `0 selected` is a statement about absence, and the header checkbox already
+   * carries the real mixed/checked state; a readout of a number that cannot be
+   * acted on is chrome costing space in a band that has to earn every pixel. So
+   * the band is not in the frame at rest, and the absence is asserted rather
+   * than tolerated.
+   *
+   * The count is of **selected** rows, not rows in view: selection survives
+   * filtering, so narrowing the grid with `q` must not silently shrink the
+   * number the operator is about to act on.
+   */
+  const selectionActions =
+    selectedCount === 0 ? null : (
+      <>
+        <span
+          className="text-muted-foreground text-[13px] font-medium tabular-nums"
+          data-bulk-selection-count=""
+        >
+          {selectedCount} selected
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          // `h-8` and `rounded-[6px]` to match the toolbar band directly above;
+          // a differently-sized control in a band that wears the same padding
+          // reads as two surfaces rather than one.
+          className="h-8 gap-1.5 rounded-[6px] px-2.5 text-[13px]"
+          disabled={bulkRunning}
+          onClick={() => {
+            void runBulkFavorite()
+          }}
+        >
+          {bulkRunning ? "Saving…" : "Add selected to favorites"}
+        </Button>
+      </>
+    )
 
   /**
    * The row lifecycle the grid renders against.
@@ -1245,7 +1301,7 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         }}
         onCellCommit={handleCellCommit}
         onClearFilters={clearFilters}
-        toolbarExtra={toolbarExtra}
+        selectionActions={selectionActions}
         rowLifecycle={rowLifecycle}
         onRowRemoved={handleRowRemoved}
       />

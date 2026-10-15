@@ -165,8 +165,11 @@ test.describe("bulk contact updates", () => {
         .toEqual(selected.map((id) => [id, true]).sort())
 
       // Selection clears after the run, never during it — the operator has to be
-      // able to read the outcomes and then select again.
-      await expect(selectionCount(page)).toHaveText("0 selected")
+      // able to read the outcomes and then select again. The selection chrome
+      // lives in a contextual band that renders only above zero, so "cleared" now
+      // means the readout is *gone* rather than reading `0`.
+      await expect(selectionCount(page)).toHaveCount(0)
+      await expect(bulkActionButton(page), "the bulk action must go with the selection").toHaveCount(0)
     } finally {
       await restoreFavoriteFlags(before)
     }

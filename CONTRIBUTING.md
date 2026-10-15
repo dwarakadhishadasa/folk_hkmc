@@ -116,17 +116,22 @@ the full row-to-spec mapping live in
 
 ### What the suite covers today
 
+The specs a contributor is most likely to need first. This is **not** the whole
+suite — the complete source-to-spec registry, with a per-file test count for
+each, is `docs/architecture/testing.md` §4.
+
 | Spec | Covers |
 |---|---|
 | `e2e/specs/smoke.spec.ts` | sign-in, `storageState` reuse, dead session vs role gate, unknown email, gitignored artifacts |
 | `e2e/specs/mailpit-reader.spec.ts` | the OTP reader's polling, recipient keying and timeout diagnostics |
-| `e2e/specs/harness-guards.spec.ts` | the suite's own guards: local-only target, readiness gate, ignored artifacts |
+| `e2e/specs/harness-guards.spec.ts` | the suite's own guards: local-only target, readiness gate, ignored artifacts, `components/grid/` token and viewport bans |
 | `e2e/specs/bulk-fixtures.spec.ts` | `pnpm seed:bulk-local`: volume, idempotence, batching, refusals |
 | `e2e/specs/manage-contacts-api.spec.ts` | the 200-item cap and per-item `contactId` isolation, over real HTTP |
 | `e2e/specs/manage-contacts-edit.spec.ts` | inline editing: happy path, persistence, 400 revert, empty field, dropped fetch |
-| `e2e/specs/manage-contacts-selection.spec.ts` | selection, the indeterminate header, select-all then filter, empty selection |
+| `e2e/specs/manage-contacts-selection.spec.ts` | selection, the indeterminate header, select-all then filter, and an empty selection offering **no** bulk chrome at all |
 | `e2e/specs/manage-contacts-bulk.spec.ts` | bulk outcomes: all succeed, partial success, an unreported row, a malformed envelope |
 | `e2e/specs/manage-contacts-filter.spec.ts` | the per-column location filter, sort-after-edit, the empty scope |
+| `e2e/specs/grid-toolbar.spec.ts` | the toolbar: the band order, *Hide fields* and CAP-18's default field set, the `hide=` encoding, the global Sort entry point, the contextual selection band |
 | `e2e/specs/suite-determinism.spec.ts` | the suite's own determinism: no sleeps, per-run regeneration, order independence, spec registration, and that a broken spec turns the gate red |
 
 ### Proving the suite is a gate

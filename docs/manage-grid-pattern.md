@@ -59,7 +59,7 @@ scrolled away.
 | `align`, `tabular` | Reaches the cell directly |
 | `frozen: true` | Joins the pinned run |
 | `selectable: true` | Row-selection control: joins the pinned run ahead of the identity column |
-| `hideable: false` | Removed from the visibility menu |
+| `hideable: false` | Rendered ticked, disabled and locked in the toolbar's *Hide fields* popover — never removed from it, and never hidden |
 
 ### `fieldType` is not `editor`, and that is the point
 
@@ -276,7 +276,12 @@ Conventions:
   `"indeterminate"` and its label names both counts.
 - Toggling the header acts on the visible rows only. Selection survives filtering, and the stated
   count is the whole selection — not the visible subset.
-- An empty selection issues no request, and the action control is disabled rather than inert-by-hope.
+- An empty selection issues no request, and the action control is not rendered at all.
+- **Selection chrome goes in `selectionActions`, not in the toolbar.** `Grid` renders that node in a
+  contextual band between the toolbar and the scroll container, and only while the consumer returns
+  something: at zero selected the band is not in the frame at all, so the readout's absence is the
+  assertion rather than a `0` nobody can act on. Return `null` at zero — a disabled bulk button costs
+  space in a band that has to earn every pixel, and "absence costs nothing to notice".
 
 ## 5. Bulk actions
 
@@ -453,7 +458,7 @@ name — density and row selection are the two deliberate exceptions, and both a
 | `f.<colId>` | One condition, ANDed across columns. Value is `<operator>:<value>` — see below |
 | `fa.<colId>` | One condition, ORed across columns. Present only when the connective is match-any |
 | `cols` | Ordered, comma-joined column ids |
-| `hide` | Hidden column ids, comma-joined |
+| `hide` | **The complete** hidden column-id set, comma-joined. Absent = the consumer's defaults. See below |
 | `size.<colId>` | Committed column width in integer px |
 
 `applyGridParams` starts from a copy of the live params and touches only grid-owned keys, which is
@@ -509,6 +514,42 @@ literals and two `SelectItem` children — which meant the control could read
 "Default rows" over a grid drawing 28px and nothing would fail. **An option that
 exists has a height, and a height that changes moves its label with it.**
 
+### The default field set, and why `hide` is a complete list
+
+A port passes `useGridViewState({ defaultHiddenColumnIds })` to name the fields
+that start hidden. It is **a per-consumer decision, deliberately not a constant
+in `components/grid/`** — the primitive has no opinion about which of a table's
+fields matter, and `/dev/grid-preview` passes nothing and keeps all fifteen of its
+columns.
+
+| URL | Meaning |
+| --- | --- |
+| no `hide` key | the defaults apply |
+| `hide=a,b` | exactly `a` and `b` are hidden — the defaults are replaced, not merged |
+| `hide=` (present, empty) | **nothing** is hidden |
+
+**The key decides, never its emptiness.** `params.has("hide")` is the test, and
+`serializeGridViewState` writes the key whenever the effective set differs from
+the defaults — including writing `hide=`. That is the only way to express "hide
+nothing", and a codec that wrote the key only when something was hidden could not
+represent it at all.
+
+Two things follow, and both are load-bearing:
+
+- **A default is reversible.** Un-hiding a default-hidden field writes the
+  complete still-hidden list; re-hiding it drops the key and the defaults apply
+  again. Without the presence test, the default set is a one-way door, which is a
+  lock wearing a default's name.
+- **An existing link does not change meaning.** `hide=notes` says "only Notes is
+  hidden" whatever the defaults are, because a present key is complete rather
+  than additive. This is why the defaults cannot be introduced by *adding* five
+  ids to the old delta encoding — it has to be this encoding.
+
+Pass the **same list** to parse and to serialize. `useGridViewState` joins it into
+one memo key rather than depending on the array, for the reason `columnIds` gets
+the same treatment: consumers pass a literal inline, and re-deriving on every
+render would make the parse outrun the write that feeds it.
+
 ### What is fixed, and why it is fixed
 
 | Token | Value | Where |
@@ -562,6 +603,9 @@ double-click carries `Shift`.
 - [ ] **The grid fills the frame, and every ancestor between `main` and `<Grid>` carries the
       height to it** — see §10. A missing `min-h-0` on any hop is the whole failure.
 - [ ] `sort`, `q`, `f.*`, `cols`, `hide`, `size.*` round-trip; `?mode=` survives.
+- [ ] A default field set is declared as `defaultHiddenColumnIds` on
+      `useGridViewState` — in the consumer, never in `components/grid/` — and
+      `hide=` still means "nothing hidden" (§8).
 - [ ] Identity column pinned as part of the leading run; one 1px divider, no scroll shadow; no
       pinned column is hideable, draggable, or a valid drop target for a scrolling column.
 - [ ] `select` first, row action last.

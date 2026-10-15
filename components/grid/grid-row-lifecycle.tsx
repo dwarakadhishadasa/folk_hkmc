@@ -115,7 +115,19 @@ export function GridRowAddControl({
       type="button"
       variant="outline"
       size="sm"
-      className="h-7 gap-1.5 px-2 text-[13px]"
+      // **The comp's primary treatment, transcribed from
+      // `contacts-toolbar-stitch-v1-corrected.html:194-200`:** royal blue, white
+      // label, `h-8 px-3 rounded-[6px]`. Record creation is the one thing in the
+      // band that acts rather than inspects, so it is the one thing that gets
+      // primary weight — and it is the *same* slot, not a second button beside
+      // it. The comp's "New contact" is deliberately not added: two controls
+      // doing one job is the nonfunctional affordance CAP-6 forbids.
+      //
+      // `text-primary-foreground` rather than the comp's `text-white`, because
+      // `harness-guards.spec.ts:89` scans this directory as text and bans the
+      // literal outright — a token is also what keeps the label legible if the
+      // primary ever stops being dark.
+      className="border-royal bg-royal text-primary-foreground hover:bg-royal-light h-8 gap-1.5 rounded-[6px] px-3 text-[13px]"
       disabled={!canCreate}
       data-grid-add-record=""
       // No `aria-label`: the button's own text is its accessible name, and a

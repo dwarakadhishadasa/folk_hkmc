@@ -48,6 +48,15 @@ export interface UseGridViewStateOptions {
    * readings of the same legacy link.
    */
   fieldTypes?: GridColumnFieldTypes
+  /**
+   * Column ids hidden when the URL carries no `hide` key at all.
+   *
+   * A per-consumer product decision, deliberately not a constant here: the
+   * primitive has no opinion about which of a table's fields matter, and a
+   * default baked into the codec would apply to `/dev/grid-preview` too. The
+   * list is compared and parsed as a SET, so order carries no meaning.
+   */
+  defaultHiddenColumnIds?: readonly string[]
 }
 
 const COLUMN_KEY_SEPARATOR = "\u0000"
@@ -84,6 +93,7 @@ function sameExceptFilters(previous: GridViewState, next: GridViewState): boolea
 export function useGridViewState({
   columnIds,
   fieldTypes,
+  defaultHiddenColumnIds,
 }: UseGridViewStateOptions): GridViewStateController {
   const router = useRouter()
   const pathname = usePathname()
@@ -94,12 +104,23 @@ export function useGridViewState({
   // column set actually changes.
   const columnKey = joinColumnKey(columnIds)
 
+  // Same reason, same fix: a consumer passing `defaultHiddenColumnIds: [...]`
+  // inline must not invalidate the parse on every render, and `columnKey` is
+  // what both the parse and the write below are keyed on.
+  const hiddenDefaultKey = joinColumnKey(defaultHiddenColumnIds ?? [])
+
   const parsed = useMemo(
-    () => parseGridViewState(searchParams, splitColumnKey(columnKey), fieldTypes),
+    () =>
+      parseGridViewState(
+        searchParams,
+        splitColumnKey(columnKey),
+        fieldTypes,
+        splitColumnKey(hiddenDefaultKey),
+      ),
     // `columnKey` rather than `columnIds`: consumers pass a fresh array literal
     // each render, and re-parsing the query on every render would make the parse
     // outrun the debounced write that is meant to feed it.
-    [searchParams, columnKey, fieldTypes],
+    [searchParams, columnKey, hiddenDefaultKey, fieldTypes],
   )
 
   // The connective is not table state — TanStack has no such field — so it is
@@ -124,7 +145,11 @@ export function useGridViewState({
     (next: Partial<TableState>, mode: "push" | "replace", connective: GridFilterConnective) => {
       const query = applyGridParams(
         searchParams,
-        serializeGridViewState(pickGridState(next, connective), columnIds),
+        serializeGridViewState(
+          pickGridState(next, connective),
+          columnIds,
+          splitColumnKey(hiddenDefaultKey),
+        ),
       ).toString()
 
       if (query === searchParams.toString()) {
@@ -139,7 +164,7 @@ export function useGridViewState({
         router.replace(url, { scroll: false })
       }
     },
-    [columnIds, pathname, router, searchParams],
+    [columnIds, hiddenDefaultKey, pathname, router, searchParams],
   )
 
   const scheduleFilterWrite = useCallback(
@@ -207,12 +232,13 @@ export function useGridViewState({
           columnFilters: [],
         },
         columnIds,
+        splitColumnKey(hiddenDefaultKey),
       ),
     ).toString()
 
     const url = query.length > 0 ? `${pathname}?${query}` : pathname
     router.push(url, { scroll: false })
-  }, [columnIds, pathname, router, searchParams, state])
+  }, [columnIds, hiddenDefaultKey, pathname, router, searchParams, state])
 
   const beginTransientChange = useCallback(() => {
     transientRef.current = true

@@ -41,9 +41,20 @@ export interface GridSortPopoverProps {
  * exactly what the grid is doing. A cleared sort is `[]`, which the URL codec
  * serializes as no `sort` param at all — a valid empty state, not an error.
  *
- * In this story the only entry points are the column menu's Sort items, which
- * open it programmatically. The toolbar Sort control opening this same popover
- * lands in story 7.
+ * Three entry points onto this one surface: the toolbar's Sort control, and
+ * this column menu's two sort items, which open it programmatically. The toolbar
+ * instance's open state is local to `GridToolbar` and needs no lifting here —
+ * every instance reads the same `sorting`, so a menu item that writes `sorting`
+ * and then opens is already prefilled by the time the popover mounts.
+ *
+ * **An unsorted grid shows NO field selected.** The field dropdown used to fall
+ * back to the first sortable column, which made this surface assert a sort the
+ * grid was not performing: the trigger read "Name", and an operator choosing Name
+ * — the obvious first act — changed nothing, because the value already was that.
+ * A surface that reports the grid's state must report it honestly, and an empty
+ * sort is a real state (`[]` serializes as no `sort` key at all). The
+ * composition agrees: `contacts-overlays-stitch-v1-corrected.html` draws the
+ * field select with nothing selected.
  *
  * Focus moves into the popover on open (the default autofocus) rather than
  * staying on the menu item that opened it. That is load-bearing, not polish:
@@ -60,8 +71,13 @@ export function GridSortPopover({
   onSortingChange,
 }: GridSortPopoverProps) {
   const current = sorting[0]
-  const fieldId =
-    current && fields.some((field) => field.id === current.id) ? current.id : fields[0]?.id
+  // **No phantom default.** This used to fall back to `fields[0]?.id`, which made
+  // the popover display a field the grid was not sorted by: an unsorted grid
+  // showed "Name" in the dropdown, and choosing Name then fired nothing — a
+  // control that looks chosen, silently is not, and cannot be re-chosen. The
+  // composition leaves the field unselected until one is picked, and an empty
+  // sort is a real state (see the module doc), so the surface now shows that.
+  const fieldId = current && fields.some((field) => field.id === current.id) ? current.id : undefined
   const descending = current?.desc === true
 
   return (
@@ -104,15 +120,28 @@ export function GridSortPopover({
 
         <div className="border-border my-2 border-t" />
 
+        {/*
+          **Disabled, not absent, until a field is chosen** — the same rule the
+          filter popover's value control follows. A direction over no field has
+          nothing to order, so leaving the control live would mean a control that
+          accepts input and does nothing, which is what CAP-6 calls a control
+          that does not work. It greys visibly rather than disappearing, so an
+          operator can see it exists and why it is unavailable.
+        */}
         <Select
           value={descending ? "desc" : "asc"}
+          disabled={!fieldId}
           onValueChange={(next) => {
             if (fieldId) {
               onSortingChange([{ id: fieldId, desc: next === "desc" }])
             }
           }}
         >
-          <SelectTrigger aria-label="Sort direction" className="h-8 w-full text-[13px]">
+          <SelectTrigger
+            aria-label="Sort direction"
+            disabled={!fieldId}
+            className="h-8 w-full text-[13px]"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

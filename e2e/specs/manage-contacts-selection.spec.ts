@@ -6,13 +6,22 @@
  * | 6   | Multi-row selection        | header checkbox on a filtered set selects every filtered row; each shows `data-state="selected"` |
  * | 7   | Indeterminate header       | 3 of 40+ rows selected → the header control shows the mixed state and names the count |
  * | 8   | Select-all then filter     | selection is retained across filtering; the count reflects selected rows, not visible rows |
- * | 12  | Bulk over an empty selection | the action is inert and no request is issued                          |
+ * | 12  | Bulk over an empty selection | neither the selection readout nor the bulk action is rendered, and no request is issued |
  *
  * All four run as the Admin in admin scope, where the generated set puts 250 rows
  * in view — comfortably above row 7's "3 of 40". Row 6 and row 8 narrow with the
  * global filter rather than scrolling, because the rows are virtualized and the
  * toolbar's `visible of total in scope` readout is the only count that is not a
  * function of the viewport.
+ *
+ * **What changed in row 12, and why the claim did not.** The claim was always
+ * "an empty selection issues no request"; the mechanism behind it is not. The
+ * selection readout and the bulk action moved out of the toolbar into a
+ * contextual band that renders only above zero, so an empty selection now
+ * asserts *absence* (`toHaveCount(0)`) where it used to assert a disabled
+ * control. Recording that here is the point: a green run of the old assertions
+ * would have proved the old contract, and a reader needs to know the mechanism
+ * changed. `matrix-coverage-map.md` row 12 carries the same note.
  */
 
 import { expect, test, type Locator, type Page } from "@playwright/test"
@@ -86,9 +95,10 @@ test.describe("row selection", () => {
     )
 
     // Toggling back off clears them, which is what makes the control a control
-    // rather than a one-way switch.
+    // rather than a one-way switch — and the contextual band goes with the
+    // selection rather than reading a `0`.
     await headerSelectAll(page).click()
-    await expect(selectionCount(page)).toHaveText("0 selected")
+    await expect(selectionCount(page)).toHaveCount(0)
     expect(await selectionStates(renderedRows(page))).toEqual(Array<string | null>(10).fill(null))
   })
 
@@ -101,7 +111,9 @@ test.describe("row selection", () => {
       `row 7 needs at least ${MIN_ROWS_FOR_MIXED} rows in scope for "3 of 40" to mean anything`,
     ).toBeGreaterThanOrEqual(MIN_ROWS_FOR_MIXED)
 
-    await expect(selectionCount(page)).toHaveText("0 selected")
+    // Nothing selected yet, so there is no readout to read — and the mixed state
+    // asserted below cannot be what makes this pass.
+    await expect(selectionCount(page)).toHaveCount(0)
 
     for (const index of [0, 1, 2]) {
       await selectRenderedRow(page, index)
@@ -166,7 +178,7 @@ test.describe("row selection", () => {
     )
   })
 
-  test("row 12 — the bulk action is inert with nothing selected and issues no request", async ({ page }) => {
+  test("row 12 — an empty selection offers no bulk action and issues no request", async ({ page }) => {
     const bulkRequests: string[] = []
     page.on("request", (request) => {
       if (request.url().includes("/api/manage/contacts/bulk")) {
@@ -176,28 +188,30 @@ test.describe("row selection", () => {
 
     await openContactsGrid(page)
 
-    const button = bulkActionButton(page)
-    await expect(selectionCount(page)).toHaveText("0 selected")
-    await expect(button, "the action must not be offered at 0 selected").toBeDisabled()
+    // **Absence, not inertness.** The bulk chrome lives in a contextual band that
+    // renders only while rows are selected, so at zero there is no readout to
+    // read and no control to disable — and an empty selection cannot dispatch a
+    // click on a button that is not in the document. What the row actually
+    // protects is the request, so that is what the rest of this test checks.
+    await expect(selectionCount(page), "no selection readout may render at 0 selected").toHaveCount(0)
+    await expect(
+      bulkActionButton(page),
+      "no bulk action may be offered at 0 selected",
+    ).toHaveCount(0)
 
-    // `force` because a disabled control is exactly what is under test: the
-    // point is that even a dispatched click changes nothing.
-    await button.click({ force: true })
-    await expect(button).toBeDisabled()
-
-    // No request, and no report panel claiming one happened. Polled rather than
-    // asserted synchronously: a request issued a tick later would otherwise slip
-    // past the check.
+    // Polled rather than asserted synchronously: a request issued a tick later
+    // would otherwise slip past the check.
     await expect
       .poll(() => bulkRequests, { timeout: 2_000, message: "an empty selection must issue no request" })
       .toEqual([])
     await expect(gridRoot(page)).toBeVisible()
     await expect(page.getByRole("region", { name: "Bulk action results" })).toHaveCount(0)
 
-    // One row selected is the other half of the row: the control becomes live,
-    // so the disabled state above is a function of the selection and not of the
-    // control being permanently inert.
+    // One row selected is the other half of the row: the band appears and its
+    // action is live, so the absence above is a function of the selection and not
+    // of the bulk path being broken.
     await renderedRows(page).nth(0).getByRole("checkbox").click()
-    await expect(button).toBeEnabled()
+    await expect(selectionCount(page)).toHaveText("1 selected")
+    await expect(bulkActionButton(page)).toBeEnabled()
   })
 })
