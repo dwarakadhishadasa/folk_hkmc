@@ -42,6 +42,7 @@ import {
   manageContactsUrl,
   openColumnMenu,
   openContactsGrid,
+  searchBox,
 } from "../fixtures/manage-grid"
 
 /**
@@ -1340,13 +1341,87 @@ test.describe("CAP-12 — the choice controls lead the URL", () => {
     expect(new URLSearchParams(picked.search).get("f.name")).toBe("contains:a")
     expect(new URLSearchParams(picked.search).get("fa.name")).toBeNull()
 
-    // **AND NOTHING ABOUT WHERE THAT WRITE LANDS IS ASSERTED HERE.** Switching the
-    // connective in the popover loses every condition: the push writes the `fa.`
-    // family correctly, and the table's own match-any state then hands TanStack an
-    // EMPTY `columnFilters` (`grid.tsx:743`), which the next state change writes
-    // back over the URL. Reproduced on `c5d9b71` with no mirror in the file, and it
-    // lives in the write layer this story is forbidden to touch — so the test above
-    // claims the control, and the defect is left for whoever owns `write`.
+    // The push lands the `fa.` family with every condition intact, and later
+    // writes keep them: the table's own match-any state hands TanStack an
+    // EMPTY `columnFilters` (`grid.tsx`), which `handleTableStateChange`
+    // re-attaches from the real list before it can reach the URL, and a
+    // debounced filter edit still in flight is folded into the switch instead
+    // of firing afterwards with the old connective.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("fa.name"), {
+        message: "switching the connective must move the conditions to the `fa.` family, not lose them",
+      })
+      .toBe("contains:a")
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("fa.phone"), {
+        message: "every condition travels, not just the first",
+      })
+      .toBe("contains:9")
+  })
+
+  test("picking `or` in the popover keeps every condition and shows the union", async ({ page }) => {
+    const rows = await scopedContacts()
+    const target = rows.find((row) => row.source === "preview-fixture-bulk")!
+
+    // Two conditions that cannot both hold: an exact source value, and a name
+    // fragment that is absent from every row.
+    const absent = "zzz-no-such-name-zzz"
+
+    await gotoGrid(page, { params: { "f.source": `is:${target.source}`, "f.name": `contains:${absent}` } })
+    await expectVisibleCount(page, 0)
+
+    await openPopover(page)
+    await popover(page).locator("[data-grid-filter-connective]").first().click()
+    await page.getByRole("option", { name: "or", exact: true }).click()
+
+    // The conditions travel to the `fa.` family intact. The regression this
+    // pins made the switch read as a no-op: the push wrote `fa.` correctly and
+    // the next write put the table's emptied `columnFilters` back over the
+    // URL, so both conditions vanished and the grid showed everything.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("fa.source"), {
+        message: "the first condition must survive the switch to `or`",
+      })
+      .toBe(`is:${target.source}`)
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("fa.name"), {
+        message: "the second condition must survive the switch to `or`",
+      })
+      .toBe(`contains:${absent}`)
+    await expect(conditionRow(page, "source")).toBeVisible()
+    await expect(conditionRow(page, "name")).toBeVisible()
+
+    // ...and the grid shows the union, not the intersection.
+    await expectVisibleCount(page, rows.filter((row) => row.source === target.source).length)
+
+    // A state change AFTER the switch must not clobber the conditions either:
+    // the table runs match-any with EMPTY `columnFilters`, and writing those
+    // back over the URL is what erased the `fa.` family next. Typing in the
+    // global search is one such write; clearing it afterwards must restore the
+    // union, not an unfiltered grid.
+    //
+    // The search takes pointer focus, which dismisses the popover, so everything
+    // from here is asserted against the URL and the row count — the popover is
+    // re-opened once at the end.
+    await searchBox(page).fill("zzz-no-such-text-zzz")
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("q"))
+      .toBe("zzz-no-such-text-zzz")
+    await expectVisibleCount(page, 0)
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("fa.source"), {
+        message: "a later state change must not erase the `fa.` conditions",
+      })
+      .toBe(`is:${target.source}`)
+
+    await searchBox(page).fill("")
+    await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBeNull()
+    await expectVisibleCount(page, rows.filter((row) => row.source === target.source).length)
+
+    await page.keyboard.press("Escape")
+    await openPopover(page)
+    await expect(conditionRow(page, "source")).toBeVisible()
+    await expect(conditionRow(page, "name")).toBeVisible()
   })
 
   test("three field picks inside one debounce window all display, and the URL carries the last", async ({

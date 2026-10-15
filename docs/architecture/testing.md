@@ -102,8 +102,8 @@ pnpm dev:local     # once per machine session
 |---|---|---|
 | `pnpm test:e2e:guards` | `harness-guards` + `suite-determinism` + `mailpit-reader` | **21 s** (24 passed) |
 | `pnpm test:e2e:theme` | `theme-switch.spec.ts` | **38 s** (16 passed) |
-| `pnpm test:e2e:manage` | The six `manage-contacts-*.spec.ts` files | **2.1 min** (36 passed) |
-| `pnpm test:e2e:grid` | The eleven `grid-*.spec.ts` files | **3.2 min** (182 passed) |
+| `pnpm test:e2e:manage` | The six `manage-contacts-*.spec.ts` files | **4.5 min** (35 tests: 32 spec + 3 setup) |
+| `pnpm test:e2e:grid` | The eleven `grid-*.spec.ts` files | **28 min observed** (181 tests) — green baseline 3.2 min predates the status strip; see §6 |
 | `pnpm test:e2e` | **Full suite.** 289 specs + 3 setup. | ~5–7 min |
 | `pnpm test:e2e:determinism` | Two full runs back to back, no reset | ~12 min |
 
@@ -151,8 +151,8 @@ use, each including the 3 setup tests that every run pays for:
 
 | Filter | Script | Tests |
 |---|---|---|
-| `grid-` | `test:e2e:grid` | 182 in 14 files |
-| `manage-contacts` | `test:e2e:manage` | 36 in 9 files |
+| `grid-` | `test:e2e:grid` | 181 in 14 files |
+| `manage-contacts` | `test:e2e:manage` | 35 in 9 files |
 | `theme-switch` | `test:e2e:theme` | 16 in 4 files |
 | `harness-guards suite-determinism mailpit-reader` | `test:e2e:guards` | 24 in 6 files |
 
@@ -182,8 +182,8 @@ session, 403 for a Volunteer, and that a failed sign-in provisions nothing.
 | `components/manage/manage-contacts-table.tsx`, `apps/*/app/api/manage/contacts/route.ts`, `lib/manage/api-handlers.ts`, `lib/supabase/manage.ts` | `e2e/specs/manage-contacts-api.spec.ts` | 3 |
 | " | `e2e/specs/manage-contacts-edit.spec.ts` | 7 |
 | " | `e2e/specs/manage-contacts-filter.spec.ts` | 5 |
-| " | `e2e/specs/manage-contacts-bulk.spec.ts` | 5 |
-| " | `e2e/specs/manage-contacts-selection.spec.ts` | 4 |
+| " | `e2e/specs/manage-contacts-bulk.spec.ts` | 2 |
+| " | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
 | " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 9 |
 
 These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
@@ -200,12 +200,12 @@ lives in
 | " | `e2e/specs/grid-clipboard.spec.ts` | 5 |
 | `components/grid/grid.tsx`, `grid-row.tsx`, `grid-cell-renderers.tsx` | `e2e/specs/grid-cell-renderers.spec.ts` | 12 |
 | " | `e2e/specs/grid-cell-metrics.spec.ts` | 6 |
-| `components/grid/grid-scroll-surface.spec.ts`'s surface: the frame, the scroll container and the bands above it | `e2e/specs/grid-scroll-surface.spec.ts` | 9 |
+| `components/grid/grid-scroll-surface.spec.ts`'s surface: the frame, the scroll container and the status strip below it | `e2e/specs/grid-scroll-surface.spec.ts` | 8 |
 | `components/grid/grid-header-cell.tsx`, `grid-toolbar.tsx` (CAP-18's column menu), `grid.tsx` drag handling | `e2e/specs/grid-column-drag-menu.spec.ts` | 11 |
 | `components/grid/grid-edit-model.spec.ts`'s model: `use-grid-keyboard.ts`, `grid-editors.tsx`, the optimistic override | `e2e/specs/grid-edit-model.spec.ts` | 24 |
 | `components/grid/grid-filter-popover.tsx`, `grid-filter-operators.ts`, `grid-view-state.ts` (`f.`/`fa.`) | `e2e/specs/grid-filter-conditions.spec.ts` | 45 |
 | `components/grid/grid-toolbar.tsx`, `grid-view-state.ts` (`hide`), `use-grid-view-state.ts`, `grid-sort-popover.tsx`, `grid-row-lifecycle.tsx` | `e2e/specs/grid-toolbar.spec.ts` | 18 |
-| " (contacts only — CAP-18's default field set and the selection band) | `e2e/specs/manage-contacts-selection.spec.ts` | 4 |
+| " (contacts only — CAP-18's default field set and the status row) | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
 
 `components/grid/**` is a **shared primitive**: it is imported by
 `components/manage/manage-contacts-table.tsx` and
@@ -294,6 +294,21 @@ not in the script's accounted-for list. This is **not** a regression from your
 change — confirm with `git stash` and say so in your report rather than
 "fixing" it by editing the gate. Whether the migration script should be in the
 allowlist or the comment reworded is Dwaraka's call.
+
+**Known pre-existing failures — `manage-contacts-filter` rows 17/18 and 18
+`grid-*` tests**, confirmed by stash-cycle on `ec60255` (failures reproduce
+with the status-row change shelved):
+
+- Rows 17/18 fail on fixture-data drift, before any changed code runs: row 17's
+  `LOCATION_NEEDLE` (`"bulk-location-3"`) matches no location the current
+  generator writes (temple names), and row 18's renamed row cannot sort first
+  while seeded `"Anand …"` names exist under either collation.
+- `grid-column-drag-menu` (5), `grid-edit-model` (5), `grid-editors` (4),
+  `grid-cell-metrics` (1), `grid-cell-renderers` (1), `grid-filter-conditions`
+  (2): mostly 60 s actionability timeouts plus one stale `hide` expectation, in
+  specs and code paths (drag, keyboard, view-state, row rendering, filter
+  connective) owned by the other in-tree workstreams — all reproduce with this
+  change shelved.
 
 ### Then: read the actual failure
 

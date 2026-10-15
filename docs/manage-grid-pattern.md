@@ -277,11 +277,13 @@ Conventions:
 - Toggling the header acts on the visible rows only. Selection survives filtering, and the stated
   count is the whole selection — not the visible subset.
 - An empty selection issues no request, and the action control is not rendered at all.
-- **Selection chrome goes in `selectionActions`, not in the toolbar.** `Grid` renders that node in a
-  contextual band between the toolbar and the scroll container, and only while the consumer returns
-  something: at zero selected the band is not in the frame at all, so the readout's absence is the
-  assertion rather than a `0` nobody can act on. Return `null` at zero — a disabled bulk button costs
-  space in a band that has to earn every pixel, and "absence costs nothing to notice".
+- **Selection chrome goes in the consumer's status bar below the grid, not in the toolbar.**
+  `manage-contacts-table.tsx` renders one footer row (`data-manage-status-bar`) beneath the
+  scroll container: a single readout that swaps between the record count and the selection, the
+  number-field aggregates over the same rows, and the bulk action — offered only while rows are
+  selected, so at zero selected it is absent rather than disabled and the readout carries the
+  total. The counts are the consumer's to derive because the page header reads the same figure, so
+  the primitive neither renders nor publishes them.
 
 ## 5. Bulk actions
 
@@ -648,7 +650,7 @@ The chain on `/manage?view=contacts`, from the shell inward:
 | --- | --- |
 | `apps/*/app/manage/page.tsx` shell | `flex h-dvh flex-col overflow-hidden` — the only place the viewport is named |
 | …its `main` | `flex min-h-0 flex-1 flex-col` |
-| `manage-portal.tsx` root | `flex min-h-0 flex-1 flex-col gap-6` |
+| `manage-portal.tsx` root | `flex min-h-0 flex-1 flex-col gap-4` |
 | its `Tabs` | `min-h-0 flex-1` |
 | the contacts `TabsContent` | `flex min-h-0 flex-col` — **no `overflow-auto`** |
 | `manage-contacts-table.tsx` root | `flex min-h-0 flex-1 flex-col gap-3` |

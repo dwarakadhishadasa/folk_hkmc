@@ -42,24 +42,24 @@ left a later author re-deriving "≥40 rows, select 3" from the specs.
 | 6 | Multi-row selection | UI | **Covered** | `manage-contacts-selection.spec.ts` |
 | 7 | Indeterminate header | UI | **Covered** | `manage-contacts-selection.spec.ts` |
 | 8 | Select-all then filter | UI | **Covered** | `manage-contacts-selection.spec.ts` |
-| 9 | Bulk all succeed | API + UI | **Covered** | `manage-contacts-bulk.spec.ts` |
+| 9 | Bulk all succeed | API | **Covered** | `manage-contacts-bulk.spec.ts` — UI half retired with the bulk client, see below |
 | 10 | Bulk partial success | API | **Covered** | `manage-contacts-bulk.spec.ts` |
-| 11 | Bulk, one unreachable row | Intercept | **Covered** | `manage-contacts-bulk.spec.ts` — mapping stated in [Row 11's mapping](#row-11s-mapping-stated-not-glossed) |
+| 11 | Bulk, one unreachable row | — | **Manual** | bulk client removed — the button and its per-row report no longer exist; the route still reports per-row outcomes, covered at the envelope by rows 13–15 |
 | 12 | Bulk over empty selection | UI | **Covered** | `manage-contacts-selection.spec.ts` |
 | 13 | Batch over the 200 cap | API | **Covered** | `manage-contacts-api.spec.ts` |
 | 14 | Bad `contactId` isolation | API | **Covered** | `manage-contacts-api.spec.ts` |
 | 15 | Item missing `contactId` | API | **Covered** | `manage-contacts-api.spec.ts` |
-| 16 | Malformed `results` body | Intercept | **Covered** | `manage-contacts-bulk.spec.ts` |
+| 16 | Malformed `results` body | — | **Manual** | bulk client removed — same note as row 11 |
 | 17 | Location filter | UI | **Covered** | `manage-contacts-filter.spec.ts` |
 | 18 | Sort after edit | UI | **Covered** | `manage-contacts-filter.spec.ts` |
 | 19 | Zero rows in scope | UI | **Covered** | `manage-contacts-filter.spec.ts` |
 
-**19 Covered, 0 Manual, out of 19.** The two rows that sat on Manual did so
-because their specs ran and **failed** — not because they were skipped, and not
-because they were claimed unreachable. Both were browser-observable, both specs
-were committed and wired into `pnpm test:e2e`, and both failed for one named
-reason. That reason is fixed; the history is kept below rather than deleted,
-because the tripwire is the part worth copying.
+**17 Covered, 2 Manual, out of 19.** Rows 11 and 16 sit on Manual because the
+client they covered no longer exists: the bulk button and its per-row report
+were removed, so there is no UI left to intercept against. The route itself
+still reports per-row outcomes — rows 13–15 cover its envelope — and the
+history of what the retired specs proved is kept above rather than deleted.
+The recorded run below will be recomputed once the suite is green on this tree.
 
 ### The recorded run
 
@@ -67,6 +67,17 @@ The verdicts above were last recomputed by story 2, on a working tree on top of
 `464b4ed`, against the local stack, Playwright 1.62, `baseURL http://127.0.0.1:3000`,
 single worker. `464b4ed` is the revision the fix is diffed against, not one that
 contains it — the fix was uncommitted when the run was taken.
+
+> **Stale since the status-row change.** The listing below predates it: row 9's
+> UI half, rows 11/16 and the contextual selection band no longer exist, and the
+> status-row specs below are the interim record until a full green run is
+> recomputed. Targeted runs on this tree, local stack, single worker:
+> `manage-contacts-selection` 9 passed (6 spec + 3 setup),
+> `manage-contacts-bulk` 2 passed, `grid-toolbar` 18 passed,
+> `grid-scroll-surface` 8 passed, `grid-cell-range` 4 passed,
+> `manage-contacts-filter` row 19 passed. Rows 17/18 and 18 unrelated `grid-*`
+> tests fail pre-existing (see `docs/architecture/testing.md` §6), so no full
+> green exists to recompute against yet.
 
 The listing below is an **excerpt**: the tests it omits are the foundation's own
 harness rows, which this map does not claim. The row specs' titles are verbatim.
@@ -162,13 +173,13 @@ trips it is the first run exercising that code path end to end, so it is also th
 first run that can surface a defect in the test's own teardown. Read the error,
 not just the verdict.
 
-### Row 11's mapping, stated not glossed
+### Row 11's mapping, stated not glossed — and its retirement
 
 The matrix asks for "`fetch` rejects for one item only". The shipped batch is
 **one** HTTP request carrying every item, so there is no per-item request for a
-network failure to be scoped to. The reachable expression of that clause is an
+network failure to be scoped to. The reachable expression of that clause was an
 item whose outcome the server never reports, and `manage-contacts-bulk.spec.ts`
-asserts both halves:
+asserted both halves:
 
 1. `route.fetch()` runs the **real** handler — so the other rows' commits are real
    writes read back from the database — and only then is the response rewritten
@@ -177,9 +188,16 @@ asserts both halves:
 2. The whole request is aborted. Every row reports a failure and none is claimed
    saved.
 
-Both are per-item isolation over real network outcomes, which is what the row's
+Both were per-item isolation over real network outcomes, which is what the row's
 error-handling column asks for. The wording differs from the matrix's literal
 "`fetch` rejects", and that difference is recorded here rather than papered over.
+
+**Retired with the bulk client.** Both halves drove the "Add selected to
+favorites" button and read the per-row report panel. That affordance no longer
+exists, so the specs were removed rather than rewritten against a surface that
+is gone. What they proved about the *route* — per-item isolation, no success
+claimed on an unverifiable envelope — still holds at the envelope rows 13–15
+cover; what they proved about the *client* has no client left to prove it on.
 
 ### Rows 1–5 and 18 re-verified under CAP-10 — the edit model moved, the verdicts did not
 

@@ -8,7 +8,6 @@ import { ManageDashboard } from "@/components/manage/manage-dashboard"
 import { ManageFavoritesView } from "@/components/manage/manage-favorites-view"
 import { ManageSessionsView } from "@/components/manage/manage-sessions-view"
 import { type ManagePortalPayload, type ManageView } from "@/components/manage/manage-types"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const TAB_LABELS: Array<{ value: ManageView; label: string }> = [
@@ -41,6 +40,14 @@ export function ManagePortal({
 }) {
   const [view, setView] = useState<ManageView>(initialView)
   const { scope } = payload
+  const [contactCount, setContactCount] = useState(payload.contacts.length)
+
+  /*
+    The title is the active tab's own name: with the per-table name between the
+    tab strip and the table removed, the page needs exactly one label for what
+    it is showing, and the operator already chose it in the strip above.
+  */
+  const activeTabLabel = TAB_LABELS.find((tab) => tab.value === view)?.label ?? "Manage"
 
   const handleViewChange = useCallback((next: string) => {
     setView(next as ManageView)
@@ -56,62 +63,62 @@ export function ManagePortal({
   }, [scope.mode])
 
   /*
-   * A bounded flex column, all the way down. `space-y-6` → `gap-6` is the same
-   * 24px rhythm, not a compaction; every `min-h-0` here is load-bearing rather
-   * than decorative, because a flex item's default `min-height: auto` refuses to
-   * shrink below its content and a chain missing one silently grows the page
-   * again — which reads as "the page scrolls again" rather than as a missing
-   * class. Story 8 compacts the header below; it may change spacing and type and
-   * nothing else about this chain.
+   * A bounded flex column, all the way down. `gap-6` → `gap-4` is the CAP-1
+   * compaction: the composition's page header carries 12px beneath it and the
+   * tab row 4px above it, which is the same 16px the content gap already had,
+   * so the header block above the tab list was the only slack. Every `min-h-0`
+   * here is load-bearing rather than decorative, because a flex item's default
+   * `min-height: auto` refuses to shrink below its content and a chain missing
+   * one silently grows the page again — which reads as "the page scrolls again"
+   * rather than as a missing class.
    */
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      {/*
+        CAP-1: the title and its metadata are ONE optical unit — the 22px
+        Poppins title with the count/location scope line tight beneath it
+        — and the scope indicator aligns to that unit's baseline
+        (`sm:items-end`), not to a label of its own in a separate column.
+      */}
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[var(--program-text)] sm:text-3xl">
-            Manage
+          <h1 className="font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)]">
+            {activeTabLabel}
           </h1>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            {payload.scope.staffName} · {payload.contacts.length.toLocaleString("en-IN")} contacts ·{" "}
+          <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+            {contactCount.toLocaleString("en-IN")} contacts ·{" "}
             {payload.locations.length.toLocaleString("en-IN")} locations
           </p>
         </div>
 
         {scope.role === "Admin" ? (
-          <div className="flex flex-col gap-2 sm:items-end">
-            <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-              Scope
-            </span>
-            <div className="inline-flex w-fit items-center gap-1 rounded-full border border-[var(--border)] bg-card p-1">
-              <Link
-                href={portalHref(view, "admin")}
-                scroll={false}
-                aria-current={scope.mode === "admin" ? "page" : undefined}
-                className={
-                  scope.mode === "admin"
-                    ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
-                    : "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
-                }
-              >
-                All preachers
-              </Link>
-              <Link
-                href={portalHref(view, "preacher")}
-                scroll={false}
-                aria-current={scope.mode === "preacher" ? "page" : undefined}
-                className={
-                  scope.mode === "preacher"
-                    ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
-                    : "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
-                }
-              >
-                Own scope
-              </Link>
-            </div>
+          <div className="inline-flex w-fit items-center gap-1 rounded-full border border-[var(--border)] bg-card p-1">
+            <Link
+              href={portalHref(view, "admin")}
+              scroll={false}
+              aria-current={scope.mode === "admin" ? "page" : undefined}
+              className={
+                scope.mode === "admin"
+                  ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
+                  : "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
+              }
+            >
+              All preachers
+            </Link>
+            <Link
+              href={portalHref(view, "preacher")}
+              scroll={false}
+              aria-current={scope.mode === "preacher" ? "page" : undefined}
+              className={
+                scope.mode === "preacher"
+                  ? "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white"
+                  : "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5"
+              }
+            >
+              Own scope
+            </Link>
           </div>
-        ) : (
-          <Badge variant="secondary">Preacher scope</Badge>
-        )}
+        ) : null}
       </div>
 
       {scope.mode === "preacher" ? (
@@ -122,15 +129,23 @@ export function ManagePortal({
       ) : null}
 
       {/*
-        `min-h-0 flex-1` is the hop that hands the bounded column to the active
-        tab. `TabsList` is `shrink-0` because it wraps at narrow widths, and a
-        wrapped row that could be squeezed is a wrapped row that changes height
-        under the operator's hands.
+        CAP-1: an underline tab strip, not shadcn's pill. The strip is a hairline
+        row; inactive tabs are 13px medium in the muted ink with a transparent
+        underline, and the active one is unmistakable — weight plus the existing
+        `--program-primary` brand token, never a new colour — as both its text
+        and its 2px underline. The trigger's own active surface is switched off
+        on both themes: under `.dark` the primitive's variants would otherwise
+        win on specificity and repaint the active tab. `gap-y-2` only matters
+        where the row wraps at narrow widths.
       */}
       <Tabs value={view} onValueChange={handleViewChange} className="min-h-0 flex-1 gap-4">
-        <TabsList className="h-auto w-full max-w-full shrink-0 flex-wrap justify-start gap-1">
+        <TabsList className="h-auto w-full max-w-full shrink-0 flex-wrap items-center justify-start gap-x-6 gap-y-2 rounded-none border-b border-[var(--border)] bg-transparent p-0">
           {TAB_LABELS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className="flex-none">
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className="flex-none rounded-none border-x-0 border-t-0 border-b-2 border-transparent bg-transparent px-0 py-0 pb-2.5 text-[13px] font-medium whitespace-nowrap text-[var(--muted-foreground)] shadow-none transition-colors h-auto hover:text-[var(--program-text)] data-[state=active]:border-[var(--program-primary)] data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-[var(--program-primary)] data-[state=active]:shadow-none dark:data-[state=active]:border-[var(--program-primary)] dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-[var(--program-primary)]"
+            >
               {tab.label}
             </TabsTrigger>
           ))}
@@ -147,7 +162,7 @@ export function ManagePortal({
           <ManageDashboard payload={payload} />
         </TabsContent>
         <TabsContent value="contacts" className="flex min-h-0 flex-col">
-          <ManageContactsTable payload={payload} />
+          <ManageContactsTable payload={payload} onRowCountChange={setContactCount} />
         </TabsContent>
         <TabsContent value="sessions" className="min-h-0 overflow-auto">
           <ManageSessionsView payload={payload} />

@@ -13,15 +13,14 @@
  *
  * | Test       | Scenario                 | Claim under test |
  * * | ---------- | ------------------------ | ---------------- |
- * * | surface 1  | contacts at rest         | exactly one element in the document both overflows and has a scrolling `overflow`, and it is `[data-grid-scroll]`; the page itself does not scroll |
- * * | surface 2  | the grid fills its frame | the container reaches the bottom of its own frame with a positive height, and the two together account for the whole frame — so the height is distributed, not capped |
+ * * | surface 1  | contacts at rest         | exactly two elements in the document both overflow and have a scrolling `overflow` — the grid's scroller and its status strip, which mirrors it — and the page itself does not scroll |
+ * * | surface 2  | the grid fills its frame | the container reaches the bottom of its own frame with a positive height, and the container plus every band around it accounts for the whole frame — so the height is distributed, not capped |
  * * | surface 3  | scrolled to its bottom   | the header `<th>` is still flush with the container's top edge — removing the cap did not cost the sticky header |
  * * | surface 4  | scrolled fully right     | the right-most header's right edge is inside the container's right edge |
  * * | surface 5  | metrics and surfaces     | the row is still exactly 32px, and the header's computed background differs from a body cell's |
- * * | surface 6  | 1024×768                 | the tab row is not squeezed, the grid still fills, and the page still does not scroll |
+ * * | surface 6  | 1024×768                 | the tab row is not squeezed, the grid still fills, no third scroller appears, and the page still does not scroll |
  * * | surface 7  | a longtext editor open   | the container's height is unchanged and the popover escapes the frame's `overflow-hidden` |
- * * | surface 8  | the bulk report open     | the panel is bounded by the frame rather than by its content, stays inside the frame, and the grid shrinks instead of vanishing |
- * * | surface 9  | the grid hydrating        | no hydration mismatch on `/manage` — dnd-kit's id counter is stable across server and client, and the suite actually watches this page's console (see the test for why `theme-switch` cannot) |
+ * * | surface 8  | the grid hydrating        | no hydration mismatch on `/manage` — dnd-kit's id counter is stable across server and client, and the suite actually watches this page's console (see the test for why `theme-switch` cannot) |
  *
  * ## Why every assertion here is behavioural
  *
@@ -70,32 +69,22 @@
  * bounded too, but bounding it does not prove that *one* scroll container is left
  * on a page whose other tabs, page header and tab row are all live.
  *
- * No test narrows with the global filter except the bulk one, which needs a
- * bounded, restorable row set. The rows are virtualized, so a scroll-dependent
- * assertion is fragile — but nothing here needs a named row, so it needs no
- * narrowing at all.
+ * No test narrows with the global filter. The rows are virtualized, so a
+ * scroll-dependent assertion is fragile — but nothing here needs a named row,
+ * so it needs no narrowing at all.
  */
 
 import { expect, test, type Locator, type Page } from "@playwright/test"
 
 import {
-  bulkActionButton,
-  bulkReportPanel,
-  bulkReportRows,
   cellAt,
   cellIn,
-  expectVisibleCount,
-  filterGlobally,
   gridRoot,
   gridScrollSurface,
-  headerSelectAll,
   openCellEditor,
   openContactsGrid,
-  readFavoriteFlags,
   renderedRows,
-  restoreFavoriteFlags,
   scrollingElements,
-  selectionCount,
 } from "../fixtures/manage-grid"
 
 /**
@@ -108,18 +97,6 @@ import {
  * a test of the compositor's rounding, not of the grid.
  */
 const FLUSH_PX = 1
-
-/**
- * Ten generated rows, indices 0240–0249 — the same phone band
- * `manage-contacts-bulk.spec.ts` uses.
- *
- * `phone` rather than `name`, because the generator stopped writing an index
- * marker into `name` and tags rows in `source` instead. `phoneFor` is
- * `PHONE_PREFIX` plus the zero-padded index (`bulk-contact-fixtures.mjs:441`), so
- * this prefix is exactly ten rows at the default `--count 250`, and index 0000
- * has no phone so the low band cannot be addressed this way.
- */
-const TEN_ROWS = "810000024"
 
 /** A measured box, in viewport coordinates, with all four edges. */
 interface Box {
@@ -154,39 +131,6 @@ async function boxOf(locator: Locator, what: string): Promise<Box> {
     right: measured.x + measured.width,
     bottom: measured.y + measured.height,
   }
-}
-
-/**
- * An element's **parent** box, normalised to all four edges.
- *
- * For a panel that frames its own content — the bulk report's containing column —
- * where the panel is a *sibling* of the thing it is bounded against. Reaching for
- * the parent by index (`xpath=../..`) would encode the sibling order this test
- * is trying to measure.
- */
-async function parentBoxOf(locator: Locator, what: string): Promise<Box> {
-  const measured = await locator.evaluate((element) => {
-    const parent = element.parentElement
-
-    if (!parent) return null
-
-    const rect = parent.getBoundingClientRect()
-
-    return {
-      top: rect.top,
-      left: rect.left,
-      width: rect.width,
-      height: rect.height,
-      right: rect.right,
-      bottom: rect.bottom,
-    }
-  })
-
-  if (!measured) {
-    throw new Error(`${what} has no parent element to measure.`)
-  }
-
-  return measured
 }
 
 /**
@@ -353,26 +297,44 @@ async function pageOverflows(page: Page): Promise<boolean> {
 }
 
 test.describe("the grid's scroll surface", () => {
-  test("surface 1 — contacts at rest leaves exactly one scrolling element, and it is the grid's", async ({
+  test("surface 1 — contacts at rest leaves the grid's scroller and its synced status strip, and nothing else scrolls", async ({
     page,
   }) => {
     await openContactsGrid(page)
     await waitForRenderedRows(page)
 
     // The whole claim, described rather than counted: a bare count would report
-    // "expected 1, got 4" without saying which four, which is a debugging session
+    // "expected 2, got 4" without saying which four, which is a debugging session
     // rather than an assertion.
     const scrolling = await scrollingElements(page)
 
+    // **Two scrollers, not one — deliberately.** The status strip below the grid
+    // is a scroller by construction: it must be one to stay aligned with the
+    // grid's columns under its own fields through every horizontal offset, and
+    // to accept the scroll gesture itself. It carries no visible scrollbar and
+    // mirrors the grid 1:1, so it is not a second scrollbar competing with the
+    // first — it is the same scroll position rendered twice. What this claim
+    // protects is unchanged: nothing *else* scrolls, and the page itself does
+    // not scroll.
     expect(
       scrolling.length,
-      `the contacts page must offer exactly one thing to scroll, found:\n${JSON.stringify(scrolling, null, 2)}`,
-    ).toBe(1)
+      `the contacts page must offer exactly the grid's scroller and its status strip, found:\n${JSON.stringify(scrolling, null, 2)}`,
+    ).toBe(2)
 
     expect(
-      scrolling[0].testId,
-      "the one scroll container on the page must be the grid's own, not a wrapper the page happened to leave behind",
-    ).toBe("data-grid-scroll")
+      scrolling.map((element) => element.testId).sort(),
+      "the two scroll containers on the page must be the grid's own and its status strip, not a wrapper the page happened to leave behind",
+    ).toEqual(["data-grid-footer-scroll", "data-grid-scroll"])
+
+    // The two never disagree, even at rest: a strip that starts offset is a
+    // strip whose totals start under the wrong fields. The behavioural half —
+    // scrolling either one moves the other — is covered in
+    // `manage-contacts-selection.spec.ts`'s status-row scroll test, which owns
+    // the strip's contract; this surface owns the frame's.
+    const positions = await page
+      .locator("[data-grid-scroll], [data-grid-footer-scroll]")
+      .evaluateAll((elements) => elements.map((element) => element.scrollLeft))
+    expect(positions, "the strip must start exactly where the grid starts").toEqual([0, 0])
 
     // Asserted separately from the helper, because whether `documentElement`
     // *appears* in that list depends on how the browser propagates the root
@@ -406,34 +368,48 @@ test.describe("the grid's scroll surface", () => {
     expect(height, "a container with no height is not a scroll container at all").toBeGreaterThan(0)
 
     // **The part that distinguishes "fills the frame" from "is capped".** The
-    // container's height plus every band above it is the grid root's whole
-    // content box: there is nothing left over, so the height was distributed to
-    // it rather than stopped at a ceiling. A `max-h-[70vh]` cap in a frame taller
-    // than 70vh leaves a visible gap below the container, and this equality is
-    // what fails.
+    // container's height plus every band above it plus the status strip below
+    // it is the grid root's whole content box: there is nothing left over, so
+    // the height was distributed to it rather than stopped at a ceiling. A
+    // `max-h-[70vh]` cap in a frame taller than 70vh leaves a visible gap below
+    // the container, and this equality is what fails.
     //
-    // **Every sibling, not just the toolbar.** At rest that is the same single
-    // sibling it always was; with rows selected the contextual selection band is
-    // a second one. The claim being protected is "no leftover gap", which is a
-    // property of the whole stack above the container — so naming one sibling
+    // **Every sibling, not just the toolbar.** At rest that used to be the same
+    // single sibling it always was; the status strip below the container is a
+    // second one, and with rows selected the contextual selection band was once
+    // a third. The claim being protected is "no leftover gap", which is a
+    // property of the whole stack around the container — so naming one sibling
     // would have made the assertion silently weaker the moment a second band
     // appeared, which is precisely when it needs to hold.
     const consumed = await container.evaluate((element) => {
       let total = element.offsetHeight
-      let sibling = element.previousElementSibling
+      let sibling: Element | null = element.previousElementSibling
 
       while (sibling) {
         total += (sibling as HTMLElement).offsetHeight
         sibling = sibling.previousElementSibling
       }
 
+      sibling = element.nextElementSibling
+
+      while (sibling) {
+        total += (sibling as HTMLElement).offsetHeight
+        sibling = sibling.nextElementSibling
+      }
+
       return total
     })
 
+    // Three segments now, not two — the container, the toolbar above it and
+    // the status strip below it — so their separately-rounded `offsetHeight`
+    // values can disagree with the frame by a pixel where two never did. That
+    // residue is subpixel stacking, not a cap: a cap leaves a visible gap, tens
+    // of pixels, and `FLUSH_PX` is the same slack every other comparison in
+    // this file allows the compositor.
     expect(
-      consumed,
-      "the scroll container plus every band above it must account for the grid frame exactly; a leftover gap is a cap, not a layout",
-    ).toBe(await root.evaluate((element) => element.clientHeight))
+      Math.abs(consumed - (await root.evaluate((element) => element.clientHeight))),
+      "the scroll container plus every band around it must account for the grid frame exactly; a leftover gap is a cap, not a layout",
+    ).toBeLessThanOrEqual(FLUSH_PX)
   })
 
   test("surface 3 — the header stays flush with the container's top edge once it is scrolled to the bottom", async ({
@@ -584,12 +560,18 @@ test.describe("the grid's scroll surface", () => {
 
     const scrolling = await scrollingElements(page)
 
+    // Two scrollers by design — see surface 1: the grid's and its status
+    // strip, which mirrors it 1:1. Narrowing the viewport must not create a
+    // third.
     expect(
       scrolling.length,
-      `narrowing the viewport must not create a second scroll container, found:\n${JSON.stringify(scrolling, null, 2)}`,
-    ).toBe(1)
+      `narrowing the viewport must not create another scroll container, found:\n${JSON.stringify(scrolling, null, 2)}`,
+    ).toBe(2)
 
-    expect(scrolling[0].testId).toBe("data-grid-scroll")
+    expect(scrolling.map((element) => element.testId).sort()).toEqual([
+      "data-grid-footer-scroll",
+      "data-grid-scroll",
+    ])
     expect(await pageOverflows(page), "and the page must still not scroll").toBe(false)
   })
 
@@ -649,94 +631,6 @@ test.describe("the grid's scroll surface", () => {
     ).toBe(true)
   })
 
-  test("surface 8 — the bulk report stays bounded and reachable, and the grid shrinks rather than vanishing", async ({
-    page,
-  }) => {
-    await openContactsGrid(page)
-    await filterGlobally(page, TEN_ROWS)
-    await expectVisibleCount(page, 10)
-    await waitForRenderedRows(page)
-
-    const container = gridScrollSurface(page)
-    const gridHeightBefore = await boxOf(gridRoot(page), "the grid frame before the report")
-
-    await headerSelectAll(page).click()
-    await expect(selectionCount(page)).toHaveText("10 selected")
-
-    const before = await readFavoriteFlags(
-      await renderedRows(page).evaluateAll((rows) =>
-        rows.map((row) => row.getAttribute("data-grid-row") ?? "").filter(Boolean),
-      ),
-    )
-
-    try {
-      await bulkActionButton(page).click()
-
-      const panel = bulkReportPanel(page)
-
-      await expect(panel, "a per-row report for every selected row").toBeVisible()
-      await expect(bulkReportRows(page), "successes included").toHaveCount(10)
-
-      // **Bounded by the frame, not by its content.** The panel is `max-h-[40%]`
-      // of the contacts column and its list scrolls inside it. The rows a bulk
-      // run can produce are capped at 200 by `MANAGE_BULK_MAX_ITEMS`, and nothing
-      // about the bound is specific to ten: a percentage `max-height` resolves
-      // against a definite-height containing block, so it is the same fraction at
-      // ten rows as at two hundred — which is exactly why the list has to scroll
-      // internally instead of stretching the panel. If the panel were sized by its
-      // content the list would fit and the grid would be gone.
-      const list = panel.locator("ul")
-
-      expect(
-        await overflowsItsBox(list),
-        "the report list must scroll inside the panel; if it fits, the panel is sized by its content and the grid has been pushed out",
-      ).toBe(true)
-
-      // **The frame is the panel's parent column, not the grid root.** Measured,
-      // not assumed: the panel renders as a *sibling* of `<Grid>` inside
-      // `manage-contacts-table.tsx`'s `flex min-h-0 flex-1 flex-col`, so
-      // comparing its bottom against the grid root's bottom would ask the panel
-      // to be inside a box it is deliberately not inside, and fail on a correct
-      // layout by about 190px.
-      const panelBox = await boxOf(panel, "the bulk report panel")
-      const columnBox = await parentBoxOf(panel, "the contacts column that frames the panel")
-      const viewportHeight = await page.evaluate(() => window.innerHeight)
-
-      // Reachable: the panel is the last thing in the column, so "reachable" and
-      // "inside the frame, which is itself inside the viewport" are one chain.
-      expect(
-        panelBox.bottom,
-        "the panel must stay inside the column that frames it rather than being pushed out of the viewport",
-      ).toBeLessThanOrEqual(columnBox.bottom + FLUSH_PX)
-
-      expect(
-        columnBox.bottom,
-        "and that column is itself bounded by the viewport — the chain carries the height all the way down",
-      ).toBeLessThanOrEqual(viewportHeight + FLUSH_PX)
-
-      expect(
-        panelBox.height,
-        "the panel must be bounded by a fraction of the frame it shares with the grid",
-      ).toBeLessThanOrEqual(columnBox.height * 0.4 + FLUSH_PX)
-
-      // And the grid shrank rather than vanished. `> 0` is the whole claim: the
-      // rows are still there and the operator can still scroll them.
-      const gridHeightAfter = await clientHeight(container)
-
-      expect(
-        gridHeightAfter,
-        "the grid must shrink to make room for the panel, not disappear",
-      ).toBeGreaterThan(0)
-
-      expect(
-        gridHeightAfter,
-        "and it must have actually given up space, or the panel is not bounding anything",
-      ).toBeLessThan(gridHeightBefore.height)
-    } finally {
-      await restoreFavoriteFlags(before)
-    }
-  })
-
   /**
    * Not a layout claim — a *rendering* one, and the reason this file asserts the
    * console here rather than leaving it to `theme-switch.spec.ts`'s theme 12.
@@ -765,7 +659,7 @@ test.describe("the grid's scroll surface", () => {
    * `React` prefixes hydration diagnostics with its own link, so the filter
    * matches the phrase rather than the URL.
    */
-  test("surface 9 — loading the contacts grid produces no hydration mismatch", async ({ page }) => {
+  test("surface 8 — loading the contacts grid produces no hydration mismatch", async ({ page }) => {
     const consoleOutput: string[] = []
 
     page.on("console", (message) => {

@@ -40,6 +40,7 @@ import {
   readContactNames,
   renderedRows,
   restoreContactNames,
+  statusCount,
   toggleSort,
 } from "../fixtures/manage-grid"
 
@@ -245,11 +246,11 @@ test.describe("filtering, sorting and the empty scope", () => {
       await headerCheckbox.click({ force: true, timeout: 2_000 }).catch(() => undefined)
       await expect(headerCheckbox).toBeDisabled()
 
-      // The selection chrome agrees there is nothing to select. It is a
-      // contextual band that renders only above zero, so "agrees" is absence
-      // rather than a disabled control reading `0` — the claim is unchanged and
-      // the mechanism is the one recorded in `manage-contacts-selection.spec.ts`.
-      await expect(page.locator("[data-bulk-selection-count]")).toHaveCount(0)
+      // The status row agrees there is nothing to select: with no rows at all
+      // it reads the empty record count, and there is no bulk action anywhere
+      // on the page — the claim is unchanged and the mechanism is the one
+      // recorded in `manage-contacts-selection.spec.ts`.
+      await expect(statusCount(page)).toHaveText("0 records")
       await expect(page.getByRole("button", { name: /Add selected to favorites/ })).toHaveCount(0)
     } finally {
       const { error } = await db

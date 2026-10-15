@@ -132,6 +132,19 @@ export function useGridViewState({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const transientRef = useRef(false)
   const pendingRef = useRef<Partial<TableState> | null>(null)
+  /**
+   * The connective a debounced filter write must carry when it fires.
+   *
+   * Read at fire time, not at schedule time: a connective switch inside the
+   * 250 ms window moves every condition to the `fa.` family, and a write
+   * carrying the old one would flip the URL — and the grid — back to `and`.
+   * `setFilterConnective` owns it; the effect below follows external changes
+   * (Back, Forward, a shared link) so a keystroke after one carries what the
+   * URL actually shows.
+   */
+  const connectiveRef = useRef<GridFilterConnective>(filterConnective)
+  /** The filter edit a pending debounce holds, for the connective switch to fold in. */
+  const pendingFilterRef = useRef<Partial<TableState> | null>(null)
 
   useEffect(() => {
     return () => {
@@ -168,18 +181,29 @@ export function useGridViewState({
   )
 
   const scheduleFilterWrite = useCallback(
-    (next: Partial<TableState>, connective: GridFilterConnective) => {
+    (next: Partial<TableState>) => {
       if (debounceRef.current !== null) {
         clearTimeout(debounceRef.current)
       }
 
+      pendingFilterRef.current = next
+
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null
-        write(next, "replace", connective)
+        const pending = pendingFilterRef.current
+        pendingFilterRef.current = null
+        write(pending ?? next, "replace", connectiveRef.current)
       }, GRID_FILTER_DEBOUNCE_MS)
     },
     [write],
   )
+
+  // External connective changes — Back, Forward, a shared link — move the ref
+  // the debounced write reads, so a keystroke after one carries the connective
+  // the URL actually shows rather than a superseded pick.
+  useEffect(() => {
+    connectiveRef.current = filterConnective
+  }, [filterConnective])
 
   const onStateChange = useCallback<OnChangeFn<TableState>>(
     (updater) => {
@@ -199,7 +223,7 @@ export function useGridViewState({
       if (sameExceptFilters(previous, resolved)) {
         write(next, "push", filterConnective)
       } else {
-        scheduleFilterWrite(next, filterConnective)
+        scheduleFilterWrite(next)
       }
     },
     [filterConnective, scheduleFilterWrite, state, write],
@@ -211,7 +235,25 @@ export function useGridViewState({
       // discrete act that moves every condition between the `f.` and `fa.` key
       // families at once, so it belongs in history rather than in a typing-style
       // debounce window.
-      write(state, "push", next)
+      connectiveRef.current = next
+
+      // A debounced filter edit still in flight was built against the old
+      // connective and the pre-keystroke list. It is folded into this push —
+      // the just-typed value travels with the switch — instead of firing
+      // later and flipping the URL back to the family it came from.
+      let base = state
+
+      if (debounceRef.current !== null) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+
+        if (pendingFilterRef.current !== null) {
+          base = pendingFilterRef.current
+          pendingFilterRef.current = null
+        }
+      }
+
+      write(base, "push", next)
     },
     [state, write],
   )
@@ -222,6 +264,15 @@ export function useGridViewState({
     // who filtered their way down to one view and cleared the filter text did not
     // ask to lose it. Back to match-all for the same reason — the connective
     // governs a list that no longer exists.
+    //
+    // A debounced filter edit still in flight is dropped with it: letting it
+    // fire afterwards would resurrect the conditions just cleared.
+    if (debounceRef.current !== null) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+
+    pendingFilterRef.current = null
     const query = applyGridParams(
       searchParams,
       serializeGridViewState(

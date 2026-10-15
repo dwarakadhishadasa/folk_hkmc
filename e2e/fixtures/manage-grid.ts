@@ -30,7 +30,11 @@
 | `[data-grid-cell-editable]`             | `grid-row.tsx` — `"true"`/`"false"` on every cell |
 | `[data-grid-cell-emphasis]`             | `grid-row.tsx`, on the identity column only |
 | `[data-grid-linked="unresolved"]`       | `grid-cell-renderers.tsx`, the `linked` renderer's unresolved marker |
- * | `[data-bulk-selection-count]`           | `manage-contacts-table.tsx`   |
+ * | `[data-grid-footer]`                    | `grid.tsx`'s status strip — below the scroll container, inside the grid frame |
+ * | `[data-grid-footer-scroll]`             | that strip's own scrollable content, synced to the grid's |
+ * | `[data-grid-footer-cell="<columnId>"]`  | one cell of the status strip, the same width as its column |
+ * | `[data-manage-status-count]`            | `manage-contacts-table.tsx` — the footer's readout under the identity column |
+ * | `[data-manage-status-aggregate="<id>"]` | one number-field total in the footer, keyed by column id |
  * | `[data-grid-add-record]`               | `grid-row-lifecycle.tsx`      |
  * | `[data-grid-delete-row="<rowId>"]`     | `grid-row-lifecycle.tsx`      |
  * | region named `Delete results`          | `grid-row-lifecycle.tsx`      |
@@ -47,9 +51,6 @@ export const GRID_CELL_KEY_SEPARATOR = "~"
 
 /** The single-row PATCH the grid's `onCellCommit` uses. */
 export const SINGLE_CONTACT_ROUTE = "**/api/manage/contacts"
-
-/** The batch route the bulk action uses. Distinct from the single-row route. */
-export const BULK_CONTACT_ROUTE = "**/api/manage/contacts/bulk"
 
 /** `mode` the specs read rows under. `admin` is the program-wide scope. */
 export type ManageScopeMode = "admin" | "preacher"
@@ -131,9 +132,11 @@ export async function scrollingElements(page: Page): Promise<
           testId:
             element.getAttribute("data-grid-scroll") !== null
               ? "data-grid-scroll"
-              : element.getAttribute("data-grid-root") !== null
-                ? "data-grid-root"
-                : "",
+              : element.getAttribute("data-grid-footer-scroll") !== null
+                ? "data-grid-footer-scroll"
+                : element.getAttribute("data-grid-root") !== null
+                  ? "data-grid-root"
+                  : "",
           className: element.className?.toString().slice(0, 120) ?? "",
         },
       ]
@@ -462,56 +465,49 @@ export function rowCheckbox(page: Page, contactName: string): Locator {
 }
 
 /**
- * The selected-count readout, in the contextual selection band.
+ * The status row under the grid — the grid frame's own footer, below the
+ * scroll container.
  *
- * **Count 0 at rest.** The band renders only while rows are selected, so a spec
- * that wants "no selection chrome anywhere" asserts this at `toHaveCount(0)`
- * rather than reading a `0` off the page. Matrix row 12's claim is unchanged by
- * that — the mechanism moved from "rendered and inert" to "not offered".
+ * Always in the frame: the readout is the record count at rest, so unlike the
+ * old contextual band the row itself is present whether or not anything is
+ * selected. What is conditional is its contents, not its existence. Being
+ * *below* the scroller, it does not scroll away vertically — the rows move
+ * under it — and its content is scrolled horizontally with the grid so every
+ * total stays under its own field.
  */
-export function selectionCount(page: Page): Locator {
-  return page.locator("[data-bulk-selection-count]")
+export function statusFooter(page: Page): Locator {
+  return page.locator("[data-grid-footer]")
 }
 
 /**
- * The bulk action's trigger, in the same contextual band.
- *
- * Count 0 at rest, for the same reason as `selectionCount`: the band is absent,
- * so there is nothing to assert disabled. Above zero it is enabled unless a run
- * is in flight.
+ * One cell of the status row, addressed by its column id — the same id its
+ * header carries, which is what makes "directly under the field" checkable.
  */
-export function bulkActionButton(page: Page): Locator {
-  return page.getByRole("button", { name: /Add selected to favorites|Saving…/ })
+export function statusFooterCell(page: Page, columnId: string): Locator {
+  return page.locator(`[data-grid-footer-cell="${columnId}"]`)
 }
 
-/** The per-row bulk report panel. */
-export function bulkReportPanel(page: Page): Locator {
-  return page.getByRole("region", { name: "Bulk action results" })
+/** The status strip's own scrollable content — synced to the grid's scroller. */
+export function statusFooterScroll(page: Page): Locator {
+  return page.locator("[data-grid-footer-scroll]")
 }
 
-/** One line per selected row inside the report panel. */
-export function bulkReportRows(page: Page): Locator {
-  return bulkReportPanel(page).locator("li")
+/**
+ * The status row's single readout: `N records` at rest, `N selected` while a
+ * selection exists.
+ *
+ * **One number, one basis.** The selection replaces the total rather than
+ * sitting beside it, and the totals are summed over the same rows — so a spec
+ * asserting selection chrome reads `N selected` here and reads the aggregates
+ * for the same basis.
+ */
+export function statusCount(page: Page): Locator {
+  return page.locator("[data-manage-status-count]")
 }
 
-/** A row's favorite toggle, addressed by its accessible name. */
-export function favoriteStar(page: Page, contactId: string): Locator {
-  // **Scoped by name, deliberately.** The row lifecycle added a second button to
-  // every row — the delete control in its own `actions` column — so an unscoped
-  // `getByRole("button")` here would match two elements and fail in strict mode
-  // across seven assertion sites rather than one. Naming it is a *narrowing* of
-  // the locator, not a loosening: every assertion still resolves to exactly the
-  // same element it did before.
-  //
-  // **Anchored on `favorites`, not on `to favorites`.** The name has two forms —
-  // `Add <name> to favorites` and `Remove <name> from favorites` — and only the
-  // first ends in `to favorites`. A `/to favorites$/` locator therefore resolved
-  // for every un-favourited row and timed out for every favourited one, which is
-  // one row in five in the bulk fixtures: three bulk specs failed on rows whose
-  // star read "Remove … from favorites". Both forms end in `favorites`, and the
-  // delete control's name (`Delete <name>`) does not, so this is still exactly
-  // one match per row.
-  return rowById(page, contactId).getByRole("button", { name: /favorites$/ })
+/** One aggregate total in the status row, addressed by its column id. */
+export function statusAggregate(page: Page, columnId: string): Locator {
+  return page.locator(`[data-manage-status-aggregate="${columnId}"]`)
 }
 
 /** The grid's contextual `+ Add record` control. Disabled, never hidden. */

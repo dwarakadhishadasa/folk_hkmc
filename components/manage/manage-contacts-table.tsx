@@ -1,13 +1,11 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react"
 import { createColumnHelper } from "@tanstack/react-table"
 import type { RowSelectionState, Table } from "@tanstack/react-table"
 
 import type {
   ManageContact,
-  ManageContactBulkItem,
-  ManageContactBulkResult,
   ManageContactPatch,
   ManageContactPatchKey,
   ManageContactWriteResult,
@@ -24,7 +22,6 @@ import {
   type GridFieldType,
   type GridRowLifecycle,
 } from "@/components/grid"
-import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 
 const columnHelper = createColumnHelper<ManageContact>()
@@ -32,9 +29,8 @@ const columnHelper = createColumnHelper<ManageContact>()
 /**
  * Defensively narrows an unknown response body before its message is shown.
  *
- * Every fetch path in this component routes through this, including the batch:
- * a malformed payload once meant a render crash, and a bulk response that cannot
- * be verified must never be reported as a success.
+ * Every fetch path in this component routes through this: a malformed payload
+ * once meant a render crash.
  */
 function readError(payload: unknown, fallback: string): string {
   if (payload && typeof payload === "object" && "error" in payload) {
@@ -335,24 +331,23 @@ function buildCreatePatch(
   return patch
 }
 
-/** Per-row bulk outcome. `message` is the server's wording, never a summary. */
-interface BulkRowOutcome {
-  contactId: string
-  name: string
-  ok: boolean
-  message: string
-}
-
-interface BulkReport {
-  /** Counts only. Never the sole record of what happened. */
-  heading: string
-  rows: BulkRowOutcome[]
-}
-
 interface Notice {
   kind: "ok" | "error"
   message: string
 }
+
+/**
+ * The two rollup fields the status bar aggregates.
+ *
+ * Declared as a pair with the column id *and* the row key rather than derived
+ * from the column defs: `fieldType: "number"` describes how a cell renders, and
+ * adding a third number column must not silently widen what a bar that claims to
+ * aggregate "the number fields" adds up.
+ */
+const NUMBER_AGGREGATE_FIELDS = [
+  { columnId: TOTAL_COLUMN_ID, key: "totalAttendanceCount" },
+  { columnId: PAST_60_COLUMN_ID, key: "past60DayAttendanceCount" },
+] as const satisfies ReadonlyArray<{ columnId: string; key: keyof ManageContact }>
 
 /**
  * The header's select-all.
@@ -401,75 +396,75 @@ function SelectAllControl({
 }
 
 /**
- * One line per selected row.
+ * The grid's footer row: the readout under the identity column, each number
+ * field's total under its own column.
  *
- * A collapsed toast fails the capability even when every row succeeded, so
- * successes are listed individually too, and a failure always names the row it
- * happened on together with the server's own reason.
+ * **Why below the scroller, not inside it.** A bar that sits among the rows
+ * scrolls away with them, and a count nobody can see is not a count. Below the
+ * scroll container it stays put while the rows move under it — the pattern the
+ * reference implementation (Airtable's summary bar) uses, and the one the
+ * operator's eye already knows: the totals stay under their fields, and the
+ * record count sits at the left of the same strip.
+ *
+ * **One number, one basis.** The readout swaps from the record count to the
+ * selection when a row is selected, and the totals are summed over the same
+ * rows — never the total in scope while the readout claims the selection.
  */
-function BulkReportPanel({
-  report,
-  onDismiss,
-}: {
-  report: BulkReport
-  onDismiss: () => void
-}) {
-  return (
-    <section
-      aria-label="Bulk action results"
-      // Bounded rather than moved. `shrink-0` keeps the panel whole — it is the
-      // record of what just happened, and crushing it would hide the outcomes —
-      // while `max-h-[40%]` is a fraction of *this container* (the grid's frame
-      // measures against a definite height, so the percentage resolves) rather
-      // than of the viewport, whose offset above the grid is not a constant. At
-      // 200 rows the list scrolls inside the panel and the grid shrinks instead
-      // of vanishing.
-      //
-      // The percentage is on the section, not on the `<ul>`: a percentage
-      // `max-height` whose containing block has an auto height computes to
-      // `none`, and the panel's own height is content-driven. Verified in
-      // Chromium — `max-h-[40%]` on the list alone grows the panel to ~4,400px
-      // and collapses the grid to 0.
-      className="flex max-h-[40%] shrink-0 flex-col rounded-md border border-border bg-card px-3 py-2 text-[13px]"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p role="status" className="font-medium">
-          {report.heading}
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 px-2 text-[13px]"
-          onClick={onDismiss}
-        >
-          Dismiss
-        </Button>
-      </div>
-
-      <ul
-        aria-live="polite"
-        className="text-muted-foreground mt-1 min-h-0 flex-1 divide-y divide-border overflow-y-auto"
+function renderFooterCell(
+  columnId: string,
+  summaryLabel: string,
+  aggregateByColumnId: Map<string, number>,
+): ReactNode {
+  if (columnId === NAME_COLUMN_ID) {
+    return (
+      <span
+        data-manage-status-count=""
+        className="text-[var(--program-text)] font-medium tabular-nums"
       >
-        {report.rows.map((row) => (
-          <li key={row.contactId} className="flex items-baseline gap-2 py-1">
-            <span aria-hidden="true">{row.ok ? "✓" : "✕"}</span>
-            <span className="text-foreground min-w-0 flex-1 truncate font-medium">{row.name}</span>
-            <span className={row.ok ? "shrink-0" : "text-destructive shrink-0"}>{row.message}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
+        {summaryLabel}
+      </span>
+    )
+  }
+
+  const sum = aggregateByColumnId.get(columnId)
+
+  if (sum === undefined) {
+    return null
+  }
+
+  return (
+    <span
+      data-manage-status-aggregate={columnId}
+      className="text-foreground block w-full text-right tabular-nums"
+    >
+      Sum {sum.toLocaleString("en-IN")}
+    </span>
   )
 }
 
-export function ManageContactsTable({ payload }: { payload: ManagePortalPayload }) {
+/**
+ * `ManagePortal`'s page header reads the row count of the table it is showing,
+ * so a create or a delete is reflected there without a reload. The payload's
+ * own count can only move when the server re-reads, which makes it the seed
+ * rather than the source.
+ */
+function useReportRowCount(onRowCountChange: ((count: number) => void) | undefined, count: number): void {
+  useEffect(() => {
+    onRowCountChange?.(count)
+  }, [count, onRowCountChange])
+}
+
+export function ManageContactsTable({
+  payload,
+  onRowCountChange,
+}: {
+  payload: ManagePortalPayload
+  onRowCountChange?: (count: number) => void
+}) {
   const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [pendingContactId, setPendingContactId] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
-  const [bulkReport, setBulkReport] = useState<BulkReport | null>(null)
-  const [bulkRunning, setBulkRunning] = useState(false)
 
   /**
    * The committed rows, mirrored from the payload so a write can be applied
@@ -489,6 +484,8 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
   }
 
   const contacts = mirror.rows
+
+  useReportRowCount(onRowCountChange, contacts.length)
 
 
   const locationNameById = useMemo(
@@ -724,123 +721,6 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
       return next
     })
   }, [])
-
-  const runBulkFavorite = useCallback(async () => {
-    const targets = contacts.filter((contact) => rowSelection[contact.id] === true)
-
-    if (targets.length === 0) {
-      // No request is issued for an empty selection, and the control is not
-      // offered in that state.
-      return
-    }
-
-    setBulkRunning(true)
-    setBulkReport(null)
-
-    /** One entry per selected row, whatever the batch turns out to have done. */
-    const failed = (message: string): BulkReport => ({
-      heading: `Nothing was saved. ${targets.length} row${targets.length === 1 ? "" : "s"} failed.`,
-      rows: targets.map((contact) => ({
-        contactId: contact.id,
-        name: contact.name,
-        ok: false,
-        message,
-      })),
-    })
-
-    try {
-      let response: Response
-      const items: ManageContactBulkItem[] = targets.map((contact) => ({
-        contactId: contact.id,
-        patch: { isFavorite: true },
-      }))
-
-      try {
-        response = await fetch("/api/manage/contacts/bulk", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items }),
-        })
-      } catch {
-        setBulkReport(failed("Unable to reach the server."))
-        return
-      }
-
-      const body: unknown = await response.json().catch(() => null)
-
-      if (!response.ok) {
-        setBulkReport(failed(readError(body, "The bulk update was rejected.")))
-        return
-      }
-
-      const results = (body as { results?: unknown } | null)?.results
-
-      // Never report success on a payload that cannot be verified: an
-      // unverifiable batch leaves every row showing its prior value.
-      if (!Array.isArray(results)) {
-        setBulkReport(failed("The server's response did not include per-row results."))
-        return
-      }
-
-      const outcomeById = new Map<string, ManageContactBulkResult>()
-      for (const entry of results) {
-        const result = entry as ManageContactBulkResult | null
-        if (result && typeof result.contactId === "string") {
-          outcomeById.set(result.contactId, result)
-        }
-      }
-
-      const writes = new Map<string, ManageContactWriteResult>()
-
-      const rows = targets.map((contact) => {
-        const result = outcomeById.get(contact.id)
-
-        if (!result) {
-          return {
-            contactId: contact.id,
-            name: contact.name,
-            ok: false,
-            message: "The server did not report a result for this row.",
-          }
-        }
-
-        if (result.ok && result.contact) {
-          writes.set(result.contact.id, result.contact)
-          return { contactId: contact.id, name: contact.name, ok: true, message: "Saved." }
-        }
-
-        return {
-          contactId: contact.id,
-          name: contact.name,
-          ok: false,
-          message: result.error ?? "The row could not be saved.",
-        }
-      })
-
-      // Only the rows the server confirmed are applied; a failed row keeps the
-      // value the operator can already see.
-      if (writes.size > 0) {
-        setContacts((current) => ({
-          ...current,
-          rows: current.rows.map((contact) => {
-            const written = writes.get(contact.id)
-            return written ? { ...contact, ...written } : contact
-          }),
-        }))
-      }
-
-      const succeeded = rows.filter((row) => row.ok).length
-      setBulkReport({
-        heading: `${succeeded} of ${rows.length} rows saved.`,
-        rows,
-      })
-    } finally {
-      setBulkRunning(false)
-      // Cleared once the run is over, never during it: the operator has to be
-      // able to read the per-row outcomes and then select again.
-      setRowSelection({})
-    }
-  }, [contacts, rowSelection])
 
   const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
     return [
@@ -1159,47 +1039,6 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
   )
 
   /**
-   * Selection chrome, in the contextual band rather than in the toolbar.
-   *
-   * **At zero selected this returns `null`, and that is the whole decision.**
-   * `0 selected` is a statement about absence, and the header checkbox already
-   * carries the real mixed/checked state; a readout of a number that cannot be
-   * acted on is chrome costing space in a band that has to earn every pixel. So
-   * the band is not in the frame at rest, and the absence is asserted rather
-   * than tolerated.
-   *
-   * The count is of **selected** rows, not rows in view: selection survives
-   * filtering, so narrowing the grid with `q` must not silently shrink the
-   * number the operator is about to act on.
-   */
-  const selectionActions =
-    selectedCount === 0 ? null : (
-      <>
-        <span
-          className="text-muted-foreground text-[13px] font-medium tabular-nums"
-          data-bulk-selection-count=""
-        >
-          {selectedCount} selected
-        </span>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          // `h-8` and `rounded-[6px]` to match the toolbar band directly above;
-          // a differently-sized control in a band that wears the same padding
-          // reads as two surfaces rather than one.
-          className="h-8 gap-1.5 rounded-[6px] px-2.5 text-[13px]"
-          disabled={bulkRunning}
-          onClick={() => {
-            void runBulkFavorite()
-          }}
-        >
-          {bulkRunning ? "Saving…" : "Add selected to favorites"}
-        </Button>
-      </>
-    )
-
-  /**
    * The row lifecycle the grid renders against.
    *
    * `createRow` appends to this component's own mirror rather than to anything
@@ -1257,18 +1096,52 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
     })
   }, [])
 
+  /**
+   * The status row's readout, derived from the same mirror the grid holds.
+   *
+   * **One number, one basis.** At rest it is the record count the table holds;
+   * the moment a row is selected that same spot carries the selection, because
+   * two counts side by side is a comparison the operator did not ask to make.
+   * The totals follow the same basis, so the attendance total is the total in
+   * scope or the total of what is selected — never a mixture of the two.
+   */
+  const statusSummary = useMemo(() => {
+    if (selectedCount > 0) {
+      return {
+        label: `${selectedCount} selected`,
+        rows: contacts.filter((contact) => rowSelection[contact.id] === true),
+      }
+    }
+
+    return { label: `${contacts.length} records`, rows: contacts }
+  }, [contacts, rowSelection, selectedCount])
+
+  /** The number-field totals, over the rows the readout is describing. */
+  const aggregateByColumnId = useMemo(() => {
+    const sums = new Map<string, number>()
+
+    for (const { columnId, key } of NUMBER_AGGREGATE_FIELDS) {
+      sums.set(
+        columnId,
+        // The ids double as the row keys, which is why no cast is needed: both
+        // number fields are already numbers on `ManageContact`.
+        statusSummary.rows.reduce((total, row) => total + row[key], 0),
+      )
+    }
+
+    return sums
+  }, [statusSummary])
+
   /*
    * `flex min-h-0 flex-1 flex-col` — the last hop before the grid, and the one
    * that makes the grid's `flex-1` mean anything. `space-y-3` → `gap-3` is the
    * same rhythm. The `role="status"` notice is *above* the grid, so it stays
-   * visible in a bounded layout rather than scrolling out with the rows.
+   * visible in a bounded layout rather than scrolling out with the rows. The
+   * status row is the grid's own footer: see `renderFooterCell` for why it
+   * cannot live below the table.
    */
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <h2 className="shrink-0 font-[family-name:var(--font-poppins)] text-lg font-semibold text-[var(--program-text)]">
-        Contacts
-      </h2>
-
       {notice ? (
         <p
           role="status"
@@ -1301,14 +1174,12 @@ export function ManageContactsTable({ payload }: { payload: ManagePortalPayload 
         }}
         onCellCommit={handleCellCommit}
         onClearFilters={clearFilters}
-        selectionActions={selectionActions}
+        tableFooter={(column) =>
+          renderFooterCell(column.columnId, statusSummary.label, aggregateByColumnId)
+        }
         rowLifecycle={rowLifecycle}
         onRowRemoved={handleRowRemoved}
       />
-
-      {bulkReport ? (
-        <BulkReportPanel report={bulkReport} onDismiss={() => setBulkReport(null)} />
-      ) : null}
     </div>
   )
 }

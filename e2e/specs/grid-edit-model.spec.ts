@@ -275,7 +275,7 @@ test.describe("CAP-10 — one commit path", () => {
       await cellEditor(page).press("ControlOrMeta+a")
       await page.keyboard.type(renamed)
 
-      await page.locator("h2").click()
+      await page.locator("h1").click()
 
       await expect.poll(() => patches.count(), { message: "blur is one commit" }).toBe(1)
       await expect
@@ -313,7 +313,7 @@ test.describe("CAP-10 — one commit path", () => {
 
       // No keystroke at all. The draft was seeded from the cell's own value, so
       // committing it would PATCH production data on every stray cell click.
-      await page.locator("h2").click()
+      await page.locator("h1").click()
 
       await expect(cellEditor(page), "the editor closes").toHaveCount(0)
       expect(patches.count(), "an untouched blur must issue no request at all").toBe(0)
@@ -337,7 +337,7 @@ test.describe("CAP-10 — one commit path", () => {
     try {
       await openCellEditor(cell)
       await expect(page.getByRole("option").first()).toBeVisible()
-      await page.locator("h2").click()
+      await page.locator("h1").click()
 
       await expect(page.getByRole("option"), "the popover closed").toHaveCount(0)
       expect(patches.count(), "a select opened and dismissed without a pick must not write").toBe(0)
@@ -366,7 +366,7 @@ test.describe("CAP-10 — one commit path", () => {
       // With the old `onOpenChange` this discarded the option the operator had
       // just picked — the most expensive regression in this story, because
       // nothing about the interaction looks wrong.
-      await page.locator("h2").click()
+      await page.locator("h1").click()
 
       await expect.poll(() => patches.count(), { message: "the pick is one commit" }).toBe(1)
       expect(patches.bodies()[0]).toMatchObject({ contactId: target.id, source: "preview-fixture" })

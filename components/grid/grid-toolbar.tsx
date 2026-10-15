@@ -70,17 +70,18 @@ export interface GridToolbarProps {
   onSortingChange: (sorting: SortingState) => void
   /**
    * The grid's own row-lifecycle affordance, rendered immediately before the
-   * row count. A consumer's selection chrome belongs in the contextual band
-   * below the frame, not wedged into this one — see `GridProps.selectionActions`.
+   * row count. A consumer's selection chrome belongs below the frame — the
+   * contacts table puts it in a footer status bar — rather than wedged into
+   * this band, where it would cost every operator that never selects anything.
    */
   rowAction?: ReactNode
   /**
    * Consumer chrome rendered after the row count.
    *
-   * Nothing in `/manage` uses it any more: the selection readout and the bulk
-   * action moved to `selectionActions`, which renders only while rows are
-   * selected. Kept because the primitive is consumed by four tables and a
-   * consumer with chrome that genuinely belongs *in* the band still needs it.
+   * Nothing in `/manage` uses it any more: the selection readout, the bulk
+   * action and the status bar that carries them are the consumer's own footer
+   * below the grid. Kept because the primitive is consumed by other tables and
+   * a consumer with chrome that genuinely belongs *in* the band still needs it.
    */
   toolbarExtra?: ReactNode
 }

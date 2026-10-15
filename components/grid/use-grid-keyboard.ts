@@ -1852,6 +1852,16 @@ export function useGridKeyboard<TData>({
       setFocusedColumnId(columnId)
       setFocusedRowIndex(index)
 
+      // A Shift+click that reaches here with a live native selection would
+      // keep painting full rows underneath the range rectangle (the browser
+      // selects the text between the two clicks, which spans every
+      // intermediate row). The range owns selection, so a stale native range
+      // is dropped. Guarded for SSR; `preventDefault` in `grid-row.tsx` stops
+      // new ones, this clears one a prior interaction already produced.
+      if (extend && typeof window !== "undefined") {
+        window.getSelection()?.removeAllRanges()
+      }
+
       // A plain click re-anchors; `Shift`+click keeps the anchor and lets the
       // focus — which is the range's far corner — travel to the pointer. The
       // consumers that own their own activation (the select column, the favorite

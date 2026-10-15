@@ -8,6 +8,7 @@ export {
   isPinnedRunIntact,
   resolveColumnDropOrder,
   type GridColumnDef,
+  type GridFooterColumn,
   type GridProps,
 } from "@/components/grid/grid"
 export {

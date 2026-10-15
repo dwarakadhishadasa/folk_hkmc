@@ -11,10 +11,11 @@
  *    acceptance criterion says "exactly nine columns render"; the assertion below
  *    names all ten ids, because an exact list is the only form of that claim
  *    which cannot be satisfied by the wrong ten.
- * 2. **An empty selection has no chrome.** The selection readout and the bulk
- *    action live in a contextual band that renders only above zero, so at rest
- *    they are *absent* rather than disabled. `manage-contacts-selection.spec.ts`
- *    carries the same note on matrix row 12.
+ * 2. **An empty selection reads the record count.** The selection readout lives
+ *    in the status row below the grid, which is always in the frame — so at
+ *    rest it carries the record count, and a selection swaps that same spot to
+ *    the selection. `manage-contacts-selection.spec.ts` carries the same note
+ *    on matrix row 12.
  *
  * **Everything else in here is one test per row of the story's I/O & Edge-Case
  * Matrix**, in matrix order, because the matrix is the specification and a spec
@@ -26,7 +27,6 @@ import { expect, test } from "@playwright/test"
 import type { Page } from "@playwright/test"
 
 import {
-  bulkActionButton,
   columnMenuTrigger,
   filterGlobally,
   headerCell,
@@ -34,15 +34,17 @@ import {
   hideFieldToggle,
   hideFieldsControl,
   hideFieldsPopover,
+  inScopeCounts,
   manageContactsUrl,
   openColumnMenu,
   openContactsGrid,
   renderedRows,
-  selectionCount,
   sortDirectionTrigger,
   sortFieldTrigger,
   sortPopover,
   sortToolbarControl,
+  statusCount,
+  statusFooter,
   clearSortButton,
 } from "../fixtures/manage-grid"
 
@@ -444,53 +446,45 @@ test.describe("story 7 — the contacts toolbar", () => {
     await expect(headerCell(page, "name")).toHaveAttribute("aria-sort", "none")
   })
 
-  test("selection chrome at rest — no readout and no bulk action anywhere", async ({ page }) => {
+  test("selection chrome at rest — the status row reads the record count", async ({ page }) => {
     await openContactsGrid(page)
+    const { total } = await inScopeCounts(page)
 
-    await expect(selectionCount(page), "a readout of `0` is a statement about absence").toHaveCount(0)
-    await expect(bulkActionButton(page)).toHaveCount(0)
-    await expect(page.locator("[data-grid-selection-band]"), "and so is the band itself").toHaveCount(0)
+    // The status row is always in the frame, below the scroll container — so at
+    // rest it carries the record count, and there is no bulk action anywhere.
+    await expect(statusCount(page)).toHaveText(`${total} records`)
+    await expect(page.getByRole("button", { name: /Add selected to favorites/ })).toHaveCount(0)
+    await expect(statusFooter(page)).toBeVisible()
   })
 
-  test("selection chrome active — the contextual band appears between the toolbar and the grid", async ({ page }) => {
+  test("selection chrome active — the readout swaps to the selection, below the grid", async ({ page }) => {
     await openContactsGrid(page)
     await renderedRows(page).nth(0).getByRole("checkbox").click()
 
-    await expect(selectionCount(page)).toHaveText("1 selected")
-    await expect(bulkActionButton(page)).toBeEnabled()
+    await expect(statusCount(page)).toHaveText("1 selected")
 
-    // Placement is the decision: between the toolbar and the scroll container,
-    // and inside the grid frame so the siblings still sum to it.
-    const band = page.locator("[data-grid-selection-band]")
-    await expect(band).toBeVisible()
+    // Placement is the decision: below the scroll container, inside the grid
+    // frame — the one place a count stays visible while the rows scroll.
     await expect
       .poll(async () =>
-        band.evaluate((element) => {
-          const sibling = element.nextElementSibling
-          return sibling?.getAttribute("data-grid-scroll") !== null
-        }),
-        { message: "the band sits directly above the scroll container" },
+        statusFooter(page).evaluate((bar) => ({
+          inFrame: bar.parentElement?.getAttribute("data-grid-root") !== null,
+          underScroller: bar.previousElementSibling?.getAttribute("data-grid-scroll") !== null,
+        })),
       )
-      .toBe(true)
-
-    await expect
-      .poll(async () =>
-        band.evaluate((element) => element.previousElementSibling?.getAttribute("data-grid-toolbar") !== null),
-        { message: "and directly below the toolbar" },
-      )
-      .toBe(true)
+      .toEqual({ inFrame: true, underScroller: true })
   })
 
-  test("selection empties — the band is gone again", async ({ page }) => {
+  test("selection empties — the readout swaps back to the record count", async ({ page }) => {
     await openContactsGrid(page)
+    const { total } = await inScopeCounts(page)
     const checkbox = renderedRows(page).nth(0).getByRole("checkbox")
 
     await checkbox.click()
-    await expect(selectionCount(page)).toHaveText("1 selected")
+    await expect(statusCount(page)).toHaveText("1 selected")
 
     await checkbox.click()
-    await expect(selectionCount(page)).toHaveCount(0)
-    await expect(page.locator("[data-grid-selection-band]")).toHaveCount(0)
+    await expect(statusCount(page)).toHaveText(`${total} records`)
   })
 
   test("selection across a filter — the count is of selected rows, not visible ones", async ({ page }) => {
@@ -501,12 +495,11 @@ test.describe("story 7 — the contacts toolbar", () => {
     for (const index of [0, 1, 2]) {
       await renderedRows(page).nth(index).getByRole("checkbox").click()
     }
-    await expect(selectionCount(page)).toHaveText("3 selected")
+    await expect(statusCount(page)).toHaveText("3 selected")
 
     await filterGlobally(page, "no-such-contact-name-anywhere")
 
-    await expect(selectionCount(page), "narrowing the view must not shrink the selection").toHaveText("3 selected")
-    await expect(bulkActionButton(page), "and the action is still live").toBeEnabled()
+    await expect(statusCount(page), "narrowing the view must not shrink the selection").toHaveText("3 selected")
   })
 
   test("stale column ids — `hide=ghost` and `sort=ghost:asc` are dropped, not thrown on", async ({ page }) => {

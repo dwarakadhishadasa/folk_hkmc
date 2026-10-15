@@ -1259,7 +1259,7 @@ test.describe("typed editors — positioning and the registry", () => {
       // An outside click: Radix dismisses the popover, and closing is now a
       // commit. `checkbox` still commits on interaction — that assertion survives
       // below, unchanged.
-      await page.locator("h2").click()
+      await page.locator("h1").click()
 
       await expect(textarea, "the editor closed").toHaveCount(0)
       await expect

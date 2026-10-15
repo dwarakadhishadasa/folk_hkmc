@@ -50,6 +50,7 @@ import {
   renderedRowIds,
   selectedCellKeys,
   selectedCells,
+  statusCount,
   toggleSort,
 } from "../fixtures/manage-grid"
 
@@ -294,8 +295,9 @@ test.describe("cell range selection", () => {
 
     // Row selection is untouched by all of the above: the range is a cell
     // concern, and a shift-click on the grid must not have started selecting
-    // rows behind the operator's back.
+    // rows behind the operator's back. The status row is the witness: with no
+    // rows selected it carries the record count, never a selection.
     await expect(gridRoot(page).locator("tr[data-state='selected']")).toHaveCount(0)
-    await expect(page.locator("[data-bulk-selection-count]")).toHaveText("0 selected")
+    await expect(statusCount(page)).toHaveText(/\d+ records/)
   })
 })

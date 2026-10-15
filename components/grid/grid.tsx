@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { ReactNode } from "react"
+import type { ReactNode, UIEvent } from "react"
 import {
   flexRender,
   getCoreRowModel,
@@ -73,6 +73,14 @@ import { cn } from "@/lib/utils"
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type GridColumnDef<TData extends RowData> = ColumnDef<TData, any>
+
+/** One column as the grid hands it to a `tableFooter` render. */
+export interface GridFooterColumn {
+  /** The column's id — what a consumer keys its per-column content on. */
+  columnId: string
+  /** The resolved width, the same number the header cell renders against. */
+  width: number
+}
 
 /**
  * Applied centrally to any column def that omits a width, so `getTotalSize()` is
@@ -456,21 +464,22 @@ export interface GridProps<TData extends RowData> {
   /** Consumer chrome rendered in the toolbar, after the density control. */
   toolbarExtra?: ReactNode
   /**
-   * Consumer chrome for a contextual band **between the toolbar and the scroll
-   * container** — the selection readout and its bulk action.
+   * A consumer's column-aligned footer, rendered as a `<tfoot>` inside the
+   * grid's own table and stuck to the bottom of the scroll viewport.
    *
-   * `Grid` owns its own chrome, so the consumer never has to agree with it about
-   * where the band goes or how it is spaced; and a band that renders only while
-   * rows are selected is the grid's call to make, because the grid is what knows
-   * how many are selected. Return `null` from it at zero and the band is simply
-   * not in the frame: an absent sibling above the scroll container is the resting
-   * state, and `grid-scroll-surface.spec.ts` asserts that the siblings above the
-   * container plus the container itself still sum to the frame.
+   * **Why it belongs in the table.** The grid's table is wider than its
+   * scrollport, so any strip *below* the scroller drifts the moment the
+   * operator scrolls right; inside the table the footer shares the columns'
+   * widths for free and stays under them through every scroll position. The
+   * table is `border-separate border-spacing-0`, which is what lets its cells
+   * stick without dragging the whole row with them.
    *
-   * Not URL state and not a status surface — a `role="status"` inside `gridRoot`
-   * is forbidden, so anything this band reports must report it elsewhere.
+   * Called once per visible column, in display order, with the column's
+   * resolved width; returning `null` leaves that cell empty. One number, one
+   * basis is the consumer's rule to keep — a footer cell is where a total goes
+   * under its own field, not aggregate storage the grid interprets.
    */
-  selectionActions?: ReactNode
+  tableFooter?: (column: GridFooterColumn) => ReactNode
   /**
    * CAP-6 row lifecycle, opted into by supplying it. Omit it and the grid has
    * no add affordance, no delete affordance, no confirmation and no report —
@@ -539,7 +548,7 @@ export function Grid<TData extends RowData>({
   onClearFilters,
   emptyContent,
   toolbarExtra,
-  selectionActions,
+  tableFooter,
   rowLifecycle,
   onRowRemoved,
   onUnreachableNewRow,
@@ -548,6 +557,32 @@ export function Grid<TData extends RowData>({
   className,
 }: GridProps<TData>) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const footerStripRef = useRef<HTMLDivElement | null>(null)
+
+  /**
+   * Keeps the status row's horizontal position equal to the scroller's.
+   *
+   * The row lives *below* the scroll container — the one place a count and its
+   * totals stay visible while rows scroll past — so it cannot inherit the
+   * table's offsets by construction. Instead the strip is a second scroller
+   * whose content is the same width as the table, and every scroll event is
+   * mirrored onto the other: trackpad over the bar scrolls the grid, and the
+   * grid scrolling drags the bar's totals along with their fields. Both
+   * directions, because a bar the operator cannot scroll is a strip that
+   * answers to only half of the gestures.
+   *
+   * The identity check is the loop guard: writing `scrollLeft` fires the other
+   * element's own scroll event, and without it the pair would ping-pong. The
+   * value check drops the no-op writes a trackpad's inertia produces.
+   */
+  const syncFooterScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const source = event.currentTarget
+    const target = source === scrollRef.current ? footerStripRef.current : scrollRef.current
+
+    if (target && target.scrollLeft !== source.scrollLeft) {
+      target.scrollLeft = source.scrollLeft
+    }
+  }, [])
 
   const columnDefinitions = useMemo<GridColumnDef<TData>[]>(
     () =>
@@ -791,6 +826,19 @@ export function Grid<TData extends RowData>({
       // genuine change is handed on, so a resize drag — which re-resolves the
       // whole state on every move — does not re-notify the selection.
       const forwarded: Partial<TableState> = { ...resolved }
+
+      // In match-any mode the table was deliberately handed EMPTY
+      // `columnFilters` (`tableState`), so the resolved table state can never
+      // be written back as-is: the next write — a sort, a search keystroke, a
+      // hide — would erase every `fa.` condition from the URL, which is the
+      // defect that made switching to `or` lose the conditions it governs.
+      // The real list lives in `state` and is re-attached here.
+      if (filterConnective === "any") {
+        forwarded.columnFilters = parsedConditions.map((condition) => ({
+          id: condition.columnId,
+          value: condition,
+        }))
+      }
       const nextRowSelection = forwarded.rowSelection
       delete forwarded.rowSelection
 
@@ -806,7 +854,7 @@ export function Grid<TData extends RowData>({
 
       onStateChange(forUrlWriter(forwarded))
     },
-    [onRowSelectionChange, onStateChange],
+    [filterConnective, onRowSelectionChange, onStateChange, parsedConditions],
   )
 
   const handleColumnSizingInfoChange = useCallback<OnChangeFn<ColumnSizingInfoState>>(
@@ -1226,32 +1274,6 @@ export function Grid<TData extends RowData>({
       />
 
       {/*
-        The contextual selection band, between the toolbar and the scroll
-        container and only while the consumer renders it.
-
-        It wears the toolbar band's own rhythm (`px-3.5 py-2.5`, `border-b`,
-        `bg-card`, `h-8` controls, `text-[13px]`) so it reads as a second line of
-        one surface rather than as a footer, which is what a differently-padded
-        strip at the bottom of a grid always starts to look like.
-
-        Placement is load-bearing in one direction: `grid-scroll-surface.spec.ts`
-        asserts that the siblings above the scroll container plus the container
-        itself sum to `gridRoot.clientHeight`, which is what keeps a leftover gap
-        from becoming a cap. A `shrink-0` band sits above a `flex-1` container in
-        a bounded column, so the container gives up the space rather than the
-        band compressing its own controls.
-      */}
-      {selectionActions ? (
-        <div
-          data-grid-selection-band=""
-          className={`${GRID_BASE_FONT_CLASS} bg-card flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3.5 py-2.5`}
-        >
-          {selectionActions}
-        </div>
-      ) : null}
-
-
-      {/*
         The one scroll container in the primitive, and the element the virtualizer
         measures against. `data-grid-scroll` is a new seam on this element — it
         did not repurpose an existing one — and it exists for the *count* of
@@ -1265,6 +1287,7 @@ export function Grid<TData extends RowData>({
         aria-label={ariaLabel}
         tabIndex={0}
         className="focus-visible:ring-ring/50 min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
+        onScroll={syncFooterScroll}
         {...keyboard.containerProps}
       >
         {/*
@@ -1300,8 +1323,15 @@ export function Grid<TData extends RowData>({
           style={{ width: totalSize, tableLayout: "fixed" }}
           className={cn(
             GRID_BASE_FONT_CLASS,
-            "border-separate border-spacing-0",
-            dragWidth && "pointer-events-none select-none",
+            // Text selection inside the grid is the cell range, never the
+            // browser's native text range: a Shift+click drag-selects the
+            // text between the two clicks, which spans every intermediate
+            // row and paints full rows over the rectangle. `select-none`
+            // removes that second signal entirely; copy still works through
+            // the range clipboard (`Ctrl/Cmd+C`). The in-cell editor below
+            // re-enables `select-text` so draft text stays selectable.
+            "border-separate border-spacing-0 select-none",
+            dragWidth && "pointer-events-none",
           )}
         >
           <thead>
@@ -1402,7 +1432,69 @@ export function Grid<TData extends RowData>({
           </tbody>
         </table>
         </DndContext>
+
+        {/*
+          The consumer's status row, *below* the scroll container and outside
+          it — the one place a count and a couple of totals can always be seen,
+          because rows that scroll take anything rendered among them away. The
+          pattern is the reference implementation's footer bar: pinned under the
+          rows while the row set scrolls, and moving horizontally *with* the
+          grid so every total stays under its own field.
+
+          Below the scroller it cannot inherit the table's columns by
+          construction, so two things carry the alignment: every cell is sized
+          from the same `header.getSize()` the header row uses, and the strip
+          mirrors the scroller's `scrollLeft` in both directions on every scroll
+          event (`syncFooterScroll`). A frozen column therefore pins the strip's
+          cell exactly as it pins the table's, which is what keeps the readout
+          under the identity column and a total under its field however far
+          right the operator scrolls.
+        */}
       </div>
+
+      {tableFooter ? (
+        <div
+          ref={footerStripRef}
+          data-grid-footer=""
+          data-grid-footer-scroll=""
+          onScroll={syncFooterScroll}
+          className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-border bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {/*
+            The wide content the scroller above clips. `width: totalSize` is the
+            same number the table renders against, so every cell sits under its
+            own column; the *outer* element is the scroller, because an element
+            can only scroll when its content overflows it — a strip carrying its
+            own width and its own overflow scrolls nothing and would leave the
+            totals behind on the first scroll to the right.
+          */}
+          <div className="flex items-center" style={{ width: totalSize }}>
+            {headerHeaders.map((header) => {
+              const stickyLeft =
+                frozenColumns.find((entry) => entry.columnId === header.column.id)?.left ?? null
+
+              return (
+                <div
+                  key={header.column.id}
+                  data-grid-footer-cell={header.column.id}
+                  style={{
+                    width: header.getSize(),
+                    // Sticky, and for the same cells the table freezes: a
+                    // pinned run that the bar does not repeat would leave the
+                    // readout behind on the first scroll to the right.
+                    position: stickyLeft === null ? undefined : "sticky",
+                    left: stickyLeft === null ? undefined : stickyLeft,
+                    backgroundColor: stickyLeft === null ? undefined : "var(--card)",
+                  }}
+                  className="text-[13px] flex-none px-2 py-1"
+                >
+                  {tableFooter({ columnId: header.column.id, width: header.getSize() })}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 

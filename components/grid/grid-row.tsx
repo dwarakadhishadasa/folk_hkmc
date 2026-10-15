@@ -137,7 +137,7 @@ function GridCellEditor({
       onBlur={onDraftBlur}
       onPointerDown={(event) => event.stopPropagation()}
       aria-label="Edit cell value"
-      className="border-ring bg-card focus-visible:ring-ring/50 h-full w-full rounded-[3px] border bg-transparent px-1 text-[13px] outline-none focus-visible:ring-[2px]"
+      className="border-ring bg-card focus-visible:ring-ring/50 h-full w-full rounded-[3px] border bg-transparent px-1 text-[13px] outline-none select-text focus-visible:ring-[2px]"
     />
   )
 }
@@ -250,18 +250,29 @@ export function GridRow<TData>({
         "bg-card transition-colors",
         // The row owns the hairline and the hover/selected surfaces; the sticky
         // frozen cell needs an opaque background of its own to cover what
-        // scrolls beneath it, so the states are driven per-cell.
+        // scrolls beneath it, so the states are driven per-cell. A translucent
+        // `bg-*` on a frozen cell turns it into a window: scrolled content
+        // bleeds through on hover. Frozen cells therefore keep `bg-card` and
+        // take the same tint as an inset shadow, which paints over the opaque
+        // background instead of replacing it.
         "[&>td]:border-b [&>td]:border-border",
-        "[&>td]:bg-card [&:hover>td]:bg-muted/50",
+        "[&>td]:bg-card",
+        "[&:hover>td:not([data-grid-frozen])]:bg-muted/50",
+        "[&:hover>td[data-grid-frozen]]:shadow-[inset_0_0_0_999px_color-mix(in_oklab,var(--muted)_50%,transparent)]",
         "data-[state=selected]:[&>td]:bg-muted",
-        isFocused && "[&>td]:bg-muted/40",
+        isFocused && "[&>td:not([data-grid-frozen])]:bg-muted/40",
+        isFocused &&
+          "[&>td[data-grid-frozen]]:shadow-[inset_0_0_0_999px_color-mix(in_oklab,var(--muted)_40%,transparent)]",
         // The cell range, applied per cell rather than per row. It has to be
         // qualified by the cell's own attribute instead of being a `bg-*` on the
         // `<td>`: the four rules above target `>td` from this row and would
         // otherwise win on specificity, and the double attribute raises this one
         // above all of them without an `!important` anywhere.
-        "[&>td[data-grid-cell-selected][data-grid-cell-selected]]:bg-accent/30",
-        isEditing && "[&>td]:bg-accent/40",
+        "[&>td[data-grid-cell-selected][data-grid-cell-selected]:not([data-grid-frozen])]:bg-accent/30",
+        "[&>td[data-grid-cell-selected][data-grid-cell-selected][data-grid-frozen]]:shadow-[inset_0_0_0_999px_color-mix(in_oklab,var(--accent)_30%,transparent)]",
+        isEditing && "[&>td:not([data-grid-frozen])]:bg-accent/40",
+        isEditing &&
+          "[&>td[data-grid-frozen]]:shadow-[inset_0_0_0_999px_color-mix(in_oklab,var(--accent)_40%,transparent)]",
       )}
     >
       {cells.map((cell) => {
@@ -311,6 +322,10 @@ export function GridRow<TData>({
             // any column carrying a custom renderer, which is exactly the case
             // (`booksRead`, `assignee`) a rejection is most likely to come from.
             data-grid-cell-error={cell.error ?? undefined}
+            // The seam the row's state surfaces scope on: translucent tints
+            // stop at scrolling cells, and frozen cells take the same tint as
+            // an inset shadow over their opaque background.
+            data-grid-frozen={stickyLeft !== undefined ? "true" : undefined}
             tabIndex={-1}
             title={
               // Nothing to inspect in an empty cell, and nothing useful to say
@@ -326,7 +341,18 @@ export function GridRow<TData>({
                 ? undefined
                 : (cell.error ?? cell.text)
             }
-            onPointerDown={(event) => onCellPointerDown(row.id, cell.columnId, event.shiftKey)}
+            onPointerDown={(event) => {
+              // Shift+click would otherwise extend the browser's native text
+              // selection across every row between the two clicks, painting
+              // full rows over the cell-range rectangle. The range is the only
+              // selection signal, so the native one is suppressed here and
+              // cleared in `focusCell` for any path that still produced one.
+              if (event.shiftKey) {
+                event.preventDefault()
+              }
+
+              onCellPointerDown(row.id, cell.columnId, event.shiftKey)
+            }}
             // `preventDefault` is OQ-7's answer, and it is load-bearing: the
             // browser selects a word under the cursor on a double-click, before
             // any handler runs, and inside a 32px fixed-height cell a selected
