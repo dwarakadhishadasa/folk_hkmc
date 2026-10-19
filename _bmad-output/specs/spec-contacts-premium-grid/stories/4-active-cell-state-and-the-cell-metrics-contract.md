@@ -2,7 +2,7 @@
 title: 'Active-cell state and the cell-metrics contract'
 type: 'feature'
 created: '2026-10-13'
-status: 'in-progress'
+status: 'doneS'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '76fd2506433b5eeacfd950443f3f2b9d2b9f6a87'

@@ -5,11 +5,8 @@ import type { ReactNode } from "react"
 import { useDraggable, useDroppable } from "@dnd-kit/core"
 import type { SortingState } from "@tanstack/react-table"
 import {
-  ArrowDown,
   ArrowDownWideNarrow,
-  ArrowUp,
   ArrowUpNarrowWide,
-  ChevronsUpDown,
   ListFilter,
   MoreHorizontal,
 } from "lucide-react"
@@ -24,15 +21,44 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { GRID_BASE_FONT_CLASS } from "@/components/grid/grid-row"
+import { resolveGridFieldIcon } from "@/components/grid/grid-field-icons"
 import { GridSortPopover, type GridSortField } from "@/components/grid/grid-sort-popover"
+import type { GridFieldType } from "@/components/grid/grid-types"
 
 export interface GridHeaderCellProps {
   label: string
   columnId: string
+  /**
+   * The column's declared `meta.grid.fieldType`, which is what decides the glyph
+   * in front of the label. Absent for a column that is a control rather than a
+   * field — the selection column, a favourite star, the row actions — and those
+   * correctly render no icon.
+   *
+   * The glyph itself is resolved by `grid-field-icons.ts`, so this component never
+   * names one; that module is the whole of the icon surface.
+   */
+  fieldType?: GridFieldType
+  /**
+   * The cell's rendered width in px, which is `column.getSize()` scaled by the
+   * frame's stretch — so it is *not* the size a resize drag writes, and reading
+   * it as one would make the boundary jump the moment the frame width changed.
+   * `resolveColumnLayout` in `grid.tsx` is the only thing that computes it.
+   */
   width: number
+  /**
+   * True for the last visible column, which drops its own right divider — the
+   * frame's border is the edge there, and a second line just inside it reads as
+   * a doubled edge. Nothing else about it is special: its width is a share of
+   * the frame's slack like every other column's, which is the point.
+   */
+  isLast?: boolean
   /** Height of the header row; matches the body row height for a tight grid. */
   rowHeight: number
-  /** `left` offset inside the pinned run, or null when the column scrolls away. */
+  /**
+   * `left` offset inside the pinned run, in px, or null when the column scrolls
+   * away. Summed from the rendered widths, so the run stays flush with the
+   * columns to its right however far the frame is stretching them.
+   */
   stickyLeft: number | null
   sortDirection: "asc" | "desc" | false
   isSortable: boolean
@@ -71,27 +97,17 @@ export interface GridHeaderCellProps {
   render?: ReactNode
 }
 
-function SortIndicator({ direction }: { direction: "asc" | "desc" | false }) {
-  if (direction === "asc") {
-    return <ArrowUp aria-hidden="true" className="size-3.5" />
-  }
-
-  if (direction === "desc") {
-    return <ArrowDown aria-hidden="true" className="size-3.5" />
-  }
-
-  return <ChevronsUpDown aria-hidden="true" className="size-3.5 opacity-40" />
-}
-
 /**
- * Sticky header cell: label, sort indicator, column menu and resize handle —
- * or, when `render` is supplied, just the consumer's node.
+ * Sticky header cell: label, column menu and resize handle — or, when `render`
+ * is supplied, just the consumer's node.
  *
  * Column order moves by drag-and-drop via `@dnd-kit/core` (pointer, touch and
  * keyboard sensors, committed once on drop through the transient handle — see
- * `grid.tsx`). The label is deliberately not a sort button: sorting lives in the
- * one global sort popover, opened from this menu's two sort items and from the
- * toolbar's Sort control, so a header is never both a control and a sort button.
+ * `grid.tsx`). The label is deliberately not a sort button and carries no
+ * sort icon: sorting lives in the one global sort popover, opened from this
+ * menu's two sort items and from the toolbar's Sort control, and `aria-sort`
+ * on the cell keeps the state exposed to assistive tech — so a header is
+ * never both a control and a sort button.
  *
  * The menu control reveals on hover and keyboard focus through an
  * opacity treatment that leaves it focusable and tappable at rest — never
@@ -100,7 +116,9 @@ function SortIndicator({ direction }: { direction: "asc" | "desc" | false }) {
 export function GridHeaderCell({
   label,
   columnId,
+  fieldType,
   width,
+  isLast = false,
   rowHeight,
   stickyLeft,
   sortDirection,
@@ -154,6 +172,16 @@ export function GridHeaderCell({
       ref={hasCustomHeader ? undefined : setDropRef}
       scope="col"
       data-grid-column={columnId}
+      // The same attribute `grid-row.tsx` puts on every body cell, so a column's
+      // declared type is readable off its header and its cells by one selector —
+      // and a header that declares none (a control column) is absent from
+      // `[data-grid-field-type]` rather than present with an empty value.
+      data-grid-field-type={fieldType}
+      // Mirrors the row cell's `data-grid-frozen` (`grid-row.tsx`): the same
+      // pinned region, marked on the same rule, so the pinned region's laid-out
+      // width is addressable from the header rather than inferred from column
+      // sizes that are not what is on screen.
+      data-grid-frozen={stickyLeft === null ? undefined : "true"}
       aria-sort={ariaSort}
       style={{
         width,
@@ -167,7 +195,20 @@ export function GridHeaderCell({
         // surface as the data, so the sticky row had nothing to read against
         // while the body scrolled under it. Token-only — a comparison of two
         // elements' computed backgrounds is what a spec asserts, never a hex.
-        "bg-muted text-muted-foreground sticky top-0 border-b border-r border-border p-0 font-medium",
+        //
+        // `text-foreground` rather than `text-muted-foreground`: the header is the
+        // one row that has to be read *while* a body row slides under it, so it
+        // carries the theme's highest-contrast foreground — which is the near-
+        // white of the dark canvas and its light-canvas counterpart in light,
+        // because a literal light value would be unreadable on `bg-muted` in one
+        // of the two themes. The guard bans that literal under this directory
+        // anyway, and a theme token is the answer it wants.
+        //
+        // `font-semibold` for the same reason: the header is a row of *names*,
+        // and at 13px against a muted surface the labels needed the extra step to
+        // read as a row rather than as a strip of clipped text.
+        "bg-muted text-foreground sticky top-0 border-b border-border p-0 font-semibold",
+        !isLast && "border-r",
         isFrozen ? "z-30" : "z-20",
         isDragging && "z-40 opacity-80",
       )}
@@ -177,6 +218,19 @@ export function GridHeaderCell({
       ) : (
         <>
           <div className="group relative flex h-full items-center gap-0.5 px-1">
+            {/*
+              The type glyph, ahead of the label and outside the drag activator.
+
+              **Outside it deliberately.** Inside, the icon would be a child of the
+              activator whose `aria-label` is "Drag to reorder <label>" — announced
+              as part of a control's name, and dragged as though it were the label
+              rather than the thing being dragged. As a sibling it is decoration,
+              and the glyph itself is `aria-hidden`: the field type is announced
+              through the column's own affordances, and a glyph has no accessible
+              name worth having.
+            */}
+            {resolveGridFieldIcon(fieldType)}
+
             {canDrag ? (
               <span
                 ref={setNodeRef}
@@ -186,15 +240,13 @@ export function GridHeaderCell({
                 tabIndex={0}
                 aria-label={`Drag to reorder ${label}`}
                 data-grid-drag-handle={columnId}
-                className="flex h-6 min-w-0 flex-1 cursor-grab items-center gap-1 rounded-sm px-1 text-[13px] font-medium outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50 active:cursor-grabbing"
+                className="flex h-6 min-w-0 flex-1 cursor-grab items-center rounded-sm px-1 text-[13px] font-medium outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50 active:cursor-grabbing"
               >
                 <span className="truncate">{label}</span>
-                <SortIndicator direction={sortDirection} />
               </span>
             ) : (
-              <span className="flex h-6 min-w-0 flex-1 items-center gap-1 px-1 text-[13px] font-medium">
+              <span className="flex h-6 min-w-0 flex-1 items-center px-1 text-[13px] font-medium">
                 <span className="truncate">{label}</span>
-                <SortIndicator direction={sortDirection} />
               </span>
             )}
 
@@ -250,7 +302,7 @@ export function GridHeaderCell({
             aria-label={`Resize ${label}`}
             onMouseDown={resizeHandler}
             onTouchStart={resizeHandler}
-            className="border-ring/40 hover:bg-ring/60 absolute right-0 top-0 h-full w-1 cursor-col-resize touch-none border-l bg-transparent select-none"
+            className="absolute right-0 top-0 h-full w-3 cursor-col-resize touch-none select-none before:absolute before:inset-y-0 before:right-0 before:w-px before:bg-border before:transition-colors hover:before:bg-ring"
           />
         </>
       )}

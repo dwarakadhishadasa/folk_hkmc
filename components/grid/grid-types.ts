@@ -127,7 +127,15 @@ export interface GridColumnMeta {
  */
 export interface GridFrozenColumn {
   columnId: string
-  /** Distance from the frozen region's left edge, in px. */
+  /**
+   * Distance from the table's left edge, in px.
+   *
+   * Summed from the **rendered** widths rather than from `column.getSize()`,
+   * which is the same number only when the columns are wider than the frame: on
+   * a frame that is stretching them a raw prefix leaves the pinned columns a gap
+   * apart exactly as wide as the stretch. `resolveColumnLayout` in `grid.tsx`
+   * produces the widths these are summed from.
+   */
   left: number
 }
 

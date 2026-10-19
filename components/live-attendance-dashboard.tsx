@@ -222,7 +222,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                     <button
                       type="button"
                       onClick={shareAttendanceLink}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--program-accent)] px-4 text-sm font-semibold text-white shadow-sm shadow-[var(--program-accent)]/20 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--program-accent)] px-4 text-sm font-semibold text-[var(--accent-foreground)] shadow-sm shadow-[var(--program-accent)]/20 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
                     >
                       <Share2 className="h-4 w-4" aria-hidden="true" />
                       Share
@@ -259,7 +259,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
               <div>
                 <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)] flex items-center gap-2">
                   {"Today's Attendance"}
-                  <span className="inline-block bg-[var(--program-accent)] text-white px-2.5 py-0.5 rounded-full text-xs font-bold">
+                  <span className="inline-block bg-[var(--program-accent)] text-[var(--accent-foreground)] px-2.5 py-0.5 rounded-full text-xs font-bold">
                     {attendanceList.length}
                   </span>
                 </h2>

@@ -10,6 +10,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table"
 import type {
+  Cell,
   ColumnDef,
   ColumnSizingInfoState,
   ColumnSizingState,
@@ -21,7 +22,7 @@ import type {
   Table,
   TableState,
 } from "@tanstack/react-table"
-import { useVirtualizer } from "@tanstack/react-virtual"
+import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual"
 import {
   DndContext,
   KeyboardSensor,
@@ -49,6 +50,7 @@ import {
 import type { GridFilterField } from "@/components/grid/grid-filter-popover"
 import type {
   GridCellCommitHandler,
+  GridCellView,
   GridDensity,
   GridFieldType,
   GridEditErrorHandler,
@@ -78,7 +80,18 @@ export type GridColumnDef<TData extends RowData> = ColumnDef<TData, any>
 export interface GridFooterColumn {
   /** The column's id — what a consumer keys its per-column content on. */
   columnId: string
-  /** The resolved width, the same number the header cell renders against. */
+  /**
+   * The column's sized width, in px — `header.getSize()`, the value the URL's
+   * `size.*` keys carry.
+   *
+   * **Not the width the cell renders at.** The strip's cell is sized from the
+   * grid's column layout, which is a share of the table's width whenever the
+   * frame is stretching it (see `resolveColumnLayout`), and this process cannot
+   * know the frame's width without measuring it. A footer that needs its cell's
+   * laid-out width reads the element it is rendered into; this number is the
+   * answer to "how wide did the user ask for this column", which is the question
+   * a total can actually use.
+   */
   width: number
 }
 
@@ -223,6 +236,136 @@ function resolveColumnLabel<TData extends RowData>(
 }
 
 /**
+ * The grid's horizontal layout: every visible column's rendered width, in px.
+ *
+ * TanStack hands out numbers and nothing else — `header.getSize()` is a column's
+ * size, `table.getTotalSize()` is their sum — and turning that into geometry is
+ * this primitive's job. Two questions have to be answered, and neither has a CSS
+ * answer that holds.
+ *
+ * **How much wider than its size does a column render?** The table is
+ * `width: 100%` with `min-width: getTotalSize()`, so the frame stretches the
+ * columns whenever their sizes fall short of it, and the factor that stretch
+ * applies is a number this process does not have: the table's width is
+ * `max(frame, totalSize)` and only the browser knows the frame's width. Hence
+ * `frameWidth`.
+ *
+ * **By which rule?** Every column's share of the slack — not one column taking
+ * all of it. The alternative was what this replaced: a single column left
+ * `width: auto` to absorb the stretch, which CSS 2.1 is explicit about giving
+ * *all* leftover space (the leftover goes to `auto` columns and is divided only
+ * among `auto` columns), so hiding one field inflated the Actions gutter by the
+ * entire freed width and left every real field where it was. A per-column share
+ * is the rule a table of mixed-width fields wants: a 240px notes field gains
+ * three times what a 40px checkbox gutter does, and both gain something.
+ *
+ * Chromium *would* spread the leftover proportionally on its own — plain pixel
+ * column widths in a wider table are scaled to fill, measured here — but that
+ * behaviour is under-specified (CSS 2.1 says only that the leftover is
+ * "distributed") and, more to the point, nothing redistributes the **pinned run's
+ * offsets**: those are computed here, so a prefix left at its raw size would sit
+ * a visible gap away from the column before it on any stretched frame. Measuring
+ * the frame is what makes one px-valued layout serve the widths, the offsets and
+ * the status strip below them.
+ */
+interface GridColumnLayout {
+  /** Every visible column's rendered width in px, in display order. */
+  widths: number[]
+  /** The table's own width, and the floor below which it starts scrolling. */
+  tableWidth: string
+  minWidth: number
+}
+
+/**
+ * How much wider than its size each column renders.
+ *
+ * One, unless the frame is wider than the columns' summed sizes — which is the
+ * whole of the stretch, and is why the frame has to be measured rather than
+ * assumed. A frame narrower than the total gets no factor at all: `min-width`
+ * has already taken the table past it, and every column renders at its own size.
+ */
+function columnStretch(totalSize: number, frameWidth: number): number {
+  if (frameWidth <= 0 || totalSize <= 0 || frameWidth <= totalSize) {
+    return 1
+  }
+
+  return frameWidth / totalSize
+}
+
+/**
+ * Rounds a rendered width to hundredths of a pixel.
+ *
+ * The rendered widths have to **sum** to the table's width, or the browser
+ * redistributes the difference and the layout stops being the one computed here —
+ * the same reason the pinned offsets depend on these numbers. Two decimal places
+ * is far below a device pixel and keeps the inline style readable; the sum is
+ * taken from the rounded values so it stays exact.
+ */
+function renderWidth(px: number): number {
+  return Math.round(px * 100) / 100
+}
+
+/** The live resize gesture, as far as the layout is concerned. */
+interface GridColumnDrag {
+  columnId: string
+  /** How far the pointer has moved the column's size from where the drag began. */
+  delta: number
+}
+
+/**
+ * Resolves the layout for this render.
+ *
+ * **Mid-gesture the layout is frozen at the one the drag began with, and only the
+ * dragged column moves.** A stretched layout is a *ratio* — every column is a
+ * share of a total — so feeding a live total back into it re-derives every other
+ * column's share on every pointer move, and the boundary under the pointer stops
+ * tracking it: for the last column it does not move at all, because its own share
+ * is a fixed fraction of a total that grew by exactly the amount the drag added.
+ * Holding the rest still makes each boundary move one-for-one with the pointer,
+ * and the table's width follows the drag, so it scrolls when the gesture runs past
+ * the frame.
+ *
+ * The table's width is pinned to the sum **only** mid-gesture. At rest `100%` is
+ * what makes the columns fill the frame, and the sum is then the frame; during a
+ * drag a `100%` table whose columns no longer add up to it would have the browser
+ * take the difference back out of them, which is the layout this is avoiding.
+ *
+ * `frozenWidths` is null until the frame has been measured once and is ignored if
+ * it does not line up with the current column set — a stale layout would be worse
+ * than the unstretched one, which is what a first render gets.
+ */
+function resolveColumnLayout<TData extends RowData>(
+  headers: readonly Header<TData, unknown>[],
+  totalSize: number,
+  frameWidth: number,
+  drag: GridColumnDrag | null,
+  frozenWidths: readonly number[] | null,
+): GridColumnLayout {
+  if (drag && frozenWidths && frozenWidths.length === headers.length) {
+    let sum = 0
+
+    const widths = headers.map((header, index) => {
+      const width = renderWidth(
+        frozenWidths[index] + (header.column.id === drag.columnId ? drag.delta : 0),
+      )
+      sum += width
+
+      return width
+    })
+
+    return { widths, tableWidth: `${renderWidth(sum)}px`, minWidth: renderWidth(sum) }
+  }
+
+  const stretch = columnStretch(totalSize, frameWidth)
+
+  return {
+    widths: headers.map((header) => renderWidth(header.getSize() * stretch)),
+    tableWidth: "100%",
+    minWidth: renderWidth(totalSize),
+  }
+}
+
+/**
  * Resolves the leading pinned region and each column's `left` offset.
  *
  * A column marked `meta.grid.frozen` joins, and so does a `selectable` column
@@ -234,8 +377,16 @@ function resolveColumnLabel<TData extends RowData>(
  * A table that marks nothing falls back to pinning only its first visible column,
  * the behaviour that predates the flag, and skips that fallback when the first
  * column is a selection control rather than an identity.
+ *
+ * `layout` supplies the offsets rather than the raw sizes, because a pinned
+ * column's offset is the sum of the **rendered** widths before it — on a stretched
+ * frame that is a larger number than the sum of their sizes, and using the sizes
+ * leaves a gap between the two pinned columns exactly as wide as the stretch.
  */
-function resolveFrozenRun<TData extends RowData>(headers: Header<TData, unknown>[]): GridFrozenColumn[] {
+function resolveFrozenRun<TData extends RowData>(
+  headers: Header<TData, unknown>[],
+  layout: GridColumnLayout,
+): GridFrozenColumn[] {
   const marked = headers.some((header) => header.column.columnDef.meta?.grid?.frozen === true)
   const run: GridFrozenColumn[] = []
   let left = 0
@@ -253,7 +404,7 @@ function resolveFrozenRun<TData extends RowData>(headers: Header<TData, unknown>
     }
 
     run.push({ columnId: header.column.id, left })
-    left += header.getSize()
+    left += layout.widths[index]
   }
 
   return run
@@ -514,6 +665,216 @@ export interface GridProps<TData extends RowData> {
   className?: string
 }
 
+interface GridVirtualRowsProps<TData extends RowData> {
+  scrollContainerRef: { current: HTMLDivElement | null }
+  virtualizerRef: { current: Virtualizer<HTMLDivElement, Element> | null }
+  rowModel: Row<TData>[]
+  rows: TData[]
+  getRowId: (row: TData, index: number, parent?: Row<TData>) => string
+  density: GridDensity
+  isReady: boolean
+  panelState: GridPanelState
+  columnCount: number
+  visibleColumnIds: readonly string[]
+  frozenColumns: readonly GridFrozenColumn[]
+  getCellView: (row: Row<TData>, cell: Cell<TData, unknown>) => GridCellView<TData>
+  isRowFocused: (row: Row<TData>) => boolean
+  isRowEditing: (row: Row<TData>) => boolean
+  focusedRowDomId: string | undefined
+  onCellPointerDown: (rowId: string, columnId: string, extend: boolean) => void
+  onCellDoubleClick: (rowId: string, columnId: string) => void
+  focusRow: (rowId: string) => boolean
+  focusRowCell: (rowId: string) => boolean
+  pendingFocusRowId: string | null
+  onPendingFocusResolved: () => void
+  onUnreachableNewRow?: () => void
+  onClearFilters?: () => void
+  emptyContent?: ReactNode
+}
+
+/**
+ * The virtualized `<tbody>`: window spacers plus the rendered rows.
+ *
+ * Split out of `Grid` because the virtualizer's scroll subscription
+ * re-renders its owner on every range change — and during active scrolling
+ * those changes arrive `flushSync`d inside the scroll event itself. Owning the
+ * hook here confines each scroll tick to this subtree, so the toolbar, the
+ * header row and the footer strip below never reconcile mid-scroll.
+ */
+function GridVirtualRows<TData extends RowData>({
+  scrollContainerRef,
+  virtualizerRef,
+  rowModel,
+  rows,
+  getRowId,
+  density,
+  isReady,
+  panelState,
+  columnCount,
+  visibleColumnIds,
+  frozenColumns,
+  getCellView,
+  isRowFocused,
+  isRowEditing,
+  focusedRowDomId,
+  onCellPointerDown,
+  onCellDoubleClick,
+  focusRow,
+  focusRowCell,
+  pendingFocusRowId,
+  onPendingFocusResolved,
+  onUnreachableNewRow,
+  onClearFilters,
+  emptyContent,
+}: GridVirtualRowsProps<TData>) {
+  const virtualizer = useVirtualizer({
+    count: isReady ? rowModel.length : 0,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => GRID_ROW_HEIGHT[density],
+    overscan: GRID_OVERSCAN,
+  })
+
+  useEffect(() => {
+    virtualizerRef.current = virtualizer
+
+    return () => {
+      if (virtualizerRef.current === virtualizer) {
+        virtualizerRef.current = null
+      }
+    }
+  }, [virtualizer, virtualizerRef])
+
+  useEffect(() => {
+    virtualizer.measure()
+  }, [density, virtualizer])
+
+  const virtualRows = isReady ? virtualizer.getVirtualItems() : []
+  const rowHeight = GRID_ROW_HEIGHT[density]
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
+  const paddingBottom =
+    virtualRows.length > 0 ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0
+
+  /**
+   * A stable value for "the rendered window moved".
+   *
+   * `virtualRows` cannot be the dependency itself: `getVirtualItems()` returns a
+   * fresh array on every call, so it is a new reference on every render — useless
+   * as evidence that anything changed. Its two ends are what actually decide
+   * whether a row is on screen, so they are what this compares.
+   */
+  const virtualWindowKey = virtualRows.length
+    ? `${virtualRows[0]?.index}:${virtualRows[virtualRows.length - 1]?.index}`
+    : "empty"
+
+  /**
+   * Lands the focus queued by `+ Add record`, once the row is both in the row
+   * model and inside the rendered window.
+   *
+   * Two failures, kept apart because only one of them can be retried:
+   *
+   * - the row is in the model but its cell is not rendered yet — a freshly
+   *   appended row on a scrolled grid. `scrollToIndex` only moves the scroll
+   *   offset; the virtual range updates on the render *after* it. Retried when
+   *   `virtualWindowKey` changes, which is the value that proves it moved.
+   * - the row is not in the row model at all — a blank draft under an active
+   *   text filter. Nothing will ever reveal it, so it is reported through the
+   *   status line rather than retried forever.
+   *
+   * Neither is reported as success. Focus that silently failed to move is the
+   * one failure an operator cannot see.
+   */
+  useEffect(() => {
+    if (pendingFocusRowId === null) {
+      return
+    }
+
+    // `focusRow` is idempotent and is what puts the model — anchor, row, column,
+    // scroll — on the row. `focusRowCell` then lands DOM focus, which only
+    // succeeds once the virtualizer has rendered the row.
+    if (!focusRow(pendingFocusRowId)) {
+      // Three states resolve here and they need three different answers:
+      //
+      // - the consumer has not appended the row yet. `createRow` runs inside the
+      //   click handler and its state lands on the *next* render, so the first
+      //   effect pass legitimately finds nothing. Retried.
+      // - the row is in `rows` but not in the row model. A blank draft under an
+      //   active text filter, which nothing will ever reveal. Reported.
+      // - otherwise it is simply not there. Same report; both are the operator
+      //   looking at a row that is not on screen.
+      if (rows.some((row, index) => getRowId(row, index) === pendingFocusRowId)) {
+        onPendingFocusResolved()
+        onUnreachableNewRow?.()
+      }
+
+      return
+    }
+
+    if (focusRowCell(pendingFocusRowId)) {
+      onPendingFocusResolved()
+    }
+  }, [
+    focusRow,
+    focusRowCell,
+    getRowId,
+    onPendingFocusResolved,
+    onUnreachableNewRow,
+    pendingFocusRowId,
+    rows,
+    virtualWindowKey,
+  ])
+
+  return (
+    <tbody data-grid-panel={gridPanelKey(panelState)}>
+      <GridPanel
+        state={panelState}
+        density={density}
+        columnCount={columnCount}
+        onClearFilters={onClearFilters}
+        emptyContent={emptyContent}
+      />
+
+      {paddingTop > 0 ? (
+        <tr aria-hidden="true" style={{ height: paddingTop }}>
+          <td colSpan={Math.max(columnCount, 1)} className="p-0" />
+        </tr>
+      ) : null}
+
+      {virtualRows.map((virtualRow) => {
+        const row = rowModel[virtualRow.index]
+
+        if (!row) {
+          return null
+        }
+
+        const focused = isRowFocused(row)
+
+        return (
+          <GridRow<TData>
+            key={row.id}
+            row={row}
+            getCellView={getCellView}
+            visibleColumnIds={visibleColumnIds}
+            isSelected={row.getIsSelected()}
+            frozenColumns={frozenColumns}
+            density={density}
+            isFocused={focused}
+            isEditing={isRowEditing(row)}
+            domId={focused ? focusedRowDomId : undefined}
+            onCellPointerDown={onCellPointerDown}
+            onCellDoubleClick={onCellDoubleClick}
+          />
+        )
+      })}
+
+      {paddingBottom > 0 ? (
+        <tr aria-hidden="true" style={{ height: paddingBottom }}>
+          <td colSpan={Math.max(columnCount, 1)} className="p-0" />
+        </tr>
+      ) : null}
+    </tbody>
+  )
+}
+
 /**
  * The composed grid: virtualized rows, sticky header, frozen first column, grid
  * keys, and the CAP-9 panel branch.
@@ -560,6 +921,51 @@ export function Grid<TData extends RowData>({
   const footerStripRef = useRef<HTMLDivElement | null>(null)
 
   /**
+   * The scroll container's content width, and the only measurement the grid's
+   * layout makes.
+   *
+   * The table is `width: 100%` with `min-width: getTotalSize()`, so the columns
+   * are stretched by exactly `frameWidth / getTotalSize()` whenever their sizes
+   * fall short of the frame — a ratio no amount of reading TanStack's state can
+   * produce, because the table's used width is the larger of the two and only the
+   * browser knows the frame's. Hiding a column is what makes the shortfall appear,
+   * which is why this is the difference between the freed width going to every
+   * column and going to whichever one used to be left `auto`.
+   *
+   * `clientWidth` rather than `contentRect.width` from the observer: both exclude
+   * a scrollbar, and `clientWidth` is the number the browser rounds, so at worst
+   * the layout is half a pixel off the table's own width and the browser takes the
+   * difference out of the columns. An equality check before `setState` keeps the
+   * observer from re-rendering the toolbar, the header and the status strip on
+   * every tick in which only the container's *height* moved — which is what the
+   * virtualizer does on every scroll.
+   */
+  const [frameWidth, setFrameWidth] = useState(0)
+
+  useEffect(() => {
+    const container = scrollRef.current
+
+    if (!container) {
+      return
+    }
+
+    const measure = (): void => {
+      const width = container.clientWidth
+
+      setFrameWidth((current) => (current === width ? current : width))
+    }
+
+    measure()
+    const observer = new ResizeObserver(measure)
+
+    observer.observe(container)
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
+  /**
    * Keeps the status row's horizontal position equal to the scroller's.
    *
    * The row lives *below* the scroll container — the one place a count and its
@@ -571,16 +977,46 @@ export function Grid<TData extends RowData>({
    * directions, because a bar the operator cannot scroll is a strip that
    * answers to only half of the gestures.
    *
-   * The identity check is the loop guard: writing `scrollLeft` fires the other
-   * element's own scroll event, and without it the pair would ping-pong. The
-   * value check drops the no-op writes a trackpad's inertia produces.
+   * Coalesced through `rAF`: a direct `scrollLeft` write per event forces a
+   * sync layout on every tick and the mirrored write fires the other's own
+   * scroll event, doubling the work under inertia. The latest offset wins;
+   * the equality check at write time is the loop guard.
    */
+  const footerSyncFrame = useRef<number | null>(null)
+  const footerSyncPending = useRef<{ source: HTMLDivElement; left: number } | null>(null)
+
   const syncFooterScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     const source = event.currentTarget
-    const target = source === scrollRef.current ? footerStripRef.current : scrollRef.current
+    footerSyncPending.current = { source, left: source.scrollLeft }
 
-    if (target && target.scrollLeft !== source.scrollLeft) {
-      target.scrollLeft = source.scrollLeft
+    if (footerSyncFrame.current !== null) {
+      return
+    }
+
+    footerSyncFrame.current = requestAnimationFrame(() => {
+      footerSyncFrame.current = null
+      const pending = footerSyncPending.current
+      footerSyncPending.current = null
+
+      if (!pending) {
+        return
+      }
+
+      const target = pending.source === scrollRef.current ? footerStripRef.current : scrollRef.current
+
+      if (target && target.scrollLeft !== pending.left) {
+        target.scrollLeft = pending.left
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (footerSyncFrame.current !== null) {
+        cancelAnimationFrame(footerSyncFrame.current)
+        footerSyncFrame.current = null
+      }
+      footerSyncPending.current = null
     }
   }, [])
 
@@ -660,7 +1096,13 @@ export function Grid<TData extends RowData>({
             id,
             label,
             fieldType,
-            options: definition.meta?.grid?.editorOptions?.options,
+            // A select/multiselect declares its allowed values as `options`; a
+            // linked field declares pickable records, whose **labels** are the
+            // values the filter can match. Falling back here is the filter's only
+            // channel for a linked column's labels.
+            options:
+              definition.meta?.grid?.editorOptions?.options ??
+              definition.meta?.grid?.editorOptions?.records?.map((record) => record.label),
             // `emphasis` is already the column carrying the row's identity, so
             // `+ Add condition` can prefer it without a second notion of
             // "primary" existing in two places.
@@ -772,8 +1214,17 @@ export function Grid<TData extends RowData>({
    * The width being dragged, held locally for the duration of one gesture. The
    * committed value is always in the URL; an abandoned drag clears this and the
    * table falls back to the URL-derived width.
+   *
+   * `delta` is the pointer's own displacement since the gesture began, which is
+   * not the same number as the difference between `size` and the size the drag
+   * started at once the frame is stretching the table — the layout needs the
+   * pointer's, because that is the thing the boundary has to track.
    */
-  const [dragWidth, setDragWidth] = useState<{ columnId: string; size: number } | null>(null)
+  const [dragWidth, setDragWidth] = useState<{
+    columnId: string
+    size: number
+    delta: number
+  } | null>(null)
   const sizingInfoRef = useRef<ColumnSizingInfoState>(INITIAL_COLUMN_SIZING_INFO)
   const resizeRef = useRef<{
     active: boolean
@@ -802,6 +1253,17 @@ export function Grid<TData extends RowData>({
   }, [columnIds, dragWidth, filterConnective, state])
 
   const tableRef = useRef<Table<TData> | null>(null)
+
+  /**
+   * The resting layout, kept for the next resize gesture to hold.
+   *
+   * Rewritten on every render with no gesture in flight, so the render
+   * immediately before one begins is the layout that gesture must freeze — and
+   * read-only otherwise. A pure derived cache rather than state: it is a value
+   * derived from props on every render anyway, and putting it in state would
+   * mean a second render of every row before a drag could even start.
+   */
+  const restingWidthsRef = useRef<readonly number[] | null>(null)
 
   const handleTableStateChange = useCallback<OnChangeFn<TableState>>(
     (updater) => {
@@ -880,7 +1342,15 @@ export function Grid<TData extends RowData>({
           resizeRef.current.moved = true
         }
 
-        setDragWidth({ columnId: next.isResizingColumn, size })
+        setDragWidth({
+          columnId: next.isResizingColumn,
+          size,
+          // The pointer's displacement, not the change in the size it produced:
+          // `size` is clamped at `GRID_MIN_COLUMN_WIDTH`, so past the floor the two
+          // part ways and only the pointer's is the displacement the boundary
+          // should follow.
+          delta: Math.round(next.deltaOffset ?? 0),
+        })
         return
       }
 
@@ -946,8 +1416,33 @@ export function Grid<TData extends RowData>({
   const headerHeaders = table.getHeaderGroups()[0]?.headers ?? []
   const visibleColumnIds = headerHeaders.map((header) => header.column.id)
   const visibleIndexById = new Map(visibleColumnIds.map((id, index) => [id, index]))
-  const frozenColumns = resolveFrozenRun(headerHeaders)
+  // `getTotalSize()` sums the **visible** columns, so it falls with every hide —
+  // which is exactly the moment the frame's slack appears and has to go somewhere.
+  const totalSize = table.getTotalSize()
+  const restingLayout = resolveColumnLayout(headerHeaders, totalSize, frameWidth, null, null)
+
+  if (dragWidth === null) {
+    restingWidthsRef.current = restingLayout.widths
+  }
+
+  const columnLayout =
+    dragWidth === null
+      ? restingLayout
+      : resolveColumnLayout(
+          headerHeaders,
+          totalSize,
+          frameWidth,
+          dragWidth,
+          restingWidthsRef.current,
+        )
+  const frozenColumns = resolveFrozenRun(headerHeaders, columnLayout)
   const frozenColumnIds = frozenColumns.map((entry) => entry.columnId)
+  // The trailing column, for the one thing that still treats it as special: it
+  // drops its own right divider, because the frame's border is the edge there and
+  // a second line just inside it reads as a doubled edge. Its *width* is a share
+  // like every other column's.
+  const lastVisibleColumnId =
+    headerHeaders.length > 0 ? headerHeaders[headerHeaders.length - 1].column.id : null
 
   const panelState = useMemo<GridPanelState>(() => {
     if (panel) {
@@ -967,21 +1462,17 @@ export function Grid<TData extends RowData>({
 
   const isReady = panelState.kind === "ready"
 
-  const virtualizer = useVirtualizer({
-    count: isReady ? rowModel.length : 0,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => GRID_ROW_HEIGHT[density],
-    overscan: GRID_OVERSCAN,
-  })
+  /**
+   * The virtualizer instance lives in `GridVirtualRows` below: the scroll
+   * subscription re-renders its owner on every range change, so owning it here
+   * would re-render the toolbar, header and footer on every scroll tick. This
+   * ref carries the instance up without a render; the child assigns it.
+   */
+  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null)
 
-  const virtualRows = isReady ? virtualizer.getVirtualItems() : []
-
-  const scrollToIndex = useCallback(
-    (index: number) => {
-      virtualizer.scrollToIndex(index, { align: "auto" })
-    },
-    [virtualizer],
-  )
+  const scrollToIndex = useCallback((index: number) => {
+    virtualizerRef.current?.scrollToIndex(index, { align: "auto" })
+  }, [])
 
   /**
    * The row a new record was just appended into, waiting for the window to
@@ -1005,10 +1496,15 @@ export function Grid<TData extends RowData>({
 
     // Queued rather than applied inline: the row is in the consumer's state, not
     // yet in this render's row model, so an immediate `focusRow` would resolve
-    // no row. The effect below retries once the consumer's append has landed.
+    // no row. The landing effect in `GridVirtualRows` retries once the
+    // consumer's append has landed.
     setPendingFocusRowId(id)
     return true
   }, [rowLifecycle])
+
+  const handlePendingFocusResolved = useCallback(() => {
+    setPendingFocusRowId(null)
+  }, [])
 
   const keyboard = useGridKeyboard<TData>({
     table,
@@ -1022,70 +1518,6 @@ export function Grid<TData extends RowData>({
     columnLabelById: labelById,
     onNotice,
   })
-
-  useEffect(() => {
-    virtualizer.measure()
-  }, [density, virtualizer])
-
-  /**
-   * A stable value for "the rendered window moved".
-   *
-   * `virtualRows` cannot be the dependency itself: `getVirtualItems()` returns a
-   * fresh array on every call, so it is a new reference on every render — useless
-   * as evidence that anything changed. Its two ends are what actually decide
-   * whether a row is on screen, so they are what this compares.
-   */
-  const virtualWindowKey = virtualRows.length
-    ? `${virtualRows[0]?.index}:${virtualRows[virtualRows.length - 1]?.index}`
-    : "empty"
-
-  /**
-   * Lands the focus queued by `+ Add record`, once the row is both in the row
-   * model and inside the rendered window.
-   *
-   * Two failures, kept apart because only one of them can be retried:
-   *
-   * - the row is in the model but its cell is not rendered yet — a freshly
-   *   appended row on a scrolled grid. `scrollToIndex` only moves the scroll
-   *   offset; the virtual range updates on the render *after* it. Retried when
-   *   `virtualWindowKey` changes, which is the value that proves it moved.
-   * - the row is not in the row model at all — a blank draft under an active
-   *   text filter. Nothing will ever reveal it, so it is reported through the
-   *   status line rather than retried forever.
-   *
-   * Neither is reported as success. Focus that silently failed to move is the
-   * one failure an operator cannot see.
-   */
-  useEffect(() => {
-    if (pendingFocusRowId === null) {
-      return
-    }
-
-    // `focusRow` is idempotent and is what puts the model — anchor, row, column,
-    // scroll — on the row. `focusRowCell` then lands DOM focus, which only
-    // succeeds once the virtualizer has rendered the row.
-    if (!keyboard.focusRow(pendingFocusRowId)) {
-      // Three states resolve here and they need three different answers:
-      //
-      // - the consumer has not appended the row yet. `createRow` runs inside the
-      //   click handler and its state lands on the *next* render, so the first
-      //   effect pass legitimately finds nothing. Retried.
-      // - the row is in `rows` but not in the row model. A blank draft under an
-      //   active text filter, which nothing will ever reveal. Reported.
-      // - otherwise it is simply not there. Same report; both are the operator
-      //   looking at a row that is not on screen.
-      if (rows.some((row, index) => getRowId(row, index) === pendingFocusRowId)) {
-        setPendingFocusRowId(null)
-        onUnreachableNewRow?.()
-      }
-
-      return
-    }
-
-    if (keyboard.focusRowCell(pendingFocusRowId)) {
-      setPendingFocusRowId(null)
-    }
-  }, [getRowId, keyboard, onUnreachableNewRow, pendingFocusRowId, rows, virtualWindowKey])
 
   useEffect(() => {
     const onWindowBlur = () => {
@@ -1195,10 +1627,6 @@ export function Grid<TData extends RowData>({
     }))
 
   const rowHeight = GRID_ROW_HEIGHT[density]
-  const totalSize = table.getTotalSize()
-  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
-  const paddingBottom =
-    virtualRows.length > 0 ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0
 
   /**
    * The grid's own contents, wrapped in the row-lifecycle provider only when a
@@ -1242,6 +1670,7 @@ export function Grid<TData extends RowData>({
         onColumnVisibilityChange={(columnId, visible) => {
           table.getColumn(columnId)?.toggleVisibility(visible)
         }}
+        hiddenFieldCount={toolbarColumns.filter((column) => !column.visible).length}
         globalFilter={typeof state.globalFilter === "string" ? state.globalFilter : ""}
         onGlobalFilterChange={(value) => {
           table.setGlobalFilter(value)
@@ -1318,9 +1747,28 @@ export function Grid<TData extends RowData>({
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
+        {/*
+          The table fills its scroll container and scrolls only when the summed
+          column sizes exceed it. `minWidth` is that sum, so a wide column set
+          scrolls and a narrow one stretches; the width itself is the container's
+          except mid-resize, where it is pinned to the columns' own total so the
+          browser does not take the drag's difference back out of them (see
+          `resolveColumnLayout`).
+
+          Every cell is then sized from `columnLayout.widths`, the **rendered**
+          width rather than `header.getSize()` — which is the whole of the change:
+          the sizes sum to less than the frame whenever a field has been hidden,
+          and each column now takes a share of that difference instead of one of
+          them taking all of it. The footer strip below is sized from the same
+          numbers, which is what keeps the two column-aligned.
+        */}
         <table
           data-grid-table=""
-          style={{ width: totalSize, tableLayout: "fixed" }}
+          style={{
+            width: columnLayout.tableWidth,
+            minWidth: columnLayout.minWidth,
+            tableLayout: "fixed",
+          }}
           className={cn(
             GRID_BASE_FONT_CLASS,
             // Text selection inside the grid is the cell range, never the
@@ -1336,7 +1784,7 @@ export function Grid<TData extends RowData>({
         >
           <thead>
             <tr style={{ height: rowHeight }}>
-              {headerHeaders.map((header) => {
+              {headerHeaders.map((header, index) => {
                 const column = header.column
                 const stickyLeft =
                   frozenColumns.find((entry) => entry.columnId === column.id)?.left ?? null
@@ -1357,7 +1805,9 @@ export function Grid<TData extends RowData>({
                     key={column.id}
                     label={labelById.get(column.id) ?? column.id}
                     columnId={column.id}
-                    width={header.getSize()}
+                    fieldType={fieldTypeByColumnId[column.id]}
+                    width={columnLayout.widths[index]}
+                    isLast={column.id === lastVisibleColumnId}
                     rowHeight={rowHeight}
                     stickyLeft={stickyLeft}
                     sortDirection={column.getIsSorted()}
@@ -1386,50 +1836,32 @@ export function Grid<TData extends RowData>({
             </tr>
           </thead>
 
-          <tbody data-grid-panel={gridPanelKey(panelState)}>
-            <GridPanel
-              state={panelState}
-              density={density}
-              columnCount={visibleColumnIds.length}
-              onClearFilters={onClearFilters}
-              emptyContent={emptyContent}
-            />
-
-            {paddingTop > 0 ? (
-              <tr aria-hidden="true" style={{ height: paddingTop }}>
-                <td colSpan={Math.max(visibleColumnIds.length, 1)} className="p-0" />
-              </tr>
-            ) : null}
-
-            {virtualRows.map((virtualRow) => {
-              const row = rowModel[virtualRow.index]
-
-              if (!row) {
-                return null
-              }
-
-              return (
-                <GridRow<TData>
-                  key={row.id}
-                  row={row}
-                  cells={row.getVisibleCells().map((cell) => keyboard.getCellView(row, cell))}
-                  frozenColumns={frozenColumns}
-                  density={density}
-                  isFocused={keyboard.isRowFocused(row)}
-                  isEditing={keyboard.isRowEditing(row)}
-                  domId={keyboard.isRowFocused(row) ? keyboard.focusedRowDomId : undefined}
-                  onCellPointerDown={keyboard.focusCell}
-                  onCellDoubleClick={keyboard.onCellDoubleClick}
-                />
-              )
-            })}
-
-            {paddingBottom > 0 ? (
-              <tr aria-hidden="true" style={{ height: paddingBottom }}>
-                <td colSpan={Math.max(visibleColumnIds.length, 1)} className="p-0" />
-              </tr>
-            ) : null}
-          </tbody>
+          <GridVirtualRows<TData>
+            scrollContainerRef={scrollRef}
+            virtualizerRef={virtualizerRef}
+            rowModel={rowModel}
+            rows={rows}
+            getRowId={getRowId}
+            density={density}
+            isReady={isReady}
+            panelState={panelState}
+            columnCount={visibleColumnIds.length}
+            visibleColumnIds={visibleColumnIds}
+            frozenColumns={frozenColumns}
+            getCellView={keyboard.getCellView}
+            isRowFocused={keyboard.isRowFocused}
+            isRowEditing={keyboard.isRowEditing}
+            focusedRowDomId={keyboard.focusedRowDomId}
+            onCellPointerDown={keyboard.focusCell}
+            onCellDoubleClick={keyboard.onCellDoubleClick}
+            focusRow={keyboard.focusRow}
+            focusRowCell={keyboard.focusRowCell}
+            pendingFocusRowId={pendingFocusRowId}
+            onPendingFocusResolved={handlePendingFocusResolved}
+            onUnreachableNewRow={onUnreachableNewRow}
+            onClearFilters={onClearFilters}
+            emptyContent={emptyContent}
+          />
         </table>
         </DndContext>
 
@@ -1461,15 +1893,21 @@ export function Grid<TData extends RowData>({
           className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-border bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {/*
-            The wide content the scroller above clips. `width: totalSize` is the
-            same number the table renders against, so every cell sits under its
-            own column; the *outer* element is the scroller, because an element
-            can only scroll when its content overflows it — a strip carrying its
-            own width and its own overflow scrolls nothing and would leave the
-            totals behind on the first scroll to the right.
+            The wide content the scroller above clips. The strip is sized from the
+            same `columnLayout` as the table and by the same numbers, so a total
+            stays under its own field with or without slack, and while the grid
+            scrolls and while a column is being resized. There is no cell left to
+            grow, because no single column absorbs anything. The *outer* element is
+            the scroller, because an element can only scroll when its content
+            overflows it — a strip carrying its own width and its own overflow
+            scrolls nothing and would leave the totals behind on the first scroll
+            to the right.
           */}
-          <div className="flex items-center" style={{ width: totalSize }}>
-            {headerHeaders.map((header) => {
+          <div
+            className="flex items-center"
+            style={{ width: columnLayout.tableWidth, minWidth: columnLayout.minWidth }}
+          >
+            {headerHeaders.map((header, index) => {
               const stickyLeft =
                 frozenColumns.find((entry) => entry.columnId === header.column.id)?.left ?? null
 
@@ -1478,7 +1916,7 @@ export function Grid<TData extends RowData>({
                   key={header.column.id}
                   data-grid-footer-cell={header.column.id}
                   style={{
-                    width: header.getSize(),
+                    width: columnLayout.widths[index],
                     // Sticky, and for the same cells the table freezes: a
                     // pinned run that the bar does not repeat would leave the
                     // readout behind on the first scroll to the right.

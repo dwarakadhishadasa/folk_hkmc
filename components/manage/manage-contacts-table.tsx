@@ -189,9 +189,13 @@ const PATCH_KEY_BY_COLUMN: Partial<Record<string, ManageContactPatchKey>> = {
   [INITIAL_CONTACT_COLUMN_ID]: "initialContact",
   [DATE_OF_BIRTH_COLUMN_ID]: "dateOfBirth",
   [NOTES_COLUMN_ID]: "notes",
+  // Plural on the wire: the `linked` editor commits `[id]` (and `[]` to clear),
+  // because a contact belongs to at most one location. Without this entry a
+  // commit on the column throws before any request is sent.
+  [LOCATION_COLUMN_ID]: "locationIds",
 }
 
-/** The same seven columns, in the order they are offered to the create write. */
+/** The same eight columns, in the order they are offered to the create write. */
 const WRITABLE_COLUMN_IDS = Object.keys(PATCH_KEY_BY_COLUMN)
 
 /**
@@ -254,7 +258,7 @@ function isDraftRowId(rowId: string): boolean {
  *
  * An explicit switch rather than an index signature so the compiler knows which
  * fields a create can carry. `default: undefined` is unreachable — the column
- * list and this switch are the same seven columns — and returning `undefined`
+ * list and this switch are the same eight columns — and returning `undefined`
  * rather than throwing keeps a future column from failing the whole create.
  */
 function draftValueForColumn(contact: ManageContact, columnId: string): unknown {
@@ -273,6 +277,8 @@ function draftValueForColumn(contact: ManageContact, columnId: string): unknown 
       return contact.dateOfBirth
     case NOTES_COLUMN_ID:
       return contact.notes
+    case LOCATION_COLUMN_ID:
+      return contact.locationIds
     default:
       return undefined
   }
@@ -490,6 +496,23 @@ export function ManageContactsTable({
 
   const locationNameById = useMemo(
     () => new Map(payload.locations.map((location) => [location.id, location.name])),
+    [payload.locations],
+  )
+
+  /**
+   * The `linked` editor's record list for `location`.
+   *
+   * `payload.locations` is already the caller's scoped set — RLS narrowed it on
+   * the read path — so the options and the scope cannot disagree. `detail` is the
+   * location's status: the list shows a name and a status and nothing else.
+   */
+  const locationRecords = useMemo(
+    () =>
+      payload.locations.map((location) => ({
+        id: location.id,
+        label: location.name,
+        detail: location.status ?? undefined,
+      })),
     [payload.locations],
   )
 
@@ -786,14 +809,19 @@ export function ManageContactsTable({
         meta: { grid: { editable: true, editor: "text", fieldType: "text" } },
       }),
 
-      // Joined rather than an array so both the per-column text filter and the
-      // sort order read the same value the operator sees in the cell.
+      // Joined rather than an array so the per-column text filter and the sort
+      // order read the same value the operator sees in the cell.
       //
       // An id the lookup misses becomes `UNRESOLVED_LOCATION`, never the id: this
       // used to fall back to `?? id`, which printed a raw UUID into the cell, into
       // its `title`, and out through the clipboard. `fieldType: "linked"` is what
-      // gets the cell a label at all — without it this column has no editor to
-      // key on and fell through to bare text.
+      // gets the cell a label at all — without it this column has no renderer to
+      // key on and falls through to bare text.
+      //
+      // `editor: "linked"` is the single-record picker. It commits `[id]` because
+      // `location_ids` is plural, and because a contact belongs to at most one
+      // location the picker is offered only when the field is empty: a set cell
+      // shows its chip and a `×`.
       columnHelper.accessor(
         (contact) =>
           contact.locationIds
@@ -804,7 +832,13 @@ export function ManageContactsTable({
           header: COLUMN_LABELS[LOCATION_COLUMN_ID],
           size: 180,
           meta: {
-            grid: { fieldType: "linked", unresolvedText: UNRESOLVED_LOCATION },
+            grid: {
+              fieldType: "linked",
+              unresolvedText: UNRESOLVED_LOCATION,
+              editable: true,
+              editor: "linked",
+              editorOptions: { records: locationRecords },
+            },
           },
         },
       ),
@@ -981,6 +1015,7 @@ export function ManageContactsTable({
     ]
   }, [
     locationNameById,
+    locationRecords,
     payload.booksReadOptions,
     payload.staffNames,
     pendingContactId,

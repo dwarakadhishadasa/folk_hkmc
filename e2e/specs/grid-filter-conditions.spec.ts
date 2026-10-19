@@ -851,7 +851,7 @@ test.describe("CAP-12 — the four reported defects", () => {
     await expect(value).toHaveValue("abcdefgh")
   })
 
-  test("AC-D3: one rule above the conditions and one below", async ({ page }) => {
+  test("AC-D3: the header carries the popover's only rule", async ({ page }) => {
     await gotoGrid(page, { params: { "f.name": "contains:a", "f.phone": "contains:9" } })
     await openPopover(page)
 
@@ -871,14 +871,57 @@ test.describe("CAP-12 — the four reported defects", () => {
     expect(conditionsBottom, "no rule between the conditions and the footer").toBe("0px")
     expect(conditionsTop, "the header's rule belongs to the header").toBe("0px")
 
-    // The two that remain: the header's below it, the footer's above it.
+    // The header's below it is the only one left.
     const [headerTop, headerBottom] = await rules("header")
     expect(headerBottom, "the header carries the rule above the conditions").not.toBe("0px")
     expect(headerTop, "and nothing above the header").toBe("0px")
 
+    // The footer carries NONE. It used to carry a `border-t`, which cut the two
+    // footer actions off as a second form region.
     const [footerTop, footerBottom] = await rules("footer")
-    expect(footerTop, "the footer carries the rule below the conditions").not.toBe("0px")
-    expect(footerBottom, "and nothing below the footer").toBe("0px")
+    expect(footerTop, "the footer carries no rule above its actions").toBe("0px")
+    expect(footerBottom, "and none below them").toBe("0px")
+  })
+
+  test("the two footer actions share one quiet treatment", async ({ page }) => {
+    await gotoGrid(page, { params: { "f.name": "contains:a" } })
+    await openPopover(page)
+
+    const footer = popover(page).locator("[data-grid-filter-footer]")
+    const addCondition = footer.getByRole("button", { name: "Add condition" })
+    const clearAll = footer.getByRole("button", { name: "Clear all" })
+
+    /** The footer button's resting face, as the browser resolves it. */
+    const face = (button: Locator) =>
+      button.evaluate((el) => {
+        const style = getComputedStyle(el)
+        return {
+          color: style.color,
+          fontWeight: style.fontWeight,
+          backgroundColor: style.backgroundColor,
+        }
+      })
+
+    // One shared class string, so neither can drift into being the louder of the
+    // two — which is what `+ Add condition` in brand royal used to be.
+    expect(await face(addCondition), "the two actions render identically").toEqual(
+      await face(clearAll),
+    )
+    expect(await face(addCondition), "bold, quiet and unfilled at rest").toMatchObject({
+      fontWeight: "600",
+      backgroundColor: "rgba(0, 0, 0, 0)",
+    })
+
+    // Hover must NOT paint a fill. `ghost` supplies `hover:bg-accent` in the
+    // light scope and a separate `dark:hover:bg-accent/50` in the dark one, and
+    // the override has to name both — a pointer-over that greys the button is
+    // the regression this holds.
+    for (const button of [addCondition, clearAll]) {
+      await button.hover()
+      expect((await face(button)).backgroundColor, "hover paints no fill").toBe(
+        "rgba(0, 0, 0, 0)",
+      )
+    }
   })
 
   test("AC-D4: a date is picked from a calendar, not typed", async ({ page }) => {

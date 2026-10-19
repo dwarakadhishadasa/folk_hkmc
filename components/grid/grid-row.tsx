@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, memo } from "react"
 import type { KeyboardEvent } from "react"
-import type { Row } from "@tanstack/react-table"
+import type { Cell, Row } from "@tanstack/react-table"
 
 import type { GridCellView, GridDensity, GridFrozenColumn } from "@/components/grid/grid-types"
 import { gridCellKey } from "@/components/grid/use-grid-keyboard"
@@ -189,7 +189,21 @@ function GridCellContents<TData>({
 
 export interface GridRowProps<TData> {
   row: Row<TData>
-  cells: GridCellView<TData>[]
+  /**
+   * Builds one cell's view. Called inside the row rather than by the caller so
+   * a memoized row can skip the row entirely — including the per-cell
+   * factories — when nothing it reads has changed. Identity covers overrides,
+   * selection, focus, editing, drafts and column definitions: any of those
+   * changing hands the row a new function.
+   */
+  getCellView: (row: Row<TData>, cell: Cell<TData, unknown>) => GridCellView<TData>
+  /**
+   * Visible column ids in display order. Compared by reference as the guard
+   * for reorder/hide changes, which otherwise leave every other prop intact.
+   */
+  visibleColumnIds: readonly string[]
+  /** Row selection, read by the caller: selection state is uncontrolled. */
+  isSelected: boolean
   /** The leading pinned run, in display order; empty when nothing is frozen. */
   frozenColumns: readonly GridFrozenColumn[]
   density: GridDensity
@@ -223,9 +237,10 @@ export interface GridRowProps<TData> {
  * belongs to the consumer; the cell range is `data-grid-cell-selected`, and the
  * two never share a signal.
  */
-export function GridRow<TData>({
+function GridRowInner<TData>({
   row,
-  cells,
+  getCellView,
+  isSelected,
   frozenColumns,
   density,
   isFocused,
@@ -237,42 +252,55 @@ export function GridRow<TData>({
   const stickyLeftByColumn = new Map(frozenColumns.map((entry) => [entry.columnId, entry.left]))
   const lastFrozenColumnId =
     frozenColumns.length === 0 ? null : frozenColumns[frozenColumns.length - 1].columnId
+  const cells = row.getVisibleCells().map((cell) => getCellView(row, cell))
 
   return (
     <tr
       id={domId}
       data-grid-row={row.id}
-      data-state={row.getIsSelected() ? "selected" : undefined}
+      data-state={isSelected ? "selected" : undefined}
       data-grid-row-focused={isFocused ? "true" : undefined}
       style={{ height: GRID_ROW_HEIGHT[density] }}
       className={cn(
         GRID_BASE_FONT_CLASS,
-        "bg-card transition-colors",
+        "bg-card",
         // The row owns the hairline and the hover/selected surfaces; the sticky
         // frozen cell needs an opaque background of its own to cover what
         // scrolls beneath it, so the states are driven per-cell. A translucent
         // `bg-*` on a frozen cell turns it into a window: scrolled content
-        // bleeds through on hover. Frozen cells therefore keep `bg-card` and
-        // take the same tint as an inset shadow, which paints over the opaque
-        // background instead of replacing it.
-        "[&>td]:border-b [&>td]:border-border",
+        // bleeds through on hover. Frozen cells therefore take the same tint
+        // as an opaque single-fill `color-mix` against `var(--card)` — one
+        // background paint, not a 999px inset shadow per cell per frame.
+        //
+        // Selected rows read `bg-[var(--grid-selected)]` — the tint each app
+        // defines in its own theme — rather than a hardcoded value, so the
+        // surface can differ per theme without the primitive naming one.
+        // No `transition-colors` here: animating every row's background turns
+        // hover churn during scroll into per-frame paint.
+        "[&>td]:border-b [&>td]:border-r [&>td]:border-border [&>td:last-child]:border-r-0",
         "[&>td]:bg-card",
-        "[&:hover>td:not([data-grid-frozen])]:bg-muted/50",
-        "[&:hover>td[data-grid-frozen]]:shadow-[inset_0_0_0_999px_color-mix(in_oklab,var(--muted)_50%,transparent)]",
-        "data-[state=selected]:[&>td]:bg-muted",
+        // Hover is its own token, not `bg-muted/50`: a 50% mix of `--muted`
+        // *lightens* a row, which is right on a light canvas but wrong on the
+        // dark one — there a lift reads as selection, and selection already has
+        // `--grid-selected`. In dark the hover goes darker instead, so the two
+        // states stay separable without either borrowing the other's colour.
+        "[&:hover>td:not([data-grid-frozen])]:bg-[var(--grid-row-hover,var(--muted))]",
+        "[&:hover>td[data-grid-frozen]]:bg-[var(--grid-row-hover,var(--muted))]",
+        "data-[state=selected]:[&>td]:bg-[var(--grid-selected,var(--muted))]",
+        "data-[state=selected]:[&>td[data-grid-frozen]]:bg-[var(--grid-selected,var(--muted))]",
         isFocused && "[&>td:not([data-grid-frozen])]:bg-muted/40",
         isFocused &&
-          "[&>td[data-grid-frozen]]:shadow-[inset_0_0_0_999px_color-mix(in_oklab,var(--muted)_40%,transparent)]",
+          "[&>td[data-grid-frozen]]:bg-[color-mix(in_oklab,var(--muted)_40%,var(--card))]",
         // The cell range, applied per cell rather than per row. It has to be
         // qualified by the cell's own attribute instead of being a `bg-*` on the
         // `<td>`: the four rules above target `>td` from this row and would
         // otherwise win on specificity, and the double attribute raises this one
         // above all of them without an `!important` anywhere.
         "[&>td[data-grid-cell-selected][data-grid-cell-selected]:not([data-grid-frozen])]:bg-accent/30",
-        "[&>td[data-grid-cell-selected][data-grid-cell-selected][data-grid-frozen]]:shadow-[inset_0_0_0_999px_color-mix(in_oklab,var(--accent)_30%,transparent)]",
+        "[&>td[data-grid-cell-selected][data-grid-cell-selected][data-grid-frozen]]:bg-[color-mix(in_oklab,var(--accent)_30%,var(--card))]",
         isEditing && "[&>td:not([data-grid-frozen])]:bg-accent/40",
         isEditing &&
-          "[&>td[data-grid-frozen]]:shadow-[inset_0_0_0_999px_color-mix(in_oklab,var(--accent)_40%,transparent)]",
+          "[&>td[data-grid-frozen]]:bg-[color-mix(in_oklab,var(--accent)_40%,var(--card))]",
       )}
     >
       {cells.map((cell) => {
@@ -447,3 +475,32 @@ export function GridRow<TData>({
     </tr>
   )
 }
+
+/**
+ * Whether a row can reuse its last render.
+ *
+ * The scroll subscription re-renders `GridVirtualRows` on every range change,
+ * so without this every visible row rebuilds ~14 cell views per tick. Each
+ * check below names the one thing that invalidates it: same row instance
+ * (data), same view factory (overrides, selection, focus, editing, drafts,
+ * column defs), same column order/visibility, same frozen run, same flags and
+ * same stable callbacks. Anything user-visible that is not named here would
+ * go stale — that is the review burden on every future prop.
+ */
+function gridRowPropsEqual<TData>(prev: GridRowProps<TData>, next: GridRowProps<TData>): boolean {
+  return (
+    prev.row === next.row &&
+    prev.getCellView === next.getCellView &&
+    prev.visibleColumnIds === next.visibleColumnIds &&
+    prev.frozenColumns === next.frozenColumns &&
+    prev.density === next.density &&
+    prev.isFocused === next.isFocused &&
+    prev.isEditing === next.isEditing &&
+    prev.isSelected === next.isSelected &&
+    prev.domId === next.domId &&
+    prev.onCellPointerDown === next.onCellPointerDown &&
+    prev.onCellDoubleClick === next.onCellDoubleClick
+  )
+}
+
+export const GridRow = memo(GridRowInner, gridRowPropsEqual) as typeof GridRowInner

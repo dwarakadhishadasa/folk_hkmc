@@ -78,6 +78,27 @@ const SLOT_OPERATOR = "w-[128px]"
 const SLOT_VALUE = "w-[154px]"
 
 /**
+ * The footer's two actions, which share ONE treatment: quiet siblings at the
+ * foot of the list, not a brand link beside a plain button.
+ *
+ * **The no-fill hover needs both variant scopes named.** `ghost` fills with
+ * `hover:bg-accent` in light and `dark:hover:bg-accent/50` in dark; those are
+ * separate scopes, so a bare `hover:bg-transparent` leaves the dark fill in
+ * place. `cn()` is `twMerge`, so within each scope the later class wins and no
+ * `!` is needed.
+ *
+ * **The label goes white in dark and `--foreground` in light.** White is asked
+ * for on the dark popover; against the light `--popover` (`#ffffff`) it would be
+ * invisible, and `--foreground` is the value `ghost`'s own hover already gives
+ * there, so light is unchanged rather than newly styled.
+ *
+ * One string for both buttons is what makes them matched by construction —
+ * `gap-1` is inert on `Clear all`, which has no icon.
+ */
+const FOOTER_ACTION =
+  "text-muted-foreground h-7 gap-1 px-0 text-[12px] font-semibold hover:bg-transparent dark:hover:bg-transparent hover:text-foreground dark:hover:text-white"
+
+/**
  * The filter conditions popover (CAP-12).
  *
  * **A POPOVER ANCHORED UNDER THE TOOLBAR, not an inline bar and not a modal.**
@@ -233,10 +254,12 @@ export function GridFilterPopover({
           event.preventDefault()
         }}
       >
-        {/* The rule BELOW the header belongs to the header. It used to sit on the
-         * conditions list instead, which drew a second rule immediately below it
-         * once the footer added its own — two hairlines under the conditions
-         * where the composition has one above and one below. */}
+        {/* The rule BELOW the header is the popover's only one. The conditions
+         * container used to carry a `border-b` as well, which doubled it, and the
+         * footer used to carry a `border-t`, which cut the two footer actions off
+         * as a second form region. Story 6's AC-D3 asserted one rule above the
+         * conditions and one below — its text is marked superseded. Do not
+         * re-add a rule to the footer to match it. */}
         <div
           className="text-muted-foreground border-border mb-3 flex items-center justify-between border-b pb-3 text-[12px] font-medium"
           data-grid-filter-header=""
@@ -426,22 +449,22 @@ export function GridFilterPopover({
           })}
         </div>
 
-        <div className="border-border mt-3 flex items-center justify-between border-t pt-3" data-grid-filter-footer="">
+        <div className="mt-6 flex items-center justify-between" data-grid-filter-footer="">
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="text-royal h-7 gap-1 px-0 text-[12px] font-medium hover:underline"
+            className={FOOTER_ACTION}
             onClick={addCondition}
           >
-            <Plus aria-hidden="true" className="size-3.5 font-semibold" />
+            <Plus aria-hidden="true" className="size-3.5" />
             Add condition
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="text-muted-foreground hover:text-destructive h-7 px-0 text-[12px] font-normal"
+            className={FOOTER_ACTION}
             onClick={() => {
               // Through the one writer, like every other change in this file, and
               // that is the point of moving it: `Clear all` is a local change to

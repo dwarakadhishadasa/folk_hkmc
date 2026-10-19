@@ -127,7 +127,12 @@ export function GridRowAddControl({
       // `harness-guards.spec.ts:89` scans this directory as text and bans the
       // literal outright — a token is also what keeps the label legible if the
       // primary ever stops being dark.
-      className="border-royal bg-royal text-primary-foreground hover:bg-royal-light h-8 gap-1.5 rounded-[6px] px-3 text-[13px]"
+      // `hover:text-primary-foreground` because the `outline` variant this button is
+      // built on carries `hover:text-accent-foreground`, and `--accent-foreground`
+      // is the light theme's `#24324A` navy: hovering repainted the white label to
+      // navy *on this navy fill*, which is ~1:1. The hover is a background change
+      // only — the label keeps its own ink.
+      className="border-royal bg-royal text-primary-foreground hover:bg-royal-light hover:text-primary-foreground h-8 gap-1.5 rounded-[6px] px-3 text-[13px]"
       disabled={!canCreate}
       data-grid-add-record=""
       // No `aria-label`: the button's own text is its accessible name, and a

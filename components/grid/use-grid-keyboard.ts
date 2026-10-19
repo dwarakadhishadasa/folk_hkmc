@@ -127,6 +127,43 @@ interface CellOverride {
   error?: string
 }
 
+/**
+ * How wide the pinned run is on screen, measured from the header cells.
+ *
+ * **Measured, not summed from `column.getSize()`**, for two reasons that are
+ * separate and both real:
+ *
+ * A pinned column's laid-out width is a *share* of the table's width whenever
+ * the frame is stretching it (see `resolveColumnLayout` in `grid.tsx`), so the
+ * summed size understates what the columns occupy by the stretch factor — on a
+ * wide frame by hundreds of pixels, which is the same order as the reveal
+ * distance being computed.
+ *
+ * And the run is not the set of columns that declare `meta.grid.frozen`: a
+ * selection control ahead of the identity column is pinned too, without saying
+ * so, so summing the frozen declarations alone leaves the identity column's own
+ * offset out of the region.
+ *
+ * The **header** row is read, not the body: it carries the same pinned cells at
+ * the same widths and there are one or two of them, where the body has two per
+ * rendered row. The origin is the container's border-box left, which is the same
+ * origin `absoluteLeft` below is measured from — so the two carry the same
+ * constant and cancel.
+ */
+function pinnedRegionWidth(container: HTMLElement, containerRect: DOMRect): number {
+  let width = 0
+
+  for (const cell of container.querySelectorAll<HTMLElement>("thead [data-grid-frozen]")) {
+    const right = cell.getBoundingClientRect().right - containerRect.left
+
+    if (right > width) {
+      width = right
+    }
+  }
+
+  return width
+}
+
 export interface UseGridKeyboardOptions<TData> {
   table: Table<TData>
   /** The single scroll container, used for key handling and focus restoration. */
@@ -503,25 +540,21 @@ export function useGridKeyboard<TData>({
         return
       }
 
-      const frozenWidth = table
-        .getVisibleLeafColumns()
-        .filter((column) => column.columnDef.meta?.grid?.frozen === true)
-        .reduce((sum, column) => sum + column.getSize(), 0)
-
       const cellRect = cell.getBoundingClientRect()
       const containerRect = container.getBoundingClientRect()
+      const pinned = pinnedRegionWidth(container, containerRect)
       const absoluteLeft = container.scrollLeft + (cellRect.left - containerRect.left)
       const absoluteRight = absoluteLeft + cell.offsetWidth
-      const viewLeft = container.scrollLeft + frozenWidth
+      const viewLeft = container.scrollLeft + pinned
       const viewRight = container.scrollLeft + container.clientWidth
 
       if (absoluteLeft < viewLeft) {
-        container.scrollLeft = Math.max(0, absoluteLeft - frozenWidth)
+        container.scrollLeft = Math.max(0, absoluteLeft - pinned)
       } else if (absoluteRight > viewRight) {
         container.scrollLeft = absoluteRight - container.clientWidth
       }
     },
-    [containerRef, table, visibleRows],
+    [containerRef, visibleRows],
   )
 
   const moveFocus = useCallback(
@@ -1022,6 +1055,13 @@ export function useGridKeyboard<TData>({
         },
         commitValue,
         close: cancelEditing,
+        open: () => {
+          const index = visibleRows.findIndex((candidate) => candidate.id === row.id)
+
+          if (index !== -1) {
+            openEditor(index, columnId)
+          }
+        },
         editing: editing?.rowId === row.id && editing.columnId === columnId,
         options: meta?.editorOptions ?? {},
         label: columnLabelById?.get(columnId) ?? columnId,
@@ -1036,9 +1076,11 @@ export function useGridKeyboard<TData>({
       draft,
       editing,
       exitEditing,
+      openEditor,
       revertCommit,
       runCommit,
       setEditorDraft,
+      visibleRows,
     ],
   )
 

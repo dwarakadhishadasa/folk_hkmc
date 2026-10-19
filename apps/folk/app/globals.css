@@ -20,94 +20,225 @@
   --saffron-dark: #e07a10;
 
   /* Backgrounds */
-  --ivory: #fff9f0;
+  --ivory: #ffffff;
   --white: #ffffff;
 
   /* Text */
   --charcoal: #24324a;
   --charcoal-light: #4a5568;
 
-  /* Accent - Soft Teal */
-  --teal: #0d9488;
-  --teal-light: #14b8a6;
+  /* Supporting accent - success green. `--teal` is the historical name for
+   * this slot and is kept so existing call sites keep resolving; the value is
+   * now the success green, not a teal. */
+  --teal: #15803d;
+  --teal-light: #4ade80;
 
   --program-primary: var(--royal-blue);
   --program-primary-light: var(--royal-blue-light);
   --program-primary-dark: var(--royal-blue-dark);
-  --program-accent: var(--saffron);
-  --program-accent-light: var(--saffron-light);
-  --program-accent-dark: var(--saffron-dark);
+  /* The CTA ramp is the neutral accent, not saffron, so it is derived from
+   * `--accent` with `color-mix` rather than fixed here: `--accent` flips in
+   * `.dark`, and a fixed ramp would leave light-grey buttons in dark mode. */
+  --program-accent: var(--accent);
+  --program-accent-light: color-mix(in oklab, var(--accent) 84%, white);
+  --program-accent-dark: color-mix(in oklab, var(--accent) 86%, black);
   --program-ivory: var(--ivory);
   --program-text: var(--charcoal);
 
-  --background: oklch(0.99 0.005 90);
-  --foreground: oklch(0.25 0.03 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.25 0.03 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.25 0.03 250);
-  --primary: oklch(0.28 0.12 260);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.72 0.18 55);
-  --secondary-foreground: oklch(0.15 0.02 55);
-  --muted: oklch(0.97 0.005 90);
-  --muted-foreground: oklch(0.45 0.02 250);
-  --accent: oklch(0.72 0.18 55);
-  --accent-foreground: oklch(0.15 0.02 55);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.92 0.01 250);
-  --input: oklch(0.92 0.01 250);
-  --ring: oklch(0.28 0.12 260);
-  --chart-1: oklch(0.72 0.18 55);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.28 0.12 260);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --background: #ffffff;
+  --foreground: #24324a;
+  --card: #ffffff;
+  --card-foreground: #24324a;
+  --popover: #ffffff;
+  --popover-foreground: #24324a;
+  --primary: #0f1e54;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f2;
+  --secondary-foreground: #24324a;
+  --muted: #f2f2f2;
+  --muted-foreground: #4a5568;
+  --accent: #f2f2f2;
+  --accent-foreground: #24324a;
+  --destructive: #c2410c;
+  --destructive-foreground: #ffffff;
+  --success: #15803d;
+  --info: #1e40af;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #0f1e54;
+  /* Selected-row surface for the shared manage grid. A token rather than a
+     literal so `components/grid/` stays hex-free per harness-guards, and so
+     both themes stay legible through one switch. */
+  --grid-selected: #f1f6ff;
+  /* Select / multiselect label palette. Ten slots; a label's slot is a stable
+   * hash of its text, so the same book or source reads the same colour on every
+   * row and in every app. Only the hue lives here — the pill's own background
+   * and border are `color-mix` of the slot against `--card`, so a slot flips
+   * with `.dark` from this one value changing. */
+  --tag-1: #1d4ed8; /* blue */
+  --tag-2: #0e7490; /* cyan */
+  --tag-3: #0f766e; /* teal */
+  --tag-4: #116b33; /* green */
+  --tag-5: #92400e; /* amber */
+  --tag-6: #9a3412; /* orange */
+  --tag-7: #b91c1c; /* red */
+  --tag-8: #be185d; /* pink */
+  --tag-9: #6d28d9; /* purple */
+  --tag-10: #475569; /* slate */
+  /* A resolved link (location, assigned preacher) is not a label, so it wears
+   * one neutral slate pill rather than a palette slot — a link is a reference,
+   * and colour-coding references would imply a category they do not have. The
+   * slate is the one sampled off the reference chip, used as the *text* here
+   * and as the surface in `.dark`, so the two themes share one hue. */
+  --grid-linked-bg: #e9ebef;
+  --grid-linked-fg: #3b3f4b;
+  /* Row hover. Neutral in both themes, per `visual-design.md:61` — never amber,
+   * never saffron, because an amber hover makes a passive row read as active. */
+  --grid-row-hover: #f5f6f8;
+  /* The accent ink the grid paints its own controls in: navy on the light
+   * canvas, white in `.dark`. The brand navy measures ~1.6:1 against a dark
+   * card, so anything drawn in it — a toolbar icon, an open button's label —
+   * disappears there. One token keeps both themes honest and lets
+   * `components/grid/` stay hex-free. */
+  --grid-accent-ink: #0f1e54;
+  /* Amber ink for a control that is reporting something the operator should
+     notice — today that is the *Hide fields* trigger while any field is hidden,
+     which is the one piece of grid state an operator can forget they set: a
+     hidden field simply leaves the grid, so nothing else in the frame reports it.
+     A token rather than a Tailwind palette class so `components/grid/` stays
+     hex-free per harness-guards.
+     **One value in both themes, on purpose.** The hue *is* the signal, so a
+     theme-stepped pair would make "2 hidden fields" mean two different severities;
+     this reads the same on the near-black canvas and on paper, which is what a
+     stated fact should do. Both `.dark` blocks carry it unchanged, which also
+     keeps them byte-identical across the two apps. */
+  --grid-warning-ink: #f97f29;
+  /* Tab strip. The dark half of this pair lives in `.dark`; these are the light
+   * values, where the active tab keeps the navy brand underline rather than the
+   * green — green only reads as "active" once the surrounding ink is white. */
+  --tab-border: #e2e8f0;
+  --tab-active-text: #0f1e54;
+  --tab-active-underline: #0f1e54;
+  --tab-inactive-text: #4a5568;
+  --chart-1: #1e40af;
+  --chart-2: #15803d;
+  --chart-3: #c2410c;
+  --chart-4: #0f1e54;
+  --chart-5: #64748b;
   --radius: 0.75rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.28 0.12 260);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.96 0.01 250);
-  --sidebar-accent-foreground: oklch(0.205 0.02 250);
-  --sidebar-border: oklch(0.9 0.01 250);
-  --sidebar-ring: oklch(0.28 0.12 260);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #24324a;
+  --sidebar-primary: #0f1e54;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f2f2f2;
+  --sidebar-accent-foreground: #24324a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0f1e54;
 }
 
 .dark {
-  --background: oklch(0.145 0.01 250);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.18 0.01 250);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.18 0.01 250);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.4 0.12 260);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.72 0.18 55);
-  --secondary-foreground: oklch(0.15 0.02 55);
-  --muted: oklch(0.25 0.01 250);
-  --muted-foreground: oklch(0.7 0.01 250);
-  --accent: oklch(0.72 0.18 55);
-  --accent-foreground: oklch(0.15 0.02 55);
-  --destructive: oklch(0.62 0.141 25.723);
-  --destructive-foreground: oklch(0.145 0.01 250);
-  --border: oklch(0.3 0.01 250);
-  --input: oklch(0.3 0.01 250);
-  --ring: oklch(0.55 0.12 260);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.18 0.01 250);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.4 0.12 260);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.25 0.01 250);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.3 0.01 250);
-  --sidebar-ring: oklch(0.4 0.12 260);
+  --background: #1f2124;
+  --foreground: #e9eaeb;
+  /* `--program-text` is a *text-only* token (41 `text-[var(--program-text)]`
+   * sites, no background use), and it was declared in `:root` alone — so it
+   * stayed the light theme's `#24324a` under `.dark`, which is navy ink on a
+   * near-black card. Every heading and label that reads it was ~1.2:1. */
+  --program-text: #e9eaeb;
+  --card: #272a2e;
+  --card-foreground: #e9eaeb;
+  --popover: #2e3136;
+  --popover-foreground: #e9eaeb;
+  --primary: #2f4b9e;
+  --primary-foreground: #ffffff;
+  --secondary: #3c4045;
+  --secondary-foreground: #e9eaeb;
+  --muted: #32363a;
+  --muted-foreground: #9da1a6;
+  --accent: #dde0e4;
+  --accent-foreground: #1f2124;
+  --destructive: #f08a5d;
+  --destructive-foreground: #1f2124;
+  --success: #4ade80;
+  --info: #60a5fa;
+  --border: #3c4045;
+  --input: #3c4045;
+  --ring: #7da3e8;
+  /* Deep-navy counterpart of `--grid-selected`: light text stays legible on it
+     where the pale light-theme tint would wash out. */
+  --grid-selected: #083065;
+  /* Dark counterparts of the tag palette: the same ten hues, carried to the
+   * light end so a 12px label clears 4.5:1 against its own mixed background. */
+  --tag-1: #60a5fa;
+  --tag-2: #22d3ee;
+  --tag-3: #2dd4bf;
+  --tag-4: #4ade80;
+  --tag-5: #fbbf24;
+  --tag-6: #fdba74;
+  --tag-7: #fca5a5;
+  --tag-8: #f472b6;
+  --tag-9: #b9a3fb;
+  --tag-10: #94a3b8;
+  /* Sampled from the reference grid rather than eyeballed: the chip surface is
+   `#3b3f4b` for every chip kind — location, assigned preacher and the date
+   chips alike — so one pair covers all three. */
+  --grid-linked-bg: #3b3f4b;
+  --grid-linked-fg: #e5e7eb;
+  /* Sampled from the hovered row of the reference: `#060606`, *darker* than the
+   * `#1d1f25` row it sits on. A lift would read as selection, and selection
+   * already has `--grid-selected`. */
+  --grid-row-hover: #060606;
+  /* Counterpart of the light accent ink. White, not a lighter navy: this is the
+   * value the toolbar's Sort and Hide fields controls draw their icons and
+   * open-state labels in. */
+  --grid-accent-ink: #ffffff;
+  /* Unchanged from the light value, for the reason given there. */
+  --grid-warning-ink: #f97f29;
+  /* App header, dark only. The light theme keeps the navy brand bar; here the bar
+   * takes `--grid-row-hover`'s value, so the top chrome and a hovered grid row
+   * are the same near-black and the `#34363b` hairline is what separates the
+   * bar from the canvas — the same job it does in the reference. */
+  --program-header-bg: #060606;
+  --program-header-text: #e9eaeb;
+  --program-header-muted-text: #91959c;
+  --program-header-border: #34363b;
+  --program-header-nav-bg: transparent;
+  --program-header-nav-ring: #34363b;
+  --program-header-nav-text: #91959c;
+  --program-header-nav-hover-bg: #292a30;
+  --program-header-nav-hover-text: #ffffff;
+  --program-header-nav-active-bg: #292a30;
+  --program-header-nav-active-text: #ffffff;
+  --program-header-nav-pending-bg: #292a30;
+  --program-header-nav-pending-text: #ffffff;
+  --program-header-nav-pending-ring: #048a0e;
+  --program-header-nav-pending-spinner: #048a0e;
+  --program-header-action-bg: #292a30;
+  --program-header-action-hover-bg: #34363b;
+  --program-header-action-text: #e9eaeb;
+  --program-header-login-bg: #048a0e;
+  --program-header-login-hover-bg: #0a6b0a;
+  --program-header-login-text: #ffffff;
+  --program-header-focus-ring: #048a0e;
+  /* Tab strip, dark only. Active ink is white rather than the brand hue because
+   * the brand navy measures ~1.6:1 on this bar; the underline carries the accent
+   * instead. */
+  --tab-border: #34363b;
+  --tab-active-text: #ffffff;
+  --tab-active-underline: #048a0e;
+  --tab-inactive-text: #91959c;
+  --chart-1: #60a5fa;
+  --chart-2: #4ade80;
+  --chart-3: #f08a5d;
+  --chart-4: #7da3e8;
+  --chart-5: #94a3b8;
+  --sidebar: #1f2124;
+  --sidebar-foreground: #e9eaeb;
+  --sidebar-primary: #2f4b9e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #32363a;
+  --sidebar-accent-foreground: #e9eaeb;
+  --sidebar-border: #3c4045;
+  --sidebar-ring: #7da3e8;
 }
 
 @theme inline {
@@ -130,6 +261,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-info: var(--info);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

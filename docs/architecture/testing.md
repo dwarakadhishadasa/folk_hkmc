@@ -196,14 +196,15 @@ lives in
 |---|---|---|
 | `components/grid/use-grid-keyboard.ts` | `e2e/specs/grid-keyboard.spec.ts` | 8 |
 | `components/grid/grid-editors.tsx`, `components/grid/grid-editor-types.ts` | `e2e/specs/grid-editors.spec.ts` | 37 |
+| `grid-editors.tsx` (`linked`), `grid-editor-types.ts`, `grid-filter-operators.ts`, `grid.tsx`; `components/manage/manage-contacts-table.tsx`, `manage-favorites-view.tsx`; `lib/supabase/manage.ts`, `lib/manage/api-handlers.ts`; `supabase/migrations/20261019000000_contacts_single_location.sql` | `e2e/specs/grid-linked-record-picker.spec.ts` | 11 |
 | `components/grid/grid.tsx`, `grid-row.tsx` | `e2e/specs/grid-cell-range.spec.ts` | 4 |
 | " | `e2e/specs/grid-clipboard.spec.ts` | 5 |
 | `components/grid/grid.tsx`, `grid-row.tsx`, `grid-cell-renderers.tsx` | `e2e/specs/grid-cell-renderers.spec.ts` | 12 |
 | " | `e2e/specs/grid-cell-metrics.spec.ts` | 6 |
-| `components/grid/grid-scroll-surface.spec.ts`'s surface: the frame, the scroll container and the status strip below it | `e2e/specs/grid-scroll-surface.spec.ts` | 8 |
+| `components/grid/grid-scroll-surface.spec.ts`'s surface: the frame, the scroll container, the status strip below it, and the column layout | `e2e/specs/grid-scroll-surface.spec.ts` | 10 |
 | `components/grid/grid-header-cell.tsx`, `grid-toolbar.tsx` (CAP-18's column menu), `grid.tsx` drag handling | `e2e/specs/grid-column-drag-menu.spec.ts` | 11 |
 | `components/grid/grid-edit-model.spec.ts`'s model: `use-grid-keyboard.ts`, `grid-editors.tsx`, the optimistic override | `e2e/specs/grid-edit-model.spec.ts` | 24 |
-| `components/grid/grid-filter-popover.tsx`, `grid-filter-operators.ts`, `grid-view-state.ts` (`f.`/`fa.`) | `e2e/specs/grid-filter-conditions.spec.ts` | 45 |
+| `components/grid/grid-filter-popover.tsx`, `grid-filter-operators.ts`, `grid-view-state.ts` (`f.`/`fa.`) | `e2e/specs/grid-filter-conditions.spec.ts` | 46 |
 | `components/grid/grid-toolbar.tsx`, `grid-view-state.ts` (`hide`), `use-grid-view-state.ts`, `grid-sort-popover.tsx`, `grid-row-lifecycle.tsx` | `e2e/specs/grid-toolbar.spec.ts` | 18 |
 | " (contacts only — CAP-18's default field set and the status row) | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
 

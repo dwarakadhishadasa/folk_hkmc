@@ -45,7 +45,20 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
         */}
         <div className="flex h-dvh flex-col overflow-hidden bg-background">
           <Header />
-          <main className="container mx-auto flex min-h-0 flex-1 flex-col px-4 py-6">
+          {/*
+             * `sm:px-6`, matching the app header's own gutter at the same
+             * breakpoint (`header.tsx`'s `px-4 sm:px-6`). The two were `px-4`
+             * against `sm:px-6`, so the logo sat 8px right of the grid's left
+             * edge on every desktop width — a visible jog on the one axis a page
+             * is read along, and one that could only be fixed here rather than in
+             * the header: `components/header.tsx` is consumed by 22 route
+             * surfaces, and its gutter is the thing that was already correct.
+             *
+             * The grid's outer border is 1px inside this padding, so the table's
+             * edge lands one pixel in from the logo's — the frame's own hairline,
+             * not a misalignment.
+             */}
+          <main className="flex min-h-0 w-full flex-1 flex-col px-4 py-6 sm:px-6">
             <ManagePortal payload={payload} initialView={initialView} />
           </main>
         </div>

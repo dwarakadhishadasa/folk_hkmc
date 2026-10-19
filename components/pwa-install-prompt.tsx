@@ -116,7 +116,7 @@ export function PWAInstallPrompt() {
   if (!isHydrated || !isLoggedIn || !staff || !isPromptEligible || isDismissed) return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--program-accent)] text-white p-4 shadow-lg border-t-4 border-[var(--program-accent-dark)]">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--program-accent)] text-[var(--accent-foreground)] p-4 shadow-lg border-t-4 border-[var(--program-accent-dark)]">
       <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1">
           <div className="bg-white rounded-lg p-2 flex-shrink-0">
@@ -125,9 +125,9 @@ export function PWAInstallPrompt() {
           <div className="flex-1">
             <h3 className="font-bold text-lg">Install {branding.shortName}</h3>
             {isIos ? (
-              <p className="text-sm text-white/80">Tap the Share button, then {"'Add to Home Screen'"}</p>
+              <p className="text-sm text-[color-mix(in_oklab,var(--accent-foreground)_78%,transparent)]">Tap the Share button, then {"'Add to Home Screen'"}</p>
             ) : (
-              <p className="text-sm text-white/80">Install the app for quick access and offline support</p>
+              <p className="text-sm text-[color-mix(in_oklab,var(--accent-foreground)_78%,transparent)]">Install the app for quick access and offline support</p>
             )}
           </div>
         </div>
@@ -135,14 +135,14 @@ export function PWAInstallPrompt() {
           {!isIos && installPrompt && (
             <button
               onClick={handleInstallClick}
-              className="px-4 py-2 bg-white text-[var(--program-primary)] font-semibold rounded-lg hover:bg-[#FFF9F0] transition-colors"
+              className="px-4 py-2 bg-white text-[var(--program-primary)] font-semibold rounded-lg hover:bg-[var(--program-accent-light)] transition-colors"
             >
               Install
             </button>
           )}
           <button
             onClick={handleDismiss}
-            className="px-4 py-2 bg-black/15 text-white font-semibold rounded-lg hover:bg-black/25 transition-colors"
+            className="px-4 py-2 bg-[color-mix(in_oklab,var(--accent-foreground)_14%,transparent)] text-[var(--accent-foreground)] font-semibold rounded-lg hover:bg-[color-mix(in_oklab,var(--accent-foreground)_22%,transparent)] transition-colors"
           >
             Later
           </button>

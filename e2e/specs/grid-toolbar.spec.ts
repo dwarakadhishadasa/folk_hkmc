@@ -543,14 +543,24 @@ test.describe("story 7 — the contacts toolbar", () => {
 
     // The named controls, in the comp's order. Read positionally because the
     // contract is about sequence; a set assertion would pass on any arrangement.
+    //
+    // **`\d+ hidden fields`, not "Hide fields"** — the trigger reports the fields
+    // it has hidden rather than only offering to hide more, because a hidden field
+    // leaves no trace on the grid itself. Contacts loads with CAP-18's default set
+    // of five already hidden (`DEFAULT_HIDDEN` above), so the resting name is the
+    // count, not the imperative. `grid-toolbar.spec.ts`'s own visibility tests
+    // cover the other side of the same contract: un-hiding every field returns the
+    // label to "Hide fields".
     const labelled = order.controls.filter((text) =>
-      /^(Search every column|Filter conditions.*|Sort|Hide fields|Row density|Add record)$/.test(text),
+      /^(Search every column|Filter conditions.*|Sort|Hide fields|\d+ hidden fields?|Row density|Add record)$/.test(
+        text,
+      ),
     )
     expect(labelled).toEqual([
       "Search every column",
       "Filter conditions",
       "Sort",
-      "Hide fields",
+      "5 hidden fields",
       "Row density",
       "Add record",
     ])

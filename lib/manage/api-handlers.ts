@@ -2,7 +2,7 @@ import "server-only"
 
 import { isValid, parseISO } from "date-fns"
 
-import { authzErrorResponse, getStaffContext, requireRole, type StaffContext } from "@/lib/authz"
+import { AuthzError, authzErrorResponse, getStaffContext, requireRole, type StaffContext } from "@/lib/authz"
 import {
   MANAGE_CONTACT_PATCH_KEYS,
   type ManageContactBulkResult,
@@ -227,8 +227,12 @@ function parseContactPatch(payload: unknown): ManageContactPatch {
           throw new AuthzBadRequest("Location must be an array of location ids.")
         }
         const locationIds = [...new Set(value.map((item) => String(item).trim()).filter(Boolean))]
-        if (locationIds.length > 50) {
-          throw new AuthzBadRequest("Location must have 50 ids or fewer.")
+        // A contact belongs to at most one location — the DB CHECK is the real
+        // guarantee, and this is the clean 4xx a client deserves instead of the
+        // constraint violation surfacing as an opaque 500. The code is
+        // `invalid_patch` so it reads like every other rejected patch.
+        if (locationIds.length > 1) {
+          throw new AuthzError(400, "invalid_patch", "A contact can have at most one location.")
         }
         patch.locationIds = locationIds
         break

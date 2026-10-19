@@ -21,6 +21,8 @@
  * * | surface 6  | 1024×768                 | the tab row is not squeezed, the grid still fills, no third scroller appears, and the page still does not scroll |
  * * | surface 7  | a longtext editor open   | the container's height is unchanged and the popover escapes the frame's `overflow-hidden` |
  * * | surface 8  | the grid hydrating        | no hydration mismatch on `/manage` — dnd-kit's id counter is stable across server and client, and the suite actually watches this page's console (see the test for why `theme-switch` cannot) |
+ * | surface 9  | a field hidden           | the freed width is shared by every remaining column by the same ratio, and the columns still reach the frame's right edge |
+ * | surface 10 | a field hidden, two widths | the pinned run's offsets stay exact adjacencies whether the table is stretched to the frame or wider than it |
  *
  * ## Why every assertion here is behavioural
  *
@@ -81,7 +83,9 @@ import {
   cellIn,
   gridRoot,
   gridScrollSurface,
+  headerCell,
   openCellEditor,
+  openColumnMenu,
   openContactsGrid,
   renderedRows,
   scrollingElements,
@@ -259,6 +263,52 @@ async function rightMostHeaderEdge(page: Page): Promise<number> {
 async function backgroundOf(locator: Locator): Promise<string> {
   return locator.evaluate((element) => getComputedStyle(element).backgroundColor)
 }
+
+/**
+ * Every visible header cell's id and laid-out width, keyed by column id.
+ *
+ * `getBoundingClientRect().width` rather than the inline style: what is being
+ * tested is what the browser *resolved*, and under the frame's stretch the
+ * inline style is a share of a width the spec would have to measure to evaluate.
+ */
+async function headerWidths(page: Page): Promise<Record<string, number>> {
+  return page.locator("[data-grid-column]").evaluateAll((cells) =>
+    Object.fromEntries(
+      cells.map((cell) => [cell.getAttribute("data-grid-column") ?? "", cell.getBoundingClientRect().width]),
+    ),
+  )
+}
+
+/**
+ * Every visible header cell's left and right edge, in display order.
+ *
+ * Both edges rather than a width, because the claims below are about *contact*
+ * between cells — a pinned column whose `left` is off by a share shows as a gap
+ * or an overlap at the join, and neither is visible in the widths alone.
+ */
+async function headerEdges(page: Page): Promise<{ id: string; left: number; right: number }[]> {
+  return page.locator("[data-grid-column]").evaluateAll((cells) =>
+    cells.map((cell) => ({
+      id: cell.getAttribute("data-grid-column") ?? "",
+      left: cell.getBoundingClientRect().left,
+      right: cell.getBoundingClientRect().right,
+    })),
+  )
+}
+
+/**
+ * Tolerance on "every column took the same *share*", as the spread between the
+ * largest and the smallest per-column growth ratio.
+ *
+ * Layout resolves in 1/64px units, so a ratio between two measured widths
+ * carries a relative error of roughly `0.02 / width` — a few thousandths on the
+ * narrowest column this grid draws. Half a percent sits two orders of magnitude
+ * above that floor, and it is still roughly a hundred times tighter than the
+ * smallest spread any *other* distribution rule produces on this column set (see
+ * surface 9), so the assertion cannot pass on a grid that shares the width some
+ * different way.
+ */
+const SHARE_SPREAD_TOLERANCE = 0.005
 
 /**
  * Whether an element's content is taller than the box it is given, past the slack.
@@ -680,5 +730,172 @@ test.describe("the grid's scroll surface", () => {
     )
 
     expect(hydration, `console output:\n${consoleOutput.join("\n")}`).toEqual([])
+  })
+
+  /**
+   * The frame's slack goes to every column, by share.
+   *
+   * Hiding a field shrinks `getTotalSize()`, and the table is `width: 100%`
+   * *with* `min-width: getTotalSize()` — so the columns now fall short of the
+   * frame and there is slack to place. It used to be placed by leaving the last
+   * visible column `width: auto`, which is the one arrangement CSS 2.1 gives
+   * **all** of it to: leftover space goes to `auto` columns and is divided only
+   * among `auto` columns, so with one such column it takes the whole increase.
+   * Hiding any field therefore inflated the Actions gutter and left every real
+   * field exactly where it was.
+   */
+  test("surface 9 — a hidden field's width is shared by every remaining column, not absorbed by the last one", async ({
+    page,
+  }) => {
+    // **Wide enough that there is slack to share at all.** At the 1280 default
+    // the contacts grid's columns overflow the frame, every width is already
+    // exact, and hiding a field changes nothing — surface 4 owns that regime.
+    // This claim is about the other one, so the viewport is set here rather than
+    // inherited from whatever the config happens to leave at.
+    await page.setViewportSize({ width: 1920, height: 1080 })
+    await openContactsGrid(page)
+    await waitForRenderedRows(page)
+
+    const container = gridScrollSurface(page)
+
+    // **Non-vacuity, asserted rather than assumed.** With no slack the table is
+    // exactly as wide as its columns and every ratio below is 1 — which is also
+    // what a grid that distributes nothing at all looks like. So "there is slack
+    // to distribute" is a precondition of the test, not one of its findings.
+    expect(
+      await container.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      "the contacts grid must fit its frame at this width, or a hide frees nothing and every ratio below is 1",
+    ).toBe(true)
+
+    const before = await headerWidths(page)
+
+    await openColumnMenu(page, "notes", "Notes")
+    await page.getByRole("menuitem", { name: "Hide column" }).click()
+    await expect(headerCell(page, "notes"), "the field must actually leave the grid").toHaveCount(0)
+
+    const after = await headerWidths(page)
+    const survivors = Object.keys(after).filter((id) => id in before)
+
+    expect(
+      survivors.length,
+      `hiding one field must leave every other column in place; ${survivors.length} of ${Object.keys(before).length} survived`,
+    ).toBe(Object.keys(before).length - 1)
+
+    // **Equal ratios, which is not the same claim as equal pixels.** Every column
+    // carries a share of the table's width, so a smaller total scales the whole
+    // set by `totalBefore / totalAfter` and every survivor moves by that one
+    // ratio. Equal *gains* would be a different rule — it would make the 40px
+    // checkbox gutter grow as fast as a 240px notes field — and so would
+    // "whichever column is left over takes the lot".
+    const factors = survivors.map((id) => after[id] / before[id])
+    const lowest = Math.min(...factors)
+    const highest = Math.max(...factors)
+
+    expect(
+      lowest,
+      `every column takes a share of the freed width, so every column must grow; got ${JSON.stringify(factors)} for ${survivors.join(", ")}`,
+    ).toBeGreaterThan(1)
+
+    expect(
+      highest - lowest,
+      `the freed width must be spread by share, not handed to one column; the Actions gutter is the last visible column and must not be the one that takes it. Got ${JSON.stringify(factors)} for ${survivors.join(", ")}`,
+    ).toBeLessThanOrEqual(SHARE_SPREAD_TOLERANCE)
+
+    // **And the slack is spent rather than left behind.** A grid that shared the
+    // width but stopped short would satisfy the ratios above and still look
+    // broken, so the trailing edge is checked too: the last column reaches the
+    // container's right edge.
+    const containerBox = await boxOf(container, "the grid's scroll container")
+
+    expect(
+      Math.abs((await rightMostHeaderEdge(page)) - containerBox.right),
+      "the columns must reach the container's right edge — the frame's slack is distributed, not left as a trailing gap",
+    ).toBeLessThanOrEqual(FLUSH_PX)
+  })
+
+  /**
+   * The pinned run's `left` offsets are shares too, so they are the other half of
+   * surface 9's change: the offsets cannot be pixel counts any more, and a wrong
+   * one shows as a gap or an overlap at the join between two pinned columns
+   * rather than anywhere visible in the widths.
+   */
+  test("surface 10 — the pinned run stays exactly adjacent in both width regimes", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 })
+    await openContactsGrid(page)
+    await waitForRenderedRows(page)
+
+    const container = gridScrollSurface(page)
+
+    // **No gaps between any two columns, pinned or not.** The header's cells are
+    // laid out as one run, so consecutive edges must meet — and they are read at
+    // rest, where nothing is scrolled and the edges are each cell's natural
+    // position. Two adjacent pairs make the pinned offsets visible by name.
+    const atRest = await headerEdges(page)
+    const gapsAtRest = atRest.slice(0, -1).map((cell, index) => cell.right - atRest[index + 1].left)
+
+    for (const [index, gap] of gapsAtRest.entries()) {
+      expect(
+        Math.abs(gap),
+        `"${atRest[index].id}" and "${atRest[index + 1].id}" must meet exactly; a gap or an overlap here is a pinned offset in the wrong unit`,
+      ).toBeLessThanOrEqual(FLUSH_PX)
+    }
+
+    // **Hide, because that is what produced the slack the offsets have to share.**
+    await openColumnMenu(page, "notes", "Notes")
+    await page.getByRole("menuitem", { name: "Hide column" }).click()
+    await expect(headerCell(page, "notes")).toHaveCount(0)
+
+    const afterHide = await headerEdges(page)
+    const gapsAfterHide = afterHide.slice(0, -1).map((cell, index) => cell.right - afterHide[index + 1].left)
+
+    for (const [index, gap] of gapsAfterHide.entries()) {
+      expect(
+        Math.abs(gap),
+        `after a hide, "${afterHide[index].id}" and "${afterHide[index + 1].id}" must still meet; the pinned offsets are re-derived from the new total`,
+      ).toBeLessThanOrEqual(FLUSH_PX)
+    }
+
+    // **The other regime: a table wider than its frame.** Above, the percentages
+    // resolve against the frame; below, `min-width` takes the table past it and
+    // they resolve against the summed sizes instead. Both resolve against the
+    // table's used width, and the pinned offsets have to agree with whichever
+    // that is — so the run is checked again with the grid scrolled fully right,
+    // where the offsets are the only thing holding the columns in place.
+    await page.setViewportSize({ width: 1024, height: 768 })
+
+    expect(
+      await container.evaluate((element) => element.scrollWidth > element.clientWidth),
+      "the grid must overflow its frame at 1024 wide, or the scrolled regime below is untestable here",
+    ).toBe(true)
+
+    await scrollToEnd(page, "horizontal")
+
+    const scrolled = await headerEdges(page)
+    const pinned = scrolled.filter((cell) => cell.id === "select" || cell.id === "name")
+
+    expect(
+      pinned.length,
+      `the contacts grid pins "select" and "name"; found ${JSON.stringify(scrolled.map((cell) => cell.id))}`,
+    ).toBe(2)
+
+    expect(
+      Math.abs(pinned[0].right - pinned[1].left),
+      "the pinned run must occupy consecutive slots once the grid is scrolled right — their offsets are the only thing holding them there, and a wrong one shows as a gap or an overlap at the join",
+    ).toBeLessThanOrEqual(FLUSH_PX)
+
+    const containerBox = await boxOf(container, "the grid's scroll container")
+    const containerContentLeft = await container.evaluate(
+      (element) => element.getBoundingClientRect().left + element.clientLeft,
+    )
+
+    expect(
+      Math.abs(pinned[0].left - containerContentLeft),
+      "the pinned run must stay flush with the container's left edge while the grid scrolls under it",
+    ).toBeLessThanOrEqual(FLUSH_PX)
+
+    expect(
+      pinned[1].right,
+      "and the run must stay inside the container, not have been pushed out of frame",
+    ).toBeLessThanOrEqual(containerBox.right + FLUSH_PX)
   })
 })

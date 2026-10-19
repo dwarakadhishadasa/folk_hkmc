@@ -49,7 +49,7 @@ scrolled away.
 
 | Key | Effect |
 | --- | --- |
-| `editable: true` | Gates the double-click that opens the editor — and it is the *only* opener. Also the only thing that should be in `PATCH_KEY_BY_COLUMN`. |
+| `editable: true` | Gates the double-click that opens the editor, and `ctx.open` — the explicit opener an empty `linked` cell's `+` uses. Also the only thing that should be in `PATCH_KEY_BY_COLUMN`. |
 | `editor: <GridEditorKey>` | Names the typed editor the cell renders and parses with. Resolved through the registry in `components/grid/grid-editors.tsx`. |
 | `editorOptions` | Presentation-only configuration for that editor: `options`, `users`, `currency`, `locale`. |
 | `fieldType: <GridFieldType>` | Names what the cell **holds**, resolved through the registry in `components/grid/grid-cell-renderers.tsx`. Independent of `editor` — see below. |
@@ -71,10 +71,17 @@ Two different questions, two different keys:
 | `fieldType` | What does this cell **hold**? | the cell renders its plain text |
 
 They are separate declarations and neither is derived from the other. A joined
-accessor column — `location`, `collectedBy` — has **no editor and no stored
-value**, because its value is derived at render time from ids the payload
-already resolved. A renderer keyed on `editor` alone renders nothing for both:
-they fall through to bare text while a stored field next to them renders a pill.
+accessor column — `collectedBy` — has **no editor and no stored value**, because
+its value is derived at render time from ids the payload already resolved. A
+renderer keyed on `editor` alone renders nothing for it: it falls through to bare
+text while a stored field next to it renders a pill.
+
+`location` is the same kind of column and the exception that proves the rule: it
+declares **both**, because it is editable. Its accessor still joins resolved
+labels, and its editor writes the plural store behind them
+(`PATCH_KEY_BY_COLUMN` maps the column to `locationIds`). Declaring one key
+without the other is the mistake here — an `editor` with no `fieldType` renders
+nothing, and a `fieldType` with no `editor` leaves the column read-only.
 
 So every column declares both, and `fieldType` covers `text`, `select`,
 `multiselect`, `date`, `number`, `boolean`, `linked` and `longtext`. The grid
@@ -105,6 +112,41 @@ so rewording the marker cannot silently stop it being recognised.
 
 Never derive a label from the id. `?? id` printed a raw UUID into the cell, into
 its `title`, and out through the clipboard; that fallback is what this replaced.
+
+#### An editable `linked` column stores ids, not labels
+
+A `linked` column that declares `editor: "linked"` and `editorOptions.records`
+becomes pickable, and the split between display and storage is total: the
+**accessor** resolves ids to labels for display, sorting and the clipboard, while
+the **stored value** is the record's id — the cell shows `Selaiyur` and the write
+carries a UUID. `records` is `{ id, label, detail? }`; `detail` (a status) is read
+in the list and never committed.
+
+The field is plural in the data model and single in the picker. A commit is always
+an array of one, an emptied draft is `[]` rather than `null`, and `Delete` on the
+cell reaches `parse` with `""`. `location` is where that rule is enforced rather
+than assumed: `contacts.location_ids` carries a CHECK of at most one, and the API
+rejects a second id as a 400 `invalid_patch` before the constraint is reached.
+
+**An empty cell offers a `+`, and it is the one single-click opener.** A blank
+linked cell shows no value, so it renders a `+` whose click calls `ctx.open` —
+the same door `onCellDoubleClick` opens, not a second one. It exists because the
+cell has no text to type into and no other way in: without it the picker is
+reachable only by a gesture nothing advertises. That is a deliberate, recorded
+scoping of CAP-10 (`stories/1-…-retiring-the-keyboard-openers.md`), which
+restored nothing else — the cell-wide click stays retired, and so does every
+keyboard opener. The cell body's own single click still opens nothing, and that
+is asserted.
+
+**The remove control lives in the cell's pill, not in the editor.** Clearing a
+record is not a reason to open a popover — the operator clears the cell and then
+picks again — so the `×` sits inside the pill and writes `[]` through the grid's
+one commit path. It is `opacity-0` until the cell is hovered, not `hidden`: a
+revealed control in every row would read as a column of buttons, and `hidden`
+would take its box with it. Like `OpenableDisplay` it is a `role="presentation"`
+span and **not a `<button>`**, and deliberately not a tab stop: the cell owns the
+keyboard, `Delete`/`Backspace` already clear it, so the `×` is a pointer shortcut
+for a write the grid already owns rather than a second keyboard surface.
 
 `filter` is gone. It used to do two jobs: choose the per-column filter popover
 control, and supply a value type. The control went with the per-column popover

@@ -45,7 +45,15 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
         */}
         <div className="flex h-dvh flex-col overflow-hidden bg-background">
           <Header />
-          <main className="container mx-auto flex min-h-0 flex-1 flex-col px-4 py-6 sm:py-8">
+          {/*
+             * `sm:px-6`, matching the app header's own gutter at the same
+             * breakpoint (`header.tsx`'s `px-4 sm:px-6`), so the logo and the
+             * grid's left edge share one line instead of sitting 8px apart on
+             * every desktop width. The header is shared by 22 route surfaces
+             * across both apps and its gutter is what was already correct, so the
+             * page is what moves.
+             */}
+          <main className="flex min-h-0 w-full flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
             <ManagePortal payload={payload} initialView={initialView} />
           </main>
         </div>

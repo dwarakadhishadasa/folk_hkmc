@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import type { ReactNode } from "react"
-import { ArrowUpDown, ListFilter, Lock, Search, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowUpDown, EyeOff, ListFilter, Lock, Search, X } from 'lucide-react'
 import type { SortingState } from "@tanstack/react-table"
 
 import { Button } from "@/components/ui/button"
@@ -45,6 +45,18 @@ export interface GridToolbarColumn {
 export interface GridToolbarProps {
   columns: GridToolbarColumn[]
   onColumnVisibilityChange: (columnId: string, visible: boolean) => void
+  /**
+   * How many of the listed columns are currently hidden.
+   *
+   * Read off `columns` rather than passed separately, because a count the caller
+   * computes is a second derivation of the same fact: it could disagree with the
+   * list the popover renders, and the operator would be told one number while
+   * looking at another. Counted over *every* listed column, not only the hideable
+   * ones — the number an operator can check is the number of unticked boxes in
+   * front of them, and a locked column that ships hidden is still one they see
+   * unticked. Locked-and-visible columns (`name`, `actions`) never count.
+   */
+  hiddenFieldCount: number
   globalFilter: string
   onGlobalFilterChange: (value: string) => void
   density: GridDensity
@@ -107,6 +119,7 @@ export interface GridToolbarProps {
 export function GridToolbar({
   columns,
   onColumnVisibilityChange,
+  hiddenFieldCount,
   globalFilter,
   onGlobalFilterChange,
   density,
@@ -206,11 +219,11 @@ export function GridToolbar({
               aria-expanded={filterOpen}
               data-grid-filter-control=""
               // `hover:bg-muted` rather than the `outline` variant's default
-              // `hover:bg-accent`: this design system's `--accent` IS saffron, so
-              // the default hover repaints the button in the same colour as the
-              // indicator text and the label vanishes. The composition hovers
-              // neutral (`hover:bg-slate-50`), and `visual-design.md:80` sends
-              // slate-50 to `--muted` anyway.
+              // `hover:bg-accent`. `--accent` is a light neutral in this
+              // palette, so the default hover would repaint the button in
+              // roughly its own resting colour and the label would not read as
+              // pressed. The composition hovers neutral (`hover:bg-slate-50`),
+              // and `visual-design.md:80` sends slate-50 to `--muted` anyway.
               className="hover:bg-muted hover:text-foreground h-8 gap-1.5 rounded-[6px] px-2.5 text-[13px] font-medium"
             >
               <ListFilter
@@ -247,32 +260,92 @@ export function GridToolbar({
               aria-expanded={sortOpen}
               aria-label="Sort"
               data-grid-sort-control=""
-              className={`hover:bg-muted h-8 gap-1.5 rounded-[6px] px-3 text-[13px] font-medium ${
-                sortOpen ? "border-royal bg-muted text-royal" : "text-foreground"
+              className={`hover:bg-muted hover:text-[var(--grid-accent-ink)] h-8 gap-1.5 rounded-[6px] px-3 text-[13px] font-medium ${
+                sortOpen
+                  ? "border-[var(--grid-accent-ink)] bg-muted text-[var(--grid-accent-ink)]"
+                  : "text-foreground"
               }`}
             >
-              <ArrowUpDown aria-hidden="true" className="size-3.5 text-royal" />
+              <ArrowUpDown aria-hidden="true" className="size-3.5 text-[var(--grid-accent-ink)]" />
               <span className="font-semibold">Sort</span>
             </Button>
           }
         />
 
-        <Popover open={hideFieldsOpen} onOpenChange={setHideFieldsOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              aria-expanded={hideFieldsOpen}
-              aria-label="Hide fields"
-              data-grid-hide-fields-control=""
-              className={`hover:bg-muted h-8 gap-1.5 rounded-[6px] px-3 text-[13px] font-medium ${
-                hideFieldsOpen ? "border-royal bg-muted text-royal" : "text-foreground"
-              }`}
-            >
-              <SlidersHorizontal aria-hidden="true" className="size-3.5 text-royal" />
-              <span className="font-semibold">Hide fields</span>
-            </Button>
-          </PopoverTrigger>
+        {(() => {
+          /*
+           * The control says two different things, and which one is a fact about
+           * the grid rather than a mode this component remembers.
+           *
+           * At rest, with nothing hidden, the label is the control's *name* —
+           * "Hide fields" — and it stays plain. Once a field is hidden, the name
+           * is a lie: the control is now as much a report as an action, because
+           * a hidden field is the one piece of grid state an operator cannot see
+           * on the grid itself. A field that is off is simply absent, so nothing
+           * else in the frame reports it. Hence the count.
+           *
+           * The amber is that report, and it is deliberately not the accent ink:
+           * the accent means "this control is open", which is a *transient* state
+           * lasting as long as the pointer is over the control. A persistent
+           * control that borrowed it would be claiming to be open for as long as
+           * a field stayed hidden. `--grid-warning-ink` is its own token because
+           * "something is off out here" and "you are looking at me" are different
+           * statements.
+           *
+           * The colour lands on the **label only**, and is carried through
+           * `style` rather than a class because it is a token value read at
+           * runtime — `components/grid/` stays hex-free per `harness-guards`, and
+           * a consumer can re-tint the report without touching this component.
+           *
+           * Counted over the listed columns rather than over all of them: the
+           * selection column is not a field and never appears in the popover, so
+           * counting it would put a number on screen the operator could not
+           * reconcile with the list in front of them.
+           */
+          const hiddenCount = hiddenFieldCount
+          const reporting = hiddenCount > 0
+          const label = reporting
+            ? `${hiddenCount} hidden ${hiddenCount === 1 ? "field" : "fields"}`
+            : "Hide fields"
+
+          return (
+            <Popover open={hideFieldsOpen} onOpenChange={setHideFieldsOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-expanded={hideFieldsOpen}
+                  aria-label={label}
+                  data-grid-hide-fields-control=""
+                  data-grid-hidden-count={hiddenCount}
+                  className={`hover:bg-muted h-8 gap-1.5 rounded-[6px] px-3 text-[13px] font-medium ${
+                    hideFieldsOpen
+                      ? "border-[var(--grid-accent-ink)] bg-muted"
+                      : "border-border"
+                  }`}
+                >
+                  {/*
+                    * **One glyph in both states, and never the warning colour.**
+                    * The icon names the control; the label reports the state. An
+                    * icon that changed with the count would be a second signal
+                    * saying the same thing in a place with no room to read it, and
+                    * painting it amber would make the glyph unreadable beside an
+                    * amber label at 14px. `--grid-accent-ink` is white on the dark
+                    * canvas and the theme's own ink on paper, so the icon is legible
+                    * in both without a second token.
+                    */}
+                  <EyeOff
+                    aria-hidden="true"
+                    className="size-3.5 text-[var(--grid-accent-ink)]"
+                  />
+                  <span
+                    className="font-semibold"
+                    style={{ color: reporting ? "var(--grid-warning-ink)" : undefined }}
+                  >
+                    {label}
+                  </span>
+                </Button>
+              </PopoverTrigger>
           <PopoverContent
             align="start"
             data-grid-hide-fields-popover=""
@@ -332,7 +405,9 @@ export function GridToolbar({
               })}
             </div>
           </PopoverContent>
-        </Popover>
+            </Popover>
+          )
+        })()}
 
         <Select value={density} onValueChange={(value) => onDensityChange(value as GridDensity)}>
           {/* `w-32 px-2`, not `w-28`: the trigger spends its width on chrome (padding +
@@ -369,11 +444,12 @@ export function GridToolbar({
 
       {toolbarExtra}
 
-      {/* `N of M in scope`, not the comp's "41 of 226 shown". `inScopeCount`,
-          `inScopeCounts` and about ten assertion sites key on this wording, and a
-          changed vocabulary with no product gain is churn. The comp's
-          `text-[12px] font-normal whitespace-nowrap pl-2` is transcribed as-is. */}
-      <p className="text-muted-foreground shrink-0 pl-2 text-[12px] font-normal whitespace-nowrap tabular-nums">
+      {/* Visually hidden, not deleted. `inScopeCount`, `inScopeCounts` and about
+          ten assertion sites key on this wording, and a screen reader still
+          needs the status the consumer footer states visually — so the node
+          stays in the DOM as `sr-only` rather than going away. The toolbar no
+          longer spends pixels on a count the footer already carries. */}
+      <p className="sr-only tabular-nums">
         {visibleCount.toLocaleString("en-IN")} of {totalCount.toLocaleString("en-IN")} in scope
       </p>
     </div>

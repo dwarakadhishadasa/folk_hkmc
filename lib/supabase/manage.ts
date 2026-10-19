@@ -22,7 +22,6 @@ import type {
   ManageStatusQuoPoint,
 } from "@/components/manage/manage-types"
 import { AuthzError, writeAuditEvent, type StaffContext } from "@/lib/authz"
-import type { ProgramId } from "@hkmc/data-contracts"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
@@ -836,7 +835,21 @@ function optionalStringArray(value: unknown, field: string): string[] {
   return values
 }
 
-async function assertProgramLocations(programId: string, locationIds: string[]): Promise<void> {
+/**
+ * Confirms every location id is one the **caller** is allowed to see.
+ *
+ * The read goes through `createSupabaseServerClient()` — the same client the
+ * manage payload is read with — so the rule is exactly RLS's: an Admin sees the
+ * program's locations, and everyone else sees only
+ * `caller_effective_location_ids()`. This function deliberately does not restate
+ * that policy; that is how the write scope and the read scope stay one fact.
+ *
+ * Nothing scoped this write before, so the picker's narrowed option list was the
+ * only guard: a Preacher could PATCH an id they cannot see. The `program_id`
+ * filter is retained so a location in another program is refused even for an
+ * Admin whose RLS row-check would not otherwise have to consider it.
+ */
+async function assertProgramLocations(staff: StaffContext, locationIds: string[]): Promise<void> {
   if (locationIds.length === 0) {
     return
   }
@@ -849,11 +862,11 @@ async function assertProgramLocations(programId: string, locationIds: string[]):
     throw new AuthzError(400, "invalid_patch", "One or more locations are not valid location ids.")
   }
 
-  const supabaseAdmin = createSupabaseAdminClient()
-  const { data, error } = await supabaseAdmin
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
     .from("locations")
     .select("id")
-    .eq("program_id", programId)
+    .eq("program_id", staff.programId)
     .in("id", uuidIds)
 
   if (error) {
@@ -862,7 +875,11 @@ async function assertProgramLocations(programId: string, locationIds: string[]):
 
   const found = new Set(((data ?? []) as Array<{ id: string }>).map((row) => row.id))
   if (found.size !== new Set(uuidIds).size) {
-    throw new AuthzError(400, "invalid_patch", "One or more locations do not exist in this program.")
+    throw new AuthzError(
+      400,
+      "invalid_patch",
+      "One or more locations do not exist in this program or are outside your scope.",
+    )
   }
 }
 
@@ -875,11 +892,15 @@ async function assertProgramLocations(programId: string, locationIds: string[]):
  * key could be half-added — the failure mode the exhaustive
  * `Record<ManageContactPatchKey, string>` type exists to prevent.
  *
+ * Takes the caller rather than a bare `programId` because the location check
+ * needs the caller's scope: the read that validates a location id is RLS-scoped
+ * to the signed-in staff member, and a program id alone cannot say who that is.
+ *
  * Returns the columns written *and* the patch keys they came from, because the
  * audit event's `metadata.fields` names the latter.
  */
 async function buildContactWritePayload(
-  programId: ProgramId,
+  staff: StaffContext,
   patch: ManageContactPatch,
 ): Promise<{ payload: Record<string, unknown>; writtenKeys: ManageContactPatchKey[] }> {
   const payload: Record<string, unknown> = {}
@@ -911,7 +932,7 @@ async function buildContactWritePayload(
         break
       case "locationIds":
         payload[column] = await assertProgramLocationsThen(
-          programId,
+          staff,
           optionalStringArray(value, "Location"),
         )
         break
@@ -953,10 +974,10 @@ async function buildContactWritePayload(
  * assign them without a second statement.
  */
 async function assertProgramLocationsThen(
-  programId: ProgramId,
+  staff: StaffContext,
   locationIds: string[],
 ): Promise<string[]> {
-  await assertProgramLocations(programId, locationIds)
+  await assertProgramLocations(staff, locationIds)
   return locationIds
 }
 
@@ -1003,7 +1024,7 @@ export async function updateManageContact(params: {
   const { staff, contactId, patch } = params
   await assertManageContactInScope(staff, contactId)
 
-  const { payload, writtenKeys } = await buildContactWritePayload(staff.programId, patch)
+  const { payload, writtenKeys } = await buildContactWritePayload(staff, patch)
 
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin
@@ -1052,7 +1073,7 @@ export async function createManageContact(params: {
   patch: ManageContactPatch
 }): Promise<ManageContactWriteResult> {
   const { staff, patch } = params
-  const { payload, writtenKeys } = await buildContactWritePayload(staff.programId, patch)
+  const { payload, writtenKeys } = await buildContactWritePayload(staff, patch)
 
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin

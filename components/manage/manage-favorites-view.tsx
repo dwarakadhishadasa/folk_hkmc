@@ -214,6 +214,25 @@ export function ManageFavoritesView({ payload }: { payload: ManagePortalPayload 
     })
   }
 
+  /**
+   * The one-location rule, expressed as a pick rather than a toggle.
+   *
+   * A contact belongs to at most one location, and the server now enforces it,
+   * so this control must not be able to build a two-id draft. Choosing the active
+   * pill clears it; choosing any other replaces it. A legacy row that somehow
+   * carries two ids collapses to the one that was picked.
+   */
+  const selectLocation = (locationId: string) => {
+    setDraft((current) => {
+      if (!current) {
+        return current
+      }
+
+      const active = current.locationIds.length === 1 && current.locationIds[0] === locationId
+      return { ...current, locationIds: active ? [] : [locationId] }
+    })
+  }
+
   const handleSave = async () => {
     if (!selectedContact || !draft) {
       return
@@ -506,7 +525,7 @@ export function ManageFavoritesView({ payload }: { payload: ManagePortalPayload 
                         <button
                           key={location.id}
                           type="button"
-                          onClick={() => toggleDraftValue("locationIds", location.id)}
+                          onClick={() => selectLocation(location.id)}
                           aria-pressed={active}
                           className={
                             active

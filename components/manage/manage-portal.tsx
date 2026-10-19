@@ -131,20 +131,22 @@ export function ManagePortal({
       {/*
         CAP-1: an underline tab strip, not shadcn's pill. The strip is a hairline
         row; inactive tabs are 13px medium in the muted ink with a transparent
-        underline, and the active one is unmistakable — weight plus the existing
-        `--program-primary` brand token, never a new colour — as both its text
-        and its 2px underline. The trigger's own active surface is switched off
-        on both themes: under `.dark` the primitive's variants would otherwise
-        win on specificity and repaint the active tab. `gap-y-2` only matters
-        where the row wraps at narrow widths.
+        underline, and the active one is unmistakable — weight plus a 2px
+        underline, never a new colour. Both inks come from tokens so the active
+        tab can be white-on-near-black in `.dark` while staying navy on the light
+        canvas; the old version hard-wired `--program-primary` here, which
+        measures ~1.6:1 against the dark bar. The trigger's own active surface is
+        switched off on both themes: under `.dark` the primitive's variants would
+        otherwise win on specificity and repaint the active tab. `gap-y-2` only
+        matters where the row wraps at narrow widths.
       */}
       <Tabs value={view} onValueChange={handleViewChange} className="min-h-0 flex-1 gap-4">
-        <TabsList className="h-auto w-full max-w-full shrink-0 flex-wrap items-center justify-start gap-x-6 gap-y-2 rounded-none border-b border-[var(--border)] bg-transparent p-0">
+        <TabsList className="h-auto w-full max-w-full shrink-0 flex-wrap items-center justify-start gap-x-6 gap-y-2 rounded-none border-b border-[var(--tab-border)] bg-transparent p-0">
           {TAB_LABELS.map((tab) => (
             <TabsTrigger
               key={tab.value}
               value={tab.value}
-              className="flex-none rounded-none border-x-0 border-t-0 border-b-2 border-transparent bg-transparent px-0 py-0 pb-2.5 text-[13px] font-medium whitespace-nowrap text-[var(--muted-foreground)] shadow-none transition-colors h-auto hover:text-[var(--program-text)] data-[state=active]:border-[var(--program-primary)] data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-[var(--program-primary)] data-[state=active]:shadow-none dark:data-[state=active]:border-[var(--program-primary)] dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-[var(--program-primary)]"
+              className="flex-none rounded-none border-x-0 border-t-0 border-b-2 border-transparent bg-transparent px-0 py-0 pb-2.5 text-[13px] font-medium whitespace-nowrap text-[var(--tab-inactive-text)] shadow-none transition-colors h-auto hover:text-[var(--tab-active-text)] data-[state=active]:border-[var(--tab-active-underline)] data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-[var(--tab-active-text)] data-[state=active]:shadow-none dark:data-[state=active]:border-[var(--tab-active-underline)] dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-[var(--tab-active-text)]"
             >
               {tab.label}
             </TabsTrigger>

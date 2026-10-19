@@ -217,7 +217,7 @@ export function Header() {
             ? [
                 { href: "/sessions", label: "Sessions", icon: CalendarDays },
                 { href: isAdmin ? "/admin/invite" : "/volunteers", label: "Invite", icon: Send },
-                { href: "/manage", label: "Manage", icon: Settings2, newTab: true, prefetch: false },
+                { href: "/manage", label: "Manage", icon: Settings2, prefetch: false },
               ]
             : []),
       ]
@@ -229,8 +229,13 @@ export function Header() {
         className="sticky top-0 z-50 border-b border-[var(--header-border)] bg-[var(--header-bg)] text-[var(--header-text)] shadow-lg shadow-black/10"
         style={headerThemeVars}
       >
-        <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-center justify-between">
+        {/* Full-bleed, not `container mx-auto`: the centred container capped the
+            bar's content well inside the viewport, so the logo and the account
+            controls floated toward the middle instead of sitting at the ends.
+            `justify-between` now spreads logo / nav / account across the full
+            bar, and `px-*` supplies the gutter the container used to. */}
+        <div className="w-full px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex items-center justify-between gap-3">
             <div className={logoShellClassName}>
               <Image
                 src={headerLogoSrc}
@@ -260,8 +265,8 @@ export function Header() {
         className="sticky top-0 z-50 border-b border-[var(--header-border)] bg-[var(--header-bg)] text-[var(--header-text)] shadow-lg shadow-black/10"
         style={headerThemeVars}
       >
-        <div className="container mx-auto px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-center justify-between">
+        <div className="w-full px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex items-center justify-between gap-3">
             <Link
               href="/"
               aria-label={`${branding.shortName} home`}

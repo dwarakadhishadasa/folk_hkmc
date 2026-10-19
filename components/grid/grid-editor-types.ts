@@ -16,7 +16,7 @@
 import type { KeyboardEvent, ReactNode } from "react"
 
 /**
- * The eleven editor types.
+ * The twelve editor types.
  *
  * A closed union rather than `string` is what makes an unknown
  * `meta.grid.editor` a compile error at the column definition instead of a blank
@@ -34,6 +34,7 @@ export type GridEditorKey =
   | "url"
   | "email"
   | "user"
+  | "linked"
 
 /**
  * Presentation-only configuration for one editor.
@@ -49,6 +50,15 @@ export interface GridEditorOptions {
   options?: readonly string[]
   /** `user`: the allowed people, as `{ id, name }`. */
   users?: readonly { id: string; name: string }[]
+  /**
+   * `linked`: the pickable records, as `{ id, label, detail? }`.
+   *
+   * The stored value is the record's **id** (plural in the data model, one in
+   * the picker), while the cell displays its `label` — the resolver's human name.
+   * `detail` is the record's secondary text (a status), shown beside the label in
+   * the list and never committed.
+   */
+  records?: readonly { id: string; label: string; detail?: string }[]
   /** `currency`: ISO 4217 code for the display formatter. */
   currency?: string
   /** `currency` / `date`: BCP 47 tag for the display formatter. */
@@ -109,6 +119,16 @@ export interface GridEditorContext<TData> {
   commitValue: (value: unknown) => void
   /** Leave the editor without writing. */
   close: () => void
+  /**
+   * Open this cell's editor: the same door `onCellDoubleClick` opens.
+   *
+   * For a display widget that is an **explicit opener** — a control whose whole
+   * meaning is "add one here" — and for nothing else. CAP-10 retires the
+   * cell-wide click, not a control that says what it does, and it is not
+   * re-opened for the general case: a cell has to have no other way in before a
+   * display is allowed to offer one.
+   */
+  open: () => void
   /** True while the cell is open, so a popover editor can start open. */
   editing: boolean
   options: GridEditorOptions

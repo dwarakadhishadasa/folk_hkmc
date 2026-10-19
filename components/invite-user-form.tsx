@@ -363,7 +363,7 @@ export function InviteUserForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-white shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
+          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
         >
           {isSubmitting ? "Sending..." : "Send Invite"}
         </button>

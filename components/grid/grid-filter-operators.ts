@@ -79,6 +79,27 @@ const TEXT_OPERATORS: readonly GridFilterOperator[] = [
 ]
 
 /**
+ * A linked record. The **same ids and labels as `TEXT_OPERATORS`**, because the
+ * parameter is the column's identity and a shared link that spelled
+ * `f.location=contains:<label>` must keep meaning exactly what it meant — and
+ * `legacyOperatorFor` reads a bare, operator-less token as the first
+ * value-taking operator, which has to stay `contains`.
+ *
+ * What differs is only the control: a linked cell holds a resolved label, so the
+ * value is picked from the record list rather than typed, and the four
+ * value-taking operators declare `option-list` instead of `text`. The evaluator
+ * does not change — a picked label is compared exactly as a typed one was.
+ */
+const LINKED_OPERATORS: readonly GridFilterOperator[] = [
+  { id: "contains", label: "contains", valueShape: "option-list" },
+  { id: "notContains", label: "does not contain", valueShape: "option-list" },
+  { id: "is", label: "is", valueShape: "option-list" },
+  { id: "isNot", label: "is not", valueShape: "option-list" },
+  { id: "isEmpty", label: NO_VALUE_OPERATORS.isEmpty, valueShape: "none" },
+  { id: "isNotEmpty", label: NO_VALUE_OPERATORS.isNotEmpty, valueShape: "none" },
+]
+
+/**
  * The inclusive comparisons are here so a legacy `f.totalAttendanceCount=5` has an
  * operator to mean what it always meant — see `legacyOperatorFor`.
  */
@@ -144,8 +165,10 @@ const MULTISELECT_OPERATORS: readonly GridFilterOperator[] = [
 ]
 
 /**
- * The registry. `linked` and `longtext` share the text set deliberately: a linked
- * cell holds a resolved label, not an id, so it filters as the text it displays.
+ * The registry. `linked` and `longtext` differ from `text` only in their value
+ * control: a linked cell holds a resolved label, not an id, so it filters as the
+ * label it displays — but that label is *picked*, so `linked` names the
+ * `option-list` control while sharing `text`'s operator ids.
  */
 export const GRID_FILTER_OPERATORS_BY_FIELD_TYPE: Record<
   GridFieldType,
@@ -153,7 +176,7 @@ export const GRID_FILTER_OPERATORS_BY_FIELD_TYPE: Record<
 > = {
   text: TEXT_OPERATORS,
   longtext: TEXT_OPERATORS,
-  linked: TEXT_OPERATORS,
+  linked: LINKED_OPERATORS,
   number: NUMBER_OPERATORS,
   date: DATE_OPERATORS,
   boolean: BOOLEAN_OPERATORS,

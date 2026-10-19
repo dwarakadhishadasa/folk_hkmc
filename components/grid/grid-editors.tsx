@@ -3,7 +3,7 @@
 /**
  * The editor registry — CAP-5.
  *
- * Eleven entries, keyed by `GridEditorKey`, none a stub. A column opts in with
+ * Twelve entries, keyed by `GridEditorKey`, none a stub. A column opts in with
  * `meta.grid.editor: "select"` and the cell looks the key up here; **adding an
  * editor type is a registry entry, not a branch in the cell renderer**, which is
  * the same rule recorded at `grid.tsx:232-268` for the default-column mistake.
@@ -17,8 +17,8 @@
  *    `ctx.text` already carries the optimistic override, so a widget that reads
  *    the stored value instead shows the *prior* value until the write resolves —
  *    the DW-27 trap. `checkbox`, `currency`, `select`, `multiselect`, `date`,
- *    `url` and `user` all return a widget and are the seven places that could
- *    have walked into it.
+ *    `url`, `user` and `linked` all return a widget and are the eight places
+ *    that could have walked into it.
  * 3. **`parse` throws to reject.** The keyboard hook catches and reuses the
  *    revert path a rejected write already uses, so there is no editor-specific
  *    error element anywhere in this file — one validation story, one
@@ -38,6 +38,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { KeyboardEvent, ReactNode } from "react"
 import { format, isValid, parseISO } from "date-fns"
+import { Plus, X } from "lucide-react"
 
 import { Calendar } from "@/components/ui/calendar"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -281,8 +282,10 @@ function PopoverEditor({ ctx, children }: { ctx: GridEditorContext<unknown>; chi
  * used to carry is retired by CAP-10 ("no other gesture opens it"): a single
  * click now only moves the focus model onto the cell, which is what CAP-11
  * asks for. The gesture is still *advertised* — `cursor-pointer` below is the
- * discoverability OQ-8 requires now that double-click is the only opener — but
- * advertising a gesture is not performing it.
+ * discoverability OQ-8 requires now that this display is not an opener — but
+ * advertising a gesture is not performing it. The one control that does open an
+ * editor on a click is the `+` an empty `linked` cell offers, and it lives in
+ * that editor's own display rather than here.
  */
 function OpenableDisplay({
   kind,
@@ -304,16 +307,94 @@ function OpenableDisplay({
   )
 }
 
-/** A pill. Semantic tokens only; the grid carries no literal colour anywhere. */
-function Pill({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
+/**
+ * The palette slot a label wears, as a stable function of the label text.
+ *
+ * Select and multiselect values are stored data, not a closed enum — a book or
+ * a source can be anything an operator typed — so there is no table to key a
+ * colour off and a hash is the only assignment that is both deterministic and
+ * total. FNV-1a, not `String.hashCode`-style arithmetic: the labels are short,
+ * and a weak hash collapses `Book A` and `Book B` onto neighbouring slots often
+ * enough to read as a mistake.
+ *
+ * Duplicated from `grid-cell-renderers.tsx` for the same reason `Pill` is:
+ * importing it back would close the cycle through `use-grid-keyboard`.
+ */
+function tagSlot(label: string): number {
+  let hash = 0x811c9dc5
+
+  for (let index = 0; index < label.length; index += 1) {
+    hash ^= label.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+
+  // `>>> 0` first: `hash` is a signed 32-bit int and `% 10` on a negative value
+  // returns a negative slot, which would resolve to `--tag--3` and paint nothing.
+  return ((hash >>> 0) % 10) + 1
+}
+
+/**
+ * A pill. Semantic tokens only; the grid carries no literal colour anywhere.
+ *
+ * `tone` picks the surface pair. `"label"` is a palette slot, chosen from the
+ * text so the same value always looks the same; `"link"` is the one neutral
+ * slate a resolved reference wears; `"muted"` is the unresolved/dashed state.
+ *
+ * The background and border are `color-mix` of the slot against `--card` rather
+ * than authored per slot, so one token per theme carries all ten and the mixed
+ * pair tracks `--card` wherever the pill lands.
+ *
+ * Duplicated from `grid-cell-renderers.tsx` rather than imported: that module is
+ * imported *by* the keyboard hook, and importing it back would close the cycle.
+ * Two identical four-line components are cheaper than a cycle — but neither may
+ * grow a behaviour the other lacks, so a change to one is a change to both.
+ */
+function Pill({
+  children,
+  tone = "label",
+  label,
+}: {
+  children: ReactNode
+  tone?: "label" | "link" | "muted"
+  label?: string
+}) {
+  if (tone === "muted") {
+    return (
+      <span
+        data-grid-editor="pill"
+        className="border-border text-muted-foreground inline-flex max-w-full items-center truncate rounded-[3px] border border-dashed px-1 text-[12px]"
+      >
+        {children}
+      </span>
+    )
+  }
+
+  // One hash, not one per property: the slot is a value, and reading it three
+  // times off `children` would also re-derive it from the *rendered* text when
+  // `label` is absent — which for a multiselect row is not the label alone.
+  const slot = tone === "label" ? tagSlot(label ?? String(children)) : 0
+
+  const style =
+    tone === "link"
+      ? {
+          backgroundColor: "var(--grid-linked-bg)",
+          color: "var(--grid-linked-fg)",
+          borderColor: "var(--grid-linked-bg)",
+        }
+      : {
+          color: `var(--tag-${slot})`,
+          // 11% is the strongest mix that still clears 4.5:1 for the dimmest
+          // slot in *both* themes; a stronger mix tints the pill more but pushes
+          // the 12px label under AA.
+          backgroundColor: `color-mix(in oklab, var(--tag-${slot}) 11%, var(--card))`,
+          borderColor: `color-mix(in oklab, var(--tag-${slot}) 42%, transparent)`,
+        }
+
   return (
     <span
       data-grid-editor="pill"
-      className={
-        muted
-          ? "border-border text-muted-foreground inline-flex max-w-full items-center truncate rounded-[3px] border px-1 text-[12px]"
-          : "border-primary/40 bg-primary/10 text-primary inline-flex max-w-full items-center truncate rounded-[3px] border px-1 text-[12px]"
-      }
+      className="inline-flex max-w-full items-center truncate rounded-[3px] border px-1 text-[12px]"
+      style={style}
     >
       {children}
     </span>
@@ -695,7 +776,7 @@ const selectEditor: GridEditorDefinition<unknown> = {
   renderDisplay: (ctx) =>
     isBlank(ctx.text) ? undefined : (
       <OpenableDisplay kind="select">
-        <Pill>{ctx.text}</Pill>
+        <Pill label={ctx.text}>{ctx.text}</Pill>
       </OpenableDisplay>
     ),
   renderEditor: (ctx) => <SelectControl ctx={ctx} />,
@@ -759,10 +840,17 @@ const multiselectEditor: GridEditorDefinition<unknown> = {
           .split(LIST_SEPARATOR)
           .slice(0, 2)
           .map((entry) => (
-            <Pill key={entry}>{entry}</Pill>
+            // Coloured per entry, not per cell: two books must be able to carry
+            // two slots, and each must match the slot the cell renderer gave
+            // the same value on an unopened row.
+            <Pill key={entry} label={entry}>
+              {entry}
+            </Pill>
           ))}
         {ctx.text.split(LIST_SEPARATOR).length > 2 ? (
-          <Pill muted>{`+${ctx.text.split(LIST_SEPARATOR).length - 2}`}</Pill>
+          // The overflow chip is not a label — it counts them, so it wears the
+          // muted surface rather than a slot of its own.
+          <Pill tone="muted">{`+${ctx.text.split(LIST_SEPARATOR).length - 2}`}</Pill>
         ) : null}
       </OpenableDisplay>
     ),
@@ -1124,6 +1212,209 @@ function UserControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* linked                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** One pickable record, as `GridEditorOptions.records` declares it. */
+type LinkedRecord = NonNullable<GridEditorOptions["records"]>[number]
+
+/**
+ * The record a linked cell's text names, or `undefined` when it names none.
+ *
+ * The text is an id immediately after a commit — `runCommit` joins an array
+ * value with `", "`, so the override for `[id]` is the bare id — and a label for
+ * a row the resolver already rendered. Matching id-then-label is what lets one
+ * editor draw either, and `undefined` (no match) is what lets the consumer's own
+ * text — its `unresolvedText` marker — show through unchanged.
+ */
+function resolveLinkedRecord(
+  text: string,
+  records: readonly LinkedRecord[],
+): LinkedRecord | undefined {
+  return records.find((record) => record.id === text) ?? records.find((record) => record.label === text)
+}
+
+/**
+ * A single linked record.
+ *
+ * The field is plural in the data model — it is an `string[]` that holds at most
+ * one id — so a commit is always an array of one, and the remove control commits
+ * `[]`. Mirrors `userEditor` in every way but three: the value is wrapped in an
+ * array, a set cell shows its record as a chip instead of offering the list
+ * (a second value is not a thing this field has room for), and that chip carries
+ * the remove control itself rather than reaching it through the editor.
+ */
+const linkedEditor: GridEditorDefinition<unknown> = {
+  renderDisplay: (ctx) => {
+    // Nothing in the cell, so the only thing it can say is "add one". An empty
+    // linked cell has no other way in: there is no text to type, and the
+    // cell-wide click stays retired.
+    if (isBlank(ctx.text)) {
+      return (
+        <OpenableDisplay kind="linked" className="group">
+          <LinkedRecordAdder ctx={ctx} />
+        </OpenableDisplay>
+      )
+    }
+
+    const match = resolveLinkedRecord(ctx.text, ctx.options.records ?? [])
+
+    // A cell whose text resolves to no record is left to the consumer's own
+    // renderer. `unresolvedText` is a data-quality fact; offering to add a
+    // record over it would hide the one thing the operator needs to see.
+    if (!match) {
+      return undefined
+    }
+
+    return (
+      <OpenableDisplay kind="linked" className="group">
+        <LinkedRecordPill ctx={ctx} label={match.label} />
+      </OpenableDisplay>
+    )
+  },
+  renderEditor: (ctx) => <LinkedRecordControl ctx={ctx} />,
+  parse: (draft, ctx) => {
+    const trimmed = draft.trim()
+
+    // An emptied draft is an empty plural value, not `null`: `location_ids` is
+    // an array, and `Delete` on the cell reaches parse with `""`.
+    if (trimmed.length === 0) {
+      return []
+    }
+
+    if (!(ctx.options.records ?? []).some((record) => record.id === trimmed)) {
+      throw new Error(`"${trimmed}" is not a known ${ctx.label}.`)
+    }
+
+    return [trimmed]
+  },
+}
+
+/**
+ * A linked cell's record as a pill that carries its own remove control.
+ *
+ * Removing a record is not a reason to open an editor: the operator clears the
+ * cell and then picks again, so the `×` sits in the pill and writes `[]`
+ * directly through the grid's one commit path.
+ *
+ * The control is `opacity-0`, not `hidden`: it keeps its box and its hit target,
+ * so a column of records reads as a column of names while the affordance is
+ * still there the moment the cell is hovered. It is a `role="presentation"`
+ * span, like `OpenableDisplay`, and deliberately not a `<button>`: a button in
+ * an editor display is what makes `getByRole("button")` inside a cell
+ * ambiguous, and the cell is already the keyboard-reachable thing —
+ * `Delete`/`Backspace` clear it, so this is a pointer shortcut for a write the
+ * grid already owns, not a second keyboard surface.
+ */
+function LinkedRecordPill({ ctx, label }: { ctx: GridEditorContext<unknown>; label: string }) {
+  return (
+    <Pill tone="link">
+      <span className="min-w-0 truncate">{label}</span>
+      <span
+        role="presentation"
+        data-grid-editor="linked-remove"
+        onClick={() => ctx.commitValue([])}
+        // A double-click on the control would otherwise reach the cell and open
+        // the editor the click just closed.
+        onDoubleClick={(event) => event.stopPropagation()}
+        className="ml-0.5 inline-flex size-3.5 shrink-0 cursor-pointer items-center justify-center rounded-[2px] opacity-0 group-hover:opacity-100"
+      >
+        <X aria-hidden="true" className="size-3" />
+      </span>
+    </Pill>
+  )
+}
+
+/**
+ * The `+` an empty linked cell offers, and the one control that opens an editor
+ * on a single click.
+ *
+ * Deliberate, and the only one. The cell is blank, it has no text to type into,
+ * and CAP-10 leaves double-click as the opener — so without this the picker is
+ * reachable only through a gesture nothing advertises. It calls `ctx.open()`,
+ * the same door `onCellDoubleClick` opens rather than a second one.
+ *
+ * Like the pill's `×` it is a `role="presentation"` span rather than a
+ * `<button>`, and `opacity-0` until the cell is hovered so a column of empties
+ * does not read as a column of buttons.
+ */
+function LinkedRecordAdder({ ctx }: { ctx: GridEditorContext<unknown> }) {
+  return (
+    <span
+      role="presentation"
+      data-grid-editor="linked-add"
+      onClick={() => ctx.open()}
+      // The `+` is a single-click gesture, so a double-click must not also reach
+      // the cell: that would be the open this click just performed, followed by
+      // the opener's own commit-and-close.
+      onDoubleClick={(event) => event.stopPropagation()}
+      className="inline-flex size-4 cursor-pointer items-center justify-center rounded-[2px] opacity-0 group-hover:opacity-100"
+    >
+      <Plus aria-hidden="true" className="size-3.5" />
+    </span>
+  )
+}
+
+function LinkedRecordControl({ ctx }: { ctx: GridEditorContext<unknown> }) {
+  const records = useMemo(() => ctx.options.records ?? [], [ctx.options.records])
+  const [query, setQuery] = useState("")
+  const current = resolveLinkedRecord(ctx.text, records)
+  const visible = useMemo(
+    () =>
+      query.trim().length === 0
+        ? records
+        : records.filter((record) => matches(record.label, query)),
+    [query, records],
+  )
+
+  return (
+    <PopoverEditor ctx={ctx}>
+      {current ? (
+        // A set field offers only its record: a list beside the chip would be
+        // an offer to make the field hold two, and clearing it is the pill's own
+        // control in the cell, not something to open a popover for.
+        <div data-grid-editor="linked-current" className="flex items-center gap-2">
+          <Pill tone="link">{current.label}</Pill>
+        </div>
+      ) : (
+        <>
+          <OptionSearch
+            ctx={ctx}
+            value={query}
+            onChange={setQuery}
+            placeholder="Find a record"
+            ariaLabel={`Find ${ctx.label}`}
+            onEnter={(typed) => {
+              const first = visible[0] ?? records.find((record) => matches(record.label, typed))
+              if (first) {
+                ctx.commitDraft(first.id)
+              }
+            }}
+          />
+          <OptionList
+            empty="No matching record."
+            options={visible.map((record) => (
+              <OptionRow
+                key={record.id}
+                selected={record.id === ctx.text}
+                onClick={() => ctx.commitDraft(record.id)}
+              >
+                <span className="flex w-full min-w-0 items-center justify-between gap-2">
+                  <span className="truncate">{record.label}</span>
+                  {record.detail ? (
+                    <span className="text-muted-foreground shrink-0 text-[11px]">{record.detail}</span>
+                  ) : null}
+                </span>
+              </OptionRow>
+            ))}
+          />
+        </>
+      )}
+    </PopoverEditor>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* The registry                                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -1151,6 +1442,7 @@ const GRID_EDITOR_REGISTRY: { [K in GridEditorKey]: GridEditorDefinition<unknown
   url: urlEditor,
   email: emailEditor,
   user: userEditor,
+  linked: linkedEditor,
 }
 
 /**
