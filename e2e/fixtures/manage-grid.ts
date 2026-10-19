@@ -36,7 +36,7 @@
  * | `[data-manage-status-count]`            | `manage-contacts-table.tsx` — the footer's readout under the identity column |
  * | `[data-manage-status-aggregate="<id>"]` | one number-field total in the footer, keyed by column id |
  * | `[data-grid-add-record]`               | `grid-row-lifecycle.tsx`      |
- * | `[data-grid-delete-row="<rowId>"]`     | `grid-row-lifecycle.tsx`      |
+ * | `role=menu` on a right-clicked row      | `grid.tsx`'s context-menu trigger |
  * | region named `Delete results`          | `grid-row-lifecycle.tsx`      |
  *
  * `~` is `GRID_CELL_KEY_SEPARATOR` from `use-grid-keyboard.ts`; it is spelled
@@ -516,8 +516,21 @@ export function addRecordButton(page: Page): Locator {
 }
 
 /** A row's delete control, addressed by row id. */
-export function rowDeleteButton(page: Page, contactId: string): Locator {
-  return rowById(page, contactId).getByRole("button", { name: /^Delete / })
+/**
+ * Open a row's context menu.
+ *
+ * Delete is no longer a per-row control: it lives on this menu and acts on the
+ * resolved target — the whole selection, or this row when it was outside the
+ * selection. A spec that means one row right-clicks that row and then picks
+ * `Delete all selected records`.
+ */
+export async function openRowContextMenu(page: Page, contactId: string): Promise<void> {
+  await rowById(page, contactId).click({ button: "right" })
+}
+
+/** The menu's delete item. The count lives in the menu's label, not the item. */
+export function deleteSelectedMenuItem(page: Page): Locator {
+  return page.getByRole("menuitem", { name: "Delete all selected records" })
 }
 
 /** The delete confirmation dialog. Present only while a delete is pending. */

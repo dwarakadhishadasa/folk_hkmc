@@ -32,12 +32,11 @@ export interface GridToolbarColumn {
    *
    * Resolved by `Grid` as `meta.grid.hideable !== false && column.getCanHide()`
    * — deliberately **not** "is this column in the pinned run". The pinned run is
-   * a layout fact; hideability is a product fact, and the two do not coincide:
-   * `actions` is not pinned and hiding it would take away the only delete
-   * affordance. A consumer that means it declares `hideable: false`, and this
-   * popover renders the column ticked, disabled and locked instead of dropping
-   * it — a field that silently vanished from the list is a field nobody can get
-   * back.
+   * a layout fact; hideability is a product fact, and the two do not coincide: a
+   * column can be unpinned and still be the only route to a destructive action.
+   * A consumer that means it declares `hideable: false`, and this popover
+   * renders the column ticked, disabled and locked instead of dropping it — a
+   * field that silently vanished from the list is a field nobody can get back.
    */
   hideable: boolean
 }
@@ -54,7 +53,7 @@ export interface GridToolbarProps {
    * looking at another. Counted over *every* listed column, not only the hideable
    * ones — the number an operator can check is the number of unticked boxes in
    * front of them, and a locked column that ships hidden is still one they see
-   * unticked. Locked-and-visible columns (`name`, `actions`) never count.
+   * unticked. Locked-and-visible columns (`name`) never count.
    */
   hiddenFieldCount: number
   globalFilter: string

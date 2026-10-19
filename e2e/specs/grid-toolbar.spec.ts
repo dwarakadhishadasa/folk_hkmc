@@ -5,12 +5,12 @@
  * Two decisions in this file are Dwaraka's and are load-bearing enough to say so
  * at the top, because a later reader would otherwise "fix" them:
  *
- * 1. **Nine columns is nine *fields*.** `COLUMN_IDS` is fifteen entries and one
+ * 1. **Eight columns is eight *fields*.** `COLUMN_IDS` is fourteen entries and one
  *    of them is `select`, which is a control rather than a field, so the frame
- *    renders **ten** headers: `select` plus CAP-18's nine visible fields. The
- *    acceptance criterion says "exactly nine columns render"; the assertion below
- *    names all ten ids, because an exact list is the only form of that claim
- *    which cannot be satisfied by the wrong ten.
+ *    renders **nine** headers: `select` plus CAP-18's eight visible fields. The
+ *    acceptance criterion says "exactly eight columns render"; the assertion below
+ *    names all nine ids, because an exact list is the only form of that claim
+ *    which cannot be satisfied by the wrong nine.
  * 2. **An empty selection reads the record count.** The selection readout lives
  *    in the status row below the grid, which is always in the frame — so at
  *    rest it carries the record count, and a selection swaps that same spot to
@@ -52,7 +52,7 @@ import {
 const DEFAULT_HIDDEN = ["source", "booksRead", "dateOfBirth", "lastContactedOn", "favorite"]
 
 /**
- * The same fourteen data fields by **display label**, in the same order.
+ * The same thirteen data fields by **display label**, in the same order.
  *
  * `*Hide fields*` rows are asserted on labels, not ids, because the label is
  * what the operator reads and what CAP-18 is written in ("Visible: Name, Phone,
@@ -74,10 +74,9 @@ const ALL_FIELD_LABELS = [
   "Notes",
   "Collected By",
   "Favorite",
-  "Actions",
 ]
 
-/** CAP-18's nine visible fields, by label — the rows shown ticked by default. */
+/** CAP-18's eight visible fields, by label — the rows shown ticked by default. */
 const DEFAULT_VISIBLE_LABELS = [
   "Name",
   "Phone",
@@ -87,10 +86,9 @@ const DEFAULT_VISIBLE_LABELS = [
   "Past 60 Days",
   "Notes",
   "Collected By",
-  "Actions",
 ]
 
-/** The nine fields a default load shows, in column-definition order. */
+/** The eight fields a default load shows, in column-definition order. */
 const DEFAULT_VISIBLE_FIELDS = [
   "name",
   "phone",
@@ -100,11 +98,10 @@ const DEFAULT_VISIBLE_FIELDS = [
   "past60DayAttendanceCount",
   "notes",
   "collectedBy",
-  "actions",
 ]
 
 /**
- * The fourteen data fields, in column-definition order, excluding `select`.
+ * The thirteen data fields, in column-definition order, excluding `select`.
  *
  * This is also the order *Hide fields* must list them in: a visibility list
  * ordered by anything else (alphabetically, by whether the column is currently
@@ -124,7 +121,6 @@ const ALL_FIELDS = [
   "notes",
   "collectedBy",
   "favorite",
-  "actions",
 ]
 
 /** Header ids, which name `select` and the visible fields. */
@@ -147,7 +143,7 @@ async function openHideFields(page: Page): Promise<void> {
  * The labels *Hide fields* lists, top to bottom.
  *
  * Read from the checkbox names rather than from the row text, so the assertion is
- * about the fourteen *fields* and cannot be satisfied by fourteen rows of chrome.
+ * about the thirteen *fields* and cannot be satisfied by thirteen rows of chrome.
  *
  * `[role="checkbox"]`, not `input[type="checkbox"]`: `components/ui/checkbox.tsx`
  * is Radix, and Radix renders a `<button role="checkbox">` — there is no input
@@ -176,22 +172,22 @@ async function tickedHideFields(page: Page): Promise<string[]> {
 }
 
 test.describe("story 7 — the contacts toolbar", () => {
-  test("default field set — no `hide` param renders CAP-18's nine, and the five stay reachable", async ({
+  test("default field set — no `hide` param renders CAP-18's eight, and the five stay reachable", async ({
     page,
   }) => {
     await openContactsGrid(page)
 
-    expect(await headerColumnIds(page), "a default load renders select plus the nine visible fields").toEqual(
+    expect(await headerColumnIds(page), "a default load renders select plus the eight visible fields").toEqual(
       toHeaderIds(DEFAULT_VISIBLE_FIELDS),
     )
 
     // Reachable, not deleted: every one of the five is still offered by
     // *Hide fields*, just unticked.
     await openHideFields(page)
-    expect(await hideFieldLabels(page), "fourteen data fields, in column-definition order").toEqual(
+    expect(await hideFieldLabels(page), "thirteen data fields, in column-definition order").toEqual(
       ALL_FIELD_LABELS,
     )
-    expect(await tickedHideFields(page), "the nine checked fields").toEqual(DEFAULT_VISIBLE_LABELS)
+    expect(await tickedHideFields(page), "the eight checked fields").toEqual(DEFAULT_VISIBLE_LABELS)
   })
 
   test("existing shared link — `hide=notes` still means only Notes hidden", async ({ page }) => {
@@ -228,12 +224,11 @@ test.describe("story 7 — the contacts toolbar", () => {
         "past60DayAttendanceCount",
         "notes",
         "collectedBy",
-        "actions",
       ]),
     )
 
     await openHideFields(page)
-    // Ticked means VISIBLE, so this is the nine plus the un-hidden `Source` —
+    // Ticked means VISIBLE, so this is the eight plus the un-hidden `Source` —
     // and `Source` sits fourth, in column order, not appended. The four that
     // remain hidden are the ones *absent* from this list, which the header
     // assertion above already proved by naming them.
@@ -247,7 +242,6 @@ test.describe("story 7 — the contacts toolbar", () => {
       "Past 60 Days",
       "Notes",
       "Collected By",
-      "Actions",
     ])
   })
 
@@ -256,7 +250,7 @@ test.describe("story 7 — the contacts toolbar", () => {
   }) => {
     await openContactsGrid(page, { params: { hide: "" } })
 
-    expect(await headerColumnIds(page), "all fourteen fields are visible").toEqual(toHeaderIds(ALL_FIELDS))
+    expect(await headerColumnIds(page), "all thirteen fields are visible").toEqual(toHeaderIds(ALL_FIELDS))
 
     // The whole point of keying on presence: `hide=` is the ONLY encoding that can
     // say "hide nothing". A key that were deleted here would restore the five
@@ -288,7 +282,7 @@ test.describe("story 7 — the contacts toolbar", () => {
     )
   })
 
-  test("Hide fields list — fourteen rows, `select` absent, Name and Actions locked", async ({ page }) => {
+  test("Hide fields list — thirteen rows, `select` absent, Name locked", async ({ page }) => {
     await openContactsGrid(page)
     await openHideFields(page)
 
@@ -298,7 +292,7 @@ test.describe("story 7 — the contacts toolbar", () => {
 
     // Ticked, disabled, and carrying a lock — three separate claims, because a
     // lock drawn without a disabled control is a picture of a guard.
-    for (const locked of ["Name", "Actions"]) {
+    for (const locked of ["Name"]) {
       await expect(hideFieldToggle(page, locked), `${locked} is a locked field, so it stays visible`).toBeChecked()
       await expect(hideFieldToggle(page, locked), `${locked} cannot be toggled`).toBeDisabled()
     }
@@ -306,7 +300,7 @@ test.describe("story 7 — the contacts toolbar", () => {
     expect(
       hideFieldsPopover(page).locator("[data-grid-hide-field-lock]"),
       "the lock marker renders once per locked field, and only per locked field",
-    ).toHaveCount(2)
+    ).toHaveCount(1)
 
     // The twelve unlocked fields are genuinely unlocked — a list where every row
     // is disabled would satisfy the three assertions above.
@@ -314,11 +308,11 @@ test.describe("story 7 — the contacts toolbar", () => {
     await expect(hideFieldToggle(page, "Notes")).toBeEnabled()
   })
 
-  test("toggling a locked row — Name and Actions cannot be hidden", async ({ page }) => {
+  test("toggling a locked row — Name cannot be hidden", async ({ page }) => {
     await openContactsGrid(page)
     await openHideFields(page)
 
-    for (const locked of ["Name", "Actions"]) {
+    for (const locked of ["Name"]) {
       const row = hideFieldsPopover(page)
         .locator("label")
         .filter({ has: page.getByText(locked, { exact: true }) })
@@ -326,19 +320,7 @@ test.describe("story 7 — the contacts toolbar", () => {
       // The click is dispatched at the row's LABEL, not at the checkbox: that is
       // the path the label's `preventDefault` exists to stop, and clicking the
       // disabled checkbox directly would prove nothing about it.
-      //
-      // `Name` is the first row and gets a real pointer click. `Actions` is the
-      // fourteenth of fourteen inside a `max-h-[380px] overflow-y-auto` list, so
-      // it is laid out below the fold and Playwright reports "outside of the
-      // viewport" — even with `force`, which skips actionability but still needs
-      // a hit point. A DOM-dispatched click still runs React's `onClick` and the
-      // `preventDefault`, which is exactly what is under test, and it does not
-      // require the row to be on screen.
-      if (locked === "Actions") {
-        await row.dispatchEvent("click")
-      } else {
-        await row.click({ force: true })
-      }
+      await row.click({ force: true })
 
       await expect(
         hideFieldToggle(page, locked),
@@ -348,7 +330,7 @@ test.describe("story 7 — the contacts toolbar", () => {
 
     expect(
       await headerColumnIds(page),
-      "neither the identity column nor the row-action column may disappear",
+      "the identity column may not disappear",
     ).toEqual(toHeaderIds(DEFAULT_VISIBLE_FIELDS))
   })
 
@@ -366,7 +348,7 @@ test.describe("story 7 — the contacts toolbar", () => {
     // state would show `notes` still ticked here, which is exactly the bug the
     // "one state, two routes" claim exists to prevent.
     await openHideFields(page)
-    // Ticked means VISIBLE: the nine defaults with `Notes` now gone, because the
+    // Ticked means VISIBLE: the eight defaults with `Notes` now gone, because the
     // header menu hid it. `Notes` being absent from this list is the same fact
     // as the header assertion above, read through the other route.
     expect(await tickedHideFields(page)).toEqual([
@@ -377,7 +359,6 @@ test.describe("story 7 — the contacts toolbar", () => {
       "Total Attendance",
       "Past 60 Days",
       "Collected By",
-      "Actions",
     ])
     await expect(hideFieldToggle(page, "Notes"), "`notes` is unticked in *Hide fields* too").not.toBeChecked()
   })

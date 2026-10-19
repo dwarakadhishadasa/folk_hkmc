@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { ReactNode, UIEvent } from "react"
+import type { ComponentType, MouseEvent, ReactNode, UIEvent } from "react"
 import {
   flexRender,
   getCoreRowModel,
@@ -56,11 +56,17 @@ import type {
   GridEditErrorHandler,
   GridFrozenColumn,
   GridPanelState,
+  GridRowContextMenuProps,
   GridRowLifecycle,
   GridTransientHandle,
 } from "@/components/grid/grid-types"
 import type { GridSortField } from "@/components/grid/grid-sort-popover"
 import { useGridKeyboard } from "@/components/grid/use-grid-keyboard"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils"
 
 /**
@@ -644,6 +650,19 @@ export interface GridProps<TData extends RowData> {
   /** Called only for a row the server confirmed, so the consumer can drop it. */
   onRowRemoved?: (rowId: string) => void
   /**
+   * A row context menu, opted into by supplying it.
+   *
+   * `Grid` owns the trigger — `contextmenu` on the scroll surface, which is also
+   * what `Shift+F10` and the Menu key dispatch — resolves the target set, and
+   * replaces the selection when the pointer lands on a row outside it. The
+   * consumer owns the items, because `components/grid/**` has no vocabulary for
+   * what a row can do.
+   *
+   * Omitted, right-click is untouched: no native menu is suppressed and no
+   * trigger listener is installed.
+   */
+  rowContextMenu?: ComponentType<GridRowContextMenuProps>
+  /**
    * Called when a just-added row cannot be focused because the active filters
    * exclude it — a blank draft under a text filter, which nothing will ever
    * reveal on its own.
@@ -912,6 +931,7 @@ export function Grid<TData extends RowData>({
   tableFooter,
   rowLifecycle,
   onRowRemoved,
+  rowContextMenu,
   onUnreachableNewRow,
   onNotice,
   panel,
@@ -1444,6 +1464,64 @@ export function Grid<TData extends RowData>({
   const lastVisibleColumnId =
     headerHeaders.length > 0 ? headerHeaders[headerHeaders.length - 1].column.id : null
 
+  /**
+   * The set the open context menu acts on, and the row it was opened on.
+   *
+   * Resolved on the `contextmenu` event rather than when the menu renders:
+   * Radix opens its content in that same event, and the target has to exist by
+   * the first paint so the menu's count and the visible selection cannot
+   * disagree for a frame.
+   */
+  const [rowMenu, setRowMenu] = useState<{
+    rowIds: readonly string[]
+    targetRowId: string
+  } | null>(null)
+
+  // JSX needs a capitalised component; the alias also keeps the opt-in check
+  // below reading as one question.
+  const RowContextMenu = rowContextMenu
+
+  const handleRowContextMenu = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!RowContextMenu) {
+        return
+      }
+
+      const rowElement =
+        event.target instanceof Element ? event.target.closest("[data-grid-row]") : null
+      const rowId = rowElement?.getAttribute("data-grid-row") ?? null
+
+      if (rowId === null) {
+        // A header, a spacer row or the empty panel is not a row: no menu. The
+        // browser's own menu is suppressed here too, because a menu that acts on
+        // "the selected records" must not appear over something that is not a row.
+        event.preventDefault()
+        setRowMenu(null)
+        return
+      }
+
+      const selection = table.getState().rowSelection ?? {}
+
+      if (selection[rowId] === true) {
+        // Already part of the selection: every selected row *in scope* is the
+        // target. Rows hidden by the active filter keep their selection but stay
+        // out of the target, because an operator cannot act on what they cannot
+        // see, and the count in the menu must describe the rows it would delete.
+        const rowIds = rowModel.map((row) => row.id).filter((id) => selection[id] === true)
+
+        setRowMenu({ rowIds, targetRowId: rowId })
+        return
+      }
+
+      // Outside the selection: the row becomes the whole target and the
+      // selection follows it before the menu paints, so the highlight and the
+      // menu can never disagree about what will be deleted.
+      onRowSelectionChange?.({ [rowId]: true })
+      setRowMenu({ rowIds: [rowId], targetRowId: rowId })
+    },
+    [RowContextMenu, onRowSelectionChange, rowModel, table],
+  )
+
   const panelState = useMemo<GridPanelState>(() => {
     if (panel) {
       return panel
@@ -1709,6 +1787,16 @@ export function Grid<TData extends RowData>({
         scroll containers, which `role`/`aria-label`/`tabIndex` cannot answer:
         they identify which element this is, not how many others scroll.
       */}
+      <ContextMenu
+        onOpenChange={(open) => {
+          // Radix owns the open state; clearing the target on close is what
+          // keeps a stale row set from outliving the menu it was resolved for.
+          if (!open) {
+            setRowMenu(null)
+          }
+        }}
+      >
+        <ContextMenuTrigger asChild disabled={!RowContextMenu}>
       <div
         ref={scrollRef}
         data-grid-scroll=""
@@ -1717,6 +1805,7 @@ export function Grid<TData extends RowData>({
         tabIndex={0}
         className="focus-visible:ring-ring/50 min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-[3px] focus-visible:ring-inset"
         onScroll={syncFooterScroll}
+        onContextMenu={handleRowContextMenu}
         {...keyboard.containerProps}
       >
         {/*
@@ -1883,6 +1972,14 @@ export function Grid<TData extends RowData>({
           right the operator scrolls.
         */}
       </div>
+        </ContextMenuTrigger>
+
+        {RowContextMenu && rowMenu ? (
+          <ContextMenuContent>
+            <RowContextMenu rowIds={rowMenu.rowIds} targetRowId={rowMenu.targetRowId} />
+          </ContextMenuContent>
+        ) : null}
+      </ContextMenu>
 
       {tableFooter ? (
         <div

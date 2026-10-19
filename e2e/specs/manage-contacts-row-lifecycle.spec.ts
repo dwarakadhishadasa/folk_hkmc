@@ -96,6 +96,7 @@ import {
   deleteConfirmDialog,
   deleteReportLines,
   deleteReportPanel,
+  deleteSelectedMenuItem,
   filterGlobally,
   gridRoot,
   inScopeCount,
@@ -103,9 +104,9 @@ import {
   openCellEditor,
   openContactsGrid,
   openPreviewGrid,
+  openRowContextMenu,
   renderedRows,
   rowById,
-  rowDeleteButton,
 } from "../fixtures/manage-grid"
 
 // See the header: a controlling service worker swallows `page.route`, which made
@@ -400,11 +401,19 @@ test.describe("row lifecycle", () => {
     ).toHaveCount(0)
     await expect(
       page.getByRole("button", { name: /^Delete / }),
-      "no delete affordance exists either",
+      "no per-row delete button exists either",
     ).toHaveCount(0)
     await expect(
       page.locator("[data-grid-add-record]"),
       "and the add control's own marker is absent, not merely unnamed",
+    ).toHaveCount(0)
+
+    // Delete is a row context menu now, so the opt-in claim has to cover it
+    // too: a right-click on a preview row opens nothing at all.
+    await renderedRows(page).first().click({ button: "right" })
+    await expect(
+      page.getByRole("menu"),
+      "no context menu is wired into a grid that did not ask for one",
     ).toHaveCount(0)
     await expect(renderedRows(page).first(), "the grid itself did render").toBeVisible()
   })
@@ -544,7 +553,8 @@ test.describe("row lifecycle", () => {
       await openContactsGrid(page, { params: { q: name } })
       await expect(rowById(page, created.id), "the inserted row is addressable").toBeVisible()
 
-      await rowDeleteButton(page, created.id).click()
+      await openRowContextMenu(page, created.id)
+      await deleteSelectedMenuItem(page).click()
 
       await expect(deleteConfirmDialog(page), "the confirmation is shown").toBeVisible()
       await expect(
@@ -558,7 +568,8 @@ test.describe("row lifecycle", () => {
       expect(requests, "cancelling issues no DELETE").toHaveLength(0)
       await expect(rowById(page, created.id), "the row is untouched").toBeVisible()
 
-      await rowDeleteButton(page, created.id).click()
+      await openRowContextMenu(page, created.id)
+      await deleteSelectedMenuItem(page).click()
       await deleteConfirmButton(page).click()
 
       await expect(rowById(page, created.id), "the confirmed delete removes the row").toHaveCount(0)
@@ -601,7 +612,8 @@ test.describe("row lifecycle", () => {
       await openContactsGrid(page, { params: { q: name } })
       await expect(rowById(page, created.id), "the inserted row is addressable").toBeVisible()
 
-      await rowDeleteButton(page, created.id).click()
+      await openRowContextMenu(page, created.id)
+      await deleteSelectedMenuItem(page).click()
       await deleteConfirmButton(page).click()
 
       await expect(deleteReportPanel(page), "the outcome is reported, not toasted").toBeVisible()

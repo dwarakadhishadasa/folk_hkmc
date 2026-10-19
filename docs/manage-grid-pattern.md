@@ -31,14 +31,14 @@ instance. What is forbidden is a memo that orders or filters the contact set.
 Build columns with `createColumnHelper<T>()` and pin `id` on every def, so the grid's ids and
 `useGridViewState({ columnIds })` cannot drift. `COLUMN_IDS` is the same list, in display order.
 
-### Layout: `select`, identity, …, row action
+### Layout: `select`, identity, …, favourite
 
 | Position | Column | Why |
 | --- | --- | --- |
 | 1 | `select` | Selection control, never data |
 | 2 | the identity column | Pinned, so scrolling right never loses the row |
 | … | data columns | |
-| last | the row-action column | Star, menu, anything that acts on one row |
+| last | the favourite toggle | Renders a value the operator can flip; verbs that act on the row live in its context menu |
 
 The select column sits *in front of* the identity column, which is why the grid freezes a **marked
 leading run** with cumulative `left` offsets rather than "whichever column is first". A leading
@@ -445,25 +445,52 @@ the table owns the row and every byte that crosses the network.
 
 ### Deleting a record
 
-- **The control is a column you render**, not one the grid injects:
+Delete is a **row context menu**, not a column. `Grid` owns the trigger and the
+target set; the consumer supplies the items:
 
-  ```tsx
-  cell: ({ row }) => <GridRowDeleteControl rowId={row.id} label={row.original.name} />
-  ```
+```tsx
+<Grid
+  rowContextMenu={ContactsRowContextMenu}
+  …
+/>
 
-  A separate row-action column rather than a second control inside an existing
-  one, so a column that renders a value and a column that acts on a row stay
-  distinguishable in the header, in the visibility menu and in a spec.
-- **Confirmation before action**, naming the row. Nothing is written until it is
-  confirmed.
+function ContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
+  const lifecycle = useGridRowLifecycle()
+
+  return (
+    <ContextMenuItem onSelect={() => lifecycle?.requestDeleteMany(rowIds)}>
+      Delete all selected records
+    </ContextMenuItem>
+  )
+}
+```
+
+- **The target is the selection, not the row under the pointer.** Right-clicking
+  a row inside the selection acts on every selected row *in scope*; right-clicking
+  a row outside it **replaces** the selection with that row before the menu
+  paints, so the highlight and the menu can never disagree about what would be
+  deleted. Shift+F10 / the Menu key on the focused row is the same path.
+- **No menu over a non-row.** The trigger sits on the scroll surface and resolves
+  the row from `event.target.closest("[data-grid-row]")`; a header, a spacer or
+  the empty panel suppresses both the menu and the browser's own.
+- **Delete is not a bulk request.** `requestDeleteMany` calls the same
+  `onDeleteRow` the single-row path uses, once per row, sequentially. The
+  single-row handler already owns authorization, attendance-conflict wording and
+  the deleted-row confirmation; a set-based route would be a second place for
+  those three to drift. Sequential keeps a partial run legible and does not
+  exhaust the connection pool.
+- **Confirmation before action**, naming the row for one row and the count for
+  many. Nothing is written until it is confirmed.
 - **One visible outcome line per row**, successes included. A collapsed toast
   fails the capability even when every row succeeded — the same rule §5 states
   for the bulk action.
 - **Only a confirmed delete is applied locally.** `onRowRemoved` fires for the
   rows the server confirmed and for nothing else, so a refused row keeps the
-  value the operator can already see.
+  value the operator can already see and does not silently vanish.
 - **Drop the row's id from `rowSelection` too.** The selection is keyed by the
   same id, and a surviving entry makes the header count a row that is gone.
+- **A draft row never reaches the network.** The consumer's `onDeleteRow` returns
+  without a request for a `draft-` id; `onRowRemoved` still drops it locally.
 
 ### Routes
 
@@ -652,7 +679,8 @@ double-click carries `Shift`.
       `hide=` still means "nothing hidden" (§8).
 - [ ] Identity column pinned as part of the leading run; one 1px divider, no scroll shadow; no
       pinned column is hideable, draggable, or a valid drop target for a scrolling column.
-- [ ] `select` first, row action last.
+- [ ] `select` first, the favourite toggle last; verbs that act on a row live in its context menu,
+      not in a column.
 - [ ] Editable columns appear in `meta.grid.editable` **and** `PATCH_KEY_BY_COLUMN`.
 - [ ] Editable columns name an `meta.grid.editor` where a typed control fits, and still
       supply no `cell` widget of their own.
@@ -763,17 +791,15 @@ Known gaps at the time of writing:
   source rows and the table is handed the survivors with an empty `columnFilters`, leaving the global
   `q` filter to compose on top. The `no-records` / `no-matches` distinction therefore reads the
   SOURCE row count, not what the table was handed.
-- The favorite star is no longer the only row action — the row lifecycle's delete control sits in its
-  own `actions` column. A row-action *menu* is the obvious next primitive if more per-row actions
-  appear.
-- `favoriteStar` in `e2e/fixtures/manage-grid.ts` used to resolve `getByRole("button")` **inside the
-  row, unscoped**, which is why a closed-state editor display must not be a `<button>`. The row
-  lifecycle added a second button per row, so that locator is now scoped by accessible name
-  (`/favorites$/`). That is a narrowing, not a loosening: every assertion still resolves to the same
-  element. **Anchor the pattern on the part of the name that does not change with state** — the star
-  reads `Add <name> to favorites` *or* `Remove <name> from favorites`, and an earlier `/to favorites$/`
-  matched only the first form, so every already-favourited row timed out. **A third per-row button
-  means the naming discipline has to hold.**
+- The `actions` column is gone. Delete lives in the row **context menu** and acts on the resolved
+  selection; the favourite star is the only per-row control left, and a row-action *column* is not
+  the shape to add next.
+- The favourite star is addressed by `cellIn(row, "favorite").getByRole("button")`, scoped to the
+  cell and named `Add <name> to favorites` / `Remove <name> from favorites`. **Anchor the pattern on
+  the part of the name that does not change with state** — an earlier `/to favorites$/` matched only
+  the first form, so every already-favourited row timed out. The same discipline is why a closed-state
+  editor display must not be a `<button>`: an unscoped `getByRole("button")` inside a row is
+  ambiguous the moment a second one appears.
 - A spec that intercepts a request with `page.route` should call `test.use({ serviceWorkers: "block" })`
   and register the route **before** navigating. `providers.tsx` registers `/sw.js` on every page, and
   once that worker controls the page the requests it serves never reach the network stack
