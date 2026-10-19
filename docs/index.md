@@ -41,6 +41,7 @@ The older generated docs described a single root app and no longer reflected the
 - [Testing Architecture and Policy](./architecture/testing.md) - **Read before changing code.** What to run at each level, the feature-to-test registry, which shared files widen the regression blast radius, and how to diagnose a failure. Notes that `pnpm test` runs zero tests and exits 0.
 - [Manage Grid Pattern](./manage-grid-pattern.md) - The contract every `/manage` table follows: column conventions, commit/rollback, selection, bulk semantics, and the URL state contract. Read it before porting a table onto `components/grid/`.
 - [Claiming a Matrix Row](./claiming-a-matrix-row.md) - How to satisfy the six rules that turn a matrix row from Manual to Covered, and what evidence to record.
+- [Airtable Legacy Base](./airtable-legacy-base.md) - Reference snapshot of the retired Airtable base: table and field identities with types, the Interface pages it served, and a field-by-field validation of the migration map in `scripts/migrate-airtable-data.mjs`
 - [NestJS Backend Reference](./nestjs-backend.md) - Historical/reference notes for a possible separate backend
 
 ## Getting Started
