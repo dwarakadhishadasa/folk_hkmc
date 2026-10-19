@@ -57,11 +57,10 @@ async function registerBackgroundSync() {
   )
 }
 
-const panelClass =
-  "overflow-hidden rounded-lg border border-[var(--border)] bg-card shadow-[0_18px_50px_rgba(45,10,10,0.08)]"
+const panelClass = "overflow-hidden rounded-lg border border-border bg-card shadow-overlay"
 const fieldClass =
-  "w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[var(--program-text)] shadow-sm transition-all placeholder:text-[var(--muted-foreground)]/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-[var(--program-accent)]/15 disabled:bg-muted disabled:text-muted-foreground"
-const labelClass = "block text-sm font-semibold text-[var(--program-text)]"
+  "w-full rounded-lg border border-input bg-field px-4 py-3 text-sm text-foreground shadow-sm transition-all placeholder:text-muted-foreground/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-ring/15 disabled:bg-muted disabled:text-muted-foreground"
+const labelClass = "block text-sm font-semibold text-foreground"
 const noticeClass = "rounded-lg border px-4 py-3 text-sm leading-6"
 
 export function ContactForm({
@@ -208,12 +207,12 @@ export function ContactForm({
   return (
     <>
       <div className={panelClass}>
-        <div className="border-b border-white/10 bg-[var(--program-primary)] px-6 py-5 text-white">
+        <div className="border-b border-white/10 bg-panel-header px-6 py-5 text-white">
           <h2 className="font-[family-name:var(--font-poppins)] text-xl font-bold">New Contact</h2>
           <p className="mt-1 text-sm text-white/75">Add a new contact to the {branding.shortName} database</p>
         </div>
         <div className="p-5 sm:p-6">
-          <div className={cn(noticeClass, "mb-4 border-[var(--program-accent)]/20 bg-muted text-[var(--program-primary)]")}>
+          <div className={cn(noticeClass, "mb-4 border-border bg-muted/50 text-foreground")}>
             {staffRole === "Volunteer" && `Volunteer contacts are assigned to your Preacher and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Assistant" && `Assistant contacts are assigned to your Preacher and the ${locationLabel.toLowerCase()} you enter.`}
             {staffRole === "Preacher" && `Contacts you create are assigned to you and the ${locationLabel.toLowerCase()} you enter.`}
@@ -221,7 +220,7 @@ export function ContactForm({
             {!isGitaLife && availableLocations.length === 0 && " No active locations are available for contact creation."}
           </div>
           {message && (
-            <div className={cn(noticeClass, "mb-4 border-amber-200 bg-amber-50 text-amber-800")} role="status">
+            <div className={cn(noticeClass, "mb-4 border-border bg-muted/50 text-foreground")} role="status">
               {message}
             </div>
           )}
@@ -257,9 +256,9 @@ export function ContactForm({
                 onChange={handleChange}
                 required
                 maxLength={10}
-                className={cn(fieldClass, phoneError && "border-red-500 focus:border-red-500 focus:ring-red-500/15")}
+                className={cn(fieldClass, phoneError && "border-destructive focus:border-destructive focus:ring-destructive/15")}
               />
-              {phoneError && <p className="text-sm text-red-500">{phoneError}</p>}
+              {phoneError && <p className="text-sm text-destructive">{phoneError}</p>}
             </div>
 
             <div className="space-y-2">
@@ -426,7 +425,7 @@ export function ContactForm({
             <button
               type="submit"
               disabled={isSubmitting || phoneError !== "" || (isGitaLife ? !formData.address.trim() : !formData.locationId)}
-              className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
+              className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0"
             >
               {isSubmitting ? "Saving..." : "Save"}
             </button>

@@ -246,12 +246,14 @@ export function Header() {
                 priority
               />
             </div>
-            {/* In this branch too: mounting the toggle only after hydration would
-                pop it into the header of the page the theme story grades.
-                `ThemeToggle` renders `null` before mount, so this costs nothing
-                and keeps the tree stable across the swap. */}
+            {/* Staff-only: the theme control is an account affordance, so a
+                signed-out visitor never sees it and the public pages follow the
+                OS preference instead. Reading `isLoggedIn` here is safe — the
+                auth context holds no staff on the server or the first client
+                render, so both agree on rendering nothing, and the toggle
+                arrives with the session rather than as a hydration mismatch. */}
             <div className="flex items-center gap-2 sm:gap-3">
-              <ThemeToggle />
+              {isLoggedIn && <ThemeToggle />}
             </div>
           </div>
         </div>
@@ -302,7 +304,7 @@ export function Header() {
               </nav>
             )}
             <div className="flex items-center gap-2 sm:gap-3">
-              <ThemeToggle />
+              {isLoggedIn && <ThemeToggle />}
               {isLoggedIn ? (
                 <>
                   <span className="hidden text-xs capitalize text-[var(--header-muted-text)] lg:inline">

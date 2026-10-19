@@ -291,10 +291,11 @@ export function GridToolbar({
            * "something is off out here" and "you are looking at me" are different
            * statements.
            *
-           * The colour lands on the **label only**, and is carried through
-           * `style` rather than a class because it is a token value read at
-           * runtime — `components/grid/` stays hex-free per `harness-guards`, and
-           * a consumer can re-tint the report without touching this component.
+           * The warning colour lands on the **label and the glyph**, and is
+           * carried through `style` rather than a class because it is a token
+           * value read at runtime — `components/grid/` stays hex-free per
+           * `harness-guards`, and a consumer can re-tint the report without
+           * touching this component.
            *
            * Counted over the listed columns rather than over all of them: the
            * selection column is not a field and never appears in the popover, so
@@ -324,18 +325,20 @@ export function GridToolbar({
                   }`}
                 >
                   {/*
-                    * **One glyph in both states, and never the warning colour.**
-                    * The icon names the control; the label reports the state. An
-                    * icon that changed with the count would be a second signal
-                    * saying the same thing in a place with no room to read it, and
-                    * painting it amber would make the glyph unreadable beside an
-                    * amber label at 14px. `--grid-accent-ink` is white on the dark
-                    * canvas and the theme's own ink on paper, so the icon is legible
-                    * in both without a second token.
+                    * **One glyph in both states, and it joins the label once the
+                    * label starts reporting.** At rest the icon names the control
+                    * and carries `--grid-accent-ink`, which is white on the dark
+                    * canvas and the theme's own ink on paper. Once a field is
+                    * hidden the whole pill is a report rather than an action, so
+                    * glyph and label share the same warning ink: two inks inside
+                    * one 32px control would read as two different states.
                     */}
                   <EyeOff
                     aria-hidden="true"
-                    className="size-3.5 text-[var(--grid-accent-ink)]"
+                    className="size-3.5"
+                    style={{
+                      color: reporting ? "var(--grid-warning-ink)" : "var(--grid-accent-ink)",
+                    }}
                   />
                   <span
                     className="font-semibold"

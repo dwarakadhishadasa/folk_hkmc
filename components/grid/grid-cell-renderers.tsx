@@ -81,8 +81,12 @@ const LIST_SEPARATOR = ", "
  *
  * Duplicated from `grid-editors.tsx` for the same reason `Pill` is: importing it
  * back would close the cycle through `use-grid-keyboard`.
+ *
+ * Exported so a surface outside the grid can assign a slot the same way — the
+ * live attendance list tints each row by its record id, and a second hash there
+ * would be a second answer to "which colour is this value".
  */
-function tagSlot(label: string): number {
+export function tagSlot(label: string): number {
   let hash = 0x811c9dc5
 
   for (let index = 0; index < label.length; index += 1) {

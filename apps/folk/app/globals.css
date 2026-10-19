@@ -49,6 +49,14 @@
   --foreground: #24324a;
   --card: #ffffff;
   --card-foreground: #24324a;
+  /* A form control sits one elevation above the card it lives on. In light it
+     is the card surface; `.dark` lifts it to a lighter graphite so a field
+     reads as an input rather than a hole. */
+  --field: #ffffff;
+  /* The title band of a card (New Contact, Today's Attendance). It carries the
+     program's brand colour in light and goes black in `.dark`, where the
+     unvarying navy read as a foreign surface. */
+  --panel-header: var(--program-primary);
   --popover: #ffffff;
   --popover-foreground: #24324a;
   --primary: #0f1e54;
@@ -239,6 +247,8 @@
   --sidebar-accent-foreground: #e9eaeb;
   --sidebar-border: #3c4045;
   --sidebar-ring: #7da3e8;
+  --field: #3b3f4b;
+  --panel-header: #000000;
 }
 
 @theme inline {
@@ -249,6 +259,8 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-field: var(--field);
+  --color-panel-header: var(--panel-header);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);

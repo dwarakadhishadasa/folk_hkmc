@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Copy, Share2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
+import { tagSlot } from "@/components/grid/grid-cell-renderers"
 import { currentProgramProfile } from "@/lib/current-program"
 
 interface AttendanceRecord {
@@ -20,22 +21,8 @@ export interface DashboardSessionContext {
   attendanceUrl: string | null
 }
 
-const backgroundColors = [
-  "bg-orange-50",
-  "bg-teal-50",
-  "bg-amber-50",
-  "bg-rose-50",
-  "bg-sky-50",
-  "bg-lime-50",
-  "bg-stone-50",
-]
-
 const MAX_TIMEOUT_DELAY_MS = 2_147_483_647
 const MAX_KNOWN_ATTENDANCE_IDS = 1000
-
-function getBackgroundColor(index: number): string {
-  return backgroundColors[index % backgroundColors.length]
-}
 
 export function LiveAttendanceDashboard({ activeSession }: { activeSession?: DashboardSessionContext }) {
   const { branding } = currentProgramProfile
@@ -178,43 +165,43 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[var(--program-text)] sm:text-3xl">
+          <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-foreground sm:text-3xl">
             Live Attendance
           </h1>
-          <p className="text-sm leading-6 text-[var(--muted-foreground)]">{sessionSubtitle}</p>
+          <p className="text-sm leading-6 text-muted-foreground">{sessionSubtitle}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1.5 text-sm font-semibold text-success">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-success" />
             Live
           </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-card shadow-[0_18px_50px_rgba(45,10,10,0.08)]">
-          <div className="bg-[var(--program-primary)] px-6 py-4 text-white">
+        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-overlay">
+          <div className="bg-panel-header px-6 py-4 text-white">
             <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)]">Attendance QR Code</h2>
             <p className="text-white/70 text-sm">Show this QR to members for quick check-in</p>
           </div>
           <div className="flex min-h-[356px] flex-col items-center justify-center p-6">
             {attendanceLink ? (
               <>
-                <div className="rounded-lg border border-[var(--border)] bg-white p-4 shadow-inner">
+                <div className="rounded-lg border border-border bg-white p-4 shadow-inner">
                   <QRCodeSVG value={attendanceLink} size={220} className="rounded-lg" />
                 </div>
                 <div className="mt-4 text-center">
-                  <span className="inline-block rounded-full bg-black/5 px-4 py-2 text-sm font-medium text-[var(--program-primary)]">
+                  <span className="inline-block rounded-full bg-foreground/5 px-4 py-2 text-sm font-medium text-foreground">
                     {branding.shortName} Attendance
                   </span>
-                  <p className="mt-2 max-w-[250px] break-all text-xs text-[var(--muted-foreground)]">
+                  <p className="mt-2 max-w-[250px] break-all text-xs text-muted-foreground">
                     {attendanceLink}
                   </p>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={copyAttendanceLink}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-black/10 px-4 text-sm font-semibold text-[var(--program-primary)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-border px-4 text-sm font-semibold text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Copy className="h-4 w-4" aria-hidden="true" />
                       Copy
@@ -222,14 +209,14 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                     <button
                       type="button"
                       onClick={shareAttendanceLink}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--program-accent)] px-4 text-sm font-semibold text-[var(--accent-foreground)] shadow-sm shadow-[var(--program-accent)]/20 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--program-accent)] px-4 text-sm font-semibold text-[var(--accent-foreground)] shadow-sm shadow-[var(--program-accent)]/20 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Share2 className="h-4 w-4" aria-hidden="true" />
                       Share
                     </button>
                   </div>
                   {shareMessage && (
-                    <p className="mt-3 text-xs font-medium text-green-700" role="status">
+                    <p className="mt-3 text-xs font-medium text-success" role="status">
                       {shareMessage}
                     </p>
                   )}
@@ -237,13 +224,13 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
               </>
             ) : (
               <div className="max-w-sm text-center">
-                <p className="text-sm font-semibold text-[var(--program-text)]">No active attendance QR code</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
+                <p className="text-sm font-semibold text-foreground">No active attendance QR code</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Start a session to generate a session-specific attendance link and QR code.
                 </p>
                 <a
                   href="/sessions"
-                  className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-[var(--program-primary)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--program-primary-light)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+                  className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-[var(--program-primary)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--program-primary-light)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Open Sessions
                 </a>
@@ -253,8 +240,8 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
         </div>
 
         {/* Attendance List Card */}
-        <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-card shadow-[0_18px_50px_rgba(45,10,10,0.08)]">
-          <div className="bg-[var(--program-primary)] px-6 py-4 text-white">
+        <div className="overflow-hidden rounded-lg border border-border bg-card shadow-overlay">
+          <div className="bg-panel-header px-6 py-4 text-white">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold font-[family-name:var(--font-poppins)] flex items-center gap-2">
@@ -268,7 +255,7 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
               <button
                 onClick={fetchAttendance}
                 disabled={isLoading}
-                className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] disabled:opacity-50"
+                className="rounded-full bg-primary-foreground/10 px-4 py-2 text-sm font-semibold transition-colors hover:bg-primary-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 {isLoading ? "..." : "Refresh"}
               </button>
@@ -276,11 +263,15 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
             {lastRefresh && (
               <p className="text-xs text-white/50 mt-2">Last updated: {lastRefresh.toLocaleTimeString()}</p>
             )}
-            {error && <p className="text-xs text-red-300 mt-1">{error}</p>}
           </div>
           <div className="p-4">
+            {error && (
+              <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">
+                {error}
+              </p>
+            )}
             {attendanceList.length === 0 ? (
-              <div className="py-12 text-center text-[var(--muted-foreground)]">
+              <div className="py-12 text-center text-muted-foreground">
                 <div className="mb-3 text-5xl opacity-30">📋</div>
                 <p className="font-medium">No attendance recorded yet</p>
                 <p className="text-xs mt-1">Attendance will appear here in real-time</p>
@@ -290,18 +281,21 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                 {attendanceList.map((record, index) => (
                   <div
                     key={record.id}
-                    className={`flex items-center justify-between rounded-lg p-3 ${getBackgroundColor(index)} transition-all hover:scale-[1.01]`}
+                    className="flex items-center justify-between rounded-lg p-3 transition-all hover:scale-[1.01]"
+                    style={{
+                      backgroundColor: `color-mix(in oklab, var(--tag-${tagSlot(record.id)}) 11%, var(--card))`,
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       <span className="flex items-center justify-center h-9 w-9 rounded-full bg-[var(--program-primary)] text-white text-sm font-bold">
                         {index + 1}
                       </span>
                       <div>
-                        <p className="font-medium text-[var(--program-text)]">{record.userName}</p>
-                        <p className="text-xs text-[var(--muted-foreground)]">{record.mobile}</p>
+                        <p className="font-medium text-foreground">{record.userName}</p>
+                        <p className="text-xs text-muted-foreground">{record.mobile}</p>
                       </div>
                     </div>
-                    <span className="text-xs text-[var(--muted-foreground)]">
+                    <span className="text-xs text-muted-foreground">
                       {new Date(record.createdAt).toLocaleTimeString("en-IN", {
                         hour: "2-digit",
                         minute: "2-digit",
