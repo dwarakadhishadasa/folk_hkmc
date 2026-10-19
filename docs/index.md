@@ -39,6 +39,7 @@ The older generated docs described a single root app and no longer reflected the
 ## Existing Reference Documentation
 
 - [Manage Grid Pattern](./manage-grid-pattern.md) - The contract every `/manage` table follows: column conventions, commit/rollback, selection, bulk semantics, and the URL state contract. Read it before porting a table onto `components/grid/`.
+- [Airtable Legacy Base](./airtable-legacy-base.md) - Reference snapshot of the retired Airtable base: table and field identities with types, the Interface pages it served, and a field-by-field validation of the migration map in `scripts/migrate-airtable-data.mjs`
 - [NestJS Backend Reference](./nestjs-backend.md) - Historical/reference notes for a possible separate backend
 
 ## Getting Started
