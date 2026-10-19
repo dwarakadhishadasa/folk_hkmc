@@ -72,15 +72,15 @@ const SESSION_LOADING_ROWS = [
   { titleWidth: "w-48 sm:w-72", metaWidth: "w-24 sm:w-44", pillWidth: "w-14" },
 ]
 const sessionFieldClass =
-  "w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[var(--program-text)] shadow-sm transition-all placeholder:text-[var(--muted-foreground)]/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-[var(--program-accent)]/15 disabled:bg-muted disabled:text-muted-foreground"
-const sessionLabelClass = "space-y-1.5 text-sm font-semibold text-[var(--program-text)]"
+  "w-full rounded-lg border border-input bg-field px-4 py-3 text-sm text-foreground shadow-sm transition-all placeholder:text-muted-foreground/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-ring/15 disabled:bg-muted disabled:text-muted-foreground"
+const sessionLabelClass = "space-y-1.5 text-sm font-semibold text-foreground"
 
 function LoadingBar({ className }: { className: string }) {
   return (
-    <span className={`relative block overflow-hidden rounded-full bg-black/5 ${className}`}>
+    <span className={`relative block overflow-hidden rounded-full bg-muted ${className}`}>
       <span
         data-session-loader-shimmer
-        className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-gradient-to-r from-transparent via-white/90 to-transparent"
+        className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-gradient-to-r from-transparent via-foreground/20 to-transparent"
       />
     </span>
   )
@@ -132,7 +132,7 @@ function SessionsLoadingState() {
       ref={containerRef}
       aria-busy="true"
       aria-live="polite"
-      className="mx-auto max-w-5xl rounded-lg border border-[var(--border)] bg-card p-5 shadow-[0_18px_50px_rgba(45,10,10,0.08)] sm:p-6"
+      className="mx-auto max-w-5xl rounded-lg border border-border bg-card p-5 shadow-overlay sm:p-6"
     >
       <span className="sr-only" role="status">
         Loading sessions...
@@ -142,11 +142,11 @@ function SessionsLoadingState() {
           <div
             key={index}
             data-session-loader-row
-            className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-lg border border-[var(--border)] bg-muted/70 px-4 py-3 opacity-0"
+            className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 rounded-lg border border-border bg-muted/70 px-4 py-3 opacity-0"
           >
             <span
               data-session-loader-dot
-              className="h-8 w-8 rounded-full bg-[#FFF3DF] ring-1 ring-[var(--program-accent)]"
+              className="h-8 w-8 rounded-full bg-muted ring-1 ring-[var(--program-accent)]"
               aria-hidden="true"
             />
             <span className="min-w-0 space-y-2">
@@ -278,24 +278,24 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
   }
 
   return (
-    <section className="mx-auto max-w-5xl rounded-lg border border-[var(--border)] bg-card p-5 shadow-[0_18px_50px_rgba(45,10,10,0.08)] sm:p-6">
+    <section className="mx-auto max-w-5xl rounded-lg border border-border bg-card p-5 shadow-overlay sm:p-6">
       <div>
-        <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[var(--program-text)]">
+        <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-foreground">
           Start Session
         </h1>
-        <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
           Start an attendance window for one location.
         </p>
       </div>
 
       {message && (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+        <div className="mt-4 rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm leading-6 text-foreground">
           {message}
         </div>
       )}
 
       {locations.length === 0 && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+        <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm leading-6 text-destructive">
           No locations are available for this staff account.
         </div>
       )}
@@ -347,7 +347,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
         <button
           type="submit"
           disabled={isSubmitting || locations.length === 0}
-          className="inline-flex h-12 items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0 md:col-span-3"
+          className="inline-flex h-12 items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0 md:col-span-3"
         >
           {isSubmitting ? "Starting..." : "Start Session"}
         </button>

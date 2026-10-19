@@ -58,7 +58,7 @@ import { Button } from "@/components/ui/button"
 import { GRID_BASE_FONT_CLASS } from "@/components/grid/grid-row"
 import type { GridRowLifecycle } from "@/components/grid/grid-types"
 
-/** One row's delete outcome. Successes are reported as well as failures. */
+/** One row's delete outcome. Only failures reach the screen. */
 export interface GridRowDeleteOutcome {
   rowId: string
   label: string
@@ -192,11 +192,14 @@ export function GridRowDeleteControl({
 }
 
 /**
- * One visible result line per deleted row.
+ * The refusal report: one visible line per row the server would not delete.
  *
- * A collapsed toast fails this even when every row succeeded, so successes are
- * listed individually too, and a failure always names the row it happened on
- * together with the server's own reason.
+ * A successful delete needs no report — the row disappearing is the whole
+ * message, and the operator already knows what they asked for. A refusal is the
+ * opposite case: the row is still there, so without this the click would look
+ * like it did nothing. The server's own wording is carried through rather than
+ * summarised, because the reason is the only thing that tells the operator what
+ * to do next.
  */
 export function GridRowDeleteReport({
   outcomes,
@@ -403,7 +406,7 @@ export function GridRowLifecycleProvider<TData>({
         </AlertDialogContent>
       </AlertDialog>
 
-      {outcomes && outcomes.length > 0 ? (
+      {outcomes && outcomes.some((outcome) => !outcome.ok) ? (
         <div className="mt-2">
           <GridRowDeleteReport
             outcomes={outcomes}

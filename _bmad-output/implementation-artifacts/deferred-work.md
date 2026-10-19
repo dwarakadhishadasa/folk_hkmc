@@ -369,3 +369,6 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/spec-grid-scroll-perf.md`
   summary: Filter/sort popover `requestAnimationFrame` deferrals have no cancellation path on unmount
   evidence: `handleFilterColumn` (grid.tsx:~753) and the sort-popover opener (grid-header-cell.tsx:~141) defer opening a frame with no cancel; unmount inside the frame still runs the setter. Pre-existing, harmless under React 18 (no warning, setter on unmounted is a no-op). Settled by tracking the frame id and cancelling on unmount if the pattern spreads.
+- source_spec: `_bmad-output/implementation-artifacts/spec-dark-theme-contact-sessions-invite.md`
+  summary: The gita-life `body` gradient has no `.dark` counterpart, so the document stays cream behind content under dark mode
+  evidence: `apps/gita-life/app/globals.css` `@layer base` sets `linear-gradient(180deg, #fff9f0 0%, #fff5e8 46%, #fffaf3 100%)` plus a saffron radial, with no `.dark` override. `theme-contract.md:49` explicitly declared it out of scope when the theme story shipped, and this spec keeps that decision — the three graded pages get `bg-background` shells, which cover the body everywhere except rubber-band overscroll. Settled by a gita-life-specific dark body treatment, which is a design decision about the brand gradient rather than a token swap.

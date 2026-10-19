@@ -13,7 +13,7 @@ export default async function VolunteersPage() {
 
     return (
       <StaffAuthShell staff={staff}>
-        <div className="min-h-screen bg-[#FFF9F0]">
+        <div className="min-h-screen bg-background">
           <Header />
           <main className="container mx-auto max-w-xl px-4 py-6 sm:py-8">
             <InviteUserForm mode="volunteer" />

@@ -47,8 +47,8 @@ function updateLocationSelection(locationIds: string[], locationId: string, sele
 }
 
 const fieldClass =
-  "w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[var(--program-text)] shadow-sm transition-all placeholder:text-[var(--muted-foreground)]/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-[var(--program-accent)]/15 disabled:bg-muted disabled:text-muted-foreground"
-const labelClass = "block space-y-1.5 text-sm font-semibold text-[var(--program-text)]"
+  "w-full rounded-lg border border-input bg-field px-4 py-3 text-sm text-foreground shadow-sm transition-all placeholder:text-muted-foreground/60 focus:border-[var(--program-accent)] focus:outline-none focus:ring-4 focus:ring-ring/15 disabled:bg-muted disabled:text-muted-foreground"
+const labelClass = "block space-y-1.5 text-sm font-semibold text-foreground"
 const noticeClass = "rounded-lg border px-4 py-3 text-sm leading-6"
 
 export function InviteUserForm({
@@ -192,18 +192,18 @@ export function InviteUserForm({
   }
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-card p-5 shadow-[0_18px_50px_rgba(45,10,10,0.08)] sm:p-6">
-      <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-[var(--program-text)]">
+    <div className="rounded-lg border border-border bg-card p-5 shadow-overlay sm:p-6">
+      <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-foreground">
         {mode === "volunteer" ? "Invite Volunteer or Assistant" : "Invite Staff User"}
       </h1>
-      <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
+      <p className="mt-1 text-sm leading-6 text-muted-foreground">
         {mode === "volunteer"
           ? "People you invite are assigned to your Preacher account. Use Assistant when they should also create sessions and take attendance on your behalf."
           : "Admins can invite Admin, Preacher, Volunteer, and Assistant users."}
       </p>
 
       {message && (
-        <div className={cn(noticeClass, "mt-4 border-amber-200 bg-amber-50 text-amber-800")} role="status">
+        <div className={cn(noticeClass, "mt-4 border-border bg-muted/50 text-foreground")} role="status">
           {message}
         </div>
       )}
@@ -282,14 +282,14 @@ export function InviteUserForm({
         )}
 
         {mode === "admin" && !isPreacherScoped && (
-          <fieldset className="space-y-3 rounded-lg border border-[var(--border)] bg-muted/70 p-4">
-            <legend className="text-sm font-semibold text-[var(--program-text)]">Location access</legend>
+          <fieldset className="space-y-3 rounded-lg border border-border bg-muted/70 p-4">
+            <legend className="text-sm font-semibold text-foreground">Location access</legend>
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <p className="text-xs leading-5 text-[var(--muted-foreground)]">
+              <p className="text-xs leading-5 text-muted-foreground">
                 Select the locations this staff user can access.
               </p>
               <span
-                className="rounded-full bg-black/5 px-3 py-1 text-xs font-semibold text-[var(--program-primary)]"
+                className="rounded-full bg-foreground/5 px-3 py-1 text-xs font-semibold text-foreground"
                 aria-live="polite"
               >
                 {selectedLocationCount} selected
@@ -297,7 +297,7 @@ export function InviteUserForm({
             </div>
 
             {availableLocations.length > 0 ? (
-              <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-[var(--border)] bg-white p-2">
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border bg-card p-2">
                 {availableLocations.map((location) => {
                   const checkboxId = `invite-location-${location.id}`
                   const checked = form.locationIds.includes(location.id)
@@ -309,8 +309,8 @@ export function InviteUserForm({
                       className={cn(
                         "flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition-colors",
                         checked
-                          ? "border-[var(--program-accent)] bg-muted text-[var(--program-text)]"
-                          : "border-transparent text-[var(--program-text)] hover:border-black/10 hover:bg-black/5",
+                          ? "border-[var(--program-accent)] bg-muted text-foreground"
+                          : "border-transparent text-foreground hover:border-border hover:bg-foreground/5",
                       )}
                     >
                       <input
@@ -318,12 +318,12 @@ export function InviteUserForm({
                         type="checkbox"
                         checked={checked}
                         onChange={(event) => setLocationSelected(location.id, event.target.checked)}
-                        className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[var(--program-accent)]"
+                        className="mt-0.5 h-4 w-4 rounded border-input accent-[var(--program-accent)]"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block font-medium">{location.name}</span>
                         {location.status && location.status !== "Active" && (
-                          <span className="block text-xs text-[var(--muted-foreground)]">{location.status}</span>
+                          <span className="block text-xs text-muted-foreground">{location.status}</span>
                         )}
                       </span>
                     </label>
@@ -331,7 +331,7 @@ export function InviteUserForm({
                 })}
               </div>
             ) : (
-              <div className={cn(noticeClass, "border-amber-200 bg-amber-50 text-amber-800")}>
+              <div className={cn(noticeClass, "border-border bg-muted/50 text-foreground")}>
                 No locations are available yet. Add one below to assign it.
               </div>
             )}
@@ -351,7 +351,7 @@ export function InviteUserForm({
                 type="button"
                 onClick={handleAddLocation}
                 disabled={isAddingLocation || isSubmitting}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--program-primary)] transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] disabled:border-gray-200 disabled:text-gray-400 disabled:hover:translate-y-0 sm:self-end"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-[var(--program-accent)] px-5 text-sm font-semibold text-foreground transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:border-border disabled:text-muted-foreground disabled:hover:translate-y-0 sm:self-end"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 {isAddingLocation ? "Adding..." : "Add"}
@@ -363,7 +363,7 @@ export function InviteUserForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
+          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[var(--program-accent)] px-5 text-sm font-semibold text-[var(--accent-foreground)] shadow-lg shadow-[var(--program-accent)]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-y-0"
         >
           {isSubmitting ? "Sending..." : "Send Invite"}
         </button>

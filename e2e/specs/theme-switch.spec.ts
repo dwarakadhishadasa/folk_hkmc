@@ -15,6 +15,7 @@
  * | theme 10 | the frozen-run divider, both themes         | rendered, non-zero, distinguishable from the surfaces it separates    |
  * | theme 11 | two screenshots                             | they differ, the dark one is materially darker, the sampled pixel is that theme's `--card` |
  * | theme 12 | a clean console                             | no hydration error for the theme class                                |
+ * | theme 13 | the staff surfaces, forced dark             | shells are `--background`; fields are `--field`, their ink ≥ 4.5:1          |
  *
  * ## Why the token edits are measured, not sampled
  *
@@ -156,6 +157,96 @@ function htmlClasses(page: Page): Promise<string> {
 /** `localStorage.theme`, or `null` when nothing has been stored. */
 function storedTheme(page: Page): Promise<string | null> {
   return page.evaluate(() => window.localStorage.getItem("theme"))
+}
+
+/**
+ * The staff surfaces this story grades, and whether the start-session form is
+ * the branch that must be on screen.
+ *
+ * `/sessions` is the exception: the seeded database carries an active session,
+ * so the page renders the live dashboard rather than the form. Both branches
+ * are real, so the test waits for whichever one mounts and grades the form's
+ * fields whenever the form is the one that did.
+ */
+const STAFF_SURFACES: ReadonlyArray<{ route: string; form: boolean }> = [
+  { route: "/contact", form: true },
+  { route: "/sessions", form: false },
+  { route: "/volunteers", form: true },
+  { route: "/admin/invite", form: true },
+]
+
+interface FieldColours {
+  readonly label: string
+  readonly background: string
+  readonly color: string
+}
+
+/**
+ * Every enabled text-entry control, with the colours it actually resolved to.
+ *
+ * Checkboxes and radios are excluded deliberately: the UA draws them and they
+ * own no background of their own, so asserting `--card` on one would assert a
+ * surface it never had. Disabled controls are excluded for the opposite reason —
+ * they resolve to `--muted` on purpose (`disabled:bg-muted`), which is correct
+ * behaviour rather than the defect this row is looking for.
+ */
+function fieldColours(page: Page): Promise<FieldColours[]> {
+  return page.evaluate(() =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'input:not([type="checkbox"]):not([type="radio"]):not(:disabled), select:not(:disabled), textarea:not(:disabled)',
+      ),
+    ).map((field) => {
+      const style = getComputedStyle(field)
+
+      return {
+        label: `${field.tagName.toLowerCase()}${field.getAttribute("name") ? `[name="${field.getAttribute("name")}"]` : ""}`,
+        background: style.backgroundColor,
+        color: style.color,
+      }
+    }),
+  )
+}
+
+/** The background of the `min-h-screen` shell that wraps `<main>`. */
+function shellBackground(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const main = document.querySelector("main")
+    if (!main?.parentElement) throw new Error("the page has no <main> with a shell around it")
+
+    return getComputedStyle(main.parentElement).backgroundColor
+  })
+}
+
+/**
+ * Let the theme swap's CSS transitions finish before anything is measured.
+ *
+ * The form fields carry `transition-all`, so toggling `.dark` animates their
+ * `background-color` and `color` for ~150ms. A measurement taken inside that
+ * window samples a blend of the two themes — neither theme — and would fail a
+ * token assertion for a reason that has nothing to do with the tokens.
+ *
+ * Infinite animations are filtered out: their `finished` promise never settles,
+ * and none of them paints a field.
+ */
+async function settleThemeTransition(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const nextFrame = () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+    // Two frames: the first applies the class, the second lets the transition it
+    // created register itself before it is awaited.
+    await nextFrame()
+    await nextFrame()
+
+    const finite = document.getAnimations().filter((animation) => {
+      const endTime = animation.effect?.getComputedTiming().endTime
+
+      return typeof endTime === "number" && Number.isFinite(endTime)
+    })
+
+    await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)))
+  })
 }
 
 /** The header's theme toggle — one stable accessible name, icon-independent. */
@@ -643,6 +734,66 @@ test.describe("CAP-7 theme switch", () => {
     )
 
     expect(hydration, `console output:\n${messages.join("\n")}`).toEqual([])
+  })
+
+  test("theme 13 — the staff surfaces paint their shells and fields through tokens", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: "light" })
+
+    for (const { route, form } of STAFF_SURFACES) {
+      await page.goto(route)
+      await expectDark(page, false)
+
+      // Set on the same render rather than through the toggle: the claim is
+      // about the tokens the page resolves, and a reload would re-mount every
+      // field for no extra evidence.
+      await forceTheme(page, true)
+
+      // `/sessions` renders `SessionsLoadingState` until its client fetch
+      // settles, then picks between the start-session form and the live
+      // dashboard. Waiting for one of the two is what makes the shell
+      // measurement describe a settled page rather than a skeleton.
+      await expect
+        .poll(
+          async () =>
+            (await fieldColours(page)).length > 0 ||
+            (await page.getByRole("heading", { name: "Attendance QR Code" }).count()) > 0,
+          { message: `${route} never finished loading` },
+        )
+        .toBe(true)
+
+      await settleThemeTransition(page)
+
+      const background = await tokenRgb(page, "--background")
+      const fieldSurface = await tokenRgb(page, "--field")
+
+      const shell = await cssColorToRgb(page, await shellBackground(page), `${route} shell`)
+      expectRgbNear(shell, background, `${route}: the page shell is not --background`)
+
+      const fields = await fieldColours(page)
+
+      if (form) {
+        expect(fields.length, `${route} rendered no enabled text field to grade`).toBeGreaterThan(0)
+      }
+
+      for (const field of fields) {
+        const surface = await cssColorToRgb(
+          page,
+          field.background,
+          `${route} ${field.label} background`,
+        )
+        const ink = await cssColorToRgb(page, field.color, `${route} ${field.label} ink`)
+
+        expectRgbNear(surface, fieldSurface, `${route}: ${field.label} does not sit on --field`)
+
+        const ratio = contrastRatio(ink, surface)
+        expect(
+          ratio,
+          `${route} ${field.label}: ${ink.color} on ${surface.color} → ${ratio.toFixed(2)}:1, below 4.5:1`,
+        ).toBeGreaterThanOrEqual(4.5)
+      }
+    }
   })
 
   test("providers.tsx mounts ThemeProvider outermost with the recipe's props", () => {

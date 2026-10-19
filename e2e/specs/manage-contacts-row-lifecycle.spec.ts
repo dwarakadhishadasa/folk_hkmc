@@ -566,11 +566,11 @@ test.describe("row lifecycle", () => {
         .poll(() => requests.length, { message: "confirming never issued the DELETE" })
         .toBe(1)
 
-      await expect(deleteReportPanel(page), "the outcome is reported per row, not toasted").toBeVisible()
-      const lines = await deleteReportLines(page)
-      expect(lines, "one line for the one row acted on").toHaveLength(1)
-      expect(lines[0], "the line names the row").toContain(name)
-      expect(lines[0], "a success says so").toContain("Deleted.")
+      // A successful delete reports nothing: the row leaving the grid is the
+      // confirmation, and the operator already knows what they asked for. The
+      // panel is reserved for a refusal, where the row stays on screen and
+      // would otherwise look untouched.
+      await expect(deleteReportPanel(page), "a success is not reported").toHaveCount(0)
 
       // The row is gone for good, so the spec owns nothing to clean up.
       ids = []

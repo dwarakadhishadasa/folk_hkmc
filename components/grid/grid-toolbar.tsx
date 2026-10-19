@@ -325,18 +325,20 @@ export function GridToolbar({
                   }`}
                 >
                   {/*
-                    * **One glyph in both states, and never the warning colour.**
-                    * The icon names the control; the label reports the state. An
-                    * icon that changed with the count would be a second signal
-                    * saying the same thing in a place with no room to read it, and
-                    * painting it amber would make the glyph unreadable beside an
-                    * amber label at 14px. `--grid-accent-ink` is white on the dark
-                    * canvas and the theme's own ink on paper, so the icon is legible
-                    * in both without a second token.
+                    * **One glyph in both states, and it joins the label once the
+                    * label starts reporting.** At rest the icon names the control
+                    * and carries `--grid-accent-ink`, which is white on the dark
+                    * canvas and the theme's own ink on paper. Once a field is
+                    * hidden the whole pill is a report rather than an action, so
+                    * glyph and label share the same warning ink: two inks inside
+                    * one 32px control would read as two different states.
                     */}
                   <EyeOff
                     aria-hidden="true"
-                    className="size-3.5 text-[var(--grid-accent-ink)]"
+                    className="size-3.5"
+                    style={{
+                      color: reporting ? "var(--grid-warning-ink)" : "var(--grid-accent-ink)",
+                    }}
                   />
                   <span
                     className="font-semibold"
