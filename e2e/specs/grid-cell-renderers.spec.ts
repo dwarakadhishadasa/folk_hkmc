@@ -214,7 +214,7 @@ test.describe("CAP-3 and CAP-4 — type-keyed cell renderers", () => {
   test("type 8 — a custom-control column is untouched by both", async ({ page }) => {
     await openContactsGrid(page)
 
-    // `favorite` and `actions` supply their own `cell` widget. Note this is NOT the
+    // `favorite` supplies its own `cell` widget. Note this is NOT the
     // same case as the preview's `flagged`, which draws its checkbox from the
     // *editor* registry: a consumer widget is what withholds `fieldType`, and
     // asserting on `flagged` here would have passed for the wrong reason.

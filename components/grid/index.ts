@@ -62,6 +62,7 @@ export type {
   GridFieldType,
   GridNewRow,
   GridPanelState,
+  GridRowContextMenuProps,
   GridRowLifecycle,
   GridSelectionCoordinate,
   GridTransientHandle,
@@ -101,7 +102,6 @@ export {
 } from "@/components/grid/grid-view-state"
 export {
   GridRowAddControl,
-  GridRowDeleteControl,
   GridRowDeleteReport,
   GridRowLifecycleProvider,
   useGridRowLifecycle,

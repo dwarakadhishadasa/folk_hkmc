@@ -52,7 +52,6 @@ const DEFAULT_ORDER = [
   "notes",
   "collectedBy",
   "favorite",
-  "actions",
 ]
 
 test.describe("column menu, drag-and-drop and the sort popover", () => {

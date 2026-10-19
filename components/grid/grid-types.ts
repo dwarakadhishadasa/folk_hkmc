@@ -212,6 +212,24 @@ export interface GridRowLifecycle<TData> {
 }
 
 /**
+ * The consumer's half of `Grid`'s row context menu.
+ *
+ * The primitive owns the trigger, the target resolution and — when the pointer
+ * lands outside the current selection — the selection replacement. The consumer
+ * owns the verbs: which items appear and what they do with `rowIds`.
+ *
+ * `rowIds` is never empty and is already narrowed to rows in scope, in display
+ * order. It is every selected row when the operator opened the menu on one of
+ * them, and exactly the one row otherwise.
+ */
+export interface GridRowContextMenuProps {
+  /** The resolved target set, in display order. */
+  rowIds: readonly string[]
+  /** The row the pointer or keyboard opened the menu on. */
+  targetRowId: string
+}
+
+/**
  * One cell write. `rowId` comes from the consumer's `getRowId`, so it must be
  * stable and URL-safe — an array index would address the wrong row the moment
  * the set is sorted or filtered.

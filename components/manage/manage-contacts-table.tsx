@@ -13,16 +13,22 @@ import type {
 } from "@/components/manage/manage-types"
 import {
   Grid,
-  GridRowDeleteControl,
   GRID_DEFAULT_DENSITY,
+  useGridRowLifecycle,
   useGridViewState,
   type GridCellCommit,
   type GridColumnDef,
   type GridDensity,
   type GridFieldType,
+  type GridRowContextMenuProps,
   type GridRowLifecycle,
 } from "@/components/grid"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu"
 
 const columnHelper = createColumnHelper<ManageContact>()
 
@@ -57,7 +63,6 @@ const LAST_CONTACTED_COLUMN_ID = "lastContactedOn"
 const NOTES_COLUMN_ID = "notes"
 const COLLECTED_BY_COLUMN_ID = "collectedBy"
 const FAVORITE_COLUMN_ID = "favorite"
-const ACTIONS_COLUMN_ID = "actions"
 
 /**
  * What a `locationIds` / `collectedById` reference that resolves to nothing
@@ -90,15 +95,16 @@ const FILTERED_DRAFT_NOTICE =
 
 /**
  * Display order, and the layout every later `/manage` table copies: the selection
- * control leads, the frozen identity column follows it, and the row actions close
- * the table. `name` is frozen because `design-constraints.md` requires that
- * scrolling right never loses the row's identity, and the select column is in
- * front of it — which is why freezing is a marked run with cumulative offsets
- * rather than "whichever column happens to be first".
+ * control leads, the frozen identity column follows it, and the row's own
+ * actions live in a right-click menu rather than in a trailing column. `name` is
+ * frozen because `design-constraints.md` requires that scrolling right never
+ * loses the row's identity, and the select column is in front of it — which is
+ * why freezing is a marked run with cumulative offsets rather than "whichever
+ * column happens to be first".
  *
- * `favorite` and `actions` are both row actions, and `actions` is last: the star
- * is a toggle on a value, the delete is the row's lifecycle, and the lifecycle
- * control is the one an operator should have to reach the end of the table for.
+ * `favorite` is the last column because it renders a value the operator toggles.
+ * Delete is not a column at all: it acts on the selection, and a per-row bin
+ * could only ever act on one row while spending a permanent 48px on every view.
  */
 const COLUMN_IDS: readonly string[] = [
   SELECT_COLUMN_ID,
@@ -115,11 +121,10 @@ const COLUMN_IDS: readonly string[] = [
   NOTES_COLUMN_ID,
   COLLECTED_BY_COLUMN_ID,
   FAVORITE_COLUMN_ID,
-  ACTIONS_COLUMN_ID,
 ]
 
 /**
- * CAP-18's default field set: nine of the fourteen data fields, with these five
+ * CAP-18's default field set: eight of the thirteen data fields, with these five
  * off until asked for.
  *
  * A **contacts** decision, so it lives here and not in `components/grid/` — the
@@ -163,7 +168,6 @@ const COLUMN_LABELS: Record<string, string> = {
   [NOTES_COLUMN_ID]: "Notes",
   [COLLECTED_BY_COLUMN_ID]: "Collected By",
   [FAVORITE_COLUMN_ID]: "Favorite",
-  [ACTIONS_COLUMN_ID]: "Actions",
 }
 
 /**
@@ -479,6 +483,42 @@ function renderFooterCell(
     >
       Sum {sum.toLocaleString("en-IN")}
     </span>
+  )
+}
+
+/**
+ * The contacts row menu.
+ *
+ * One item today — delete every selected row — because the star already owns the
+ * favourite toggle. The grid resolves the target set (the selection, or the row
+ * that replaced it); this component owns the verbs, which is what keeps contacts
+ * vocabulary out of `components/grid/`.
+ *
+ * The count lives in the label rather than in the item's text: the item's name
+ * is the operator's requirement, and a label that changed with the selection
+ * would rename the control between two right-clicks.
+ */
+function ContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
+  const lifecycle = useGridRowLifecycle()
+  const count = rowIds.length
+
+  return (
+    <>
+      <ContextMenuLabel className="text-[13px]">
+        {count} selected row{count === 1 ? "" : "s"}
+      </ContextMenuLabel>
+      <ContextMenuSeparator />
+      <ContextMenuItem
+        variant="destructive"
+        className="text-[13px]"
+        disabled={!lifecycle}
+        onSelect={() => {
+          lifecycle?.requestDeleteMany(rowIds)
+        }}
+      >
+        Delete all selected records
+      </ContextMenuItem>
+    </>
   )
 }
 
@@ -1160,36 +1200,6 @@ export function ManageContactsTable({
         enableSorting: false,
         meta: { grid: { align: "center" } },
       }),
-
-      // The row lifecycle's second half. A separate column rather than a second
-      // control inside `favorite` so a column that renders a value and a column
-      // that acts on a row stay distinguishable in the header, in the visibility
-      // menu and in a spec.
-      columnHelper.display({
-        id: ACTIONS_COLUMN_ID,
-        header: COLUMN_LABELS[ACTIONS_COLUMN_ID],
-        cell: ({ row }) => (
-          <span
-            className="flex justify-center"
-            onPointerDown={(event) => {
-              event.stopPropagation()
-            }}
-          >
-            <GridRowDeleteControl
-              rowId={row.id}
-              label={row.original.name || "this untitled record"}
-            />
-          </span>
-        ),
-        size: 48,
-        minSize: 48,
-        maxSize: 48,
-        // A row action is neither sortable nor hideable: hiding it would leave an
-        // operator with no way to delete anything and no way to get it back.
-        enableSorting: false,
-        enableHiding: false,
-        meta: { grid: { align: "center", hideable: false } },
-      }),
     ]
   }, [
     locationNameById,
@@ -1432,6 +1442,7 @@ export function ManageContactsTable({
         }
         rowLifecycle={rowLifecycle}
         onRowRemoved={handleRowRemoved}
+        rowContextMenu={ContactsRowContextMenu}
       />
     </div>
   )

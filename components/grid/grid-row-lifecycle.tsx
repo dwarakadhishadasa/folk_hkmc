@@ -3,17 +3,19 @@
 /**
  * CAP-6 row lifecycle — the grid's half.
  *
- * Three pieces, all table-agnostic:
+ * Two pieces, all table-agnostic:
  *
  * 1. `GridRowAddControl` — a small `+ Add record` in the grid's own chrome. It
  *    asks the consumer for a new row and then hands the id back to the grid,
  *    which focuses it through the keyboard model. It is deliberately small: a
  *    permanently large footer bar is a permanent claim on vertical space for a
  *    control most sessions use once.
- * 2. `GridRowDeleteControl` — a per-row affordance that opens a confirmation
- *    naming the row, then reports one outcome line per row rather than a
- *    collapsed toast.
- * 3. `GridRowLifecycleProvider` — the plumbing between them and `Grid`.
+ * 2. `GridRowLifecycleProvider` — the confirmation, the delete write and the
+ *    per-row report, exposed through `useGridRowLifecycle()` so a consumer's
+ *    own affordance (today, the row context menu) can request N rows at once.
+ *
+ * The delete is confirmed and then reported one outcome line per row rather
+ * than a collapsed toast, whether the request covered one row or forty.
  *
  * **No fetch, no route, no table vocabulary.** Everything that touches
  * persistence arrives as a prop from the consumer; the provider only sequences
@@ -28,12 +30,11 @@
  * same reason: the next `/manage` table copies this, and copying a collapsed
  * toast copies a capability that cannot be debugged.
  *
- * **Why the delete control is a `<button>`.** A story-4 note forbids a
- * `<button>` in a cell's *closed display*, because `favoriteStar` resolved
- * `getByRole("button")` unscoped inside a row. That constraint was about a
- * control that renders a value. This is an action in its own column with its own
- * accessible name, so the honest fix is a precise locator on the star rather
- * than suppressing a real control.
+ * **Why a set is deleted sequentially.** One request at a time keeps a partial
+ * run legible: the report is appended in the order the rows were addressed, and
+ * a refusal never cancels the rows after it. A parallel burst would interleave
+ * the outcomes and could exhaust the browser's connection pool on a large
+ * selection.
  *
  * **A `<TData,>` in the add control's props.** The control holds no row, so the
  * generic parameter is unconstrained; `TData,` is the trailing-comma idiom for
@@ -42,7 +43,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react"
 import type { ReactNode } from "react"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus } from "lucide-react"
 
 import {
   AlertDialog,
@@ -70,6 +71,12 @@ export interface GridRowDeleteOutcome {
 interface GridRowLifecycleContextValue {
   /** Opens the confirmation for `rowId`; nothing is written until it is confirmed. */
   requestDelete: (rowId: string) => void
+  /**
+   * Opens one confirmation for every id in `rowIds`, then deletes them
+   * sequentially. The menu passes the resolved selection; `requestDelete` is the
+   * one-row case of the same path.
+   */
+  requestDeleteMany: (rowIds: readonly string[]) => void
   /** True while that row's delete is in flight, so its control can be disabled. */
   isDeleting: (rowId: string) => boolean
 }
@@ -77,7 +84,8 @@ interface GridRowLifecycleContextValue {
 const GridRowLifecycleContext = createContext<GridRowLifecycleContextValue | null>(null)
 
 /**
- * The delete side of the lifecycle, for a column that renders one control.
+ * The delete side of the lifecycle, for whatever affordance the consumer
+ * renders — the row context menu today.
  *
  * Null when the surrounding `Grid` was given no `rowLifecycle`, which is what
  * makes the affordance genuinely opt-in rather than present-but-inert.
@@ -150,48 +158,6 @@ export function GridRowAddControl({
 }
 
 /**
- * A row's delete affordance.
- *
- * Rendered by the consumer inside its own row-action column, so which column it
- * lands in and how wide it is stay the consumer's decisions — the primitive
- * supplies the behaviour, not the layout.
- */
-export function GridRowDeleteControl({
-  rowId,
-  label,
-  className,
-}: {
-  rowId: string
-  label: string
-  className?: string
-}) {
-  const lifecycle = useGridRowLifecycle()
-
-  if (!lifecycle) {
-    return null
-  }
-
-  const deleting = lifecycle.isDeleting(rowId)
-
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      className={className ?? "text-destructive hover:text-destructive size-6"}
-      disabled={deleting}
-      data-grid-delete-row={rowId}
-      aria-label={`Delete ${label}`}
-      onClick={() => {
-        lifecycle.requestDelete(rowId)
-      }}
-    >
-      <Trash2 aria-hidden="true" className="size-3.5" />
-    </Button>
-  )
-}
-
-/**
  * One visible result line per deleted row.
  *
  * A collapsed toast fails this even when every row succeeded, so successes are
@@ -201,15 +167,18 @@ export function GridRowDeleteControl({
 export function GridRowDeleteReport({
   outcomes,
   onDismiss,
+  label = "Delete results",
 }: {
   outcomes: readonly GridRowDeleteOutcome[]
   onDismiss: () => void
+  /** The region's accessible name. Consumer-supplied, defaulted for the common case. */
+  label?: string
 }) {
   const deleted = outcomes.filter((outcome) => outcome.ok).length
 
   return (
     <section
-      aria-label="Delete results"
+      aria-label={label}
       data-grid-delete-report=""
       className={`${GRID_BASE_FONT_CLASS} bg-card rounded-md border border-border px-3 py-2`}
     >
@@ -259,15 +228,17 @@ function readDeleteFailure(cause: unknown): string {
 /**
  * The confirmation, the delete write, and the per-row report.
  *
- * Rendered by `Grid` around the whole grid, so a consumer only has to render the
- * control. Present only when a `rowLifecycle` was supplied, which is what makes
- * `useGridRowLifecycle()` returning null *be* the "no delete here" answer.
+ * Rendered by `Grid` around the whole grid, so a consumer only has to render an
+ * affordance and call `requestDelete` / `requestDeleteMany`. Present only when a
+ * `rowLifecycle` was supplied, which is what makes `useGridRowLifecycle()`
+ * returning null *be* the "no delete here" answer.
  */
 export function GridRowLifecycleProvider<TData>({
   lifecycle,
   rows,
   getRowId,
   onRowRemoved,
+  reportLabel = "Delete results",
   children,
 }: {
   lifecycle: GridRowLifecycle<TData>
@@ -277,9 +248,11 @@ export function GridRowLifecycleProvider<TData>({
   getRowId: (row: TData, index: number) => string
   /** Called only for a row the server confirmed. */
   onRowRemoved: (rowId: string) => void
+  /** The report region's accessible name. Defaulted for the common case. */
+  reportLabel?: string
   children: ReactNode
 }) {
-  const [pendingRowId, setPendingRowId] = useState<string | null>(null)
+  const [pendingRowIds, setPendingRowIds] = useState<readonly string[] | null>(null)
   const [deletingRowIds, setDeletingRowIds] = useState<ReadonlySet<string>>(() => new Set())
   const [outcomes, setOutcomes] = useState<readonly GridRowDeleteOutcome[] | null>(null)
 
@@ -295,69 +268,115 @@ export function GridRowLifecycleProvider<TData>({
     [getRowId, rows],
   )
 
-  const requestDelete = useCallback((rowId: string) => {
+  const requestDeleteMany = useCallback((rowIds: readonly string[]) => {
+    if (rowIds.length === 0) {
+      return
+    }
+
     setOutcomes(null)
-    setPendingRowId(rowId)
+    setPendingRowIds([...rowIds])
   }, [])
+
+  const requestDelete = useCallback(
+    (rowId: string) => {
+      requestDeleteMany([rowId])
+    },
+    [requestDeleteMany],
+  )
 
   const isDeleting = useCallback((rowId: string) => deletingRowIds.has(rowId), [deletingRowIds])
 
   /**
-   * The row the dialog is naming, or `null` when it is closed or the row is gone
-   * from the consumer's set between the click and the confirmation.
+   * The rows the dialog is naming, resolved per render so a row that disappears
+   * between the request and the confirmation simply drops out of the count.
    */
-  const pendingRow = pendingRowId === null ? undefined : findRow(pendingRowId)
-  const pendingLabel = pendingRow === undefined ? null : lifecycle.getRowLabel(pendingRow)
+  const pendingRows =
+    pendingRowIds === null
+      ? []
+      : pendingRowIds.flatMap((rowId) => {
+          const row = findRow(rowId)
+
+          return row === undefined ? [] : [{ rowId, label: lifecycle.getRowLabel(row) }]
+        })
+
+  const pendingLabel = pendingRows.length === 1 ? pendingRows[0].label : null
 
   const confirmDelete = useCallback(async () => {
-    const rowId = pendingRowId
+    const rowIds = pendingRowIds
 
-    setPendingRowId(null)
+    setPendingRowIds(null)
 
-    if (rowId === null) {
+    if (rowIds === null || rowIds.length === 0) {
       return
     }
 
-    const row = findRow(rowId)
-
-    if (!row) {
-      return
-    }
-
-    // Resolved here rather than when the control was pressed: by the time the
+    // Resolved here rather than when the affordance was pressed: by the time the
     // operator confirms, the grid may have re-sorted, and a row's *position* is
     // not its identity.
-    const label = lifecycle.getRowLabel(row)
+    const targets = rowIds.flatMap((rowId) => {
+      const row = findRow(rowId)
 
-    setDeletingRowIds((current) => new Set(current).add(rowId))
+      return row === undefined
+        ? []
+        : [{ rowId, row, label: lifecycle.getRowLabel(row) }]
+    })
 
-    let outcome: GridRowDeleteOutcome
+    if (targets.length === 0) {
+      return
+    }
 
-    try {
-      await lifecycle.onDeleteRow(row)
-      // Only a confirmed delete is applied locally. A refused row keeps the
-      // value the operator can already see; nothing is removed that was not.
-      onRowRemoved(rowId)
-      outcome = { rowId, label, ok: true, message: "Deleted." }
-    } catch (cause) {
-      outcome = { rowId, label, ok: false, message: readDeleteFailure(cause) }
-    } finally {
-      setDeletingRowIds((current) => {
-        const next = new Set(current)
-        next.delete(rowId)
-        return next
-      })
+    setDeletingRowIds((current) => {
+      const next = new Set(current)
+
+      for (const target of targets) {
+        next.add(target.rowId)
+      }
+
+      return next
+    })
+
+    const nextOutcomes: GridRowDeleteOutcome[] = []
+
+    // Sequential, not parallel: the report is appended in the order the rows
+    // were addressed, one refusal never cancels the rows after it, and a large
+    // selection cannot exhaust the browser's connection pool.
+    for (const target of targets) {
+      try {
+        await lifecycle.onDeleteRow(target.row)
+        // Only a confirmed delete is applied locally. A refused row keeps the
+        // value the operator can already see; nothing is removed that was not.
+        onRowRemoved(target.rowId)
+        nextOutcomes.push({
+          rowId: target.rowId,
+          label: target.label,
+          ok: true,
+          message: "Deleted.",
+        })
+      } catch (cause) {
+        nextOutcomes.push({
+          rowId: target.rowId,
+          label: target.label,
+          ok: false,
+          message: readDeleteFailure(cause),
+        })
+      } finally {
+        setDeletingRowIds((current) => {
+          const next = new Set(current)
+          next.delete(target.rowId)
+          return next
+        })
+      }
     }
 
     // One report per run, not per row: a second delete replaces the first
     // rather than appending to it, so the report always describes the last
     // action and never accumulates stale lines.
-    setOutcomes([outcome])
-  }, [findRow, lifecycle, onRowRemoved, pendingRowId])
+    setOutcomes(nextOutcomes)
+  }, [findRow, lifecycle, onRowRemoved, pendingRowIds])
 
   const value = useMemo<GridRowLifecycleContextValue>(
-    () => ({ requestDelete, isDeleting }),
-    [isDeleting, requestDelete],
+    () => ({ requestDelete, requestDeleteMany, isDeleting }),
+    [isDeleting, requestDelete, requestDeleteMany],
   )
 
   return (
@@ -365,20 +384,26 @@ export function GridRowLifecycleProvider<TData>({
       {children}
 
       <AlertDialog
-        open={pendingRowId !== null}
+        open={pendingRowIds !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setPendingRowId(null)
+            setPendingRowIds(null)
           }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[13px]">Delete this record?</AlertDialogTitle>
+            <AlertDialogTitle className="text-[13px]">
+              {pendingRows.length > 1
+                ? `Delete ${pendingRows.length} records?`
+                : "Delete this record?"}
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-[13px]">
-              {pendingLabel === null
-                ? "This record will be removed from this table. This cannot be undone."
-                : `${pendingLabel} will be removed from this table. This cannot be undone.`}
+              {pendingRows.length > 1
+                ? `The ${pendingRows.length} selected records will be removed from this table. This cannot be undone.`
+                : pendingLabel === null
+                  ? "This record will be removed from this table. This cannot be undone."
+                  : `${pendingLabel} will be removed from this table. This cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -406,6 +431,7 @@ export function GridRowLifecycleProvider<TData>({
       {outcomes && outcomes.length > 0 ? (
         <div className="mt-2">
           <GridRowDeleteReport
+            label={reportLabel}
             outcomes={outcomes}
             onDismiss={() => {
               setOutcomes(null)
