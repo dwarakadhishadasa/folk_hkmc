@@ -1335,20 +1335,25 @@ function LinkedRecordPill({ ctx, label }: { ctx: GridEditorContext<unknown>; lab
  * the same door `onCellDoubleClick` opens rather than a second one.
  *
  * Like the pill's `×` it is a `role="presentation"` span rather than a
- * `<button>`, and `opacity-0` until the cell is hovered so a column of empties
- * does not read as a column of buttons.
+ * `<button>`. It is **always visible**, not hover-only: on a blank cell it is
+ * the only way in with the pointer, and an affordance that appears only under a
+ * hover the operator has not made yet is one they will not find — an empty
+ * `location` cell on a brand-new row looked like a dead cell for exactly that
+ * reason. The muted glyph reads as "nothing here yet", not as a column of
+ * buttons.
  */
 function LinkedRecordAdder({ ctx }: { ctx: GridEditorContext<unknown> }) {
   return (
     <span
       role="presentation"
       data-grid-editor="linked-add"
+      title={`Add ${ctx.label}`}
       onClick={() => ctx.open()}
       // The `+` is a single-click gesture, so a double-click must not also reach
       // the cell: that would be the open this click just performed, followed by
       // the opener's own commit-and-close.
       onDoubleClick={(event) => event.stopPropagation()}
-      className="inline-flex size-4 cursor-pointer items-center justify-center rounded-[2px] opacity-0 group-hover:opacity-100"
+      className="text-muted-foreground hover:text-foreground inline-flex size-4 cursor-pointer items-center justify-center rounded-[2px]"
     >
       <Plus aria-hidden="true" className="size-3.5" />
     </span>

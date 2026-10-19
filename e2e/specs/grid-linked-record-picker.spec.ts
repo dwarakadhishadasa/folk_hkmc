@@ -175,6 +175,19 @@ test.describe("a linked record is picked, not typed", () => {
     const cell = cellIn(rowById(page, empty!.id), "location")
     const finder = page.getByRole("textbox", { name: "Find Location" })
 
+    // The control is not hover-only. A blank cell whose only opener appears
+    // after a hover the operator has not made yet reads as a dead cell — which
+    // is exactly how a new row's location picker looked unreachable.
+    await expect
+      .poll(
+        () =>
+          cell
+            .locator('[data-grid-editor="linked-add"]')
+            .evaluate((element) => getComputedStyle(element).opacity),
+        { message: "the add control is visible without a hover" },
+      )
+      .not.toBe("0")
+
     // CAP-10 still governs the cell: a click on the body focuses it and opens
     // nothing. Aimed at the far edge so the control at the leading edge is not
     // what is hit, and derived from the box rather than a fixed offset because

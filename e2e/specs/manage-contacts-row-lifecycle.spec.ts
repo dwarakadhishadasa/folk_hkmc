@@ -3,12 +3,14 @@
  *
  * | Test | Scenario | Claim under test |
  * | ---- | -------- | ---------------- |
- * | add | `+ Add record` then immediately type | the new row's **first editable cell** holds DOM focus, and a printable character seeds that cell's editor rather than being swallowed by the button that was clicked |
- * | add (hidden) | `+ Add record` under a text filter | a draft no filter can match is *reported* through the status line rather than dropped |
+ * | add | `+ Add record` then immediately type | the new row's **first editable cell** holds DOM focus, a double-click opens that cell's editor, and the committed value survives a create that is not yet sendable |
+ * | add (hidden) | `+ Add record` under a text filter | a draft no filter can match is **reported** through the status line rather than dropped silently, and the add control stays disabled rather than pretending the click worked |
  * | add (disabled) | `+ Add record` while a draft is unresolved | the control renders disabled, not hidden |
  * | opt-in | a `Grid` with no `rowLifecycle` | no add control and no delete affordance anywhere — the slot is genuinely opt-in |
- * | invalid | a draft committed with a required field blank | the real handler answers `400 Phone is required.`; the cell reverts, marks destructive, the status line names the server's own reason, and nothing was written |
- * | promote | a create that answers `201` | the draft is replaced by the server row **in place**, and focus re-keys onto the new row id instead of dying on `<body>` |
+ * | buffer | a draft committed with a required field blank | the value is **kept in the row, not sent**: no request, no error, no revert; the create is sent by the commit that completes `name` + `phone` |
+ * | default | the draft's `Collected By` | the cell names the signed-in staff member before the row exists, and the promoted row keeps that value without a reload |
+ * | race | a location committed while the create is in flight | the value is **patched onto the created row**, not sent as a second create the server refuses as a duplicate |
+ * | promote | a create that answers `201` | the draft is replaced by the server row **in place**, the row carries the caller's assignment and collector, and focus re-keys onto the new row id instead of dying on `<body>` |
  * | confirm | delete confirmation | the dialog names the row and **no** `DELETE` is issued until it is confirmed; cancelling issues none either |
  * | report | per-row delete outcomes | one visible line per deleted row naming the row and the server's message, successes included; a refused delete keeps its row and claims no success |
  * | revert | a failed create | an intercepted `500` reverts the cell and names the failure, and writes nothing |
@@ -83,9 +85,11 @@ import { expect, test, type Locator, type Page } from "@playwright/test"
 
 import {
   ROW_LIFECYCLE_TAG,
+  adminId,
   bulkFixtureClient,
   cleanupRowLifecycleContacts,
   createRowLifecycleContact,
+  listProgramLocations,
 } from "../fixtures/bulk-contacts"
 import {
   SINGLE_CONTACT_ROUTE,
@@ -98,11 +102,12 @@ import {
   deleteReportPanel,
   filterGlobally,
   gridRoot,
-  inScopeCount,
+  inScopeCounts,
   manageContactsUrl,
   openCellEditor,
   openContactsGrid,
   openPreviewGrid,
+  readContactColumn,
   renderedRows,
   rowById,
   rowDeleteButton,
@@ -176,6 +181,24 @@ function ownedName(offset: number): string {
   return `${ROW_LIFECYCLE_TAG}${Date.now()}${offset}`
 }
 
+/**
+ * A location the draft's picker will offer, and the name that identifies it.
+ *
+ * The picker is a search over the payload's scoped locations, so any seeded
+ * location is selectable; the first by name is simply a stable choice. The
+ * returned name is used only as the search text — the option actually clicked is
+ * read back from the cell, because the local database also carries stale
+ * locations whose names contain a seeded one.
+ */
+async function firstProgramLocation(): Promise<{ id: string; name: string }> {
+  const [location] = await listProgramLocations()
+
+  if (!location) {
+    throw new Error("No location is seeded, so the draft's picker has nothing to offer.")
+  }
+
+  return { id: location.id, name: location.name }
+}
 /** The row ids holding `name`, read straight from the database. */
 async function idsForName(name: string): Promise<string[]> {
   const { data, error } = await bulkFixtureClient().from("contacts").select("id").eq("name", name)
@@ -297,6 +320,54 @@ async function refuseDeletes(page: Page): Promise<void> {
   })
 }
 
+/**
+ * Park every POST on the single-contact route until `release()` is called, then
+ * let it through.
+ *
+ * `holdCreateRequests` above answers `500`, which is what the revert case needs;
+ * this one lets the create finish, which is what the follow-up case needs: the
+ * row has to exist before a value committed during the flight can be patched
+ * onto it.
+ */
+function parkCreateRequests(page: Page) {
+  let release: () => void = () => undefined
+  let intercepted = 0
+  let settled: Promise<void> = Promise.resolve()
+
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  const handler = async (route: import("@playwright/test").Route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue()
+      return
+    }
+
+    intercepted += 1
+    settled = settled.then(async () => {
+      await held
+      await route.continue()
+    })
+
+    await settled
+  }
+
+  page.route(SINGLE_CONTACT_ROUTE, handler)
+
+  return {
+    release,
+    get intercepted() {
+      return intercepted
+    },
+    async unroute() {
+      release()
+      await settled
+      await page.unroute(SINGLE_CONTACT_ROUTE, handler)
+    },
+  }
+}
+
 test.describe("row lifecycle", () => {
   test("add — the new row's first editable cell takes focus, and a double-click opens that cell's editor", async ({
     page,
@@ -341,34 +412,72 @@ test.describe("row lifecycle", () => {
 
       await page.keyboard.press("Enter")
 
-      // Held open, so this is the optimistic display and not a fast server.
+      // A name alone cannot be written — `phone` is also `NOT NULL` — so the
+      // commit is buffered: the value paints, and **no** create is sent. This is
+      // the assertion that the row is editable before it is complete, which is
+      // what the old one-field create model got wrong.
       await expect(nameCell, "the committed value paints before the write resolves").toHaveText("Ravi")
-      expect(held.intercepted, "the interception caught the create write").toBe(1)
+      expect(held.intercepted, "a one-field draft sends no create").toBe(0)
+
+      // Completing the second required field is what sends it, and that write is
+      // the one parked above.
+      await typeIntoCell(page, cellIn(draftRow(page), "phone"), "7400000001")
+      await page.keyboard.press("Enter")
+
+      await expect(
+        cellIn(draftRow(page), "phone"),
+        "the second required field paints before the create resolves",
+      ).toHaveText("7400000001")
+      await expect
+        .poll(() => held.intercepted, { message: "the interception caught the create write" })
+        .toBe(1)
     } finally {
       await held.unroute()
     }
   })
 
-  test("add — a record the active filter hides is created but stays out of scope", async ({ page }) => {
+  test("add — a record the active filter hides is reported, not silently lost", async ({ page }) => {
     await openContactsGrid(page)
     await filterGlobally(page, "preview-fixture")
 
     // The readout is "<in scope> of <total> in scope". A blank draft matches no
     // text filter, so `focusRow` resolves no row and the retry has nothing to
-    // retry against — the grid reports that through `onUnreachableNewRow` rather
-    // than a rendered status strip, so what is assertable here is the shape of
-    // the outcome: the record really was created (the total grows) and really is
-    // unreachable (the in-scope count does not).
-    const before = (await inScopeCount(page).textContent())?.match(/^([\d,]+) of /)?.[1]
-
-    expect(before, "the grid reports an in-scope readout to begin with").toBeDefined()
+    // retry against.
+    const before = await inScopeCounts(page)
 
     await addRecordButton(page).click()
 
+    // The row was appended — the total counts it — but the filter hides it, so
+    // it cannot be filled in. The table has to say so: silently parking an
+    // invisible draft leaves the operator with an add control that does nothing
+    // and no way to discover why.
     await expect(
-      inScopeCount(page),
-      "the record the filters hid is created, so the total grows",
-    ).toHaveText(new RegExp(`^${before} of [\\d,]+ in scope$`))
+      page.getByRole("status").filter({ hasText: "hidden by the current filters" }),
+      "the filtered-out draft is named rather than dropped",
+    ).toBeVisible()
+
+    await expect
+      .poll(async () => (await inScopeCounts(page)).total, {
+        message: "the draft is in the table's row set even though no filter matches it",
+      })
+      .toBe(before.total + 1)
+
+    expect(
+      (await inScopeCounts(page)).visible,
+      "the hidden draft does not enter the visible set",
+    ).toBe(before.visible)
+
+    // And the one-draft rule still holds: a second add is refused while this one
+    // is unresolved, which is what makes the report the operator's only clue.
+    await expect(addRecordButton(page), "the unresolved draft still blocks a second one").toBeDisabled()
+
+    // Clearing the search is the way out, and the notice goes with the state it
+    // described.
+    await page.getByRole("button", { name: "Clear search" }).click()
+    await expect(
+      page.getByRole("status").filter({ hasText: "hidden by the current filters" }),
+      "the notice does not outlive the filters it named",
+    ).toHaveCount(0)
   })
 
   test("add — the control is disabled, never hidden, while a draft is unresolved", async ({ page }) => {
@@ -409,45 +518,70 @@ test.describe("row lifecycle", () => {
     await expect(renderedRows(page).first(), "the grid itself did render").toBeVisible()
   })
 
-  test("invalid — a draft with a required field blank is refused, names the reason, and writes nothing", async ({
+  test("buffer — a draft keeps an incomplete value locally and creates once both required fields are present", async ({
     page,
   }) => {
     const name = ownedName(0)
     const phone = ownedPhone(0)
     const created: string[] = []
+    const posts: string[] = []
+
+    page.on("request", (request) => {
+      if (request.method() === "POST" && request.url().includes("/api/manage/contacts")) {
+        posts.push(request.url())
+      }
+    })
 
     try {
       await openContactsGrid(page)
       await addRecordButton(page).click()
 
+      // The reported defect: a name typed into a new row vanished because the
+      // first commit was sent as a create with the phone still blank, and the
+      // `400` reverted the cell. A name alone is now buffered instead.
       await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
       await page.keyboard.press("Enter")
 
-      // The real handler, not an interception: `parseContactPatch` is the one
-      // place the required-field rules live, and this is the assertion that the
-      await expect(cellIn(draftRow(page), "name"), "the server's own wording reaches the cell").toHaveAttribute(
-        "data-grid-cell-error",
-        /Phone is required\./,
-      )
       await expect(
         cellIn(draftRow(page), "name"),
-        "the refused cell is marked destructive",
-      ).toHaveClass(/text-destructive/)
+        "an incomplete draft keeps the value the operator typed",
+      ).toHaveText(name)
+      await expect(
+        cellIn(draftRow(page), "name"),
+        "an incomplete draft is not an error",
+      ).not.toHaveAttribute("data-grid-cell-error", /.+/)
+      expect(posts, "a one-field draft sends no create").toHaveLength(0)
 
-      expect(
-        await namesForPhones([phone]),
-        "a refused create wrote nothing",
-      ).toEqual(new Map([[phone, null]]))
+      // A location picked before the row exists is buffered too, and has to stay
+      // visible rather than being reverted by a create that could not succeed.
+      const location = await firstProgramLocation()
+      await openCellEditor(cellIn(draftRow(page), "location"))
+      await page.getByRole("textbox", { name: "Find Location" }).fill(location.name)
+      await page.locator('[data-grid-editor="option"]').filter({ hasText: location.name }).first().click()
 
-      // The draft survives its refusal, so the record can be completed: the
-      // second commit carries the first field's value along. Dropping the draft
-      // instead would make a two-`NOT NULL` record impossible to create.
+      const locationCell = cellIn(draftRow(page), "location")
+      await expect(
+        locationCell,
+        "a location picked on an incomplete draft stays on screen",
+      ).toContainText(location.name)
+
+      // The label the cell shows is the one that was picked. Read from the cell
+      // rather than from the option's name: the local database carries stale
+      // locations whose names *contain* a seeded one, so the picker's first match
+      // is not necessarily the row the name alone identifies.
+      const pickedLocationLabel = (await locationCell.innerText()).trim()
+      expect(posts, "picking a location on a draft sends no create").toHaveLength(0)
+
+      expect(await idsForName(name), "nothing was written while the draft was incomplete").toEqual([])
+
+      // The second required field completes the draft, and only now is the
+      // create sent — with the buffered name and location carried along.
       await typeIntoCell(page, cellIn(draftRow(page), "phone"), phone)
       await page.keyboard.press("Enter")
-      await expect(
-        cellIn(draftRow(page), "name"),
-        "a completed draft clears the previous failure",
-      ).not.toHaveAttribute("data-grid-cell-error", /.+/)
+
+      await expect
+        .poll(() => posts.length, { message: "the completed draft never sent a create" })
+        .toBe(1)
 
       await expect
         .poll(async () => (await namesForPhones([phone])).get(phone), {
@@ -456,6 +590,21 @@ test.describe("row lifecycle", () => {
         .toBe(name)
 
       created.push(...(await idsForName(name)))
+
+      // The buffered values are in the created row, not only on screen: a create
+      // built from the last cell alone would have dropped both.
+      const storedLocations = await readContactColumn<string[]>([created[0]], "location_ids")
+      const storedLocationIds = storedLocations.get(created[0]) ?? []
+      expect(storedLocationIds, "the buffered location is stored as one id").toHaveLength(1)
+      expect(
+        (await listProgramLocations()).find((candidate) => candidate.id === storedLocationIds[0])?.name,
+        "the stored location is the one picked on the draft",
+      ).toBe(pickedLocationLabel)
+
+      await expect(
+        cellIn(draftRow(page), "collectedBy"),
+        "the created row names the signed-in staff member",
+      ).toHaveText("Kavitha Raman")
 
       // Survives a reload, read through a filter so the row is addressable: the
       // rows are virtualized and the created row is last in an unfiltered set.
@@ -474,6 +623,98 @@ test.describe("row lifecycle", () => {
     }
   })
 
+  test("race — a location picked while the create is in flight is patched, not re-created", async ({
+    page,
+  }) => {
+    const name = ownedName(5)
+    const phone = ownedPhone(5)
+    const created: string[] = []
+    const parked = parkCreateRequests(page)
+
+    try {
+      await openContactsGrid(page)
+      await addRecordButton(page).click()
+
+      await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
+      await page.keyboard.press("Enter")
+      await typeIntoCell(page, cellIn(draftRow(page), "phone"), phone)
+      await page.keyboard.press("Enter")
+
+      // The create is on the wire, so the row still carries its draft id. A
+      // real network keeps this window open for hundreds of milliseconds, and
+      // the location pick below is exactly what an operator does inside it:
+      // clicking the cell blurs the phone field, which is what starts the
+      // create, and the picker is the very next gesture.
+      await expect.poll(() => parked.intercepted).toBe(1)
+      await expect(draftRow(page)).toHaveAttribute("data-grid-row", /^draft-/)
+
+      const location = await firstProgramLocation()
+      await openCellEditor(cellIn(draftRow(page), "location"))
+      await page.getByRole("textbox", { name: "Find Location" }).fill(location.name)
+      await page.locator('[data-grid-editor="option"]').filter({ hasText: location.name }).first().click()
+
+      // The row is still a draft, but a create is already carrying it. A second
+      // create from this commit would come back `409 duplicate`, and its revert
+      // would land on the draft id after promotion — the pick would vanish with
+      // no message, which is the reported "can't select a location".
+      expect(parked.intercepted, "a commit during the create must not start another").toBe(1)
+
+      const pickedLabel = (await cellIn(draftRow(page), "location").innerText()).trim()
+      const picked = (await listProgramLocations()).find(
+        (candidate) => candidate.name === pickedLabel,
+      )
+      expect(picked, "the label the cell shows names a seeded location").toBeDefined()
+
+      parked.release()
+
+      // The one create lands, and the queued value is written onto the id it
+      // returns: one POST and one PATCH, not two creates.
+      await expect
+        .poll(async () => (await namesForPhones([phone])).get(phone), {
+          message: "the parked create never landed",
+        })
+        .toBe(name)
+
+      created.push(...(await idsForName(name)))
+
+      await expect
+        .poll(
+          async () => {
+            const stored = await readContactColumn<string[]>([created[0]], "location_ids")
+            return stored.get(created[0])?.[0] ?? null
+          },
+          { message: "the location picked during the create was never stored" },
+        )
+        .toBe(picked!.id)
+
+      await expect(
+        cellIn(draftRow(page), "location"),
+        "the promoted row keeps the picked location on screen",
+      ).toContainText(pickedLabel)
+    } finally {
+      await parked.unroute()
+      created.push(...(await idsForName(name)))
+      await cleanupRowLifecycleContacts(created)
+    }
+  })
+
+  test("default — a new draft names the signed-in staff member in Collected By", async ({ page }) => {
+    await openContactsGrid(page)
+    await addRecordButton(page).click()
+
+    // The server already writes `collected_by_id = staff.supabaseUserId`; the
+    // blank row used to render nothing there, so the value only appeared after a
+    // reload. The draft shows the person the server is about to store.
+    await expect(
+      cellIn(draftRow(page), "collectedBy"),
+      "a new draft defaults Collected By to the signed-in user",
+    ).toHaveText("Kavitha Raman")
+    await expect(
+      cellIn(draftRow(page), "collectedBy"),
+      "the default is a value, not an unresolved reference",
+    ).not.toContainText("Unknown staff member")
+  })
+
   test("promote — a created record takes the server's id and keeps the keyboard position", async ({
     page,
   }) => {
@@ -487,10 +728,14 @@ test.describe("row lifecycle", () => {
 
       await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
       await page.keyboard.press("Enter")
-      await expect(cellIn(draftRow(page), "name"), "the refusal rides the cell itself").toHaveAttribute(
-        "data-grid-cell-error",
-        /Phone is required\./,
-      )
+
+      // The name alone is buffered, so the row is still a draft and still
+      // focused; the phone commit is the one that promotes it.
+      await expect(cellIn(draftRow(page), "name"), "the incomplete draft keeps the name").toHaveText(name)
+      await expect(
+        cellIn(draftRow(page), "name"),
+        "an incomplete draft is not an error",
+      ).not.toHaveAttribute("data-grid-cell-error", /.+/)
 
       await typeIntoCell(page, cellIn(draftRow(page), "phone"), phone)
       await page.keyboard.press("Enter")
@@ -516,6 +761,30 @@ test.describe("row lifecycle", () => {
       ).toBeFocused()
 
       created.push(...(await idsForName(name)))
+
+      // The create is what makes a row *the caller's*: `assigned_preacher_id`
+      // is the RLS scope key for a Preacher, and `collected_by_id` is what the
+      // grid shows in `Collected By`. Both are server-written from the session,
+      // not from the request body, so the operator cannot reassign a row by
+      // omitting or forging a field.
+      const manager = await adminId()
+      const assigned = await readContactColumn<string>(created, "assigned_preacher_id")
+      expect(
+        assigned.get(created[0]),
+        "the created row is assigned to the signed-in staff member",
+      ).toBe(manager)
+      const collected = await readContactColumn<string>(created, "collected_by_id")
+      expect(
+        collected.get(created[0]),
+        "the created row records the signed-in staff member as its collector",
+      ).toBe(manager)
+
+      // The promoted row carries the same assignment the database holds, without
+      // a reload. `ManageContactWriteResult` is what makes that possible.
+      await expect(
+        cellIn(draftRow(page), "collectedBy"),
+        "the promoted row keeps Collected By on screen",
+      ).toHaveText("Kavitha Raman")
     } finally {
       created.push(...(await idsForName(name)))
       await cleanupRowLifecycleContacts(created)
@@ -636,18 +905,12 @@ test.describe("row lifecycle", () => {
       await openContactsGrid(page)
       await addRecordButton(page).click()
 
-      // The name first, against the **real** handler. Both required fields are
-      // `NOT NULL`, so one commit can never satisfy both: this is refused with
-      // `Phone is required.`, which is what the create path is designed to do and
-      // what makes the second commit carry the first field's value along. Arming
-      // the interception first would fail the *name* commit instead, which tests
-      // a one-field record and not the two-field draft this case is about.
+      // The name is buffered, so no create is sent yet. That is what makes the
+      // phone commit the **first** request this case can park — the old model
+      // spent its first POST on a create that could only be refused.
       await typeIntoCell(page, cellIn(draftRow(page), "name"), name)
       await page.keyboard.press("Enter")
-      await expect(cellIn(draftRow(page), "name"), "the first commit is refused for the missing phone").toHaveAttribute(
-        "data-grid-cell-error",
-        /Phone is required\./,
-      )
+      await expect(cellIn(draftRow(page), "name"), "the buffered name is on screen").toHaveText(name)
 
       held = holdCreateRequests(page)
 

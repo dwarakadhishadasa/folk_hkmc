@@ -184,7 +184,7 @@ session, 403 for a Volunteer, and that a failed sign-in provisions nothing.
 | " | `e2e/specs/manage-contacts-filter.spec.ts` | 5 |
 | " | `e2e/specs/manage-contacts-bulk.spec.ts` | 2 |
 | " | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
-| " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 9 |
+| " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 11 |
 
 These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
 lives in

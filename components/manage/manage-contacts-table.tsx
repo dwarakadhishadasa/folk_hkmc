@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react"
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createColumnHelper } from "@tanstack/react-table"
 import type { RowSelectionState, Table } from "@tanstack/react-table"
 
@@ -76,6 +76,17 @@ const ACTIONS_COLUMN_ID = "actions"
  */
 const UNRESOLVED_LOCATION = "Unknown location"
 const UNRESOLVED_STAFF = "Unknown staff member"
+
+/**
+ * What the status line says when `+ Add record` appends a row no active filter
+ * can match.
+ *
+ * A constant because two places have to agree on it: the report itself, and the
+ * filter-change effect that clears it — and only it — when the state it
+ * describes is gone.
+ */
+const FILTERED_DRAFT_NOTICE =
+  "The new record is hidden by the current filters. Clear the filters to edit it."
 
 /**
  * Display order, and the layout every later `/manage` table copies: the selection
@@ -222,7 +233,7 @@ let draftSequence = 0
  * row, focus it, and key the operator's keystrokes to it before the server has
  * ever heard of it.
  */
-function createDraftContact(): ManageContact {
+function createDraftContact(staffUserId: string): ManageContact {
   draftSequence += 1
 
   return {
@@ -241,8 +252,12 @@ function createDraftContact(): ManageContact {
     photoPath: null,
     isFavorite: false,
     locationIds: [],
-    assignedPreacherId: null,
-    collectedById: null,
+    // The server writes both columns from the caller:
+    // `assigned_preacher_id = staff.userId`, `collected_by_id = staff.supabaseUserId`.
+    // `userId` and `supabaseUserId` are the same `public.users.id`, so the draft
+    // shows what the create is about to store rather than a blank owner.
+    assignedPreacherId: staffUserId,
+    collectedById: staffUserId,
     totalAttendanceCount: 0,
     past60DayAttendanceCount: 0,
   }
@@ -335,6 +350,25 @@ function buildCreatePatch(
 
   patch[patchKey] = value
   return patch
+}
+
+/**
+ * Whether a draft carries enough to be written.
+ *
+ * `name` and `phone` are both `NOT NULL`, and `parseContactPatch` is the
+ * authority that refuses a create missing either. This mirrors that rule —
+ * trim, then require a non-empty string — so the client does not send a create
+ * that can only come back `400`. It is a **gate, not a validation story**: the
+ * server's wording is still the only message an operator ever sees, because a
+ * draft that fails this check is not sent at all.
+ */
+function isDraftComplete(patch: ManageContactPatch): boolean {
+  return (
+    typeof patch.name === "string" &&
+    patch.name.trim().length > 0 &&
+    typeof patch.phone === "string" &&
+    patch.phone.trim().length > 0
+  )
 }
 
 interface Notice {
@@ -491,12 +525,52 @@ export function ManageContactsTable({
 
   const contacts = mirror.rows
 
+  /**
+   * The create in flight for a draft row.
+   *
+   * A draft keeps its client id until the create answers, so a commit that
+   * lands in that window still looks like a draft commit. Picking a location
+   * right after the phone field starts the create is exactly that case, and
+   * sending a second create from it is what made the location look
+   * unselectable: the server answered `409 duplicate`, the revert landed on a
+   * row id that no longer existed, and the value vanished without a message.
+   * One create at a time — values committed meanwhile become a follow-up patch
+   * against the id the server assigns.
+   */
+  const draftCreateRef = useRef<{
+    rowId: string
+    promise: Promise<ManageContactWriteResult>
+    /** Values committed while the create was on the wire, keyed by patch key. */
+    queued: ManageContactPatch
+    /** Those cells' values before their commits, so a failed follow-up reverts. */
+    previous: ManageContactPatch
+  } | null>(null)
+
   useReportRowCount(onRowCountChange, contacts.length)
 
 
   const locationNameById = useMemo(
     () => new Map(payload.locations.map((location) => [location.id, location.name])),
     [payload.locations],
+  )
+
+  /**
+   * `collectedById` -> display name, with the signed-in staff member always
+   * present.
+   *
+   * `payload.staffNames` only covers ids the *loaded rows* reference, and a new
+   * program can have no contact that references its first operator. The draft
+   * row is prefilled with `scope.staffUserId`, so without this the cell would
+   * render the unresolved marker for the person looking at it. The scope entry
+   * is written last so the signed-in user's own name always wins.
+   */
+  const staffNameById = useMemo(
+    () =>
+      new Map([
+        ...Object.entries(payload.staffNames),
+        [payload.scope.staffUserId, payload.scope.staffName] as const,
+      ]),
+    [payload.scope.staffName, payload.scope.staffUserId, payload.staffNames],
   )
 
   /**
@@ -665,38 +739,142 @@ export function ManageContactsTable({
       }
 
       if (isDraftRowId(commit.rowId)) {
-        // A commit on a draft row *is* the create. Nothing branches around the
-        // commit path, so the create inherits the optimistic override, the
-        // destructive revert and the status line that every other write has.
+        // A commit on a draft row is how the row gets built, not how it gets
+        // written: `name` and `phone` are both `NOT NULL`, so one commit can
+        // never satisfy both and a create sent on the first field could only
+        // come back `400 Phone is required.` — which is exactly the behaviour
+        // that made the row look uneditable. Every value is buffered in the
+        // mirror instead, and the create is sent by the commit that completes
+        // the two required fields.
         const draft = commit.row
         const patch = buildCreatePatch(draft, commit.columnId, commit.value)
 
-        // Accumulated *before* the request, not after it succeeds. `name` and
-        // `phone` are both `NOT NULL`, so one commit can never satisfy both: the
-        // handler answers `Phone is required.` for the first field and the record
-        // cannot exist until the second commit carries the first field's value
-        // along. Rolling back on failure instead would make a two-field record
-        // impossible to create at all.
+        // Accumulated *before* the completeness check, not after it: a buffered
+        // value has to survive until a later commit carries it into the create.
+        //
+        // Keyed by the **patch key**, not the column id. `location` is the column
+        // whose two names differ — its patch key is `locationIds` — and writing
+        // `contact.location` used to leave `locationIds` untouched, so a
+        // location picked on a draft never reached the create body.
         setContacts((current) => ({
           ...current,
           rows: current.rows.map((contact) =>
             contact.id === commit.rowId
-              ? ({ ...contact, [commit.columnId]: commit.value } as ManageContact)
+              ? ({ ...contact, [patchKey]: commit.value } as ManageContact)
               : contact,
           ),
         }))
 
-        const written = await createContact(patch)
+        // No request, no error, and the optimistic override stays: the cell
+        // shows what was typed while the row is still local. `parseContactPatch`
+        // remains the one place the required-field rules live — this only
+        // decides when there is enough to send.
+        if (!isDraftComplete(patch)) {
+          return
+        }
 
-        // Promoted in place: the draft row is replaced by the row the server
-        // made, keeping its position, so the operator's focus — which the grid
-        // re-keys onto the new id — does not jump.
-        setContacts((current) => ({
-          ...current,
-          rows: current.rows.map((contact) =>
-            contact.id === commit.rowId ? { ...contact, ...written } : contact,
-          ),
-        }))
+        // A create is already carrying this row. The body is on the wire, so
+        // this value cannot join it; queue it for a patch against the id the
+        // create is about to return rather than sending a second create. The
+        // second create is what the server refuses as a duplicate phone — and
+        // the refusal used to land on the draft id after promotion, so the
+        // operator saw the pick disappear with no message at all.
+        const inFlight = draftCreateRef.current
+
+        if (inFlight?.rowId === commit.rowId) {
+          inFlight.queued[patchKey] = commit.value
+
+          if (!(patchKey in inFlight.previous)) {
+            inFlight.previous[patchKey] = draftValueForColumn(draft, commit.columnId)
+          }
+
+          return
+        }
+
+        // The value this cell had *before* the commit, read from the draft the
+        // grid handed us. On a failed create the grid reverts the cell to what
+        // it showed, so the mirror has to go back too — otherwise the next
+        // commit would carry a value the operator can no longer see into
+        // another create attempt.
+        const previousDraftValue = draftValueForColumn(draft, commit.columnId)
+        const create = {
+          rowId: commit.rowId,
+          promise: createContact(patch),
+          queued: {} as ManageContactPatch,
+          previous: {} as ManageContactPatch,
+        }
+
+        draftCreateRef.current = create
+
+        try {
+          const written = await create.promise
+
+          // Promoted in place: the draft row is replaced by the row the server
+          // made, keeping its position, so the operator's focus — which the grid
+          // re-keys onto the new id — does not jump. `queued` is painted over
+          // the response because it was committed after the body was built and
+          // the server has not heard of it yet; without it the cells would blink
+          // back while the follow-up request is on the wire.
+          setContacts((current) => ({
+            ...current,
+            rows: current.rows.map((contact) =>
+              contact.id === commit.rowId
+                ? ({ ...contact, ...written, ...create.queued } as ManageContact)
+                : contact,
+            ),
+          }))
+
+          // Drained in a loop rather than once: a commit can still land on the
+          // draft id between the response and the promotion's render, and it
+          // must not be left in `queued` after this function lets go of it.
+          while (Object.keys(create.queued).length > 0) {
+            const queued = create.queued
+            const previous = create.previous
+
+            create.queued = {}
+            create.previous = {}
+
+            try {
+              applyWrite(await patchContact(written.id, queued))
+            } catch (cause) {
+              // The row itself exists — only the values committed while the
+              // create was in flight failed. Restore the cells to the server's
+              // row and report; the grid's revert is keyed to the draft id,
+              // which no longer names a row.
+              setContacts((current) => ({
+                ...current,
+                rows: current.rows.map((contact) =>
+                  contact.id === written.id
+                    ? ({ ...contact, ...previous } as ManageContact)
+                    : contact,
+                ),
+              }))
+              setNotice({
+                kind: "error",
+                message:
+                  cause instanceof Error ? cause.message : "The change could not be saved.",
+              })
+              break
+            }
+          }
+        } catch (cause) {
+          setContacts((current) => ({
+            ...current,
+            rows: current.rows.map((contact) =>
+              contact.id === commit.rowId
+                ? ({ ...contact, [patchKey]: previousDraftValue } as ManageContact)
+                : contact,
+            ),
+          }))
+
+          // Re-thrown unchanged: the grid's revert and status line are the one
+          // error surface, and they need the server's own message.
+          throw cause
+        } finally {
+          if (draftCreateRef.current === create) {
+            draftCreateRef.current = null
+          }
+        }
 
         return
       }
@@ -936,7 +1114,7 @@ export function ManageContactsTable({
       columnHelper.accessor(
         (contact) =>
           contact.collectedById
-            ? (payload.staffNames[contact.collectedById] ?? UNRESOLVED_STAFF)
+            ? (staffNameById.get(contact.collectedById) ?? UNRESOLVED_STAFF)
             : "",
         {
           id: COLLECTED_BY_COLUMN_ID,
@@ -1017,10 +1195,10 @@ export function ManageContactsTable({
     locationNameById,
     locationRecords,
     payload.booksReadOptions,
-    payload.staffNames,
     pendingContactId,
     setVisibleSelection,
     sourceOptions,
+    staffNameById,
     toggleFavorite,
   ])
   /**
@@ -1089,7 +1267,12 @@ export function ManageContactsTable({
   const rowLifecycle = useMemo<GridRowLifecycle<ManageContact>>(
     () => ({
       createRow: () => {
-        const row = createDraftContact()
+        // Prefilled with the signed-in staff member: `createManageContact`
+        // writes both `assigned_preacher_id = staff.userId` and
+        // `collected_by_id = staff.supabaseUserId`, so the blank row carries the
+        // owner and the collector the server is about to store instead of
+        // values that only appear after a reload.
+        const row = createDraftContact(payload.scope.staffUserId)
 
         setContacts((current) => ({ ...current, rows: [...current.rows, row] }))
 
@@ -1110,7 +1293,7 @@ export function ManageContactsTable({
       // the operator would have no way to tell which one the create failed on.
       canCreate: !contacts.some((contact) => isDraftRowId(contact.id)),
     }),
-    [contacts, deleteContact],
+    [contacts, deleteContact, payload.scope.staffUserId],
   )
 
   const handleRowRemoved = useCallback((rowId: string) => {
@@ -1167,6 +1350,40 @@ export function ManageContactsTable({
     return sums
   }, [statusSummary])
 
+  /**
+   * The filtered-draft report.
+   *
+   * Stable identity is load-bearing: `Grid`'s pending-focus effect lists
+   * `onUnreachableNewRow` as a dependency, and the effect can only report by
+   * setting this notice — so a fresh closure each render would re-run the
+   * effect on the render the notice caused, report again, and loop.
+   */
+  const handleUnreachableNewRow = useCallback(() => {
+    // The row was appended but no filter can match it, so it is on screen
+    // nowhere and cannot be filled in — and because `canCreate` is false while a
+    // draft exists, the operator would otherwise be stuck with an add control
+    // that does nothing. Naming the cause is the only action available from
+    // here; clearing the filters is one click away in the toolbar.
+    setNotice({ kind: "error", message: FILTERED_DRAFT_NOTICE })
+  }, [])
+
+  /**
+   * A filter change invalidates the filtered-draft notice.
+   *
+   * The notice describes a state — "a filter is hiding your new row" — and the
+   * moment that state changes it is stale. Only that notice is cleared: a
+   * failed write's message is about a write, not about the filters, and
+   * discarding it because the operator typed in the search box would hide the
+   * one thing they need to read. Keyed on a signature rather than on the state
+   * objects because `useGridViewState` hands back fresh arrays, and a
+   * dependency on those would fire on every render.
+   */
+  const filterSignature = `${viewState.globalFilter}\u0000${JSON.stringify(viewState.columnFilters)}\u0000${filterConnective}`
+
+  useEffect(() => {
+    setNotice((current) => (current?.message === FILTERED_DRAFT_NOTICE ? null : current))
+  }, [filterSignature])
+
   /*
    * `flex min-h-0 flex-1 flex-col` — the last hop before the grid, and the one
    * that makes the grid's `flex-1` mean anything. `space-y-3` → `gap-3` is the
@@ -1209,6 +1426,7 @@ export function ManageContactsTable({
         }}
         onCellCommit={handleCellCommit}
         onClearFilters={clearFilters}
+        onUnreachableNewRow={handleUnreachableNewRow}
         tableFooter={(column) =>
           renderFooterCell(column.columnId, statusSummary.label, aggregateByColumnId)
         }

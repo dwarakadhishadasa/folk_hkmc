@@ -190,6 +190,21 @@ export interface ManageContactWriteResult {
   dateOfBirth: string | null
   isFavorite: boolean
   locationIds: string[]
+  /**
+   * The staff member the create assigned the row to (`assigned_preacher_id`).
+   * Not patchable — it is returned so a promoted draft row carries the same
+   * assignment the database now holds instead of the `null` the blank row was
+   * created with. That gap is invisible until something reads the row's owner
+   * before a reload.
+   */
+  assignedPreacherId: string | null
+  /**
+   * The staff member the create defaulted the row to (`collected_by_id`). Not
+   * patchable — it is returned so a promoted draft row can render
+   * `Collected By` without a reload, the same reason `locationIds` is here
+   * rather than only on the read payload.
+   */
+  collectedById: string | null
 }
 
 /**

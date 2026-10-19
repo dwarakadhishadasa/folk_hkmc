@@ -997,6 +997,8 @@ function toContactWriteResult(row: ContactRow): ManageContactWriteResult {
     dateOfBirth: text(row.date_of_birth),
     isFavorite: row.is_favorite === true,
     locationIds: textArray(row.location_ids),
+    assignedPreacherId: row.assigned_preacher_id,
+    collectedById: row.collected_by_id,
   }
 }
 

@@ -132,11 +132,14 @@ rejects a second id as a 400 `invalid_patch` before the constraint is reached.
 linked cell shows no value, so it renders a `+` whose click calls `ctx.open` —
 the same door `onCellDoubleClick` opens, not a second one. It exists because the
 cell has no text to type into and no other way in: without it the picker is
-reachable only by a gesture nothing advertises. That is a deliberate, recorded
-scoping of CAP-10 (`stories/1-…-retiring-the-keyboard-openers.md`), which
-restored nothing else — the cell-wide click stays retired, and so does every
-keyboard opener. The cell body's own single click still opens nothing, and that
-is asserted.
+reachable only by a gesture nothing advertises. It is **always visible**, not
+hover-only: a control that appears only under a hover the operator has not made
+yet is one they will not find, and on a new row — whose location cell is
+necessarily blank — that is the difference between a picker and a cell that
+looks dead. That is a deliberate, recorded scoping of CAP-10
+(`stories/1-…-retiring-the-keyboard-openers.md`), which restored nothing else —
+the cell-wide click stays retired, and so does every keyboard opener. The cell
+body's own single click still opens nothing, and that is asserted.
 
 **The remove control lives in the cell's pill, not in the editor.** Clearing a
 record is not a reason to open a popover — the operator clears the cell and then
