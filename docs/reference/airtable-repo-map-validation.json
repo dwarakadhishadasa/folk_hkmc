@@ -1,0 +1,329 @@
+{
+ "base": "appqea9DRLOXqErXb",
+ "source": "docs/airtable-legacy-base.md",
+ "note": "Airtable field ids in scripts/migrate-airtable-data.mjs re-checked against the live base schema",
+ "rows": [
+  {
+   "mapping": "contacts.name",
+   "fieldId": "fld8SsX2vXZU3uE1g",
+   "liveName": "Name",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.phone",
+   "fieldId": "fld746R8PKbcKRXse",
+   "liveName": "Phone",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.age",
+   "fieldId": "fldEwgdNymKULq2el",
+   "liveName": "Age",
+   "liveType": "number",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.dateOfBirth",
+   "fieldId": "fldvU1WsX1FV7BxxK",
+   "liveName": "Date of Birth",
+   "liveType": "date",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.year",
+   "fieldId": "fldXK5bdOsHyIn6r7",
+   "liveName": "smallSelectColumn",
+   "liveType": null,
+   "confidence": "MEDIUM"
+  },
+  {
+   "mapping": "contacts.college",
+   "fieldId": "fldtbZToYqsJx3O1m",
+   "liveName": "College",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.company",
+   "fieldId": "fldZGRXtDgGGHdlk9",
+   "liveName": "Company",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.designation",
+   "fieldId": "fldVkz3c5p6GuFBrg",
+   "liveName": null,
+   "liveType": null,
+   "confidence": "ABSENT"
+  },
+  {
+   "mapping": "contacts.source",
+   "fieldId": "fld2oGmIKM21mGpDM",
+   "liveName": "Source",
+   "liveType": "select",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.notes",
+   "fieldId": "fldkz2Wy0kBySyMUs",
+   "liveName": "Notes",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.initialContact",
+   "fieldId": "fldA7u04AN1QGJiZd",
+   "liveName": "Initial Contact",
+   "liveType": "date",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.lastContactedOn",
+   "fieldId": "fldCo370C6hCcgKcC",
+   "liveName": "Last Contacted On",
+   "liveType": "date",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.address",
+   "fieldId": "fldaNPo4ptlc0Pbwh",
+   "liveName": "Address",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.location",
+   "fieldId": "fldvkZbuEvFr8WW72",
+   "liveName": "Location",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.assignedPreacher",
+   "fieldId": "fldiG9nSAfBWbw3ij",
+   "liveName": "Assigned Preacher",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.collectedBy",
+   "fieldId": "fldOiszMxhsWOI9OC",
+   "liveName": "Collected By",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.photo",
+   "fieldId": "fldwl5gdCfcFhMT77",
+   "liveName": "Photo",
+   "liveType": null,
+   "confidence": "MEDIUM"
+  },
+  {
+   "mapping": "contacts.rounds",
+   "fieldId": "fldj7wwwg5ddJkhvX",
+   "liveName": "Rounds",
+   "liveType": "number",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.books",
+   "fieldId": "flddjOIrcuV7U6iij",
+   "liveName": "Books",
+   "liveType": null,
+   "confidence": "MEDIUM"
+  },
+  {
+   "mapping": "contacts.favorite",
+   "fieldId": "fldfmjPOapjSkLUOI",
+   "liveName": "Favorite",
+   "liveType": "checkbox",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "contacts.locationLegacy",
+   "fieldId": "fld41eZGUhpS4N1aj",
+   "liveName": "Location_Legacy",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.name",
+   "fieldId": "fld5z4R4R9ervCeGR",
+   "liveName": "Name",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.sessionDate",
+   "fieldId": "fldamDX1vEq58nWae",
+   "liveName": "Session Date",
+   "liveType": "date",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.location",
+   "fieldId": "fldQ4SaaJGTgAMYCG",
+   "liveName": "Location",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.preacher",
+   "fieldId": "fld7LZkXSACmRhB3H",
+   "liveName": "Preacher",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.publicAttendanceEnabled",
+   "fieldId": "fldVkmOgalZOWAwoB",
+   "liveName": "Public Attendance Enabled",
+   "liveType": "checkbox",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.attendanceOpensAt",
+   "fieldId": "fld2il5FEK1fDBeN4",
+   "liveName": "Attendance Opens At",
+   "liveType": "date",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.attendanceClosesAt",
+   "fieldId": "fldOamVt7HE6Cf2s4",
+   "liveName": "Attendance Closes At",
+   "liveType": "date",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.durationMinutes",
+   "fieldId": "fldrke8mwfTq1N0Hq",
+   "liveName": "Duration Minutes",
+   "liveType": "number",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "sessions.createdBy",
+   "fieldId": "fldtMCVELgChcMRCz",
+   "liveName": "Admin (from Admin)",
+   "liveType": null,
+   "confidence": "MEDIUM"
+  },
+  {
+   "mapping": "attendance.contact",
+   "fieldId": "fld5uKAqO8yXFlg5F",
+   "liveName": "Contact",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "attendance.session",
+   "fieldId": "fldJ9Yhz6NbrE6MhR",
+   "liveName": "Session",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "attendance.phone",
+   "fieldId": "fldlneeesd7tMxUIG",
+   "liveName": "Phone",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "attendance.name",
+   "fieldId": "fldhZJflE7RhUqwST",
+   "liveName": "Name",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "attendance.attendanceDate",
+   "fieldId": "fldhPXDkql0ynCn9Y",
+   "liveName": "DATETIME_FORMAT",
+   "liveType": "select",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "locations.name",
+   "fieldId": "fldarUNLPjl1aCg2M",
+   "liveName": "Name",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "locations.code",
+   "fieldId": "fld6Zi4QlWPlNj63y",
+   "liveName": "Code",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "locations.status",
+   "fieldId": "fldcqcFRLJrFd77Iw",
+   "liveName": "Status",
+   "liveType": "select",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "users.name",
+   "fieldId": "fldAxt0CvuegC3MnZ",
+   "liveName": "Name",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "users.email",
+   "fieldId": "fldJEg1ZKuJXbDwja",
+   "liveName": "Email",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "users.role",
+   "fieldId": "fld3gD17qO9nk4sxz",
+   "liveName": "Role",
+   "liveType": "select",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "users.status",
+   "fieldId": "fldH77NSXKAxbecCp",
+   "liveName": "Status",
+   "liveType": "select",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "users.locations",
+   "fieldId": "fldtk1f5Mi45xmdMG",
+   "liveName": "Locations",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "users.supabaseUserId",
+   "fieldId": "fldDvNXnFXRoaLhIq",
+   "liveName": "Supabase User ID",
+   "liveType": "text",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "users.invitedBy",
+   "fieldId": "fld0pNLxBz7VsyIgo",
+   "liveName": "Invited By",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  },
+  {
+   "mapping": "users.assignedPreacher",
+   "fieldId": "fldlzGkIw4LS0MbPS",
+   "liveName": "Assigned Preacher",
+   "liveType": "foreignKey",
+   "confidence": "HIGH"
+  }
+ ]
+}

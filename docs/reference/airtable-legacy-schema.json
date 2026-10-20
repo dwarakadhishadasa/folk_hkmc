@@ -1,0 +1,841 @@
+{
+ "base": "appqea9DRLOXqErXb",
+ "source": "docs/airtable-legacy-base.md",
+ "rebuiltFrom": "the committed documentation; the original capture was lost to a tmpfs wipe",
+ "tables": [
+  {
+   "id": "tbltzdtCmCHf6gJKD",
+   "name": "Contacts",
+   "provenance": "corrected from contextual descriptor evidence"
+  },
+  {
+   "id": "tbl2aiD2NfvrBMnfI",
+   "name": "Users",
+   "provenance": "corrected from contextual descriptor evidence"
+  },
+  {
+   "id": "tbldQTIJb7EgPIDVE",
+   "name": "Analytics",
+   "provenance": "corrected from contextual descriptor evidence"
+  },
+  {
+   "id": "tblxfB2W2l6OXc2IX",
+   "name": "Attendance",
+   "provenance": "corrected from contextual descriptor evidence"
+  },
+  {
+   "id": "tbl9AbwkiIaAwK20X",
+   "name": "Sessions",
+   "provenance": "corrected from contextual descriptor evidence"
+  },
+  {
+   "id": "tbl5IOOcS2RUkXzyG",
+   "name": "Locations",
+   "provenance": "corrected from contextual descriptor evidence"
+  },
+  {
+   "id": "tbl9WvM4v2CFsMSBY",
+   "name": "Forms",
+   "provenance": "inferred from formContainerF / allowPublicAccess / formCoverImage descriptors"
+  }
+ ],
+ "fields": [
+  {
+   "id": "fld1OW7R1tgDBkV7i",
+   "name": "Added By",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fldaNPo4ptlc0Pbwh",
+   "name": "Address",
+   "type": "text",
+   "table": "contacts"
+  },
+  {
+   "id": "fld2ez6D0Y99MHsQe",
+   "name": "Admin",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldEwgdNymKULq2el",
+   "name": "Age",
+   "type": "number",
+   "table": "contacts"
+  },
+  {
+   "id": "fldcIHPHRFL5Hs0Fo",
+   "name": "Analytics",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldSzNUmuGmbE1i9U",
+   "name": "Analytics",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldG9I2g9YdQuS8y4",
+   "name": "Anlytics Link",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldt4QoxRwxZB6U8f",
+   "name": "ARRAYJOIN",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fldIIVwIV9HBvDdWs",
+   "name": "Assigned Contacts",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldiG9nSAfBWbw3ij",
+   "name": "Assigned Preacher",
+   "type": "foreignKey",
+   "table": "contacts"
+  },
+  {
+   "id": "fldlzGkIw4LS0MbPS",
+   "name": "Assigned Preacher",
+   "type": "foreignKey",
+   "table": "users"
+  },
+  {
+   "id": "fldec5Zqr33dDwVQd",
+   "name": "Assigned Volunteers",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fld4EgGpwwnBklsED",
+   "name": "Attendance",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldQkC9XZ351OHarA",
+   "name": "Attendance",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldL5sLu5RUxsuGd4",
+   "name": "Attendance - delete",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fldOamVt7HE6Cf2s4",
+   "name": "Attendance Closes At",
+   "type": "date",
+   "table": "sessions"
+  },
+  {
+   "id": "fldhPXDkql0ynCn9Y",
+   "name": "Attendance Date",
+   "type": "lookup",
+   "table": "attendance"
+  },
+  {
+   "id": "fld2il5FEK1fDBeN4",
+   "name": "Attendance Opens At",
+   "type": "date",
+   "table": "sessions"
+  },
+  {
+   "id": "fldWzRkO3NtRFGLVO",
+   "name": "Attendance Records",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldScLbxVMHehGpnP",
+   "name": "Attendance URL",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "flduEPGzcn2ZNpUi0",
+   "name": "AttendanceLog",
+   "type": "rollup",
+   "table": null
+  },
+  {
+   "id": "fldUwvrIZrSUv51Gp",
+   "name": "Attendee Count",
+   "type": "count",
+   "table": null
+  },
+  {
+   "id": "fld23lXdmptRpkiHm",
+   "name": "Branch",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fld6Zi4QlWPlNj63y",
+   "name": "Code",
+   "type": "text",
+   "table": "locations"
+  },
+  {
+   "id": "fldOiszMxhsWOI9OC",
+   "name": "Collected By",
+   "type": "foreignKey",
+   "table": "contacts"
+  },
+  {
+   "id": "fldjyD5cMzhQMgiK2",
+   "name": "Collected Contacts",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldtbZToYqsJx3O1m",
+   "name": "College",
+   "type": "text",
+   "table": "contacts"
+  },
+  {
+   "id": "fldZGRXtDgGGHdlk9",
+   "name": "Company",
+   "type": "text",
+   "table": "contacts"
+  },
+  {
+   "id": "fld5uKAqO8yXFlg5F",
+   "name": "Contact",
+   "type": "foreignKey",
+   "table": "attendance"
+  },
+  {
+   "id": "flduMRrYIaRHbXN6c",
+   "name": "ContactId",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fldd6rMWRwK8PxVLc",
+   "name": "Contacts",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldKyJe4gDRuq4T3O",
+   "name": "Contacts",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldyZaJrauenCB3Tj",
+   "name": "Contacts 2",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldskjShs5t7hAPAj",
+   "name": "Contacts 3",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldTkqcIJK2aNwC2K",
+   "name": "Count (Attendance)_Legacy",
+   "type": "count",
+   "table": null
+  },
+  {
+   "id": "fldkmWQIl2IPXRLa3",
+   "name": "Current status",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldvU1WsX1FV7BxxK",
+   "name": "Date of Birth",
+   "type": "date",
+   "table": "contacts"
+  },
+  {
+   "id": "fldiyvPHh4GXupVFy",
+   "name": "Deactivated At",
+   "type": "date",
+   "table": null
+  },
+  {
+   "id": "fld9DqtWOeMX3cUS3",
+   "name": "Deactivated By",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fldlIaFhhF9mhAcpl",
+   "name": "Delete",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldrke8mwfTq1N0Hq",
+   "name": "Duration Minutes",
+   "type": "number",
+   "table": "sessions"
+  },
+  {
+   "id": "fldJEg1ZKuJXbDwja",
+   "name": "Email",
+   "type": "text",
+   "table": "users"
+  },
+  {
+   "id": "fldfmjPOapjSkLUOI",
+   "name": "Favorite",
+   "type": "checkbox",
+   "table": "contacts"
+  },
+  {
+   "id": "fldLlUU2c46wvl0UW",
+   "name": "Feedback",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fldA7u04AN1QGJiZd",
+   "name": "Initial Contact",
+   "type": "date",
+   "table": "contacts"
+  },
+  {
+   "id": "fldIbxVivuVYT6THg",
+   "name": "Interest",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldzHGC4DXkWnMzOy",
+   "name": "Interest in Future Sessions",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldLxB9tX4JusWjpp",
+   "name": "Interest level",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldDiJksXJZjVt0k0",
+   "name": "Invite Sent At",
+   "type": "date",
+   "table": null
+  },
+  {
+   "id": "fldXpdnmu0UUKlUXc",
+   "name": "Invite Status",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fld0pNLxBz7VsyIgo",
+   "name": "Invited By",
+   "type": "foreignKey",
+   "table": "users"
+  },
+  {
+   "id": "fldyU6Zsw3Frt4UE2",
+   "name": "Invited Users",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldR2gAF4UsdV45JY",
+   "name": "IsPast60Days",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fldCo370C6hCcgKcC",
+   "name": "Last Contacted On",
+   "type": "date",
+   "table": "contacts"
+  },
+  {
+   "id": "fld71oirzdOhW2kZk",
+   "name": "Link to Analytics",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldFAxYOPntMmt2y1",
+   "name": "Link to Analytics",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldQ4SaaJGTgAMYCG",
+   "name": "Location",
+   "type": "foreignKey",
+   "table": "sessions"
+  },
+  {
+   "id": "fldvkZbuEvFr8WW72",
+   "name": "Location",
+   "type": "foreignKey",
+   "table": "contacts"
+  },
+  {
+   "id": "fld41eZGUhpS4N1aj",
+   "name": "Location_Legacy",
+   "type": "text",
+   "table": "contacts"
+  },
+  {
+   "id": "fld9IfaRUJKu6U8yW",
+   "name": "Locations",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldtk1f5Mi45xmdMG",
+   "name": "Locations",
+   "type": "foreignKey",
+   "table": "users"
+  },
+  {
+   "id": "fldNVTjyv1GHuWCrQ",
+   "name": "Meta",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fld6rNvAFajNa0YiP",
+   "name": "Month",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fldoxmIrWmtRo3INS",
+   "name": "Month",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fld5z4R4R9ervCeGR",
+   "name": "Name",
+   "type": "text",
+   "table": "sessions"
+  },
+  {
+   "id": "fld8SsX2vXZU3uE1g",
+   "name": "Name",
+   "type": "text",
+   "table": "contacts"
+  },
+  {
+   "id": "fldarUNLPjl1aCg2M",
+   "name": "Name",
+   "type": "text",
+   "table": "locations"
+  },
+  {
+   "id": "fldAxt0CvuegC3MnZ",
+   "name": "Name",
+   "type": "text",
+   "table": "users"
+  },
+  {
+   "id": "fldhZJflE7RhUqwST",
+   "name": "Name",
+   "type": "text",
+   "table": "attendance"
+  },
+  {
+   "id": "fldTqKNfU91Up0d6S",
+   "name": "Next Follow-up",
+   "type": "date",
+   "table": null
+  },
+  {
+   "id": "fldkz2Wy0kBySyMUs",
+   "name": "Notes",
+   "type": "text",
+   "table": "contacts"
+  },
+  {
+   "id": "fldY9G97EcfGQMBc7",
+   "name": "Occupation",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fldL6lzjy9Vh9EljR",
+   "name": "Past60DayAttendanceCount",
+   "type": "rollup",
+   "table": null
+  },
+  {
+   "id": "fldPfmDbDZjQQGuPa",
+   "name": "Past60DayAttendanceCount_Legacy",
+   "type": "number",
+   "table": null
+  },
+  {
+   "id": "fldPvRzZWfprQUg1P",
+   "name": "Past60DayPercentage",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fld3LopTeJqAJnUhg",
+   "name": "Past60DayPercentage_Legacy",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fldhXRReE7K5wd6vz",
+   "name": "Past60DaySessionCount",
+   "type": "rollup",
+   "table": null
+  },
+  {
+   "id": "fld746R8PKbcKRXse",
+   "name": "Phone",
+   "type": "text",
+   "table": "contacts"
+  },
+  {
+   "id": "fldlneeesd7tMxUIG",
+   "name": "Phone",
+   "type": "text",
+   "table": "attendance"
+  },
+  {
+   "id": "fld7LZkXSACmRhB3H",
+   "name": "Preacher",
+   "type": "foreignKey",
+   "table": "sessions"
+  },
+  {
+   "id": "fldxdx1BjiZF11s8m",
+   "name": "Processed?",
+   "type": "checkbox",
+   "table": null
+  },
+  {
+   "id": "fldVkmOgalZOWAwoB",
+   "name": "Public Attendance Enabled",
+   "type": "checkbox",
+   "table": "sessions"
+  },
+  {
+   "id": "fld3gD17qO9nk4sxz",
+   "name": "Role",
+   "type": "select",
+   "table": "users"
+  },
+  {
+   "id": "fldj7wwwg5ddJkhvX",
+   "name": "Rounds",
+   "type": "number",
+   "table": "contacts"
+  },
+  {
+   "id": "fld4alwyVI0NxHv4L",
+   "name": "Select Year",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fldJ9Yhz6NbrE6MhR",
+   "name": "Session",
+   "type": "foreignKey",
+   "table": "attendance"
+  },
+  {
+   "id": "fldamDX1vEq58nWae",
+   "name": "Session Date",
+   "type": "date",
+   "table": "sessions"
+  },
+  {
+   "id": "fldGlSTnsrMQKBYDP",
+   "name": "Session Key",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fldCAPsvFS5WfGcTR",
+   "name": "Sessions",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldeVvfnSRl7KJsZN",
+   "name": "Sessions",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fldtFOJxZeNfUukgq",
+   "name": "Sessions",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fldU6o0N4Evb1Ju98",
+   "name": "Sessions",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fld1GyNynGPdzLTYJ",
+   "name": "Sessions 2",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fld3FjTlo7Ra2e07p",
+   "name": "Sessions 2",
+   "type": "text",
+   "table": null
+  },
+  {
+   "id": "fldGthK1Y0bqKRVUE",
+   "name": "Sessions 3",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fld2oGmIKM21mGpDM",
+   "name": "Source",
+   "type": "select",
+   "table": "contacts"
+  },
+  {
+   "id": "fldcqcFRLJrFd77Iw",
+   "name": "Status",
+   "type": "select",
+   "table": "locations"
+  },
+  {
+   "id": "fldfrj7Oi85vh04mo",
+   "name": "Status",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldH77NSXKAxbecCp",
+   "name": "Status",
+   "type": "select",
+   "table": "users"
+  },
+  {
+   "id": "fldzCpEGTA4USZyQk",
+   "name": "Status",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldq7b1lJFGSziu4A",
+   "name": "Status Quo",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fldWas3szsBZ9ueZR",
+   "name": "Status Quo_Legacy",
+   "type": "formula",
+   "table": null
+  },
+  {
+   "id": "fldkc4RyfFdbY3WlG",
+   "name": "SUM",
+   "type": "number",
+   "table": null
+  },
+  {
+   "id": "fldDvNXnFXRoaLhIq",
+   "name": "Supabase User ID",
+   "type": "text",
+   "table": "users"
+  },
+  {
+   "id": "fldUTqa06PNWCL1BH",
+   "name": "TotalAttandanceCount_Legacy",
+   "type": "number",
+   "table": null
+  },
+  {
+   "id": "fldxdZSq7gfqfgueW",
+   "name": "TotalAttendanceCount",
+   "type": "count",
+   "table": null
+  },
+  {
+   "id": "fld2efEnRPtBWreZz",
+   "name": "TotalSessionCount",
+   "type": "rollup",
+   "table": null
+  },
+  {
+   "id": "fldsg5L3wsi5lSYZR",
+   "name": "Users",
+   "type": "foreignKey",
+   "table": null
+  },
+  {
+   "id": "fld2jSQLNUigbIPtb",
+   "name": "WhatsappEnabled?",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldmMnWMG3QvocJa0",
+   "name": "Year",
+   "type": "select",
+   "table": null
+  },
+  {
+   "id": "fldVtNRJw0PoedgBu",
+   "name": "Year",
+   "type": "formula",
+   "table": null
+  }
+ ],
+ "framing": {
+  "containerMarker": "fixext1('r', 0x40+depth) precedes every container value",
+  "maps": "flat: fixarray(k) [key1..keyN] followed by k values",
+  "schemaDescriptors": "positional triples [fldId][name][type]",
+  "flags": [
+   "many",
+   "automatic",
+   "unique",
+   "unreversed",
+   "u",
+   "i"
+  ]
+ },
+ "verifiedCorrections": {
+  "fldwl5gdCfcFhMT77": {
+   "name": "Photo",
+   "type": "multipleAttachment",
+   "note": "raw-byte verified; type token outside the standard list"
+  },
+  "fldF7ABQORmBaJerW": {
+   "name": "Session Date",
+   "type": "lookup",
+   "note": "raw-byte verified; lookup on the Session link"
+  },
+  "fldS01FusXYZWa2Fw": {
+   "name": "Visible To",
+   "type": "lookup",
+   "note": "raw-byte verified; \"Read-only lookup from Assigned Preacher\" - the list visibility filter"
+  },
+  "fldL6lzjy9Vh9EljR": {
+   "name": "Past60DayAttendanceCount",
+   "type": "rollup",
+   "note": "rollup -> SUM(values); UI label \"Number of sessions attended in past 2 months\""
+  },
+  "fldxdZSq7gfqfgueW": {
+   "name": "TotalAttendanceCount",
+   "type": "count",
+   "note": "the list sort column, descending"
+  },
+  "fldWzRkO3NtRFGLVO": {
+   "name": "Attendance Records",
+   "type": "foreignKey",
+   "note": "link expanded by the Records grid"
+  },
+  "fldJ9Yhz6NbrE6MhR": {
+   "name": "Session",
+   "type": "foreignKey",
+   "note": "link to the Sessions table"
+  },
+  "fld8SsX2vXZU3uE1g": {
+   "name": "Name",
+   "type": "text",
+   "note": "list card and detail heading cell"
+  },
+  "fld746R8PKbcKRXse": {
+   "name": "Phone",
+   "type": "text",
+   "note": "list card"
+  },
+  "fldtbZToYqsJx3O1m": {
+   "name": "College",
+   "type": "text",
+   "note": "Occupation section"
+  },
+  "fldZGRXtDgGGHdlk9": {
+   "name": "Company",
+   "type": "text",
+   "note": "Occupation section"
+  },
+  "fldhPXDkql0ynCn9Y": {
+   "name": "Attendance Date",
+   "type": "lookup",
+   "note": "the session's program day - the attendance table's date column"
+  },
+  "fldamDX1vEq58nEae": {
+   "name": "date",
+   "type": "date",
+   "note": "raw-byte verified"
+  },
+  "fldYIdVqGjIqX7Y05": {
+   "name": "Attendance Date (from Assignee)",
+   "type": "lookup",
+   "note": "raw-byte verified"
+  },
+  "flddjOIrcuV7U6iij": {
+   "name": "Books",
+   "type": "multipleSelects",
+   "note": "raw-byte verified"
+  },
+  "fldWfRLhTc29I1FSb": {
+   "name": "collaborator",
+   "type": "collaborator",
+   "note": "raw-byte verified"
+  },
+  "fldvkZbuEvFr8WW72": {
+   "name": "Location",
+   "type": "foreignKey",
+   "note": "raw-byte verified"
+  },
+  "fld4EgGpwwnBklsED": {
+   "name": "Attendance",
+   "type": "foreignKey",
+   "note": "raw-byte verified"
+  },
+  "fldXK5bdOsHyIn6r7": {
+   "name": "(select, name not recovered)",
+   "type": "select",
+   "note": "type-validated only"
+  },
+  "fld3gD17qO9nk4sxz": {
+   "name": "Role",
+   "type": "select",
+   "note": "raw-byte verified"
+  },
+  "fldtMCVELgChcMRCz": {
+   "name": "Admin (from Admin)",
+   "type": "lookup",
+   "note": "raw-byte verified; a multipleLookupValues of the Admin collaborator, so it resolves by email and not by a linked-record id - the same reason the migration script gives for resolving it by email"
+  }
+ },
+ "fieldsNotInTheTable": [
+  "fldwl5gdCfcFhMT77",
+  "fldF7ABQORmBaJerW",
+  "fldS01FusXYZWa2Fw",
+  "fldamDX1vEq58nEae",
+  "fldYIdVqGjIqX7Y05",
+  "flddjOIrcuV7U6iij",
+  "fldWfRLhTc29I1FSb",
+  "fldXK5bdOsHyIn6r7",
+  "fldtMCVELgChcMRCz"
+ ]
+}

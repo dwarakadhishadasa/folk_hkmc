@@ -1,0 +1,175 @@
+{
+ "source": "docs/airtable-legacy-base.md",
+ "navEntries": [
+  {
+   "name": "Contacts",
+   "pageId": "pagHmCzuqPSMcXjZx",
+   "defaultVisualization": null
+  },
+  {
+   "name": "Dashboard",
+   "pageId": "pagc77PtbNsr9ljWu",
+   "defaultVisualization": null
+  },
+  {
+   "name": "Sessions",
+   "pageId": "pager0WDWhaPcr3B5",
+   "defaultVisualization": "calendarI}"
+  },
+  {
+   "name": "Attendance",
+   "pageId": "pagiq9sGceEPvTIGQ",
+   "defaultVisualization": null
+  },
+  {
+   "name": "Sessions",
+   "pageId": "pagjoGT4O9MrXXXCT",
+   "defaultVisualization": "gridI}"
+  },
+  {
+   "name": "Contact Details",
+   "pageId": "paglQ8Ap69TqRidpA",
+   "defaultVisualization": "inboxI}"
+  },
+  {
+   "name": "Favorites",
+   "pageId": "pagm11D5Ble0O8Or7",
+   "defaultVisualization": "inboxI"
+  },
+  {
+   "name": "Registrations",
+   "pageId": "pagz1nbdfiXBflfNi",
+   "defaultVisualization": null
+  },
+  {
+   "name": "New Attendance",
+   "pageId": "pagGNEf2TeM7sFncY",
+   "defaultVisualization": null
+  },
+  {
+   "name": "New Attendance 2",
+   "pageId": "pag9jVErkH6h5CVnk",
+   "defaultVisualization": null
+  },
+  {
+   "name": "Feedback",
+   "pageId": "pagHzOXmxQFeVyu7K",
+   "defaultVisualization": null
+  }
+ ],
+ "pageTypeFieldBindings": [
+  {
+   "pageType": null,
+   "label": "Attendance pagiq9sGceEPvTIGQ",
+   "fields": [
+    "Name",
+    "Phone",
+    "Photo",
+    "TotalAttendanceCount"
+   ]
+  },
+  {
+   "pageType": null,
+   "label": "Attendance row pagcLd2QJIas0dpEx",
+   "fields": [
+    "Visible To",
+    "Location",
+    "Past60DayAttendanceCount",
+    "Session",
+    "Session Date",
+    "Attendance Records"
+   ]
+  },
+  {
+   "pageType": null,
+   "label": "Contact Details paglQ8Ap69TqRidpA (type pagXJJ7muzwSttNVK)",
+   "fields": [
+    "Name",
+    "Phone",
+    "Photo",
+    "Interest",
+    "Last Contacted On",
+    "Date of Birth",
+    "Branch",
+    "Notes",
+    "AttendanceLog",
+    "WhatsappEnabled?",
+    "TotalAttendanceCount",
+    "Past60DayAttendanceCount"
+   ]
+  },
+  {
+   "pageType": null,
+   "label": "Contact Detail 2 pag2ZG4E5Tf528dDm",
+   "fields": [
+    "Name",
+    "Phone",
+    "Photo",
+    "College",
+    "Company",
+    "Location",
+    "Date of Birth",
+    "Rounds",
+    "Initial Contact",
+    "Notes",
+    "TotalAttendanceCount",
+    "Past60DayAttendanceCount"
+   ]
+  },
+  {
+   "pageType": null,
+   "label": "Contacts sidesheet pagRU4vhDmpCflhZs",
+   "fields": [
+    "Name",
+    "Phone",
+    "Collected By",
+    "Initial Contact",
+    "TotalAttendanceCount",
+    "Past60DayAttendanceCount"
+   ]
+  },
+  {
+   "pageType": null,
+   "label": "Sessions sidesheet pagVjhR1HmNTz7vjZ",
+   "fields": [
+    "Name",
+    "Phone",
+    "Session Date",
+    "Attendee Count",
+    "Location",
+    "Attendance"
+   ]
+  },
+  {
+   "pageType": null,
+   "label": "Attendance sidesheet pagueHhRyM1bhSmSy",
+   "fields": [
+    "Name",
+    "Phone",
+    "Contact",
+    "Session",
+    "Past60DayAttendanceCount"
+   ]
+  },
+  {
+   "pageType": null,
+   "label": "Form post-submission pagrR58csx8jEoYnH",
+   "fields": [
+    "Name",
+    "Phone",
+    "Photo",
+    "College",
+    "Company",
+    "Date of Birth",
+    "Rounds",
+    "Notes",
+    "Initial Contact",
+    "Assigned Preacher",
+    "Role",
+    "Email",
+    "Favorite",
+    "WhatsappEnabled?"
+   ]
+  }
+ ]
+}

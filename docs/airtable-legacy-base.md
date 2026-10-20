@@ -37,6 +37,11 @@ treats an absent field as null rather than looking a field up by name.
 111 fields recovered. `table` is populated where the migration map assigns the
 field to a table; for the rest, table membership was not established.
 
+`docs/reference/airtable-legacy-schema.json` carries the same data in machine-readable form, plus
+the field ids whose name was verified directly against the captured bytes.
+`docs/reference/airtable-legacy-pages.json` carries the page inventory, and
+`docs/reference/airtable-repo-map-validation.json` the field-by-field check below.
+
 | field id | name | type | table |
 | --- | --- | --- | --- |
 | `fld1OW7R1tgDBkV7i` | Added By | text | — |
@@ -339,6 +344,12 @@ was opened only through the Attendance page's "Go to interface" button, and the 
 in is not its normal rendering, so it is described but not characterised. The interface's
 per-page drafts were not captured, so a page could in principle override the field set of the
 page type it uses. The realtime stream body (`withCompression`) was not decoded.
+
+The working capture — the DevTools recording, the REA capture records and the page screenshots —
+was lost when the machine's `/tmp` was wiped by a restart. The committed document and
+`docs/reference/` are the durable output; the tools that produced them live outside `/tmp` at
+`~/.local/share/rea-airtable-tools/`, whose README records which steps are verified and which
+inputs are gone.
 
 The Airtable client bundle is 661 chunks served from
 `static.airtable.com/esbuild/by_sha/8979430b/br/chunks/`; it is minified shipped code and was not
