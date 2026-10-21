@@ -188,35 +188,41 @@ differently, was populated.
 
 ## 6. What this changed in this repository
 
-The mobile interface's stack is now in the app, as a **contact surface** over
-the `/manage` contacts grid.
+The mobile interface's stack is now in the app, as a **contact list** — the
+view the `/manage` contacts tab shows on a phone.
 
 | Source (mobile app) | Here |
 |---|---|
-| Two-column list, every cell tappable | `components/manage/manage-contact-overlay.tsx` |
+| Two-column list, every cell tappable | `components/manage/manage-contact-list.tsx` |
 | Field sheet with `Expand contact` | `components/manage/manage-contact-sheet.tsx` |
 | Expanded record, label over value | `components/manage/manage-contact-record.tsx` |
 | Shared field vocabulary | `components/manage/manage-contact-fields.ts` |
 | Per-field editor | `components/manage/manage-contact-field-editor.tsx` |
 
-Four decisions differ from the source, and each is a decision rather than an
+Five decisions differ from the source, and each is a decision rather than an
 oversight:
 
-1. **The grid is not replaced.** The mobile app's list is two columns and the
-   grid is thirteen; a spreadsheet that also stacked would be neither. The
-   surface is over the grid, and the grid stays the grid.
+1. **The grid is not replaced — it is the *other* view.** The mobile app's
+   list is two columns and the grid is thirteen; a spreadsheet that also
+   stacked would be neither. So the contacts tab shows one of the two, and
+   the viewport chooses: the grid at 768px and above, the list below it. The
+   grid is **not mounted** behind the list, so on a phone none of it reaches
+   the accessibility tree or the tab order.
 2. **The field set is this product's.** Nine fields — `Name`, `Phone`,
    `Location`, `Notes` writable; `Initial Contact`, `Total attendance`,
    `Past 60 day attendance`, `Collected By`, `Favorite` read-only. The
    Airtable record view's six are not the answer to a question this app asks.
-3. **The write path is the grid's.** The surface hands a value to the grid's
+3. **The write path is the grid's.** The list hands a value to the grid's
    own commit handler, so the optimistic update, the request, the rollback and
    the rejection are the grid's. There is one place where a contact is
    written, not two.
 4. **A single click does not open an editor.** CAP-10 makes the double-click
-   the only gesture that opens one, and the surface is a *different*
-   component — so it does not reopen what CAP-10 retired. The surface's cells
-   are a list, and a tap on a list item opens that item's field.
+   the only gesture that opens one, and the list is a *different* component —
+   so it does not reopen what CAP-10 retired. The list's cells are a list,
+   and a tap on a list item opens that item's field.
+5. **Creating a contact is not offered on a phone.** `+ Add record` is a grid
+   control, and the grid is not mounted there. A create flow for the list is
+   its own story, not something the detection quietly takes over.
 
 ## 7. How it was observed, and what is not established
 

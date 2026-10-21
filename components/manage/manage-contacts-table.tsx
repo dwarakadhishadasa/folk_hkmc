@@ -3,7 +3,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createColumnHelper } from "@tanstack/react-table"
 import type { RowSelectionState, Table } from "@tanstack/react-table"
-import { Smartphone } from "lucide-react"
 
 import type {
   ManageContact,
@@ -19,7 +18,7 @@ import {
   UNRESOLVED_STAFF,
   type ContactFieldId,
 } from "@/components/manage/manage-contact-fields"
-import { ManageContactOverlay } from "@/components/manage/manage-contact-overlay"
+import { ManageContactList } from "@/components/manage/manage-contact-list"
 import {
   Grid,
   GRID_DEFAULT_DENSITY,
@@ -32,8 +31,8 @@ import {
   type GridRowContextMenuProps,
   type GridRowLifecycle,
 } from "@/components/grid"
+import { useDeviceView } from "@/hooks/use-mobile"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Button } from "@/components/ui/button"
 import {
   ContextMenuItem,
   ContextMenuLabel,
@@ -557,15 +556,20 @@ export function ManageContactsTable({
   const [notice, setNotice] = useState<Notice | null>(null)
 
   /**
-   * Whether the contact surface is open over the grid.
+   * Which of the two contacts views this device takes.
    *
-   * The surface is the Airtable mobile interface's Contacts page — a
-   * two-column list that stacks a field sheet and then the whole record over
-   * itself. It is *over* the grid rather than beside it, because the grid's
-   * thirteen columns and the surface's two are not two views of one layout:
-   * the grid is a spreadsheet and the surface is a phone.
+   * The viewport decides, and the decision is made *before* any of this
+   * component's state: the grid is a spreadsheet of thirteen columns and the
+   * contact list is a phone-shaped two-column stack, and only one of them can
+   * be the right thing on a given screen. A phone cannot use the grid, and a
+   * desktop does not want the list, so the operator is not asked to choose —
+   * a button that offered the choice was the thing this replaced.
+   *
+   * `null` is the third answer: the server cannot know the viewport, so the
+   * first render shows neither view rather than the wrong one, and the
+   * container keeps its box while it waits.
    */
-  const [overlayOpen, setOverlayOpen] = useState(false)
+  const deviceView = useDeviceView()
 
   /**
    * The committed rows, mirrored from the payload so a write can be applied
@@ -945,9 +949,9 @@ export function ManageContactsTable({
   )
 
   /**
-   * The contact surface's write.
+   * The contact list's write.
    *
-   * It is a **commit**, not a request: the surface hands the value to the
+   * It is a **commit**, not a request: the list hands the value to the
    * grid's own commit path, so the optimistic update, the request, the
    * rollback and the rejection are the grid's. A second write path here would
    * be a second place where a contact is written and a second place where a
@@ -958,7 +962,7 @@ export function ManageContactsTable({
    * same way the grid reads it, so a refused write reverts to what the
    * operator was looking at rather than to a guess.
    */
-  const handleOverlayCommit = useCallback(
+  const handleListCommit = useCallback(
     async (contactId: string, fieldId: ContactFieldId, value: unknown) => {
       const contact = contacts.find((row) => row.id === contactId)
 
@@ -976,7 +980,7 @@ export function ManageContactsTable({
         })
       } catch (cause) {
         // The grid's own commits report a refusal through `onEditError`, which
-        // the grid turns into a cell revert and a status line. The surface is
+        // the grid turns into a cell revert and a status line. The list is
         // not a grid, so it reports here — on the same notice, in the same
         // words, so there is one error story rather than two.
         setNotice({
@@ -1462,10 +1466,13 @@ export function ManageContactsTable({
   /*
    * `flex min-h-0 flex-1 flex-col` — the last hop before the grid, and the one
    * that makes the grid's `flex-1` mean anything. `space-y-3` → `gap-3` is the
-   * same rhythm. The `role="status"` notice is *above* the grid, so it stays
-   * visible in a bounded layout rather than scrolling out with the rows. The
-   * status row is the grid's own footer: see `renderFooterCell` for why it
-   * cannot live below the table.
+   * same rhythm. The `role="status"` notice is *above* whichever view is
+   * showing, so it stays visible in a bounded layout rather than scrolling out
+   * with the rows. The status row is the grid's own footer: see
+   * `renderFooterCell` for why it cannot live below the table.
+   *
+   * The container keeps its box whatever the device view is, so the page does
+   * not jump while the viewport is still being found.
    */
   return (
     <div className="relative flex min-h-0 flex-1 flex-col gap-3">
@@ -1482,74 +1489,64 @@ export function ManageContactsTable({
         </p>
       ) : null}
 
-      <Grid<ManageContact>
-        rows={contacts}
-        columns={columns}
-        getRowId={(contact) => contact.id}
-        state={{ ...viewState, rowSelection }}
-        onStateChange={onStateChange}
-        filterConnective={filterConnective}
-        onFilterConnectiveChange={setFilterConnective}
-        onRowSelectionChange={setRowSelection}
-        ariaLabel="Contacts"
-        density={density}
-        onDensityChange={setDensity}
-        transient={{
-          begin: beginTransientChange,
-          commit: commitTransientChange,
-          cancel: cancelTransientChange,
-        }}
-        onCellCommit={handleCellCommit}
-        onClearFilters={clearFilters}
-        onUnreachableNewRow={handleUnreachableNewRow}
-        tableFooter={(column) =>
-          renderFooterCell(column.columnId, statusSummary.label, aggregateByColumnId)
-        }
-        rowLifecycle={rowLifecycle}
-        onRowRemoved={handleRowRemoved}
-        rowContextMenu={ContactsRowContextMenu}
-        toolbarExtra={
-          /*
-            The way into the contact surface.
+      {/*
+        The desktop view: the grid, untouched.
 
-            It is a toolbar control rather than a tab or a route because it is
-            another **view of the same contacts**, not another place: the grid
-            is a spreadsheet and this is the phone-shaped list the Airtable
-            mobile interface draws. The toolbar is where the grid's other
-            views of itself already live — the columns, the filters, the sort,
-            the density — so a second view belongs there rather than in the
-            portal's tab strip.
-          */
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setOverlayOpen(true)}
-            className="h-8 gap-1.5 text-[13px]"
-          >
-            <Smartphone aria-hidden="true" className="size-3.5" />
-            Contact list
-          </Button>
-        }
-      />
+        Same columns, same write path, same keyboard model as before — the
+        device detection only decides *which* view is on the screen, never
+        what the grid does.
+      */}
+      {deviceView === "desktop" ? (
+        <Grid<ManageContact>
+          rows={contacts}
+          columns={columns}
+          getRowId={(contact) => contact.id}
+          state={{ ...viewState, rowSelection }}
+          onStateChange={onStateChange}
+          filterConnective={filterConnective}
+          onFilterConnectiveChange={setFilterConnective}
+          onRowSelectionChange={setRowSelection}
+          ariaLabel="Contacts"
+          density={density}
+          onDensityChange={setDensity}
+          transient={{
+            begin: beginTransientChange,
+            commit: commitTransientChange,
+            cancel: cancelTransientChange,
+          }}
+          onCellCommit={handleCellCommit}
+          onClearFilters={clearFilters}
+          onUnreachableNewRow={handleUnreachableNewRow}
+          tableFooter={(column) =>
+            renderFooterCell(column.columnId, statusSummary.label, aggregateByColumnId)
+          }
+          rowLifecycle={rowLifecycle}
+          onRowRemoved={handleRowRemoved}
+          rowContextMenu={ContactsRowContextMenu}
+        />
+      ) : null}
 
       {/*
-        The contact surface, over the grid.
+        The phone view: the contact list, and nothing else.
 
-        It is absolutely positioned against this container rather than
-        rendered beside the grid, so it covers the grid exactly — including
-        the grid's own toolbar — and the operator who closes it finds the
-        grid where they left it, with its scroll position and its selection
-        intact.
+        The grid is **not mounted** underneath it — not hidden, not covered —
+        so none of the grid's rows, its keyboard model or its virtualization
+        reaches the accessibility tree or the tab order behind the list.
+
+        The wrapper is `relative flex-1` so the list's `absolute inset-0` root
+        fills the space under the notice line, and so the sheet and the record
+        — both positioned against the list's own frame — still resolve
+        against it.
       */}
-      {overlayOpen ? (
-        <ManageContactOverlay
-          contacts={contacts}
-          locations={payload.locations}
-          resolvers={{ locationNameById, staffNameById }}
-          onCommit={handleOverlayCommit}
-          onClose={() => setOverlayOpen(false)}
-        />
+      {deviceView === "mobile" ? (
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <ManageContactList
+            contacts={contacts}
+            locations={payload.locations}
+            resolvers={{ locationNameById, staffNameById }}
+            onCommit={handleListCommit}
+          />
+        </div>
       ) : null}
     </div>
   )

@@ -414,8 +414,8 @@ suite it is inside of. That is why it is a script.
 Recorded result: **86 passed on each of two consecutive runs**, script exit 0, with
 Playwright 1.62.0 — first at revision `c2cfaa6`, and re-measured on a working tree on
 top of `464b4ed` after this story's grid fix, with the same count and no `✘` in either
-run's output. Since then the contact surface has added five tests
-(`e2e/specs/manage-contacts-sheet.spec.ts`) and the suite carries two known failures
+run's output. Since then the contact list has added eleven tests
+(`e2e/specs/manage-contacts-list.spec.ts`) and the suite carries two known failures
 in `e2e/specs/manage-contacts-filter.spec.ts` (rows 17 and 18), both reproduced on a
 clean tree; the combined total has not been re-measured. Note
 `retries` is a determinism property here, not a CI preference — under `CI` the key

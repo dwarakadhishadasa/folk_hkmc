@@ -152,7 +152,7 @@ use, each including the 3 setup tests that every run pays for:
 | Filter | Script | Tests |
 |---|---|---|
 | `grid-` | `test:e2e:grid` | 181 in 14 files |
-| `manage-contacts` | `test:e2e:manage` | 35 in 9 files |
+| `manage-contacts` | `test:e2e:manage` | 48 in 10 files |
 | `record-review-` | `test:e2e:attendance` | 9 in 4 files |
 | `theme-switch` | `test:e2e:theme` | 16 in 4 files |
 | `harness-guards suite-determinism mailpit-reader` | `test:e2e:guards` | 24 in 6 files |
@@ -165,7 +165,7 @@ selects three files in one run.
 ## 4. Feature-to-test registry
 
 Every path below is verified to exist. Counts are from `pnpm test:e2e:list`
-(289 spec tests + 3 setup tests, 292 total).
+(328 spec tests + 3 setup tests, 331 total).
 
 ### Staff auth and session handling — `pnpm test:e2e smoke`
 
@@ -186,16 +186,17 @@ session, 403 for a Volunteer, and that a failed sign-in provisions nothing.
 | " | `e2e/specs/manage-contacts-bulk.spec.ts` | 2 |
 | " | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
 | " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 11 |
-| `components/manage/manage-contact-overlay.tsx`, `manage-contact-sheet.tsx`, `manage-contact-record.tsx`, `manage-contact-field-editor.tsx`, `manage-contact-fields.ts` | `e2e/specs/manage-contacts-sheet.spec.ts` | 5 |
+| `components/manage/manage-contact-list.tsx`, `manage-contact-sheet.tsx`, `manage-contact-record.tsx`, `manage-contact-field-editor.tsx`, `manage-contact-fields.ts`, `hooks/use-mobile.ts` | `e2e/specs/manage-contacts-list.spec.ts` | 11 |
 
 These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
 lives in
 [`matrix-coverage-map.md`](../../_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md).
 
-The contact-surface spec is **not** a matrix row. It covers the contact
-surface — the list → field sheet → expanded record stack described in
-[`airtable-mobile-interface.md`](../airtable-mobile-interface.md) — and it is
-listed separately because it has no matrix row to claim.
+The contact-list spec is **not** a matrix row. It covers the contact list —
+the list → field sheet → expanded record stack described in
+[`airtable-mobile-interface.md`](../airtable-mobile-interface.md) — and the
+device detection that chooses between that list and the grid, so it is listed
+separately because it has no matrix row to claim.
 
 ### Attendance tab — the record review and its location filter — `pnpm test:e2e:attendance`
 
@@ -272,6 +273,7 @@ not a local change — run the specs named for every consumer.
 | `components/staff-auth-shell.tsx` | `/manage`, `/sessions`, `/dashboard`, `/contact`, `/volunteers`, `/admin/invite` ×2 apps | `smoke` + `test:e2e:manage` |
 | `components/grid/**` | `manage-contacts-table.tsx`, `/dev/grid-preview` | `test:e2e:grid` **+** `test:e2e:manage` |
 | `components/manage/manage-types.ts` | Manage UI **and** `lib/manage/api-handlers.ts` (server) | `test:e2e:manage` |
+| `hooks/use-mobile.ts` | `manage-contacts-table.tsx` (the device detection) and `components/ui/sidebar.tsx` | `test:e2e:manage` |
 | `lib/manage/api-handlers.ts` | The three `/api/manage/contacts/*` routes ×2 apps | `test:e2e:manage` |
 | `lib/authz.ts` | Every staff page + every authz'd API route ×2 apps | Full `pnpm test:e2e` |
 | `lib/supabase/data.ts` | Sessions, dashboard, contact, invite, attendance, registration ×2 apps | Full `pnpm test:e2e` |

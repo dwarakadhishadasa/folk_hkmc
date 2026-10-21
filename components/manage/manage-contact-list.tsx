@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 /**
- * The contact surface: the Airtable mobile interface's Contacts page, brought
+ * The contact list: the Airtable mobile interface's Contacts page, brought
  * into this app.
  *
  * The Airtable app rendered the interface's Contacts page as a **list of two
@@ -28,11 +28,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
  * the bottom holding that cell's editor; the sheet's "Expand contact" action
  * opens the whole record over it. This component is that stack.
  *
- * The list is deliberately not the contacts grid. The grid is a spreadsheet:
- * thirteen columns, a toolbar, a column manager, a keyboard model. The
- * Airtable page is a phone-shaped surface with two columns and a stack, and
- * mixing the two — a spreadsheet that also stacked — would give the operator
- * neither. So the grid stays the grid, and this is the other shape, over it.
+ * The list is deliberately not the contacts grid, and it is not a rendering of
+ * the grid either. The grid is a spreadsheet: thirteen columns, a toolbar, a
+ * column manager, a keyboard model. The Airtable page is a phone-shaped
+ * surface with two columns and a stack, and mixing the two — a spreadsheet
+ * that also stacked — would give the operator neither. So the grid stays the
+ * grid, and this is the other shape: on a narrow viewport it **is** the
+ * contacts view, chosen by the viewport rather than by a button.
  *
  * What the two share is everything underneath: the same rows, the same write
  * path, and the same field vocabulary.
@@ -70,7 +72,7 @@ const SORT_OPTIONS: readonly { id: string; label: string }[] = [
   { id: CONTACT_FIELD_IDS.collectedBy, label: "Collected By" },
 ]
 
-export interface ManageContactOverlayProps {
+export interface ManageContactListProps {
   contacts: readonly ManageContact[]
   /** The program's locations — the options the location picker offers. */
   locations: readonly ManageLocation[]
@@ -78,17 +80,23 @@ export interface ManageContactOverlayProps {
   resolvers: ContactFieldResolvers
   /** Called with the new value, for a field that can be written. */
   onCommit: (contactId: string, fieldId: ContactFieldId, value: unknown) => void
-  /** Close the surface and return to the grid. */
-  onClose: () => void
+  /**
+   * Close the list and return to the grid.
+   *
+   * Optional, and optional for a reason: on a phone the list is the *whole*
+   * contacts view, so there is nothing to close back to. A "Close contacts"
+   * button there would close the only contacts surface the operator has.
+   */
+  onClose?: () => void
 }
 
-export function ManageContactOverlay({
+export function ManageContactList({
   contacts,
   locations,
   resolvers,
   onCommit,
   onClose,
-}: ManageContactOverlayProps) {
+}: ManageContactListProps) {
   const [query, setQuery] = useState("")
   const [sortId, setSortId] = useState("default")
 
@@ -117,14 +125,12 @@ export function ManageContactOverlay({
   )
 
   /**
-   * The surface takes the focus when it opens.
+   * The list takes the focus when it mounts.
    *
-   * The grid keeps its focus model on a container element, and a container
-   * that still holds the focus keeps answering keys — so an operator who
-   * pressed `Escape` to dismiss the sheet would also collapse the grid's
-   * selection behind it. Moving the focus here takes the grid's keyboard model
-   * out of the picture for as long as the surface is up, which is the same
-   * thing a modal does and the reason a modal has to.
+   * On a phone the list is the whole contacts view, so the focus has to land
+   * inside it: a document that keeps its focus on the page behind the list
+   * answers `Tab` to that page, and an operator who pressed `Escape` to
+   * dismiss the sheet would find something behind it answering keys instead.
    */
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -142,19 +148,21 @@ export function ManageContactOverlay({
       ref={rootRef}
       tabIndex={-1}
       className="absolute inset-0 z-30 flex flex-col bg-card outline-none"
-      data-contact-overlay=""
+      data-contact-list=""
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Close contacts"
-          onClick={onClose}
-          className="size-8 text-[var(--program-text)]"
-        >
-          <X aria-hidden="true" className="size-4" />
-        </Button>
+        {onClose ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Close contacts"
+            onClick={onClose}
+            className="size-8 text-[var(--program-text)]"
+          >
+            <X aria-hidden="true" className="size-4" />
+          </Button>
+        ) : null}
         <h2 className="min-w-0 flex-1 truncate font-[family-name:var(--font-poppins)] text-[15px] font-semibold text-[var(--program-text)]">
           Contacts
         </h2>
