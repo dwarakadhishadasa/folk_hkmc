@@ -42,6 +42,7 @@ The older generated docs described a single root app and no longer reflected the
 - [Manage Grid Pattern](./manage-grid-pattern.md) - The contract every `/manage` table follows: column conventions, commit/rollback, selection, bulk semantics, and the URL state contract. Read it before porting a table onto `components/grid/`.
 - [Claiming a Matrix Row](./claiming-a-matrix-row.md) - How to satisfy the six rules that turn a matrix row from Manual to Covered, and what evidence to record.
 - [Airtable Legacy Base](./airtable-legacy-base.md) - Reference snapshot of the retired Airtable base: table and field identities with types, the Interface pages it served, and a field-by-field validation of the migration map in `scripts/migrate-airtable-data.mjs`
+- [Airtable Mobile Interface](./airtable-mobile-interface.md) - The Airtable Android app's rendering of the same "Admin Portal" interface: the list → field sheet → expanded record stack, and why its field labels differ from the base's field names. Read it before changing the contact surface in `components/manage/`.
 - [NestJS Backend Reference](./nestjs-backend.md) - Historical/reference notes for a possible separate backend
 
 ## Getting Started

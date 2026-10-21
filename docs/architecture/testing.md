@@ -186,10 +186,16 @@ session, 403 for a Volunteer, and that a failed sign-in provisions nothing.
 | " | `e2e/specs/manage-contacts-bulk.spec.ts` | 2 |
 | " | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
 | " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 11 |
+| `components/manage/manage-contact-overlay.tsx`, `manage-contact-sheet.tsx`, `manage-contact-record.tsx`, `manage-contact-field-editor.tsx`, `manage-contact-fields.ts` | `e2e/specs/manage-contacts-sheet.spec.ts` | 5 |
 
 These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
 lives in
 [`matrix-coverage-map.md`](../../_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md).
+
+The contact-surface spec is **not** a matrix row. It covers the contact
+surface — the list → field sheet → expanded record stack described in
+[`airtable-mobile-interface.md`](../airtable-mobile-interface.md) — and it is
+listed separately because it has no matrix row to claim.
 
 ### Attendance tab — the record review and its location filter — `pnpm test:e2e:attendance`
 

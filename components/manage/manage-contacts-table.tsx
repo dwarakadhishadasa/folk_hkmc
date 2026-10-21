@@ -3,6 +3,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createColumnHelper } from "@tanstack/react-table"
 import type { RowSelectionState, Table } from "@tanstack/react-table"
+import { Smartphone } from "lucide-react"
 
 import type {
   ManageContact,
@@ -11,6 +12,14 @@ import type {
   ManageContactWriteResult,
   ManagePortalPayload,
 } from "@/components/manage/manage-types"
+import {
+  CONTACT_FIELD_IDS,
+  contactFieldValue,
+  UNRESOLVED_LOCATION,
+  UNRESOLVED_STAFF,
+  type ContactFieldId,
+} from "@/components/manage/manage-contact-fields"
+import { ManageContactOverlay } from "@/components/manage/manage-contact-overlay"
 import {
   Grid,
   GRID_DEFAULT_DENSITY,
@@ -24,6 +33,7 @@ import {
   type GridRowLifecycle,
 } from "@/components/grid"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from "@/components/ui/button"
 import {
   ContextMenuItem,
   ContextMenuLabel,
@@ -50,37 +60,37 @@ function readError(payload: unknown, fallback: string): string {
 }
 
 const SELECT_COLUMN_ID = "select"
-const NAME_COLUMN_ID = "name"
-const PHONE_COLUMN_ID = "phone"
-const LOCATION_COLUMN_ID = "location"
+const NAME_COLUMN_ID = CONTACT_FIELD_IDS.name
+const PHONE_COLUMN_ID = CONTACT_FIELD_IDS.phone
+const LOCATION_COLUMN_ID = CONTACT_FIELD_IDS.location
 const SOURCE_COLUMN_ID = "source"
 const BOOKS_READ_COLUMN_ID = "booksRead"
-const INITIAL_CONTACT_COLUMN_ID = "initialContact"
+const INITIAL_CONTACT_COLUMN_ID = CONTACT_FIELD_IDS.initialContact
 const DATE_OF_BIRTH_COLUMN_ID = "dateOfBirth"
-const TOTAL_COLUMN_ID = "totalAttendanceCount"
-const PAST_60_COLUMN_ID = "past60DayAttendanceCount"
+const TOTAL_COLUMN_ID = CONTACT_FIELD_IDS.totalAttendance
+const PAST_60_COLUMN_ID = CONTACT_FIELD_IDS.past60DayAttendance
 const LAST_CONTACTED_COLUMN_ID = "lastContactedOn"
-const NOTES_COLUMN_ID = "notes"
-const COLLECTED_BY_COLUMN_ID = "collectedBy"
-const FAVORITE_COLUMN_ID = "favorite"
+const NOTES_COLUMN_ID = CONTACT_FIELD_IDS.notes
+const COLLECTED_BY_COLUMN_ID = CONTACT_FIELD_IDS.collectedBy
+const FAVORITE_COLUMN_ID = CONTACT_FIELD_IDS.favorite
 
-/**
+/*
+ * `UNRESOLVED_LOCATION` and `UNRESOLVED_STAFF` live in
+ * `manage-contact-fields.ts` now, because the contact surface renders the same
+ * two references and the marker has to be the same marker in both places.
+ *
  * What a `locationIds` / `collectedById` reference that resolves to nothing
- * renders as.
+ * renders as is a marker, not the id and not a guess derived from it. A contact
+ * with no location and a contact whose location row is gone are *different
+ * facts*, and both the empty string and the raw UUID collapse them: one hides
+ * the dangling reference entirely, the other prints a database identifier at an
+ * operator and tells them nothing about what to do next.
  *
- * The honest answer is a marker, not the id and not a guess derived from it. A
- * contact with no location and a contact whose location row is gone are
- * *different facts*, and both the empty string and the raw UUID collapse them:
- * one hides the dangling reference entirely, the other prints a database
- * identifier at an operator and tells them nothing about what to do next.
- *
- * Wording lives here rather than in the grid because the primitive has no
- * vocabulary for a location. `meta.grid.unresolvedText` carries this value to
- * the `linked` renderer, which marks the cell rather than matching a shape — so
- * rewording this string cannot silently stop the marker being recognised.
+ * The wording lives outside the grid because the primitive has no vocabulary
+ * for a location. `meta.grid.unresolvedText` carries the value to the `linked`
+ * renderer, which marks the cell rather than matching a shape — so rewording
+ * the string cannot silently stop the marker being recognised.
  */
-const UNRESOLVED_LOCATION = "Unknown location"
-const UNRESOLVED_STAFF = "Unknown staff member"
 
 /**
  * What the status line says when `+ Add record` appends a row no active filter
@@ -547,6 +557,17 @@ export function ManageContactsTable({
   const [notice, setNotice] = useState<Notice | null>(null)
 
   /**
+   * Whether the contact surface is open over the grid.
+   *
+   * The surface is the Airtable mobile interface's Contacts page — a
+   * two-column list that stacks a field sheet and then the whole record over
+   * itself. It is *over* the grid rather than beside it, because the grid's
+   * thirteen columns and the surface's two are not two views of one layout:
+   * the grid is a spreadsheet and the surface is a phone.
+   */
+  const [overlayOpen, setOverlayOpen] = useState(false)
+
+  /**
    * The committed rows, mirrored from the payload so a write can be applied
    * optimistically without a round trip.
    *
@@ -921,6 +942,50 @@ export function ManageContactsTable({
       applyWrite(await patchContact(commit.rowId, { [patchKey]: commit.value }))
     },
     [applyWrite, createContact, patchContact],
+  )
+
+  /**
+   * The contact surface's write.
+   *
+   * It is a **commit**, not a request: the surface hands the value to the
+   * grid's own commit path, so the optimistic update, the request, the
+   * rollback and the rejection are the grid's. A second write path here would
+   * be a second place where a contact is written and a second place where a
+   * refused write has to be reported — which is the thing the grid pattern
+   * exists to prevent.
+   *
+   * The `previousValue` is the value the field held before the edit, read the
+   * same way the grid reads it, so a refused write reverts to what the
+   * operator was looking at rather than to a guess.
+   */
+  const handleOverlayCommit = useCallback(
+    async (contactId: string, fieldId: ContactFieldId, value: unknown) => {
+      const contact = contacts.find((row) => row.id === contactId)
+
+      if (!contact) {
+        return
+      }
+
+      try {
+        await handleCellCommit({
+          rowId: contactId,
+          columnId: fieldId,
+          row: contact,
+          previousValue: contactFieldValue(contact, fieldId),
+          value,
+        })
+      } catch (cause) {
+        // The grid's own commits report a refusal through `onEditError`, which
+        // the grid turns into a cell revert and a status line. The surface is
+        // not a grid, so it reports here — on the same notice, in the same
+        // words, so there is one error story rather than two.
+        setNotice({
+          kind: "error",
+          message: cause instanceof Error ? cause.message : "The change could not be saved.",
+        })
+      }
+    },
+    [contacts, handleCellCommit],
   )
 
   const toggleFavorite = useCallback(
@@ -1403,7 +1468,7 @@ export function ManageContactsTable({
    * cannot live below the table.
    */
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="relative flex min-h-0 flex-1 flex-col gap-3">
       {notice ? (
         <p
           role="status"
@@ -1443,7 +1508,49 @@ export function ManageContactsTable({
         rowLifecycle={rowLifecycle}
         onRowRemoved={handleRowRemoved}
         rowContextMenu={ContactsRowContextMenu}
+        toolbarExtra={
+          /*
+            The way into the contact surface.
+
+            It is a toolbar control rather than a tab or a route because it is
+            another **view of the same contacts**, not another place: the grid
+            is a spreadsheet and this is the phone-shaped list the Airtable
+            mobile interface draws. The toolbar is where the grid's other
+            views of itself already live — the columns, the filters, the sort,
+            the density — so a second view belongs there rather than in the
+            portal's tab strip.
+          */
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setOverlayOpen(true)}
+            className="h-8 gap-1.5 text-[13px]"
+          >
+            <Smartphone aria-hidden="true" className="size-3.5" />
+            Contact list
+          </Button>
+        }
       />
+
+      {/*
+        The contact surface, over the grid.
+
+        It is absolutely positioned against this container rather than
+        rendered beside the grid, so it covers the grid exactly — including
+        the grid's own toolbar — and the operator who closes it finds the
+        grid where they left it, with its scroll position and its selection
+        intact.
+      */}
+      {overlayOpen ? (
+        <ManageContactOverlay
+          contacts={contacts}
+          locations={payload.locations}
+          resolvers={{ locationNameById, staffNameById }}
+          onCommit={handleOverlayCommit}
+          onClose={() => setOverlayOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }

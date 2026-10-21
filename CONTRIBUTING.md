@@ -71,8 +71,11 @@ each `storageState` file on every run.
 
 ### `test.fail` rows, and what they are for
 
-`pnpm test:e2e` reports `86 passed` and exits 0 with **no `✘` in the output**. It
-used to print two.
+`pnpm test:e2e` reported `86 passed` and exited 0 with **no `✘` in the output**
+at revision `464b4ed`. It now carries five more tests, from
+`e2e/specs/manage-contacts-sheet.spec.ts`, and the combined total has not been
+re-measured — so treat `86` as the last *observed* figure rather than the
+current one. It used to print two.
 
 Those two were `test.fail` rows in `e2e/specs/manage-contacts-edit.spec.ts`, for
 matrix rows 1 and 4: the grid did not show an edited value optimistically,
