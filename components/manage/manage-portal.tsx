@@ -169,7 +169,13 @@ export function ManagePortal({
         <TabsContent value="sessions" className="min-h-0 overflow-auto">
           <ManageSessionsView payload={payload} />
         </TabsContent>
-        <TabsContent value="attendance" className="min-h-0 overflow-auto">
+        {/*
+          The attendance tab is a record review: a roster of contacts beside the
+          focused contact's record. It is a two-canvas surface, so it takes the
+          height it is given the way the contacts tab does — the canvases scroll
+          inside themselves, and the page does not.
+        */}
+        <TabsContent value="attendance" className="flex min-h-0 flex-col">
           <ManageAttendanceView payload={payload} />
         </TabsContent>
         <TabsContent value="favorites" className="min-h-0 overflow-auto">

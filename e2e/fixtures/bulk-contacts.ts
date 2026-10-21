@@ -224,6 +224,24 @@ export async function listProgramLocations(program: string = e2eProgramId()): Pr
 }
 
 /**
+ * Every contact in the program, seeded and bulk alike.
+ *
+ * The set a program-scoped roster resolves, so a spec can compute what a
+ * roster SHOULD hold rather than naming rows it hopes still exist. Paged,
+ * because PostgREST caps a single response and `pnpm seed:bulk-full` creates
+ * more than a cap's worth of contacts.
+ */
+export async function listProgramContacts(program: string = e2eProgramId()): Promise<BulkContact[]> {
+  return collectPaged<BulkContact>(() =>
+    bulkFixtureClient()
+      .from("contacts")
+      .select(BULK_CONTACT_COLUMNS)
+      .eq("program_id", program)
+      .order("id", { ascending: true }),
+  )
+}
+
+/**
  * The rows the generator created, from its own Chennai pool.
  *
  * Located by name rather than by prefix: the generator's locations carry plain

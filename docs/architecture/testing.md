@@ -153,6 +153,7 @@ use, each including the 3 setup tests that every run pays for:
 |---|---|---|
 | `grid-` | `test:e2e:grid` | 181 in 14 files |
 | `manage-contacts` | `test:e2e:manage` | 35 in 9 files |
+| `record-review-` | `test:e2e:attendance` | 9 in 4 files |
 | `theme-switch` | `test:e2e:theme` | 16 in 4 files |
 | `harness-guards suite-determinism mailpit-reader` | `test:e2e:guards` | 24 in 6 files |
 
@@ -189,6 +190,24 @@ session, 403 for a Volunteer, and that a failed sign-in provisions nothing.
 These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
 lives in
 [`matrix-coverage-map.md`](../../_bmad-output/specs/spec-playwright-test-foundation/matrix-coverage-map.md).
+
+### Attendance tab — the record review and its location filter — `pnpm test:e2e:attendance`
+
+| Source | Spec | Tests |
+|---|---|---|
+| `components/manage/manage-attendance-view.tsx`, `components/manage/manage-location-filter.tsx`, `components/record-review/**` | `e2e/specs/record-review-attendance.spec.ts` | 6 |
+
+Covers the record-review arrangement (cards, focused record, the focused id in
+the URL, the search) and the location dropdown: one ticked location narrows
+the roster to that location's contacts, two ticked locations give the UNION of
+the two, un-ticking one narrows back, and "All locations" clears the filter.
+The roster's count is read from the badge's raw value, so the assertion does
+not depend on the locale the number is formatted in.
+
+`components/record-review/**` is imported by the Attendance tab only, so the
+blast radius of a change there is this spec — but `components/grid/**`, which
+the tab's filtering leans on for the condition encoding, widens to the grid
+specs — see §5.
 
 ### Grid primitive — keyboard, editors, range, clipboard, chrome — `pnpm test:e2e:grid`
 

@@ -702,13 +702,30 @@ export function evaluateCondition(
  * A condition with no value yet, for a freshly added row: the type's first
  * operator and an empty value — never a leftover operator from another type.
  */
-export function emptyCondition(columnId: string, fieldType: GridFieldType | undefined): GridFilterCondition {
-  const [first] = filterOperatorsFor(fieldType)
+/**
+ * A condition with no value yet, for a freshly added row: the type's first
+ * operator and an empty value — never a leftover operator from another type.
+ *
+ * `operatorId` names the operator to seed with. A field whose question has a
+ * different default than its type's first operator — "is in ANY of these
+ * locations", where the type's first is "is in ALL of them" — passes it here
+ * rather than having its condition rewritten after the fact. A rewrite is
+ * invisible to the operator while the row is being built, and a row that says
+ * one thing and filters by another is the defect the condition encoding
+ * exists to prevent.
+ */
+export function emptyCondition(
+  columnId: string,
+  fieldType: GridFieldType | undefined,
+  operatorId?: string,
+): GridFilterCondition {
+  const operators = filterOperatorsFor(fieldType)
+  const first = operatorId ? operators.find((entry) => entry.id === operatorId) : operators[0]
   const shape = first?.valueShape ?? "text"
 
   return {
     columnId,
-    operator: first?.id ?? "contains",
+    operator: first?.id ?? operatorId ?? "contains",
     value: shape === "multi-option-list" || shape === "option-list" ? [] : "",
   }
 }
