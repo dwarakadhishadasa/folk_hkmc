@@ -92,7 +92,7 @@ export function ManageContactSheet({
         role="dialog"
         aria-modal="true"
         aria-label={`Edit ${label}`}
-        className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-2xl border-t border-border bg-card shadow-2xl"
+        className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-xl bg-card shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
       >
         {/*
           The drag handle. It is a picture of a handle rather than a handle:
@@ -100,7 +100,7 @@ export function ManageContactSheet({
           it, and a grab bar that does not move would be a control that lies.
         */}
         <div aria-hidden="true" className="flex shrink-0 justify-center pt-3">
-          <span className="h-1 w-10 rounded-full bg-border" />
+          <span className="h-1 w-8 rounded-full bg-border" />
         </div>
 
         {/*
@@ -109,20 +109,21 @@ export function ManageContactSheet({
           It sits above the editor rather than below it because it is the step
           *out* of the sheet: an operator who opened a cell to read a value and
           then wants the rest of the record should not have to scroll past the
-          thing they already have.
+          thing they already have. It is centred, and it is a 48px target: it
+          is a label, so it has to look like one and still be easy to hit.
         */}
-        <div className="shrink-0 px-4 pt-2">
+        <div className="flex shrink-0 justify-center">
           <Button
             type="button"
-            variant="link"
+            variant="ghost"
             onClick={onExpand}
-            className="h-auto p-0 text-[13px] font-semibold text-[var(--program-primary)]"
+            className="h-12 p-0 font-[family-name:var(--font-poppins)] text-[13px] font-semibold text-[var(--program-primary)] hover:bg-transparent hover:text-[var(--program-primary)] hover:opacity-80"
           >
             Expand contact
           </Button>
         </div>
 
-        <div className="flex min-h-0 flex-col gap-1.5 px-4 pb-5 pt-3">
+        <div className="flex min-h-0 flex-col gap-2.5 px-4 pb-5 pt-4">
           <label
             htmlFor={`contact-sheet-${fieldId}`}
             className="text-[13px] font-medium text-[var(--program-text)]"

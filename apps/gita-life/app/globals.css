@@ -345,8 +345,21 @@
 }
 
 @media (max-width: 767px) {
+  /*
+   * The space the fixed bottom nav occupies, as one number.
+   *
+   * The nav is `fixed`, so the space it takes is reserved by the body's
+   * padding below. A page that claims the whole viewport height — the manage
+   * portal — has to subtract the same number, or it ends underneath the nav
+   * and the last row of a list is behind it. The two rules are conditioned on
+   * the same `:has()` so the reservation and the subtraction cannot drift.
+   */
+  :root:has([data-mobile-app-nav]) {
+    --mobile-app-nav-inset: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+
   body:has([data-mobile-app-nav]) {
-    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    padding-bottom: var(--mobile-app-nav-inset);
   }
 
   [data-mobile-app-nav] {

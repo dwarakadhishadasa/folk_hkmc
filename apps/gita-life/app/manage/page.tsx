@@ -35,15 +35,22 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
     return (
       <StaffAuthShell staff={staff}>
         {/*
-          `h-dvh` + `overflow-hidden`, and `main` a bounded flex column: this is
+          `overflow-hidden`, and `main` a bounded flex column: this is
           where the height the grid fills is established. Nothing below may assert
           a viewport fraction — the offset above the grid is not a constant (the
           header height, a tab row that wraps at narrow widths, and a scope notice
           that renders only in preacher mode all move it), so the chain has to
           carry the height down instead. Each tab is then its own scroller, and
           Contacts is the one surface with a single one.
+
+          The height is the viewport **less the fixed bottom nav** on a phone.
+          The nav is `fixed`, so it floats over the page; the space it takes is
+          reserved by the body's padding, and a page that claims the whole
+          viewport has to subtract the same reservation or it ends underneath
+          it. `--mobile-app-nav-inset` is that reservation, and it is `0` on a
+          desktop, where there is no nav.
         */}
-        <div className="flex h-dvh flex-col overflow-hidden bg-background">
+        <div className="flex h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col overflow-hidden bg-background">
           <Header />
           {/*
              * `sm:px-6`, matching the app header's own gutter at the same

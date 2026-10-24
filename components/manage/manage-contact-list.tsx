@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowUpDown, Search, X } from "lucide-react"
+import { Search } from "lucide-react"
 
 import { ManageContactRecord } from "@/components/manage/manage-contact-record"
 import { ManageContactSheet } from "@/components/manage/manage-contact-sheet"
@@ -13,10 +13,7 @@ import {
   type ContactFieldResolvers,
 } from "@/components/manage/manage-contact-fields"
 import type { ManageContact, ManageLocation } from "@/components/manage/manage-types"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 /**
  * The contact list: the Airtable mobile interface's Contacts page, brought
@@ -53,24 +50,12 @@ const LIST_COLUMNS: readonly ContactFieldId[] = [
 ]
 
 /**
- * The sort options, in the Airtable app's order.
+ * The list's two columns, as a grid.
  *
- * The Airtable sheet offered "Created" first, as the default; this app's
- * contacts carry no creation timestamp, so the first option is the order the
- * server delivered — which is the same idea, and the rest of the list is the
- * Airtable list verbatim.
+ * 60 / 40 — the Airtable Contacts page's own split — so the name gets the
+ * room it needs and the phone number is not clipped by it.
  */
-const SORT_OPTIONS: readonly { id: string; label: string }[] = [
-  { id: "default", label: "Default" },
-  { id: CONTACT_FIELD_IDS.name, label: CONTACT_FIELD_LABEL.name },
-  { id: CONTACT_FIELD_IDS.phone, label: CONTACT_FIELD_LABEL.phone },
-  { id: CONTACT_FIELD_IDS.location, label: "Location" },
-  { id: CONTACT_FIELD_IDS.totalAttendance, label: "TotalAttendanceCount" },
-  { id: CONTACT_FIELD_IDS.past60DayAttendance, label: "Past60DayAttendanceCount" },
-  { id: "lastContactedOn", label: "Last Contacted On" },
-  { id: CONTACT_FIELD_IDS.notes, label: "Notes" },
-  { id: CONTACT_FIELD_IDS.collectedBy, label: "Collected By" },
-]
+const LIST_COLUMN_TEMPLATE = "grid-cols-[3fr_2fr]"
 
 export interface ManageContactListProps {
   contacts: readonly ManageContact[]
@@ -80,14 +65,6 @@ export interface ManageContactListProps {
   resolvers: ContactFieldResolvers
   /** Called with the new value, for a field that can be written. */
   onCommit: (contactId: string, fieldId: ContactFieldId, value: unknown) => void
-  /**
-   * Close the list and return to the grid.
-   *
-   * Optional, and optional for a reason: on a phone the list is the *whole*
-   * contacts view, so there is nothing to close back to. A "Close contacts"
-   * button there would close the only contacts surface the operator has.
-   */
-  onClose?: () => void
 }
 
 export function ManageContactList({
@@ -95,10 +72,8 @@ export function ManageContactList({
   locations,
   resolvers,
   onCommit,
-  onClose,
 }: ManageContactListProps) {
   const [query, setQuery] = useState("")
-  const [sortId, setSortId] = useState("default")
 
   /**
    * The sheet: which record, and which of its fields.
@@ -120,8 +95,8 @@ export function ManageContactList({
   const [recordId, setRecordId] = useState<string | null>(null)
 
   const visible = useMemo(
-    () => sortContacts(contacts, sortId, resolvers, query),
-    [contacts, resolvers, query, sortId],
+    () => filterContacts(contacts, query),
+    [contacts, query],
   )
 
   /**
@@ -147,50 +122,41 @@ export function ManageContactList({
     <div
       ref={rootRef}
       tabIndex={-1}
-      className="absolute inset-0 z-30 flex flex-col bg-card outline-none"
+      className="absolute inset-0 z-30 -mx-4 flex flex-col bg-card outline-none sm:-mx-6 md:mx-0"
       data-contact-list=""
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-        {onClose ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Close contacts"
-            onClick={onClose}
-            className="size-8 text-[var(--program-text)]"
-          >
-            <X aria-hidden="true" className="size-4" />
-          </Button>
-        ) : null}
-        <h2 className="min-w-0 flex-1 truncate font-[family-name:var(--font-poppins)] text-[15px] font-semibold text-[var(--program-text)]">
-          Contacts
-        </h2>
-        <SortControl sortId={sortId} onSortChange={setSortId} />
-      </header>
+      {/*
+        The search row.
 
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-        <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+        It is the list's own search, not the grid's global filter, and it sits
+        under the page title rather than in a toolbar: on a phone the toolbar
+        is a row of controls the operator cannot see past, and the grid is not
+        mounted here anyway.
+      */}
+      <div className="flex h-12 shrink-0 items-center gap-3 px-4">
+        <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
         <Input
           type="search"
           value={query}
           aria-label="Search contacts"
           placeholder="Search name or phone"
           onChange={(event) => setQuery(event.target.value)}
-          className="h-7 border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0"
+          className="h-9 border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0"
         />
       </div>
 
       {/*
-        The column header. Sticky, because the Airtable list kept the field
-        names in view while the rows scrolled under them, and a list of
-        contacts without its column names is a list of fragments.
+        The column header. It is *outside* the scroll area, so it stays in view
+        while the rows scroll under it — and a list of contacts without its
+        column names is a list of fragments.
       */}
-      <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] border-b border-border bg-muted/40">
+      <div
+        className={`grid h-[38px] shrink-0 ${LIST_COLUMN_TEMPLATE} items-center border-b border-border bg-muted`}
+      >
         {LIST_COLUMNS.map((fieldId) => (
           <div
             key={fieldId}
-            className="truncate px-3 py-2 text-[12px] font-medium text-muted-foreground"
+            className="truncate px-4 text-[12px] font-medium text-muted-foreground"
           >
             {CONTACT_FIELD_LABEL[fieldId]}
           </div>
@@ -199,7 +165,7 @@ export function ManageContactList({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visible.length === 0 ? (
-          <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">
+          <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">
             No contact matches this search.
           </p>
         ) : (
@@ -207,7 +173,7 @@ export function ManageContactList({
             <div
               key={contact.id}
               data-contact-row={contact.id}
-              className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] border-b border-border/60"
+              className={`grid ${LIST_COLUMN_TEMPLATE} border-b border-border`}
             >
               {LIST_COLUMNS.map((fieldId) => (
                 <button
@@ -215,7 +181,7 @@ export function ManageContactList({
                   type="button"
                   data-contact-cell={fieldId}
                   onClick={() => setSheet({ contactId: contact.id, fieldId })}
-                  className="truncate px-3 py-2.5 text-left text-[13px] text-[var(--program-text)] hover:bg-muted/60"
+                  className="flex h-11 items-center truncate px-4 text-left text-[13px] text-[var(--program-text)] hover:bg-muted/60 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--program-accent)]"
                 >
                   {contactFieldText(contact, fieldId, resolvers) || "—"}
                 </button>
@@ -256,100 +222,21 @@ export function ManageContactList({
 }
 
 /**
- * The sort control — the Airtable app's "End user controls" popover, which
- * held a single **Sort** action.
+ * The rows the list shows: the searched contacts.
  *
- * The Airtable popover was a menu with one item in it, and the item opened a
- * second sheet of radio buttons. This is that second sheet, reached from the
- * same place in the frame: the sort button in the header.
+ * The search matches the name or the phone. It is decided here rather than by
+ * a table model, because this list is a list: it is two columns and a stack,
+ * not a spreadsheet with a column manager behind it.
  */
-function SortControl({
-  sortId,
-  onSortChange,
-}: {
-  sortId: string
-  onSortChange: (next: string) => void
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Sort contacts"
-          className="size-8 text-[var(--program-text)]"
-        >
-          <ArrowUpDown aria-hidden="true" className="size-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-56 p-2">
-        <p className="px-2 pb-1.5 text-[12px] font-semibold text-muted-foreground">Sort by</p>
-        <RadioGroup value={sortId} onValueChange={onSortChange}>
-          {SORT_OPTIONS.map((option) => (
-            <label
-              key={option.id}
-              className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] text-[var(--program-text)] hover:bg-muted"
-            >
-              <RadioGroupItem value={option.id} />
-              <span className="truncate">{option.label}</span>
-            </label>
-          ))}
-        </RadioGroup>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-/**
- * The rows the list shows: the searched contacts, in the chosen order.
- *
- * The sort is a plain comparator over the values the list already knows how
- * to read, and the search matches the name or the phone. Both are decided
- * here rather than by a table model, because this list is a list: it is two
- * columns and a stack, not a spreadsheet with a column manager behind it.
- */
-function sortContacts(
-  contacts: readonly ManageContact[],
-  sortId: string,
-  resolvers: ContactFieldResolvers,
-  query: string,
-): ManageContact[] {
+function filterContacts(contacts: readonly ManageContact[], query: string): ManageContact[] {
   const needle = query.trim().toLowerCase()
 
-  const matched = needle
-    ? contacts.filter(
-        (contact) =>
-          contact.name.toLowerCase().includes(needle) || contact.phone.toLowerCase().includes(needle),
-      )
-    : [...contacts]
-
-  if (sortId === "default") {
-    return matched
+  if (!needle) {
+    return [...contacts]
   }
 
-  const value = (contact: ManageContact): string => {
-    switch (sortId) {
-      case CONTACT_FIELD_IDS.name:
-        return contact.name
-      case CONTACT_FIELD_IDS.phone:
-        return contact.phone
-      case CONTACT_FIELD_IDS.location:
-        return contactFieldText(contact, CONTACT_FIELD_IDS.location, resolvers)
-      case CONTACT_FIELD_IDS.totalAttendance:
-        return String(contact.totalAttendanceCount)
-      case CONTACT_FIELD_IDS.past60DayAttendance:
-        return String(contact.past60DayAttendanceCount)
-      case "lastContactedOn":
-        return contact.lastContactedOn ?? ""
-      case CONTACT_FIELD_IDS.notes:
-        return contact.notes ?? ""
-      case CONTACT_FIELD_IDS.collectedBy:
-        return contactFieldText(contact, CONTACT_FIELD_IDS.collectedBy, resolvers)
-      default:
-        return ""
-    }
-  }
-
-  return matched.sort((left, right) => value(left).localeCompare(value(right), undefined, { numeric: true }))
+  return contacts.filter(
+    (contact) =>
+      contact.name.toLowerCase().includes(needle) || contact.phone.toLowerCase().includes(needle),
+  )
 }

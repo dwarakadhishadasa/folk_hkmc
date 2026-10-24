@@ -50,6 +50,16 @@ const NO_LOCATION = "__no_location__"
  * single place where a contact is written and a single place where a rejected
  * write is reported.
  */
+/**
+ * How a field's control is drawn.
+ *
+ * `"field"` is the ordinary editor — a bordered control under a label.
+ * `"title"` is the record's **name**, which is not a field among others: it is
+ * the record's own title, so it is drawn as one — large, unbordered, and in
+ * the display face.
+ */
+export type ContactFieldAppearance = "field" | "title"
+
 export interface ManageContactFieldEditorProps {
   contact: ManageContact
   fieldId: ContactFieldId
@@ -61,6 +71,8 @@ export interface ManageContactFieldEditorProps {
   autoFocus?: boolean
   /** The id of the input, so a `<label htmlFor>` can name it. */
   inputId?: string
+  /** How the control is drawn. Defaults to `"field"`. */
+  appearance?: ContactFieldAppearance
 }
 
 export function ManageContactFieldEditor({
@@ -70,6 +82,7 @@ export function ManageContactFieldEditor({
   onCommit,
   autoFocus = false,
   inputId,
+  appearance = "field",
 }: ManageContactFieldEditorProps) {
   const generatedId = useId()
   const controlId = inputId ?? generatedId
@@ -109,6 +122,7 @@ export function ManageContactFieldEditor({
       controlId={controlId}
       onCommit={onCommit}
       autoFocus={autoFocus}
+      appearance={appearance}
     />
   )
 }
@@ -127,6 +141,7 @@ function TextFieldEditor({
   onCommit,
   autoFocus,
   multiline = false,
+  appearance = "field",
 }: {
   contact: ManageContact
   fieldId: ContactFieldId
@@ -134,6 +149,7 @@ function TextFieldEditor({
   onCommit: ManageContactFieldEditorProps["onCommit"]
   autoFocus: boolean
   multiline?: boolean
+  appearance?: ContactFieldAppearance
 }) {
   const committed = readText(contact, fieldId)
   const [draft, setDraft] = useState(committed)
@@ -179,7 +195,7 @@ function TextFieldEditor({
             setDraft(committed)
           }
         }}
-        className="min-h-24 resize-y bg-card text-[13px]"
+        className="min-h-24 resize-y rounded-[6px] border-border bg-card text-[13px]"
       />
     )
   }
@@ -205,7 +221,11 @@ function TextFieldEditor({
           setDraft(committed)
         }
       }}
-      className="bg-card text-[13px]"
+      className={
+        appearance === "title"
+          ? "h-12 border-0 bg-transparent px-0 font-[family-name:var(--font-poppins)] text-[22px] font-bold text-[var(--program-text)] shadow-none focus-visible:ring-0"
+          : "h-12 rounded-[6px] border-border bg-card text-[13px]"
+      }
     />
   )
 }
@@ -241,7 +261,11 @@ function LocationFieldEditor({
         )
       }}
     >
-      <SelectTrigger id={controlId} aria-label={CONTACT_FIELD_LABEL.location} className="bg-card text-[13px]">
+      <SelectTrigger
+        id={controlId}
+        aria-label={CONTACT_FIELD_LABEL.location}
+        className="h-12 w-full rounded-[6px] border-border bg-card text-[13px] [&_svg:last-child]:rotate-90"
+      >
         <SelectValue placeholder="No location" />
       </SelectTrigger>
       <SelectContent>

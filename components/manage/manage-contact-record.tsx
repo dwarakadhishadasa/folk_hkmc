@@ -104,16 +104,22 @@ export function ManageContactRecord({
       className="absolute inset-0 z-50 flex flex-col bg-card outline-none"
       data-contact-record=""
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-1.5">
+      {/*
+        The top bar: a hairline row with the way out on its left. The source
+        app carried a comment affordance on the right; this app has no comment
+        feature, so the slot is deliberately empty rather than filled with a
+        button that opens nothing.
+      */}
+      <header className="flex h-9 shrink-0 items-center border-b border-border pl-2 pr-3">
         <Button
           type="button"
           variant="ghost"
           size="icon"
           aria-label="Close"
           onClick={onClose}
-          className="size-8 text-[var(--program-text)]"
+          className="size-9 justify-start p-0 text-[var(--program-text)]"
         >
-          <X aria-hidden="true" className="size-4" />
+          <X aria-hidden="true" className="size-[18px]" strokeWidth={2} />
         </Button>
       </header>
 
@@ -124,7 +130,7 @@ export function ManageContactRecord({
           primary field a large editable line at the top rather than a labelled
           field among the others.
         */}
-        <div className="mb-5" data-contact-field={CONTACT_FIELD_IDS.name}>
+        <div className="mb-3" data-contact-field={CONTACT_FIELD_IDS.name}>
           <label htmlFor={nameId} className="sr-only">
             {CONTACT_FIELD_LABEL.name}
           </label>
@@ -134,10 +140,11 @@ export function ManageContactRecord({
             locations={locations}
             onCommit={onCommit}
             inputId={nameId}
+            appearance="title"
           />
         </div>
 
-        <dl className="flex flex-col gap-4">
+        <dl className="flex flex-col gap-6">
           {CONTACT_FIELD_ORDER.filter((id) => id !== CONTACT_FIELD_IDS.name).map((fieldId) => (
             <RecordField key={fieldId} fieldId={fieldId}>
               {isContactFieldEditable(fieldId) ? (
@@ -148,9 +155,10 @@ export function ManageContactRecord({
                   onCommit={onCommit}
                 />
               ) : (
-                <span className="text-[13px] text-[var(--program-text)]">
-                  {contactFieldText(contact, fieldId, resolvers) || "—"}
-                </span>
+                <ReadOnlyValue
+                  fieldId={fieldId}
+                  text={contactFieldText(contact, fieldId, resolvers)}
+                />
               )}
             </RecordField>
           ))}
@@ -182,4 +190,34 @@ function RecordField({
       <dd className="min-w-0">{children}</dd>
     </div>
   )
+}
+
+/**
+ * A read-only field's value.
+ *
+ * `Collected By` is the one that reads as a **pill**: it names a person
+ * rather than a fact about the contact, and a pill says "this is somebody"
+ * the way bare text does not. The rest are plain values, because a control
+ * on them would invite a write the server will refuse.
+ */
+function ReadOnlyValue({
+  fieldId,
+  text,
+}: {
+  fieldId: ContactFieldId
+  text: string
+}) {
+  if (fieldId === CONTACT_FIELD_IDS.collectedBy) {
+    if (!text) {
+      return null
+    }
+
+    return (
+      <span className="inline-flex h-6 items-center rounded-full bg-muted px-3 text-[12px] font-medium text-muted-foreground">
+        {text}
+      </span>
+    )
+  }
+
+  return <span className="text-[13px] text-[var(--program-text)]">{text || "—"}</span>
 }

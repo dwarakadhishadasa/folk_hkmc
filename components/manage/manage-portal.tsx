@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react"
 import Link from "next/link"
+import { ChevronDown } from "lucide-react"
+import { ManageAdminPanel } from "@/components/manage/manage-admin-panel"
 import { ManageAttendanceView } from "@/components/manage/manage-attendance-view"
 import { ManageContactsTable } from "@/components/manage/manage-contacts-table"
 import { ManageDashboard } from "@/components/manage/manage-dashboard"
@@ -9,6 +11,7 @@ import { ManageFavoritesView } from "@/components/manage/manage-favorites-view"
 import { ManageSessionsView } from "@/components/manage/manage-sessions-view"
 import { type ManagePortalPayload, type ManageView } from "@/components/manage/manage-types"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useDeviceView } from "@/hooks/use-mobile"
 
 const TAB_LABELS: Array<{ value: ManageView; label: string }> = [
   { value: "dashboard", label: "Dashboard" },
@@ -41,6 +44,20 @@ export function ManagePortal({
   const [view, setView] = useState<ManageView>(initialView)
   const { scope } = payload
   const [contactCount, setContactCount] = useState(payload.contacts.length)
+
+  /**
+   * Whether this device is a phone.
+   *
+   * The tab strip and the Admin Panel are the same navigation in two shapes,
+   * and the viewport picks the shape: the strip on a desktop, the panel on a
+   * phone. `useDeviceView()` answers `null` until the viewport is known, so
+   * the first render shows the strip — the shape that does not hide a page
+   * behind a panel the operator has not opened yet.
+   */
+  const isPhone = useDeviceView() === "mobile"
+
+  /** The Admin Panel's open state. */
+  const [adminPanelOpen, setAdminPanelOpen] = useState(false)
 
   /*
     The title is the active tab's own name: with the per-table name between the
@@ -82,8 +99,32 @@ export function ManagePortal({
       */}
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
+          {/*
+            On a phone the title is the panel's handle: the same label, with a
+            chevron, that opens the Admin Panel. It is a button rather than a
+            heading with a button beside it, because the design treats the
+            title *and* the chevron as one target — and because a heading whose
+            only child is a button still reads as the heading it is, the
+            chevron being `aria-hidden`.
+          */}
           <h1 className="font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)]">
-            {activeTabLabel}
+            {isPhone ? (
+              <button
+                type="button"
+                onClick={() => setAdminPanelOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={adminPanelOpen}
+                className="-ml-1 flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+              >
+                {activeTabLabel}
+                <ChevronDown
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-[var(--program-primary)]"
+                />
+              </button>
+            ) : (
+              activeTabLabel
+            )}
           </h1>
           <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
             {contactCount.toLocaleString("en-IN")} contacts ·{" "}
@@ -91,8 +132,13 @@ export function ManagePortal({
           </p>
         </div>
 
+        {/*
+          The scope switch is a desktop control. On a phone the screen belongs
+          to the list, and the switch is two taps away in the panel's own
+          place rather than a row of its own above every page.
+        */}
         {scope.role === "Admin" ? (
-          <div className="inline-flex w-fit items-center gap-1 rounded-full border border-[var(--border)] bg-card p-1">
+          <div className="hidden w-fit items-center gap-1 rounded-full border border-[var(--border)] bg-card p-1 md:inline-flex">
             <Link
               href={portalHref(view, "admin")}
               scroll={false}
@@ -139,9 +185,13 @@ export function ManagePortal({
         switched off on both themes: under `.dark` the primitive's variants would
         otherwise win on specificity and repaint the active tab. `gap-y-2` only
         matters where the row wraps at narrow widths.
+
+        The strip is a **desktop** control. At 390px five labels wrap onto two
+        rows, and the second row is a third of the screen a list of contacts
+        needs; the Admin Panel carries the same navigation on a phone.
       */}
       <Tabs value={view} onValueChange={handleViewChange} className="min-h-0 flex-1 gap-4">
-        <TabsList className="h-auto w-full max-w-full shrink-0 flex-wrap items-center justify-start gap-x-6 gap-y-2 rounded-none border-b border-[var(--tab-border)] bg-transparent p-0">
+        <TabsList className="hidden h-auto w-full max-w-full shrink-0 flex-wrap items-center justify-start gap-x-6 gap-y-2 rounded-none border-b border-[var(--tab-border)] bg-transparent p-0 md:flex">
           {TAB_LABELS.map((tab) => (
             <TabsTrigger
               key={tab.value}
@@ -182,6 +232,25 @@ export function ManagePortal({
           <ManageFavoritesView payload={payload} />
         </TabsContent>
       </Tabs>
+
+      {/*
+        The Admin Panel: the phone's navigation, opened from the page title.
+
+        It is rendered outside the `Tabs` on purpose — it is not one of the
+        portal's pages, it is the way *between* them — and it is a fixed
+        takeover, so it sits above the app bar and the bottom nav alike.
+      */}
+      {adminPanelOpen ? (
+        <ManageAdminPanel
+          views={TAB_LABELS}
+          activeView={view}
+          onSelect={(next) => {
+            handleViewChange(next)
+            setAdminPanelOpen(false)
+          }}
+          onClose={() => setAdminPanelOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }
