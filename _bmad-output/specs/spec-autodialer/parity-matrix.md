@@ -9,7 +9,7 @@ Source of truth for the port is `/home/dwarakadhisha-dasa/projects/autodialer` (
 | Source app | folk_hkmc | Verdict |
 |---|---|---|
 | `ADMIN` (preacher/manager) | `Admin` / `Preacher` | Map. `FOLK_GUIDE` was already folded into `ADMIN` upstream — do not resurrect it. |
-| `ENABLER` (volunteer caller) | Any staff role with a `dialer_callers` profile | Map. Created through the **existing invite flow**, never a bare `users` row. The final design confirms Admin, Preacher, Volunteer and Assistant can all be callers; scope still comes from the caller row and `program_id`. |
+| `ENABLER` (volunteer caller) | Any staff role with a `dialer_callers` profile | Map. An existing staff user promoted on assignment; the dialer creates no `users` row and has no invite of its own. The final design confirms Admin, Preacher, Volunteer and Assistant can all be callers; a Preacher's assignable set is the staff assigned to them plus themselves. |
 | `FOLK` (member) | not a staff role | A `contacts` row, not a `users` row. Members get no login for calling. |
 | Email-OTP gate via `request-email-otp` Edge Function | Supabase Auth email-OTP | Reuse existing. Do not port the Edge Function. |
 | `contact.is_enabler` boolean | *dropped* | Two sources of truth alongside `role`, one written as a **string** into a boolean column. One column here. |
@@ -19,17 +19,15 @@ Source of truth for the port is `/home/dwarakadhisha-dasa/projects/autodialer` (
 
 | Source feature | Source file | Capability | Notes |
 |---|---|---|---|
-| Campaign list + create/edit | `lib/events/events_widget.dart`, `lib/events/create_event_dialog.dart` | CAP-2 | Carries `gap_duration`, `audience_filter`, status. |
+| Campaign list + create/edit | `lib/events/events_widget.dart`, `lib/events/create_event_dialog.dart` | CAP-2 | Carries `gap_duration` and status; target audience is assignment-time only, so no `audience_filter` is stored. |
 | Survey builder, drag-and-drop | `lib/events/create_event_dialog.dart` | CAP-2 | Includes quick presets and per-card FIELD PREVIEW. |
-| Contacts add dialog | `contact_assignment_widget.dart:2181` | CAP-3 | |
-| CSV import, 45 headers | `contact_assignment_widget.dart:2348` | CAP-3 | Must fix: source is not duplicate-safe. |
-| CSV export contacts + call logs | `contact_assignment_widget.dart:2524, 2667` | CAP-3, CAP-8 | Column contract needs rebasing onto `folk_hkmc` contacts. |
+| Contacts add dialog | `contact_assignment_widget.dart:2181` | CAP-3 | Existing `/manage` contact create/edit only; the Campaign surface never owns a contact write. |
 | Caller roster, promote-from-contacts + add manually | `lib/enablers/enablers_widget.dart` | CAP-4 | |
 | Per-caller assign/unassign/transfer | `lib/enablers/enabler_assignment_widget.dart` | CAP-5 | Transfer is worth keeping. |
 | Assignment hub, filters, bulk select | `lib/contact_assignment/contact_assignment_widget.dart` | CAP-5 | |
 | Assigned-contacts list + progress | `lib/pages/assigned_contacts/assigned_contacts_widget.dart` | CAP-1, CAP-6 | |
 | Auto-dialer session | `lib/auto_dialer/auto_dialer_widget.dart` | CAP-6, CAP-7 | Core. See §4 for what changes. |
-| Calling dashboard (single contact) | `lib/calling_dashboard/calling_dashboard_widget.dart` | CAP-7 | Includes re-editing a previous logged call. |
+| Calling dashboard (single contact) | `lib/calling_dashboard/calling_dashboard_widget.dart` | CAP-7 | A landed attempt is not edited; a correction is a new attempt. |
 | Admin dashboard funnel | `lib/folk_guide_dashboard/folk_guide_dashboard_widget.dart` | CAP-8 | |
 | Event analytics + outcome pie | `lib/events/event_analytics_widget.dart` | CAP-8 | |
 | Recent activity feed | `lib/folk_guide_dashboard/recent_activity_widget.dart` | CAP-8 | |
@@ -54,12 +52,14 @@ These have no source counterpart. They are not ports.
 
 | Source feature | Why |
 |---|---|
+| CSV contact import, 45 headers (`contact_assignment_widget.dart:2348`) | Deferred to a future Manage-contacts change. V1 reuses existing `contacts` rows and has no batch contact route or 45-header contract. |
+| Contact CSV export (`contact_assignment_widget.dart:2524`) | Deferred with contact import. Campaign outcome export remains in CAP-8. |
 | Android floating survey overlay (`lib/overlay/`, `overlay_bridge.dart`) | No browser equivalent over a native dialer. Replaced by a dedicated disposition screen plus the phone queue drawer (`ux-flows.md` §1–2). The overlay's win — never losing your place — is recovered by the queue and the call card's history; the caller surface is a phone, so there is no desktop side-by-side rail. |
 | `phone_state` stream + app-lifecycle call detection | Requires device call permissions. A browser cannot observe a `tel:` call at all. Replaced by an explicit **"I'm back"** action (`ux-flows.md` §3). |
 | `flutter_phone_direct_caller` / `tel:` external app | Becomes a plain `tel:` link. |
 | WhatsApp deep link button | Out of Non-goals (no WhatsApp messaging). Revisit separately. |
 | **AI assistant** (`ai_assistant_widget.dart`, `ai_assistant_service.dart`) | CAP-10 deferred. Its mechanism is arbitrary SQL over the whole database via `run_dynamic_sql`, gated only on `role = 'ADMIN'`, with the provider API key in a client-readable table. The `json:choice` chip UX is preserved for when a tool-based assistant ships — `architecture.md` §6. |
-| **Member RSVP** (`folk_dashboard_widget.dart`) | CAP-11 cut. Redundant with `call_outcome` + `follow_up_status`, and it would add a public unauthenticated surface where the source's RLS is `USING (true)` including to anon. |
+| **Member RSVP** (`folk_dashboard_widget.dart`) | CAP-11 cut. Redundant with `disposition_status`, and it would add a public unauthenticated surface where the source's RLS is `USING (true)` including to anon. |
 | Phone OTP login, `access_token` table, token-login tracking | Already retired upstream; docs are stale. |
 | Legacy `users` table writes | Vestigial dual-write; `folk_hkmc` has one `public.users` table. |
 | `contact.is_enabler` boolean | A second source of truth alongside `role`, written as a string into a boolean. |
@@ -97,11 +97,11 @@ Each row was found by reading the source, not by reading the spec.
 | `survey_question.options` is comma-separated `text`; MULTI_SELECT answers reuse the same delimiter. | `initial_schema.sql:126` | `dialer_survey_options` child table. |
 | `assignment.IN_PROGRESS` / `SKIPPED` never written; `sort_order` written, never read. | `initial_schema.dart` enum, `contact_assignment_widget.dart:952` | `SKIPPED` is written; `sort_order` is read. |
 | `event.audience_filter` stored, editable, never applied. | — | Omitted. |
-| `next_call_date` queried on every dashboard load with no index. | `folk_guide_dashboard_widget.dart:93` | Index on `(program_id, next_call_date)`. |
+| `next_call_date` queried on every dashboard load with no index. | `folk_guide_dashboard_widget.dart:93` | Dropped in v1 with the follow-up date; a deferral is recorded but does not schedule a future call. |
 | **RLS grants `select ... using (true)` on `contact`, `assignment` and `call_log` to any authenticated user** — every volunteer could read every member's phone, email, DOB and address, and every call log. | `initial_schema.sql:317` | Program-scoped, caller-scoped policies throughout. |
 | `event_rsvp` RLS is `USING (true)`, including to `anon`. | `20240702000000` | CAP-11 cut. |
 | `ai_chat_message.role` CHECK rejects `'model'`, inserts fail silently. | `ai_assistant_service.dart:944` | CAP-10 deferred; use `'assistant'` if it ships. |
-| CSV import is not duplicate-safe; unique violations counted as plain failures. | `:2464` | Report the offending rows by name. `contacts` already has `unique (phone, program_id)`. |
+| CSV import is not duplicate-safe; unique violations counted as plain failures. | `:2464` | Not ported in v1. If a future Manage import revives it, report the offending rows by name against `contacts`' existing `unique (phone, program_id)`. |
 | Seeded notes pre-filled with `"Interested in attending weekend programs and activities."` in **every** call log. | `calling_dashboard_widget.dart:57` | Never pre-fill user input. |
 | Filter facets built from the current page's 50 rows, so dropdown options change as you paginate. | `contact_assignment_widget.dart:256` | Derive from the whole set. |
 | AI cost derived from hardcoded per-model rates × `83.5`, silently falling through to `0.10` for unlisted models. | `ai_assistant_service.dart:730` | CAP-10 deferred. |

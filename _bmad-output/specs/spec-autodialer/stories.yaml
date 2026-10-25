@@ -1,0 +1,827 @@
+# Story dispatch index for SPEC-autodialer.
+#
+# Consumed by bmad-build: `{spec_folder}/stories.yaml` + a `stories/{id}-*.md`
+# file. A missing story file is expected — bmad-build derives one from the
+# entry's title. The acceptance criteria live in `epics.md`; this file is the
+# dispatch contract (scope, design links, dependencies, test economy).
+#
+# Every story inherits TP1–TP15 from epics.md § Additional Test Policy.
+
+- id: "1-1"
+  title: Dialer data model, generated status group, and RLS
+  epic: 1
+  depends_on: []
+  frames: []
+  spec_checkpoint: true
+  description: >-
+    The additive migration for seven dialer tables, the total generated
+    status_group over the 13 design chips, the two unique keys, RESTRICT FKs,
+    RLS through the existing helpers, the rls-policy-matrix row and regenerated
+    types. dialer_survey_responses is deliberately deferred to 2.3 with the RPC.
+  invoke_dev_with: >-
+    DESIGN LINKS: none — no frame exists for this story; any required state is a design omission recorded in epics.md.
+
+    Read SPEC.md constraints (program scope, contacts, disposition, inherited
+    platform rules), data-model.md in full, ARCHITECTURE-SPINE.md AD-4, AD-11,
+    AD-12, AD-13, AD-14, and epics.md Story 1.1. Read AGENTS.md and
+    docs/architecture/testing.md before touching anything.
+
+    This is the only story with no UI. It is not a "create all tables" story:
+    seven tables are needed by the admin surface that follows, and the eighth
+    (dialer_survey_responses) is intentionally created by Story 2.3 next to the
+    RPC that writes it. Follow data-model.md exactly; do not add
+    next_call_date, call_duration, audience_filter, follow_up_status or any
+    speculative contact column. No new column on contacts.
+
+    THE GENERATED COLUMN IS THE CONTRACT. status_group is
+    GENERATED ALWAYS AS (CASE ...) STORED, NOT NULL, total over the 13 chips,
+    and never written by the client or an RPC. The 13 labels are frame 2456's
+    chips; the six groups are frame 790's buckets. If a chip has no group, the
+    migration is wrong.
+
+    GRANTS ARE THE OTHER HALF. Supabase grants every privilege to anon and
+    authenticated on new public tables by default. Adding RLS policies does not
+    remove those grants, so revoke INSERT/UPDATE/DELETE from anon and
+    authenticated explicitly and grant SELECT only. No role holds DELETE.
+
+    THE RESTRICT FKs COLLIDE WITH /manage. Do not change
+    lib/supabase/manage.ts in this story — Story 1.3 owns the delete-message
+    mapping while the full suite is already running for the header change.
+    Here, only assert the FK refuses the delete.
+
+    Verify: pnpm test:static; pnpm supabase:push (local only); pnpm seed:local.
+    Record SQL probes for the generated column, both unique constraints, the
+    grants, and each RESTRICT FK. Do NOT run pnpm test (zero tests), and do NOT
+    run e2e — no UI exists and the suite would prove nothing about the schema.
+
+- id: "1-2"
+  title: The Campaign access boundary, and a guardrail that keeps it covered
+  epic: 1
+  depends_on: ["1-1"]
+  frames: [32, 1752, 2217, 2263]
+  spec_checkpoint: true
+  description: >-
+    requireCampaignAdmin, requireDialerCaller, campaignScope with the assignable
+    caller set, the caller-scope assertion, the denial-sweep harness, the static
+    route-coverage guardrail in pnpm guardrails, the Assistant e2e role, and the
+    test:e2e:campaign script.
+  invoke_dev_with: >-
+    DESIGN LINKS (4 frames in campaign.figcraft): figcraft://node/32, figcraft://node/1752, figcraft://node/2217, figcraft://node/2263
+
+    Read SPEC.md constraints on the caller boundary and route split,
+    ARCHITECTURE-SPINE.md AD-2, AD-3, AD-7, AD-8, AD-14, architecture.md §2 and
+    §2a, and epics.md Story 1.2.
+
+    THE SPLIT IS STRUCTURAL, NOT REMEMBERED. /api/dialer/caller/** calls
+    requireDialerCaller (any active caller) and then
+    assertCallerAssignmentInScope. /api/dialer/admin/** calls
+    requireCampaignAdmin (Admin/Preacher/Assistant) and then campaignScope.
+    Never one guard for both populations. The caller id comes from
+    getStaffContext(), never the request.
+
+    THE CALLER PATH RETURNS 404 FOR BOTH CASES. A missing assignment and
+    another caller's assignment must be indistinguishable. The admin surface may
+    keep 403 vs 404. A failure returns no row and no id.
+
+    SCOPE HAS NO FALLBACK. campaignScope returns { kind: "program" } for Admin,
+    { kind: "preacher", userId } for Preacher, and the Assistant's preacher id.
+    A Preacher or Assistant with no id is 403; it never widens. The same helper
+    returns the assignable caller set: Admin the program; Preacher their
+    assignees plus themselves; Assistant their preacher's assignees plus
+    themselves; inactive callers excluded everywhere.
+
+    THE STATIC GATE IS THE POINT. scripts/verify-dialer-route-coverage.mjs
+    runs inside pnpm guardrails, enumerates every route file under
+    apps/folk/app/api/dialer/**, and fails when one has no denial-sweep row.
+    With zero routes it passes vacuously; prove it fails against a temporary
+    unlisted route, then remove that route. Never commit a deliberately broken
+    spec under e2e/specs/.
+
+    ASSISTANT ROLE: the seeder already writes
+    suresh.kannan@folk.fixture.test. Add the role to e2e/fixtures/roles.ts, add
+    e2e/auth/assistant.setup.ts, add the setup project to playwright.config.ts,
+    and add `test:e2e:campaign` to package.json. Harness-guards asserts only
+    that test:e2e contains the readiness gate; adding a script is safe.
+
+    Verify: pnpm test:static; pnpm guardrails; pnpm test:e2e dialer-route;
+    pnpm test:e2e:list campaign-. Determinism is DELIBERATELY DEFERRED to Story
+    4.2 even though this story edits the role fixture and playwright.config.ts:
+    Story 1.3's full run immediately exercises the changed harness, and Story
+    4.2 runs determinism over the accumulated suite. Running it here would add
+    two full suites (~12 min) for a change the next full run already proves.
+    Record the deferral in the story file. Do NOT re-run smoke — the sweep owns
+    denial cases and smoke owns sign-in.
+
+- id: "1-3"
+  title: Campaign is a first-class destination, and shared chrome changes land once
+  epic: 1
+  depends_on: ["1-2"]
+  frames: [32, 961, 1752, 2217]
+  description: >-
+    The role/caller-profile-resolved header item, Campaign sub-nav, /campaigns
+    and /campaigns/assignments shells with actionable empty states,
+    modules.dialer, both app-level proxy matchers, the root sw.js paths, and the
+    /manage delete-mapping fix that the new RESTRICT FK requires.
+  invoke_dev_with: >-
+    DESIGN LINKS (4 frames in campaign.figcraft): figcraft://node/32, figcraft://node/961, figcraft://node/1752, figcraft://node/2217
+
+    Read SPEC.md route/nav/lifecycle constraints, ARCHITECTURE-SPINE.md AD-1,
+    AD-2, AD-12, AD-14, architecture.md §3 and §3a, ux-flows.md §8 and §11, and
+    epics.md Story 1.3. Read AGENTS.md + docs/architecture/testing.md first.
+
+    DESIGN: desktop Campaign pill and sub-nav are frame 32; phone Overview and
+    bottom nav are 1752; the phone Campaign menu is 2217; dark parity is 961.
+    Frames 32/1752/2217 show no empty state — the empty states are required
+    omissions (UX-DR24), not optional.
+
+    THE THREE TRAPS, VERIFIED IN THIS REPO:
+    1. Next reads the matcher in apps/folk/proxy.ts and apps/gita-life/proxy.ts,
+       NOT the root proxy.ts config export. Add /campaigns/:path* and
+       /api/dialer/:path* to both app matchers and keep the root in sync.
+    2. apps/*/public is a symlink to ../../public. Edit the one root
+       public/sw.js; an app-only edit is the same inode. Add /campaigns to
+       NETWORK_ONLY_PATH_PREFIXES and /api/dialer/caller/disposition to
+       QUEUED_POST_PATHS.
+    3. modules.dialer does not exist. Add it to
+       packages/program-config/src/types.ts and both profiles (true folk, false
+       gita-life). It gates rendering only; authorization stays requireRole +
+       program_id. This is the first live read of any modules flag.
+
+    THE VOLUNTEER MUST NOT GET A DEAD LINK. Without an active caller profile,
+    no Campaign item. With one, the item goes to /campaigns/assignments, which
+    in this story is an actionable no-queue state (Story 2.1 replaces it with
+    the real session). /campaigns itself refuses a Volunteer.
+
+    THIS STORY BUNDLES THE /manage DELETE MESSAGE because Story 1.1's RESTRICT
+    FK makes any FK violation read "has attendance". Update
+    lib/supabase/manage.ts to distinguish dialer history from attendance
+    history. Keep the existing attendance code and message intact; three
+    assertions in manage-contacts-row-lifecycle.spec.ts and
+    grid-row-context-menu.spec.ts pin them.
+
+    Verify: pnpm test:static; then FULL pnpm test:e2e ONCE. This is one of only
+    two full runs in the feature (components/header.tsx + lib/supabase/*). The
+    full run already includes campaign-navigation, smoke, theme-switch and
+    manage-contacts-row-lifecycle. Do NOT add a separate nav/theme/manage run.
+
+- id: "1-4"
+  title: Create a campaign, and move it through its lifecycle
+  epic: 1
+  depends_on: ["1-2"]
+  frames: [32, 212, 1752]
+  description: >-
+    The campaign create/edit form with gap duration and max_attempts, the DRAFT
+    default, the explicit DRAFT→ACTIVE / ACTIVE→COMPLETED / ACTIVE→CANCELLED /
+    DRAFT→CANCELLED transitions, terminal 409s, and the campaign table/status.
+  invoke_dev_with: >-
+    DESIGN LINKS (3 frames in campaign.figcraft): figcraft://node/32, figcraft://node/212, figcraft://node/1752
+
+    Read SPEC.md CAP-2 and lifecycle constraints, ARCHITECTURE-SPINE.md AD-12,
+    data-model.md dialer_campaigns, UX flows, and epics.md Story 1.4.
+
+    DESIGN: frame 212 is the form (name, description, end date, survey step),
+    frame 32 is the campaign table (including CANCELLED, no row actions), frame
+    1752 is the phone card. THE FRAME OMITS THREE REQUIRED THINGS: the gap
+    duration control, max_attempts, and Start/Complete/Cancel. Implement all
+    three; they are UX-DR17/18, not optional. Presets 5/10/20/30/60, default 20,
+    range 5–300; a value outside the presets must still render as the current
+    value.
+
+    LIFECYCLE IS EXPLICIT. A new campaign is DRAFT. Only the four transitions
+    exist; COMPLETED and CANCELLED are terminal in v1. Every transition is a
+    conditional update on the current status, so a lost race is 409, never a
+    double-apply. A DRAFT campaign must not look like a live campaign with an
+    empty queue. Assignments and survey edits are allowed in DRAFT.
+
+    Server-side refusal is required even though the UI hides controls. The
+    form uses useState + hand-written handlers + fetch; no react-hook-form, no
+    zod.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-campaigns. Do NOT run the
+    full suite — only campaign files changed.
+
+- id: "1-5"
+  title: The per-campaign survey builder
+  epic: 1
+  depends_on: ["1-4"]
+  frames: [212]
+  description: >-
+    Free-form survey questions and options per campaign, choice questions
+    rejected with zero options, required markers backed by RPC enforcement,
+    retire-not-delete for questions with responses, and program scoping.
+  invoke_dev_with: >-
+    DESIGN LINKS (1 frame in campaign.figcraft): figcraft://node/212
+
+    Read SPEC.md CAP-2 and the survey-builder constraint, ARCHITECTURE-SPINE.md
+    AD-12, data-model.md dialer_survey_questions/options, ux-flows.md §10 and
+    §10a, design-coverage.md, and epics.md Story 1.5.
+
+    DESIGN: frame 212 owns the builder. Its former Status? survey card was
+    removed on purpose: the 13-chip disposition is the only status, and the
+    builder must not seed a second status question. Retire/Delete states are
+    not drawn — implement them from ux-flows §10a (UX-DR13).
+
+    OPTIONS ARE A CHILD TABLE, not a comma-separated string. A label may
+    contain a comma; value is the stable key so a rename does not orphan
+    answers. A DROPDOWN/RADIO/MULTI_SELECT question with zero options is
+    rejected at save time. is_required is enforced by the disposition RPC in
+    Story 2.3; render the marker only because it will be enforced.
+
+    Survey edits are allowed while DRAFT and while ACTIVE. Once a question has
+    responses, Retire only; Delete is offered only at zero responses and says
+    so. A retired question keeps its rows, historical answers and export.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-survey. Do NOT test the
+    disposition survey here; Story 2.3 owns it.
+
+- id: "1-6"
+  title: The caller roster, and auto-promotion on first assignment
+  epic: 1
+  depends_on: ["1-2"]
+  frames: [645, 2639]
+  description: >-
+    Scoped caller roster with per-campaign performance, active/inactive status
+    (an Admin action), auto-promotion of an eligible staff user on first
+    assignment, no invite/add/import control, and no second identity table.
+  invoke_dev_with: >-
+    DESIGN LINKS (2 frames in campaign.figcraft): figcraft://node/645, figcraft://node/2639
+
+    Read SPEC.md CAP-4 and the no-invite constraint, ARCHITECTURE-SPINE.md AD-2,
+    AD-3, AD-7, AD-13, data-model.md dialer_callers, ux-flows.md §8, and
+    epics.md Story 1.6.
+
+    DESIGN: frame 645 is the desktop roster — Caller, Contact, Campaigns, Calls
+    made, Reached, Status, a row menu, and the copy "All roles can be callers"
+    and "Inactive means inactive ... refused at the disposition write". Frame
+    2639 is the phone roster. There is NO add, invite, import or manage-user
+    control; both header buttons were removed on purpose (UX-DR32). Do not
+    re-add one because a screenshot from the older set had it.
+
+    SCOPE: Admin = program; Preacher = staff with assigned_preacher_id = self,
+    plus self; Assistant = their preacher's assignees, plus self. Inactive
+    callers are excluded from pickers and batch requests, never reactivated.
+    Deactivation/reactivation is an Admin action only.
+
+    PROMOTION: assigning an eligible staff user creates the dialer_callers row
+    with promoted_by = assigner. Never create public.users or auth.users; the
+    core invite path owns that.
+
+    Performance columns come from campaign_progress (Story 1.9), not a
+    client-side count and not a second query shape.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-callers. Do NOT re-run
+    smoke for role access.
+
+- id: "1-7"
+  title: Assign-contacts selection surface
+  epic: 1
+  depends_on: ["1-6"]
+  frames: [324]
+  description: >-
+    Desktop-only contact selection with server paging, hidden-selected count,
+    whole-set facets from dialer_contact_profiles, the scoped caller picker,
+    weight inputs and a live distribution preview. No write yet.
+  invoke_dev_with: >-
+    DESIGN LINKS (1 frame in campaign.figcraft): figcraft://node/324
+
+    Read SPEC.md CAP-2/CAP-5, ARCHITECTURE-SPINE.md AD-3, AD-11, AD-16,
+    data-model.md dialer_assignments, ux-flows.md §6, §7 and §14, and epics.md
+    Story 1.7.
+
+    DESIGN: frame 324 is the whole surface — the contact grid, "125 of 272
+    selected", "12 hidden on other pages", "Assign to", weighted callers, the
+    conflict warning and "Assign 120 contacts". Implement the layout, but keep
+    the write for Story 1.8: the primary action here previews and is disabled
+    at zero selection.
+
+    DESKTOP ONLY. A narrow viewport gets an explicit "open this on a desktop"
+    state. Do not invent a phone admin grid.
+
+    FACETS COME FROM THE WHOLE SET. centre/level/gender/language live in
+    dialer_contact_profiles; a contact without a profile row is fully callable.
+    Missing values give an empty option list, never a crash and never a facet
+    derived from the current page (the source app's defect).
+
+    PAGING IS CORRECTNESS. Exactly 1,000-row PostgREST cap, ~1,030 folk
+    contacts. Use the shared pager from lib/supabase/manage.ts; do not write a
+    bare .range() loop. The hidden-selected indicator is load-bearing: without
+    it an admin assigns the wrong people.
+
+    The caller picker is the AD-3 assignable set, excluding inactive. Weights
+    are UI state only; never store them and never add a weights table.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-assign-select. Do NOT
+    re-test components/grid/** — this story does not change it.
+
+- id: "1-8"
+  title: Conflict-aware weighted assignment write
+  epic: 1
+  depends_on: ["1-7"]
+  frames: [324]
+  description: >-
+    The server pre-check that names every conflict, the skip/move choice, one
+    transaction that writes only the confirmed set, floor + largest-remainder
+    weights, auto-promotion, and named refusals for out-of-set or inactive
+    callers.
+  invoke_dev_with: >-
+    DESIGN LINKS (1 frame in campaign.figcraft): figcraft://node/324
+
+    Read SPEC.md CAP-5, ARCHITECTURE-SPINE.md AD-3, AD-11, AD-16,
+    data-model.md dialer_assignments, architecture.md §1a, ux-flows.md §6,
+    and epics.md Story 1.8.
+
+    CONFLICTS ARE NAMED BEFORE ANY WRITE. The pre-check returns contact name +
+    current caller for every selected contact already assigned in the campaign.
+    Nothing is written until the assigner chooses skip or move. The primary
+    button's count is the count that will actually be written (frame 324's
+    "Assign 120 contacts" is this rule).
+
+    THE UNIQUE KEY IS (contact_id, campaign_id). Assignment is a move: update
+    the existing row, never insert a second one. The constraint is the
+    backstop; the readable conflict list is the feature.
+
+    WEIGHTS ARE WRITE-TIME ONLY. N = confirmed set size. Each caller gets
+    floor(N × weight ÷ total weight); leftovers go one at a time to the largest
+    remainders, ties by higher weight then list order. Counts must sum exactly
+    to N. No weights column, no weights table.
+
+    ONE TRANSACTION. Re-run the pre-check inside it, insert exactly the
+    confirmed set, and roll the whole batch back on any failure. No partial
+    success. Report offending rows by name. Out-of-set caller = 403 naming
+    them; inactive existing caller = refused, never reactivated. DRAFT is
+    allowed; COMPLETED/CANCELLED is refused.
+
+    FIXTURES: you may reuse e2e/fixtures/bulk-contacts.ts, but restore any
+    renamed fixture in a finally. The generator is idempotent on exact
+    deterministic names; a left-renamed row breaks the next run before any test.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-assign-write.
+
+- id: "1-9"
+  title: Campaign overview and the one progress computation
+  epic: 1
+  depends_on: ["1-8"]
+  frames: [32, 790, 961, 1752]
+  description: >-
+    campaign_progress as the single source of funnel, mix, rollup, summary and
+    activity numbers; the Overview stat cards and campaign table; scoped,
+    fail-closed, queued-excluded.
+  invoke_dev_with: >-
+    DESIGN LINKS (4 frames in campaign.figcraft): figcraft://node/32, figcraft://node/790, figcraft://node/961, figcraft://node/1752
+
+    Read SPEC.md CAP-8 and reporting constraints, ARCHITECTURE-SPINE.md AD-5,
+    AD-16, data-model.md Reporting, and epics.md Story 1.9.
+
+    DESIGN: frame 32 has five stat cards including Confirmed and the campaign
+    table (CANCELLED, no row actions); 1752 is the phone Overview; 961 is dark
+    parity; 790 shows Never attempted as the amber bucket. No campaign empty
+    state is drawn — implement it (UX-DR24).
+
+    ONE FUNCTION, ONE SET OF DEFINITIONS. campaign_progress returns the funnel,
+    outcome mix by status_group, per-caller rollup, summary counts and recent
+    activity. Attempted = at least one log; Reached = at least one log outside
+    NOT_REACHABLE/WRONG_NUMBER; Confirmed = latest reached log is CONFIRMED;
+    Never attempted = assigned − attempted. Funnel/campaign counts are
+    assignment-grain; leaderboard/activity are log-grain. Never recompute a
+    definition in the client.
+
+    SECURITY: SECURITY INVOKER, SET search_path = public, pg_temp, EXECUTE
+    revoked from PUBLIC/anon/authenticated, granted to service_role only. A
+    program_scope=false with a null scope id raises; only Admin passes true. An
+    Assistant with no preacher is refused before the call.
+
+    A QUEUED DISPOSITION IS NOT COUNTED until replay. Say so in the UI; do not
+    let the funnel look short without explanation.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-overview. Do NOT re-test
+    the reports screen — Story 3.1 consumes this function.
+
+- id: "2-1"
+  title: The caller queue, the call card, and contact history
+  epic: 2
+  depends_on: ["1-9"]
+  frames: [2263, 2360, 2737]
+  description: >-
+    The caller-scoped queue payload, deterministic order, the call card with
+    campaign context, progress, phone + Copy, the Queue drawer with current/next
+    and jump, and the last-N cross-campaign contact history.
+  invoke_dev_with: >-
+    DESIGN LINKS (3 frames in campaign.figcraft): figcraft://node/2263, figcraft://node/2360, figcraft://node/2737
+
+    Read SPEC.md CAP-1/CAP-6, ARCHITECTURE-SPINE.md AD-1, AD-7, AD-9, AD-16,
+    calling-mechanism.md, ux-flows.md §2, §3 and §9, and epics.md Story 2.1.
+
+    DESIGN: frame 2263 is the call card, frame 2360 is the queue, frame 2737 is
+    a second card state. Frame 2737 HAS A KNOWN DEFECT: the primary button
+    still says "Call Priya" while showing Sanjay K. The label must follow the
+    current contact (UX-DR31). Do not copy the defect.
+
+    THE QUEUE IS CALLER-GRAIN. Only PENDING assignments on ACTIVE campaigns,
+    program-scoped, resolved through dialer_assignments → dialer_callers by
+    caller_id, user_id and program_id. Order deterministically by campaign
+    date, campaign, sort_order, assignment id. Another caller's id is 404 with
+    no payload — add the denial-sweep row in this commit.
+
+    PHONE-FIRST. The card is full width; the Queue opens over it as a
+    full-screen drawer/list with the current row marked "← you", the next row
+    directly below, and every row tappable. It is a virtualised window with an
+    honest "Showing X of Y"; a 300–500 row queue must not jank. A wide viewport
+    gets the same phone-first session or an explicit open-on-phone state — no
+    desktop rail.
+
+    CALL: copy the number first, then tel:. An empty phone number is a visible
+    failure, never silence. The history panel is read-only, contact-scoped
+    across campaigns, last N, directly above the call button. Never ship a
+    general contacts read to the browser.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-queue. Do NOT re-test the
+    pacing controls; Story 2.2 owns them.
+
+- id: "2-2"
+  title: Pacing, Skip, Pause, campaign switch, single tab, and resume
+  epic: 2
+  depends_on: ["2-1"]
+  frames: [2263, 2360]
+  description: >-
+    Date.now-derived gap countdown gating the call button, Skip writing SKIPPED,
+    Pause as a normal state, the awaited campaign-switch notice, the
+    BroadcastChannel/localStorage second-tab lock, and reload recovery.
+  invoke_dev_with: >-
+    DESIGN LINKS (2 frames in campaign.figcraft): figcraft://node/2263, figcraft://node/2360
+
+    Read SPEC.md CAP-6, ARCHITECTURE-SPINE.md AD-9, AD-12, calling-mechanism.md
+    §The gap timer, ux-flows.md §3, §4, §5, and epics.md Story 2.2.
+
+    THE FRAMES SHOW NEITHER CONTROL. Frames 2263/2360 have no Skip, no Pause,
+    no countdown and no switch notice. They are required design omissions
+    (UX-DR4, UX-DR8, UX-DR19, UX-DR20), not optional polish.
+
+    THE GAP MUST NOT DRIFT. Derive it from Date.now() against a target
+    timestamp, never a decrementing counter. The tab is backgrounded for the
+    whole call, so throttling is the normal case. The gap gates the CALL BUTTON,
+    not navigation: the next card is readable immediately. Presets 5/10/20/30/60,
+    default 20, range 5–300; an off-preset value still renders as current.
+
+    SKIP WRITES. SKIPPED is a real assignment state here. Bound the last row;
+    the source app crashed there. Skip must never drop a contact silently.
+    Pause is a normal state and must not look like an error (no red error dot).
+
+    THE SWITCH NOTICE IS AWAITED. It names the incoming campaign and date,
+    pauses the gap, and blocks the next call until dismissed. The source fired
+    it without await and dialled mid-fade.
+
+    ONE SESSION: unique (assignment_id, attempt) is the database guarantee; a
+    BroadcastChannel lock with a localStorage fallback is the courtesy. Refuse
+    the second tab loudly.
+
+    RESUME: /campaigns/assignments?campaign=<id> plus a re-fetch restores the
+    same contact and in-flight draft. Do not keep the queue only in memory.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-session. Do NOT run
+    theme-switch or grid-*.
+
+- id: "2-3"
+  title: The disposition screen and the one-transaction save
+  epic: 2
+  depends_on: ["2-2"]
+  frames: [2456]
+  spec_checkpoint: true
+  description: >-
+    The 13-chip disposition screen with notes always and the campaign survey
+    only when reached; the second migration adding dialer_survey_responses; the
+    service-role-only, SECURITY INVOKER, idempotent record_call_disposition.
+  invoke_dev_with: >-
+    DESIGN LINKS (1 frame in campaign.figcraft): figcraft://node/2456
+
+    Read SPEC.md CAP-7 and the disposition constraints, ARCHITECTURE-SPINE.md
+    AD-4, AD-6, AD-12, data-model.md record_call_disposition and
+    dialer_survey_responses, ux-flows.md §1, §3, §10, and epics.md Story 2.3.
+
+    DESIGN: frame 2456 is "How did it go?" with the 13 Status chips, Notes and
+    "Save & continue". The survey below Status is a required omission
+    (UX-DR21). The chips ARE the stored model (UX-DR16): copy the labels
+    exactly, including "Not interested — do not call again".
+
+    SURVEY IS CONDITIONAL. It renders only when the selected group is not
+    NOT_REACHABLE and not WRONG_NUMBER. Notes always render. An is_required
+    answer is enforced by the RPC, or the marker is not rendered.
+
+    ONE TRANSACTION, OR NOTHING. record_call_disposition is SECURITY INVOKER,
+    search_path pinned, EXECUTE revoked from PUBLIC/anon/authenticated and
+    granted to service_role only. It re-reads the assignment, refuses an
+    inactive caller, snapshots dial_phone from contacts, writes the call log,
+    its responses and the assignment status together. Idempotent on
+    (assignment_id, attempt): same payload 200 with the stored row, different
+    payload 409 changing nothing, never 500.
+
+    ATTEMPT IS SUPPLIED, NOT INVENTED. Accept only the next attempt or an
+    existing attempt owned by the same caller. called_at is insert-only. The
+    caller id is getStaffContext(), never the payload.
+
+    THIS IS THE SECOND MIGRATION: dialer_survey_responses with unique
+    (call_log_id, question_id), its RLS matrix row, regenerated types.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-disposition. If a spec
+    holds the PATCH open with page.route, await the release before unroute —
+    unrouting a parked request resumes it and the later continue throws
+    "Route is already handled!" inside the finally.
+
+- id: "2-4"
+  title: Save receipts, failure states, and named refusals
+  epic: 2
+  depends_on: ["2-3"]
+  frames: [2456]
+  description: >-
+    Persistent Saving/Saved/Queued/Save failed receipt, answers kept on failure,
+    and named blocking states for deactivated caller, reassigned assignment,
+    cancelled campaign, second tab, and the Assistant wrong-number help.
+  invoke_dev_with: >-
+    DESIGN LINKS (1 frame in campaign.figcraft): figcraft://node/2456
+
+    Read SPEC.md CAP-7/CAP-9, ARCHITECTURE-SPINE.md AD-7, AD-10,
+    architecture.md §5, ux-flows.md §1, §8, §11, and epics.md Story 2.4.
+
+    THE RECEIPT IS NOT A TOAST. It is persistent on the disposition screen:
+    Saving…, Saved 12:04, Queued — will send, Save failed — session paused. A
+    disappearing toast is not a guarantee a caller can trust mid-conversation.
+
+    QUEUED IS SUCCESS. A network gap must never render Save failed. A rejected
+    or failed write is loud, pauses the session, and keeps every answer
+    editable/retryable.
+
+    REFUSALS ARE NAMED, NOT GENERIC. Cross-tab, deactivated caller, reassigned
+    assignment and cancelled campaign each get their own blocking message. The
+    session pauses and answers are kept. The denial sweep needs the inactive
+    caller row in Story 4.1; make the state reachable here.
+
+    WRONG-NUMBER HELP: an Assistant who cannot edit a contact sees "Ask an
+    Admin or Preacher", not a /manage link that fails. That is UX-DR28/FR46.
+
+    Frames 2456 is the only design for this screen; the receipt and refusal
+    states are required omissions, not a descope.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-receipts. Do NOT re-test
+    the offline queue; Story 2.5 owns it.
+
+- id: "2-5"
+  title: Offline disposition queue and draft recovery
+  epic: 2
+  depends_on: ["2-4"]
+  frames: [2456]
+  spec_checkpoint: true
+  description: >-
+    The disposition path in sw.js Background Sync, the 202 queued contract,
+    drain on ok||409, the localStorage draft keyed by assignment/attempt, and
+    surfacing an unsaved draft next session.
+  invoke_dev_with: >-
+    DESIGN LINKS (1 frame in campaign.figcraft): figcraft://node/2456
+
+    Read SPEC.md the offline constraint, ARCHITECTURE-SPINE.md AD-10,
+    architecture.md §5, public/sw.js (the one root file), AGENTS.md's sw.js
+    contract note, and epics.md Story 2.5.
+
+    ONE SERVICE WORKER. apps/folk/public and apps/gita-life/public are symlinks
+    to ../../public. Add /api/dialer/caller/disposition to QUEUED_POST_PATHS and
+    /campaigns to NETWORK_ONLY_PATH_PREFIXES in the root public/sw.js. Do not
+    add any other dialer path; the queue must not capture attendance,
+    registration or contact traffic.
+
+    THE 202 CONTRACT IS SHARED. A queued response is
+    { success: false, queued: true, message } and four existing files depend on
+    it. Do not change its shape. The receipt reads "Queued — will send".
+
+    DRAIN: ok || 409. A 200 replay must not duplicate the call log (the RPC is
+    idempotent). A permanent refusal returns 409 so the frozen queue drains; the
+    localStorage draft remains the recovery record, keyed
+    dialer:disposition:<assignmentId>:<attempt>, and is surfaced next session
+    as a call that could not be saved. Discard it when assignment or attempt
+    changes, or when the write is confirmed.
+
+    NO APP-SHELL OFFLINE PROMISE. The tab must already be open. Say so in the
+    story file rather than implying more.
+
+    Verify: pnpm test:static; pnpm test:offline-queue (existing 19-row contract
+    gate, stack up); pnpm test:e2e campaign-offline; pnpm test:e2e:guards (21 s).
+    Do NOT run the full suite for a sw.js-only change — no §5 shared component
+    changed.
+
+- id: "2-6"
+  title: Session summary and caller-grain recall
+  epic: 2
+  depends_on: ["2-5"]
+  frames: []
+  description: >-
+    The session-complete summary with the caller's own counts, recall of only
+    their NOT_REACHABLE rows within max_attempts, closed-after-N reporting,
+    attempt not bumped, and terminal 409 on a non-ACTIVE campaign.
+  invoke_dev_with: >-
+    DESIGN LINKS: none — no frame exists for this story; any required state is a design omission recorded in epics.md.
+
+    Read SPEC.md CAP-6, ARCHITECTURE-SPINE.md AD-5, AD-12, data-model.md
+    attempt cap and recall, ux-flows.md §3a, and epics.md Story 2.6.
+
+    THERE IS NO FRAME. The summary and recall are a required design omission
+    (UX-DR7, UX-DR23). Build from ux-flows §3a: counts, "Re-queue those N and
+    continue", "Done — back to my queue".
+
+    CALLER-GRAIN, DECIDED (D1). The counts are this caller's own work for the
+    campaign, not campaign_progress's campaign-wide numbers. Do not repurpose
+    campaign_progress; use the caller-scoped read the queue already proves.
+    Another caller's NOT_REACHABLE row is absent from the count and cannot be
+    recalled (404).
+
+    RECALL IS BOUNDED. Only NOT_REACHABLE (CALL_DID_NOT_CONNECT, SWITCHED_OFF)
+    returns to PENDING. Reached and WRONG_NUMBER are never re-queued. attempt is
+    not bumped; the next call log is the next attempt. max_attempts (default 3)
+    counts logs; at the cap report "closed after N attempts" rather than
+    vanishing. A non-ACTIVE campaign returns terminal 409.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-summary. Do NOT re-run
+    campaign-reports; that is campaign-grain and Story 3.1 owns it.
+
+- id: "3-1"
+  title: Desktop reports — funnel, outcome mix, leaderboard, activity
+  epic: 3
+  depends_on: ["1-9", "2-6"]
+  frames: [790, 1141]
+  description: >-
+    The desktop reports screen rendering campaign_progress: four-bucket funnel
+    plus Confirmed, Never attempted distinct, outcome mix by status_group,
+    leaderboard with the no-quality disclaimer, recent activity, and scoped
+    numbers.
+  invoke_dev_with: >-
+    DESIGN LINKS (2 frames in campaign.figcraft): figcraft://node/790, figcraft://node/1141
+
+    Read SPEC.md CAP-8, ARCHITECTURE-SPINE.md AD-3, AD-5, data-model.md
+    Reporting, ux-flows.md §11, and epics.md Story 3.1.
+
+    DESIGN: frame 790 is the accepted composition — funnel with the amber
+    Never attempted bucket, outcome mix, leaderboard disclaimer, recent
+    activity, Export CSV. Frame 1141 is dark parity. Do not add a fifth funnel
+    bucket or a quality score.
+
+    RENDER, DO NOT RECOMPUTE. campaign_progress was built in Story 1.9 and is
+    the only source of every number. Attempted/Reached/Confirmed/Never attempted
+    must match its definitions exactly. Mix groups by status_group (six), not
+    the 13 chips. Leaderboard ranks completed attempts and says it measures no
+    quality signal.
+
+    SCOPE IS THE SAME PREDICATE AS ASSIGNMENT. A Preacher sees only their
+    contacts; an Assistant only their preacher's. The campaign row is visible
+    to both; the counts are not program-wide.
+
+    A queued disposition is excluded until replay; state that rather than
+    letting the funnel look short. Zero data gets an actionable empty state.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-reports. Do NOT re-assert
+    the RPC arithmetic; Story 1.9 owns it. Do NOT run theme-switch.
+
+- id: "3-2"
+  title: CSV export of the same numbers
+  epic: 3
+  depends_on: ["3-1"]
+  frames: [790, 1968]
+  description: >-
+    A scoped CSV export that reads campaign_progress with the same arguments as
+    the screen, includes no unfillable column, pages at 1,000+ rows and fails
+    loudly, and is reachable from phone and desktop.
+  invoke_dev_with: >-
+    DESIGN LINKS (2 frames in campaign.figcraft): figcraft://node/790, figcraft://node/1968
+
+    Read SPEC.md CAP-8, ARCHITECTURE-SPINE.md AD-3, AD-5, AD-16,
+    data-model.md Reporting, and epics.md Story 3.2.
+
+    ONE SOURCE. The export reads campaign_progress with the same scope
+    arguments as the reports screen. A CSV row and an on-screen number cannot
+    disagree. No call_duration column — the product cannot fill it, and the
+    source app's export header was a lie.
+
+    SCOPE: the same predicate as assignment. A Preacher's or Assistant's file
+    cannot contain another scope's rows. Unauthenticated or out-of-scope
+    requests are refused with no file.
+
+    PAGING: use the shared pager extracted from collectPagedRows. PostgREST caps
+    at 1,000 and folk holds ~1,030. Throw loudly rather than truncating. A
+    transient failure shows a named error, never an empty file that looks
+    successful.
+
+    Frame 790 owns the desktop control, frame 1968 the phone control.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-export; pnpm guardrails.
+    Do NOT duplicate the reports rendering assertions.
+
+- id: "3-3"
+  title: Mobile reports — funnel with Confirmed, reduced-view statement
+  epic: 3
+  depends_on: ["3-1"]
+  frames: [1968, 2068]
+  description: >-
+    The phone reports screen adds Confirmed to the funnel and states that
+    outcome mix and recent activity are desktop detail; scoped leaderboard;
+    no clipping; token-driven dark parity.
+  invoke_dev_with: >-
+    DESIGN LINKS (2 frames in campaign.figcraft): figcraft://node/1968, figcraft://node/2068
+
+    Read SPEC.md CAP-8, design-coverage.md (CAP-8 and design defects),
+    ux-flows.md §11, and epics.md Story 3.3.
+
+    DESIGN + DECISION D3. Frame 1968 shows the mobile funnel and leaderboard
+    and Export CSV, but omits Confirmed, outcome mix and recent activity. Add
+    Confirmed to the funnel and add a visible statement:
+    "Outcome mix and recent activity are available on desktop."
+    Do not silently omit them, and do not invent a full desktop layout on a
+    phone.
+
+    Frame 2068 is the dark Overview; it is not a Reports frame. Do not add
+    per-screen dark overrides — tokens carry both themes.
+
+    Check 390×844: no horizontal scroll, Export CSV not clipped, Campaign
+    bottom nav usable. A desktop viewport shows the desktop screen.
+
+    Verify: pnpm test:static; pnpm test:e2e campaign-reports-mobile. Do NOT
+    re-run campaign-reports.
+
+- id: "4-1"
+  title: The denial sweep is complete, and Assistant scope is proven
+  epic: 4
+  depends_on: ["3-3"]
+  frames: [32, 1752, 2217, 2263, 2360]
+  description: >-
+    Audit and complete the per-route denial sweep, prove inactive-caller
+    refusal, Assistant-with-no-preacher zero-scope, Assistant/Preacher scope
+    isolation, and the non-caller Volunteer nav absence.
+  invoke_dev_with: >-
+    DESIGN LINKS (5 frames in campaign.figcraft): figcraft://node/32, figcraft://node/1752, figcraft://node/2217, figcraft://node/2263, figcraft://node/2360
+
+    Read ARCHITECTURE-SPINE.md AD-3, AD-7, AD-8, AD-14, architecture.md §2a,
+    docs/architecture/testing.md, and epics.md Story 4.1.
+
+    THIS IS A GATE, NOT FEATURE WORK. Every route file under
+    apps/folk/app/api/dialer/** must have a sweep row; pnpm guardrails fails
+    otherwise. Each row asserts: unauthenticated refused; non-owner 404 with no
+    row or id; owner succeeds. Add any missing row in the same commit as the
+    route it covers — do not defer.
+
+    PROVE THE HARD CASES: an inactive caller refused at queue/disposition/Skip
+    with no row written; an Assistant with assigned_preacher_id = NULL gets 403
+    or zero rows, never program scope; an Assistant with a preacher sees only
+    that preacher's contacts; a Preacher cannot read another preacher's
+    contact/assignment/report; a Volunteer without an active caller profile has
+    no Campaign item and is refused at /campaigns.
+
+    DO NOT DUPLICATE smoke.spec.ts. It owns sign-in and role landing; the sweep
+    owns denial. Use per-role storageState.
+
+    A pre-existing failure is named with git stash evidence, not fixed by
+    editing the gate. The known ones are test:airtable-removal 3/30 and the
+    rows 17/18 + 18 grid-* failures in testing.md §6.
+
+    Verify: pnpm test:static; pnpm guardrails; pnpm test:e2e dialer-route. Do
+    NOT run the full suite; Story 4.2 is the release run.
+
+- id: "4-2"
+  title: Release gate — full suite, determinism, and the recorded visual pass
+  epic: 4
+  depends_on: ["4-1"]
+  frames: [32, 212, 324, 645, 790, 961, 1141, 1752, 1968, 2068, 2217, 2263, 2360, 2456, 2639, 2737]
+  done_checkpoint: true
+  description: >-
+    The one release run: full pnpm test:e2e, determinism, the recorded visual
+    pass across all 16 campaign frames in both themes, the four design-defect
+    checks, and an evidence-based report with real commands and counts.
+  invoke_dev_with: >-
+    DESIGN LINKS (16 frames in campaign.figcraft): figcraft://node/32, figcraft://node/212, figcraft://node/324, figcraft://node/645, figcraft://node/790, figcraft://node/961, figcraft://node/1141, figcraft://node/1752, figcraft://node/1968, figcraft://node/2068, figcraft://node/2217, figcraft://node/2263, figcraft://node/2360, figcraft://node/2456, figcraft://node/2639, figcraft://node/2737
+
+    Read AGENTS.md, docs/architecture/testing.md, matrix-coverage-map.md,
+    docs/claiming-a-matrix-row.md, design-coverage.md, and epics.md Story 4.2.
+
+    DESIGN LINKS: all 16 campaign frames, nodes 32, 212, 324, 645, 790, 961,
+
+    1141, 1752, 1968, 2068, 2217, 2263, 2360, 2456, 2639, 2737 in
+    _bmad-output/E-Assets/page-designs/campaign.figcraft. Grade at 1440×900
+    and 390×844, light and dark. Every state implemented from the spec rather
+    than the frame is a restored design omission; name it in the story file.
+
+    THE FOUR DESIGN DEFECTS: 2737's call label follows the contact; mobile
+    reports include Confirmed; frame 212 has no status question; frame 645 has
+    no invite/import control.
+
+    EXACTLY TWO FULL RUNS IN THE WHOLE FEATURE: Story 1.3 (header) and this
+    gate. Determinism runs once at Story 1.2 (harness change) and once here.
+    If you are running the full suite again "to see", stop and run the affected
+    filter instead.
+
+    REPORT REALITY: exact commands, pass counts, revision, baseURL, worker
+    count (1). Never report pnpm test — it runs zero tests and exits 0. Name
+    pre-existing failures (test:airtable-removal 3/30; rows 17/18 and 18 grid-*
+    tests) with git stash evidence. Do not weaken package.json or
+    playwright.config.ts assertions.
+
+    NO PRODUCTION ACTION. Never run deploy:prod, deploy:folk:prod or
+    deploy:gita-life:prod, and never read or modify production secrets or
+    environment config.
+
+    Verify: pnpm test:e2e (the one recorded full run); pnpm test:e2e:determinism
+    (two back-to-back full runs; the second is valid evidence for the recorded
+    run); pnpm test:static; the manual visual pass. Nothing else. Total
+    full-suite executions for the feature: Story 1.3's one, plus these three.

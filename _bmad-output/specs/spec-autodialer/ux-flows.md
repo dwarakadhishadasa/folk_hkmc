@@ -77,7 +77,7 @@ This is the single largest intuition gain in the port: the caller can see the wh
 
 Three rules for that history panel, because "relevant" is doing real work:
 
-1. **It is read-only and it is scoped.** The caller sees this contact's history — never another contact's, and never a general contacts read.
+1. **It is read-only and it is contact-scoped, deliberately across campaigns.** The caller sees this contact's prior calls anywhere in the program — never another contact's, and never a general contacts read. Notes are therefore written knowing that a future caller assigned this contact may read them.
 2. **It is the last N entries, not all of them.** A contact with forty calls does not push the call button off the screen.
 3. **It sits directly above the call button.** History a caller has to scroll to find is history that shapes no conversation.
 
@@ -92,7 +92,7 @@ Three rules for that history panel, because "relevant" is doing real work:
    │   18 called    11 reached    7 no answer      │
    │   3 wrong number   2 skipped early           │
    │                                               │
-   │   7 people were never picked up.              │
+   │   7 people were not reachable.                │
    │                                               │
    │   [ Re-queue those 7 and continue ]           │
    │   [ Done — back to my queue ]                 │
@@ -103,8 +103,8 @@ Three rules for that history panel, because "relevant" is doing real work:
 
 Two boundaries keep this from becoming an infinite loop:
 
-- **Re-queue bumps `attempt`**, and there is a per-campaign **attempt cap** (default 3). Past the cap the contact leaves the queue and shows in the summary as *closed after N attempts* rather than vanishing.
-- **A "reached" contact is never re-queued by this button.** Only busy, no-answer, switched-off and not-reachable outcomes are eligible.
+- **Re-queue does not bump `attempt`**; the next call log is the next attempt. There is a per-campaign **attempt cap** (default 3). Past the cap the contact leaves the queue and shows in the summary as *closed after N attempts* rather than vanishing.
+- **A reached contact is never re-queued by this button.** Only `CALL_DID_NOT_CONNECT` and `SWITCHED_OFF` — the `NOT_REACHABLE` group — are eligible. A wrong number is corrected through contacts; a deferral is recorded and completes the assignment, and does not re-queue in v1.
 
 The current design does not contain the summary screen. That is a required omission, not a reason to drop the capability.
 
@@ -159,12 +159,14 @@ The current desktop Assign frame shows `125 of 272 selected` and `12 hidden on o
 
 **Survives**, with two necessary changes:
 
-- Since callers are `public.users` rows here, *Add Manually* goes through the **existing invite flow** (`upsertStaffUser` → `sendStaffInviteEmail` → `writeInviteLog`) rather than creating a bare contact row. A `users` row without a matching `auth.users` row cannot sign in, so the invite flow is the only correct path. Promoting an existing contact therefore requires that contact to have an email address — the picker says so rather than offering a control that cannot work.
+- **There is no dialer invite.** Callers are existing staff users; the Callers screen is a roster, not a creation surface. An eligible staff user is promoted to a calling profile on first assignment, and that is all — there is no invite, add or import control. Adding a person is the app's single staff invite path (`upsertStaffUser` → `sendStaffInviteEmail` → `writeInviteLog`), outside the Campaign surface; the dialer never creates a `public.users` or `auth.users` row. A contact who is not yet staff must be invited through the core path first; the picker says so rather than offering a control that cannot work.
 - **The auto-created campaign is dropped.** The source silently created a `"FOLK Camp Campaign"` whenever none existed, so an admin was never blocked but also never knew what they were assigning into. A blocked admin with a one-click empty state — "No campaigns yet · Create one" — is clearer than a silent default.
+- **A created campaign is not live.** It opens in `DRAFT`; the admin sees one **Start campaign** action on the campaign detail. Starting is what puts its pending assignments into callers' queues. Survey editing and assignment are allowed while `DRAFT`, so the campaign can be prepared before it goes live. Complete and Cancel are explicit actions too; a completed or cancelled campaign is terminal in v1 and never returns to a queue by accident.
+- **Navigation follows the caller profile, not the role label.** Admin, Preacher and Assistant see Campaign because it is their admin entry; they see Assignments only when they have an active `dialer_callers` profile. A Volunteer sees Campaign only when they are an active caller; otherwise the item is absent, not a 403. An Assistant who cannot correct a wrong number sees **“Ask an Admin or Preacher to correct this number”** rather than a control that leads to `/manage` and fails.
 
 The source's `contact.is_enabler` boolean alongside a `role` column — two sources of truth for the same question, one of them written as a string into a boolean — does not come across. One column.
 
-The final design's Callers copy says “All roles can be callers”. That is confirmed: Admin, Preacher, Volunteer and Assistant can all hold a `dialer_callers` profile. The design's `Import roster` control is out of v1 and must not ship; callers come through invite or promote-from-contacts.
+The final design's Callers copy says “All roles can be callers”. That is confirmed: Admin, Preacher, Volunteer and Assistant can all hold a `dialer_callers` profile. A Preacher's roster and assignment picker contain only the staff assigned to them, plus themselves; an Assistant's contain their preacher's assignees, plus themselves. The `Import roster` control is out of v1 and has been removed from the design; callers are existing staff users promoted on assignment, and adding a person is the core invite path.
 
 ## 9. Progressive detail, flat summary
 
@@ -172,13 +174,13 @@ The final design's Callers copy says “All roles can be callers”. That is con
 
 **Survives unchanged.** The caller needs the phone number, the name, and the outcome control. Everything else is one tap away. Putting 30 profile fields above the outcome dropdown would bury the one thing the caller is there to do. The final call card shows the number, Copy, history and the call button; the extra profile fields stay out of the way.
 
-## 10. Conditional fields — follow-up only when it means something
+## 10. Conditional fields — the survey only when there was a conversation
 
 **Source.** Every disposition screen shows all six outcomes and all seven follow-up statuses to every caller, always, regardless of what happened on the call. The `is_required` asterisk is rendered and never enforced.
 
-**What changes.** **Follow-up status and interest questions appear only when the outcome is `ANSWERED`.** For a busy or unanswered call, a follow-up status is not information — it is a decision the caller has to make that does not matter. Roughly half the disposition screen disappears for those calls, and the `*` required marker is actually enforced or not rendered at all.
+**What changes.** The design's 13-chip Status list is the whole selector and the stored data model — one `disposition_status`, with `status_group` generated from it. **The campaign survey appears only when the call reached a conversation**, meaning a group other than `NOT_REACHABLE` or `WRONG_NUMBER`. For a call that did not connect, a survey answer is not information; it is a decision about a conversation that never happened. Notes always render, and the `*` required marker is actually enforced or not rendered at all.
 
-The current design's single `Status` list mixes call outcomes and follow-up statuses; it cannot replace the separate `call_outcome`, conditional `follow_up_status` and campaign survey. That mapping is a required omission and an open question.
+The current design's single Status list is therefore the data model, not an omission. What the design omits is the campaign survey below it, which is a required addition and is tracked in `design-coverage.md`.
 
 ## 10a. Questions are retired, never deleted
 

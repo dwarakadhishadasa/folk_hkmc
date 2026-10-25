@@ -13,7 +13,7 @@ Where the new pieces attach to the existing `folk_hkmc` architecture.
         |                                        |
         v                                        v
 +---------------------------+        +----------------------------+
-| Campaign (admin)         |        | /dialer                    |
+| Campaign (admin)         |        | /campaigns/assignments     |
 |  create - assign - report |        |  queue - pace -            |
 |  desktop only             |        |  disposition - receipt     |
 | campaign payload resolved |        |                            |
@@ -100,9 +100,10 @@ The queue must never wedge. Every transition is reachable from the UI alone, and
                               | caller returns and says so
                               v
                       +---------------+
-                      |  DISPOSITION  |  outcome first; follow-up,
-                      |               |  interest + survey appear ONLY
-                      |               |  when outcome = ANSWERED
+                      |  DISPOSITION  |  one 13-chip status; notes
+                      |               |  always; survey appears ONLY
+                      |               |  when the status reached a
+                      |               |  conversation (survey only)
                       +--+---------+--+----------------+
             save ok      |         | offline accepted | save failed
                          v         v                  v
@@ -150,7 +151,7 @@ Invariants:
 1. **One primary action per phase, and its label states the consequence.** `Call Priya` / `I'm back` / `Save & continue` / `Next call in 14s`. No button whose meaning changes invisibly — the source's "Call Now" meant *skip* whenever the timer happened to be running.
 2. **Skip and pause are always available** from any live state — no telephony dependency, no modal traps, and no unbounded index. The source's "Skip" had no bounds guard and threw on the last contact.
 3. **A failed save never discards an answer.** It pauses the session, says so, and keeps the answers. The source set `_paused = true` with no message at all.
-4. **Autosave is idempotent and atomic.** One RPC writes the call log, its responses and the assignment status together; the `(call_log_id, question_id)` unique constraint makes a retry safe. The source's per-row insert loop could strand a caller with a half-written record and no way forward.
+4. **The explicit save is idempotent and atomic.** One RPC writes the call log, its responses and the assignment status together; the `(call_log_id, question_id)` unique constraint makes a retry safe. The source's per-row insert loop could strand a caller with a half-written record and no way forward.
 5. **The gap timer derives from elapsed time**, not a decrementing counter — the tab is backgrounded for the whole of every call and a backgrounded tab throttles `setInterval`.
 6. **The card you return to is the card you left.** Position is restored from the URL and a re-fetch, never from a `static` field, so answers cannot land on the wrong contact.
 7. **The queue is one tap away**, and the current and next contacts are visible in it. The caller surface is a phone, so the queue is a full-screen drawer/list over the call card; the desktop does not run a caller session.
@@ -176,20 +177,19 @@ The constraint is `unique (contact_id, campaign_id)` — **not** the source app'
               v
     +---------------------------+
     | name every conflict:     |--> admin decides:
-    | "X is assigned to Y"     |    assign the rest / cancel
+    | "X is assigned to Y"     |    skip them / move them / cancel
     +---------+-----------------+
-              | no conflicts, or partial accepted
+              | no conflicts, or confirmed skip/move plan
               v
     +---------------------------+
-    | write                     |--> failure -> report rows BY NAME,
-    |                           |    keep the successes (never collapse
-    |                           |    them into one count)
+    | write                     |--> all-or-nothing; failure -> roll back,
+    |                           |    report rows BY NAME; no partial success
     +---------+-----------------+
               |
               v
       assignments written
       contact promoted to caller
-      if needed (invite flow)
+      if needed (auto-promote)
 ```
 
 ## 4. What the browser cannot do
@@ -214,8 +214,8 @@ The dropped source-app capabilities, and what replaces each one.
   x  arbitrary SQL from the assistant  ->  named tools, validated server-side
       (run_dynamic_sql over the DB)      (CAP-10 deferred)
 
-  x  public member RSVP page           ->  cut; call_outcome + follow_up_status
-      (RLS was USING (true), incl. anon)  already record what RSVP recorded
+  x  public member RSVP page           ->  cut; disposition_status already
+      (RLS was USING (true), incl. anon)  records what RSVP recorded
 ```
 
 ## 5. Caller scope — the boundary that must not leak
@@ -230,8 +230,9 @@ A caller must never see another caller's queue, nor a general contacts read. Thi
    | assertCallerInScope(staff, assignmentX) |
    |                                         |
    |  dialer_assignments -> dialer_callers   |
-   |  WHERE caller.user_id = staff.userId   |
-   |    AND  program_id  = staff.programId  |
+   |  WHERE assignment.caller_id = caller.id |
+   |    AND caller.user_id = staff.userId    |
+   |    AND caller.program_id = staff.programId |
    |                                         |
    |  caller id comes from getStaffContext(), |
    |  NEVER from the request body            |
@@ -240,12 +241,12 @@ A caller must never see another caller's queue, nor a general contacts read. Thi
    found & mine         not found / not mine
         |                    |
         v                    v
-   queue payload        403, or 404 when the row
-   returned only       does not exist anywhere.
-   already scoped      NEVER a partial row.
+   queue payload        404 for both cases.
+   returned only       NEVER a partial row and
+   already scoped      never an existence oracle.
 ```
 
 Two properties make this hold:
 
 - **The browser never learns an id it was not given.** The queue arrives as one scoped payload, so there is no "give me contact #418" path to probe with.
-- **The id in the URL is the attack surface, so it is tested directly.** A caller requesting another caller's assignment id gets 403, covered by e2e — an assertion that exists only in app code and is never exercised is not a boundary.
+- **The id in the URL is the attack surface, so it is tested directly.** A caller requesting another caller's assignment id gets `404` with no payload, covered by e2e — an assertion that exists only in app code and is never exercised is not a boundary.

@@ -21,7 +21,7 @@ Follows `folk_hkmc` conventions exactly: additive timestamped migrations, `progr
 
 ## Tables
 
-All ids are `uuid PRIMARY KEY DEFAULT gen_random_uuid()`. All carry `program_id TEXT NOT NULL` — matching `contacts`, which uses a bare `TEXT` with an `isProgramId()` TypeScript check rather than an FK, so these follow suit. Timestamps are `timestamptz`, with an `updated_at` trigger using the existing `set_updated_at()` convention.
+All ids are `uuid PRIMARY KEY DEFAULT gen_random_uuid()`. All carry `program_id TEXT NOT NULL` — matching `contacts`, which uses a bare `TEXT` with an `isProgramId()` TypeScript check rather than an FK, so these follow suit. Timestamps are `timestamptz`, with an `updated_at` trigger using the existing `set_updated_at()` convention; `dialer_call_logs` is the exception (it has `called_at` and no `updated_at`).
 
 ### `dialer_contact_profiles`
 
@@ -48,13 +48,13 @@ The `event` table from the source app, renamed to avoid collision with any futur
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
-| `program_id` | text | FK |
+| `program_id` | text | scoped, `NOT NULL`; no FK, matching `contacts` |
 | `name` | text | not null |
 | `description` | text | |
 | `campaign_date` | date | not null |
 | `campaign_time` | text | |
 | `audience_filter` | text | **omitted.** The source column was stored, editable and never applied by any query. `ux-flows.md` §14 gets its facets from `dialer_contact_profiles` instead. |
-| `status` | text | not null default `'DRAFT'`, check in `DRAFT, ACTIVE, COMPLETED, CANCELLED` — **`CANCELLED`, never `DELETE`.** `dialer_assignments.campaign_id` is `on delete cascade`, so deleting a campaign silently destroys every queue, disposition and answer under it. Cancelling preserves all of it and simply removes the campaign from pickers. |
+| `status` | text | not null default `'DRAFT'`, check in `DRAFT, ACTIVE, COMPLETED, CANCELLED` — **`CANCELLED`, never `DELETE`.** `dialer_assignments.campaign_id` is `on delete restrict` and no role holds `DELETE`, so a campaign can neither be deleted by an endpoint nor cascade-destroyed. Cancelling preserves the queue, dispositions and answers and removes the campaign from new queues. |
 | `max_attempts` | integer | not null default 3, check between 1 and 10 — how many times a contact may be re-queued before the campaign closes them out |
 | `gap_duration` | integer | not null default 20, check between 5 and 300 — the pace between calls |
 | `created_by` | uuid | FK to `public.users(id)` |
@@ -62,30 +62,32 @@ The `event` table from the source app, renamed to avoid collision with any futur
 
 Index on `(program_id, status, campaign_date)`.
 
+**Lifecycle is explicit.** `DRAFT → ACTIVE`, `ACTIVE → COMPLETED`, `ACTIVE → CANCELLED` and `DRAFT → CANCELLED` are the only transitions; `COMPLETED` and `CANCELLED` are terminal in v1 and nothing auto-activates or auto-completes. The three Campaign admin roles may perform them. Assignments and the survey may be prepared while `DRAFT`; the queue and the disposition path require `ACTIVE`. A disposition, Skip or recall against any other status returns a terminal `409`.
+
 **Gap range is one number, not three.** The source had a DB check of `5–3600`, a client clamp to `300`, and a UI offering `[5, 10, 20, 30, 60]` — three disagreeing ranges, plus a `gap_duration` that no admin screen could set, so the DB default always applied. Here the admin can set it, and a value outside the preset list renders as the current value rather than as *no selection*.
 
-**Design coverage.** Frame 212 shows the name, description, end date and survey builder, but not the target-audience control or the gap-duration control. Both remain required by CAP-2; their absence is a design omission, not a schema change.
+**Design coverage.** Frame 212 shows the name, description, end date and survey builder, but not the gap-duration control. Gap timing remains required by CAP-2; its absence is a design omission, not a schema change. Target audience is not a campaign field: it is the assignment-time facet over `dialer_contact_profiles` described in AD-11.
 
 ### `dialer_callers`
 
-Callers are staff users with a calling profile, not a separate identity. The source app made them rows in `contact`; here they are `public.users` rows of role `Volunteer`, so one identity serves calling, attendance and the manage portal.
+Callers are staff users with a calling profile, not a separate identity. The source app made them rows in `contact`; here they are `public.users` rows of any staff role, so one identity serves calling, attendance and the manage portal.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
-| `program_id` | text | FK |
-| `user_id` | uuid | not null, FK `public.users(id)`, unique per program |
+| `program_id` | text | scoped, `NOT NULL`; no FK, matching `contacts` |
+| `user_id` | uuid | not null, FK `public.users(id)` **on delete restrict**, unique per program — a staff identity with dialer history cannot be deleted |
 | `display_name` | text | not null |
 | `is_active` | boolean | not null default true |
-| `invited_by` | uuid | FK `public.users(id)`, on delete set null |
-| `invited_at` | timestamptz | |
+| `promoted_by` | uuid | FK `public.users(id)`, on delete set null |
+| `promoted_at` | timestamptz | |
 | `created_at`, `updated_at` | timestamptz | |
 
 Unique on `(program_id, user_id)`.
 
-**Onboarding rule**: promoting an existing contact to a caller creates the `public.users` row *and* this row, and links the contact via `public.users.id = auth.users.id` the same way the invite flow does today. No third identity table.
+**Onboarding rule**: a caller is an existing `public.users` row; this table adds only the calling profile. An eligible staff user in the assigner's set is promoted on first assignment, writing this row with `promoted_by = staff.userId`. The dialer never inserts `public.users` or `auth.users`; adding a person is the core app's single staff invite path, outside the Campaign surface. An existing `is_active = false` profile is never reactivated by assignment. No third identity table.
 
-**Any staff role can hold this row.** Admin, Preacher, Volunteer and Assistant are all eligible; the caller scope is the `dialer_callers` row plus `program_id`, not the role. There is no `Import roster` path in v1.
+**Any staff role can hold this row.** Admin, Preacher, Volunteer and Assistant are all eligible; the caller scope is the `dialer_callers` row plus `program_id`, not the role. A Preacher may promote or assign only staff users whose `public.users.assigned_preacher_id` is them, **plus themselves**; an Assistant the same for their preacher, **plus themselves**; an Admin across the program. A deactivated caller is excluded from every assignable set. There is no `Import roster` path in v1.
 
 ### `dialer_assignments`
 
@@ -94,88 +96,77 @@ A contact assigned to a caller for a campaign.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
-| `program_id` | text | FK |
-| `contact_id` | uuid | not null, FK `contacts(id)` on delete cascade |
-| `caller_id` | uuid | not null, FK `dialer_callers(id)` on delete cascade |
-| `campaign_id` | uuid | not null, FK `dialer_campaigns(id)` on delete cascade |
+| `program_id` | text | scoped, `NOT NULL`; no FK, matching `contacts` |
+| `contact_id` | uuid | not null, FK `contacts(id)` **on delete restrict** — a contact with dialer history cannot be deleted, because the cascade would destroy the calls |
+| `caller_id` | uuid | not null, FK `dialer_callers(id)` **on delete restrict** — a caller with assignments cannot be deleted |
+| `campaign_id` | uuid | not null, FK `dialer_campaigns(id)` **on delete restrict** — a campaign cannot be deleted, only cancelled |
 | `assigned_by` | uuid | FK `public.users(id)` |
-| `status` | text | not null default `'PENDING'`, check in `PENDING, COMPLETED, SKIPPED` — **and `SKIPPED` is actually written.** The source declared it in the CHECK and in its Dart enum and wrote it from nowhere, so a skipped call vanished from the campaign metrics. |
+| `status` | text | not null default `'PENDING'`, check in `PENDING, COMPLETED, SKIPPED`. A saved disposition sets `COMPLETED`; Skip sets `SKIPPED`; recall returns `NOT_REACHABLE` rows to `PENDING`. Every transition is a conditional update. |
 | `sort_order` | integer | not null default 0 — **and the queue reads it.** The source wrote it and iterated in filter order, so call order was arbitrary. The rail in `ux-flows.md` §2 renders a defined order. |
 | `assigned_at` | timestamptz | |
 
-**Unique on `(contact_id, campaign_id)`** — this is what makes CAP-5 conflict detection possible at the database level, not just in the UI.
+**Unique on `(contact_id, campaign_id)`** — this is what makes a duplicate assignment impossible; the pre-check is what names an existing assignment before the admin decides to skip or move it. The constraint is the backstop, not the error message.
 
 The source used `(contact_id, enabler_id, campaign_id)`, which means reassigning a contact to a *different* caller for the same campaign creates a **second row** rather than moving the first — so a contact could be assigned to two callers at once and the app only noticed on the next screen, via the "already assigned to" snackbar. Dropping `caller_id` from the key makes assignment a **move**, which is what an admin means by it, and makes the conflict a real constraint rather than a warning about an accident the schema permitted.
 
-**Weighted multi-caller assignment is a write-time distribution, not a column.** The request carries `[{callerId, weight}]`; the server computes `N = selected − already assigned` and writes only the final `(contact_id, campaign_id, caller_id)` rows. No weights table and no weight column exist. See `architecture.md` §1a.
+**Weighted multi-caller assignment is a write-time distribution, not a column.** The request carries `[{callerId, weight}]`; every caller must be in the assigner's assignable set — Admin: the program; Preacher: the staff assigned to them plus themselves; Assistant: their preacher's assigned staff plus themselves — and an eligible staff user is auto-promoted to a `dialer_callers` profile on first assignment. The server computes `N = selected − already assigned` and writes only the final `(contact_id, campaign_id, caller_id)` rows. No weights table and no weight column exist. See `architecture.md` §1a.
 
-Indexes on `(campaign_id, caller_id, status)` and `(contact_id)`.
+Indexes on `(campaign_id, caller_id, status)` and `(contact_id)`. The first is the queue read.
 
 ### `dialer_call_logs`
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
-| `program_id` | text | FK |
-| `assignment_id` | uuid | not null, FK `dialer_assignments(id)` on delete cascade |
-| `contact_id` | uuid | not null, FK `contacts(id)` |
-| `caller_id` | uuid | not null, FK `dialer_callers(id)` |
-| `campaign_id` | uuid | not null, FK `dialer_campaigns(id)` on delete cascade |
-| `attempt` | integer | not null default 1 — the Nth call made about this contact in this campaign. **Re-queueing an un-reached contact bumps it**, and it is what the per-campaign attempt cap counts |
-| `call_outcome` | text | not null, check in `ANSWERED, BUSY, NO_RESPONSE, SWITCHED_OFF, WRONG_NUMBER, NOT_REACHABLE` |
-| `follow_up_status` | text | check in `NEW, CONTACTED, INTERESTED, NOT_INTERESTED, JOINED, PENDING, DORMANT` — **nullable, and only collected when `call_outcome = 'ANSWERED'`** (`ux-flows.md` §10) |
+| `program_id` | text | scoped, `NOT NULL`; no FK, matching `contacts` |
+| `assignment_id` | uuid | not null, FK `dialer_assignments(id)` on delete cascade. The link to the contact and campaign; `dial_phone` is the one deliberate historical snapshot. |
+| `caller_id` | uuid | not null, FK `dialer_callers(id)` **on delete restrict** — the historical attribution, snapshotted at write time |
+| `dial_phone` | text | not null — the number dialled, copied from `contacts.phone` inside the disposition transaction. History and export read this, not the contact's current phone. |
+| `attempt` | integer | not null — the Nth call made about this contact in this campaign. Supplied by the queue payload; the RPC accepts only the next attempt or an existing attempt owned by the same caller. |
+| `disposition_status` | text | not null, check in the 13 design chips — `CONFIRMED, MAY_COME, WILL_COME_NEXT_CLASS, WILL_COME_NEXT_WEEK, VISITING_HOME_TOWN, CALL_ME_BACK, CALL_DID_NOT_CONNECT, HEALTH_IS_NOT_GOOD, SWITCHED_OFF, OUT_OF_STATION, BUSY_CANNOT_COME, WRONG_NUMBER, NOT_INTERESTED` |
+| `status_group` | text | `NOT NULL`, `GENERATED ALWAYS AS (CASE ...) STORED` — `CONFIRMED, MAY_COME, DEFERRED, NOT_REACHABLE, WRONG_NUMBER, NOT_INTERESTED`. The `CASE` is total over the 13 chips; never written by the client or the RPC. |
 | `follow_up_notes` | text | **never pre-filled.** The source seeded every call log with `"Interested in attending weekend programs and activities."` |
-| `next_call_date` | date | |
 | `call_duration` | integer | **omitted unless `calling-mechanism.md` option B is chosen.** The source shipped this column, shipped a CSV export header for it, and wrote it from nowhere. |
 | `called_at` | timestamptz | not null default now() |
 
-Indexes on `(campaign_id, called_at desc)`, `(assignment_id)`, **and `(program_id, next_call_date)`** — the source queried `next_call_date = today` on every dashboard load with no index.
+Indexes on `(caller_id, called_at desc)` and `(assignment_id)`. There is no `next_call_date` column in v1; a deferral is recorded but does not schedule a future call. `dial_phone` is a historical snapshot and is never updated. `dialer_call_logs` is the one table exempt from the `updated_at` convention: it has `called_at` and is immutable per attempt.
 
 **`call_logs.caller_id` is the only historical attribution, and `assignments.caller_id` is the current owner.** Because the assignment unique key dropped `caller_id`, reassignment is a **move** — the row is updated, not appended — so the question "who was assigned this contact in week 1" cannot be answered from `dialer_assignments` at all. It is answered from `call_logs.caller_id`, which is snapshotted at write time and never updated.
 
 This is stated explicitly because the source app died on precisely this ambiguity: one disposition screen wrote `assignment['enabler_id']` and the other wrote `AuthService.currentUser.id`, producing `call_log` rows whose caller did not match the assignment they belonged to, which its own RLS policy then rejected. Any code that needs historical attribution reads `call_logs`, never `assignments`.
 
-**Multiple attempts are allowed** — the unique constraint lives on `survey_response`, not here, so re-calling a contact writes a new `call_log` rather than overwriting. That is how follow-ups stay auditable.
+**Multiple attempts are allowed** — the unique key includes `attempt`, so a second call writes attempt 2 rather than overwriting attempt 1. The survey-response uniqueness is separate, on `(call_log_id, question_id)`. A landed attempt is immutable: a correction is a new attempt, never an edit of the previous call log.
 
-**Unique on `(assignment_id, attempt)`.** This is what makes a duplicate write from a second tab an idempotent overwrite rather than a second record — the reporting counts attempts, and a volunteer with two tabs open would otherwise double every number they produce.
+**Unique on `(assignment_id, attempt)`.** This makes a duplicate write from a second tab an idempotent replay rather than a second record — the reporting counts attempts, and a volunteer with two tabs open would otherwise double every number they produce. A landed attempt is immutable: a replay of the same payload returns the stored row unchanged, and a different payload for the same attempt is a `409` conflict, not an overwrite. `attempt` is not invented by the database: the queue payload carries the assignment's next attempt, and the RPC accepts it only when it is `max(attempt) + 1` or an existing attempt for the same caller. `called_at` is set on insert and never updated on a replay, so the first save time survives a retry.
 
-### Disposition fields — outcome vs follow-up
+### Disposition status and the generated group
 
-`call_outcome` answers **what happened when we tried to reach them**:
+`disposition_status` is the only status a caller writes. It carries the design's 13 chips, so the screen the caller sees is the data model, not a translation of it:
 
-`ANSWERED | BUSY | NO_RESPONSE | SWITCHED_OFF | WRONG_NUMBER | NOT_REACHABLE`
+`CONFIRMED | MAY_COME | WILL_COME_NEXT_CLASS | WILL_COME_NEXT_WEEK | VISITING_HOME_TOWN | CALL_ME_BACK | CALL_DID_NOT_CONNECT | HEALTH_IS_NOT_GOOD | SWITCHED_OFF | OUT_OF_STATION | BUSY_CANNOT_COME | WRONG_NUMBER | NOT_INTERESTED`
 
-It is the field that controls the rest of the form. If the outcome is not `ANSWERED`, follow-up and survey questions do not appear.
+`status_group` is a `NOT NULL`, `GENERATED ALWAYS AS (CASE ...) STORED` column. The generation expression is immutable, total over the 13 chips and references only the same row, which is what PostgreSQL 17 requires of a stored generated column.
 
-`follow_up_status` answers **for an answered call, where does this person stand**:
-
-`NEW | CONTACTED | INTERESTED | NOT_INTERESTED | JOINED | PENDING | DORMANT`
-
-It is collected only when `call_outcome = 'ANSWERED'`. It is not the campaign survey and it is not a free-form answer; the survey is per campaign and may contain any questions the admin builds.
-
-The design's single `Status` list mixes the two concepts. A proposed UI split:
-
-| Design chip | Proposed field |
+| Stored `disposition_status` | Generated `status_group` |
 |---|---|
-| Confirmed | `follow_up_status` — `JOINED` today, or a new `CONFIRMED` value |
-| May come | `follow_up_status = INTERESTED` |
-| Will come next class / next week | `follow_up_status = INTERESTED` |
-| Call me back | `follow_up_status = PENDING` |
-| Call did not connect | `call_outcome = NO_RESPONSE` (or `NOT_REACHABLE`) |
-| Switched off | `call_outcome = SWITCHED_OFF` |
-| Wrong number | `call_outcome = WRONG_NUMBER` |
-| Not interested — do not call again | `follow_up_status = NOT_INTERESTED` |
-| Health is not good / out of station / busy cannot come / visiting home town | needs a decision: a follow-up status, a survey answer, or notes |
+| `CONFIRMED` | `CONFIRMED` |
+| `MAY_COME` | `MAY_COME` |
+| `WILL_COME_NEXT_CLASS`, `WILL_COME_NEXT_WEEK`, `VISITING_HOME_TOWN`, `CALL_ME_BACK`, `HEALTH_IS_NOT_GOOD`, `OUT_OF_STATION`, `BUSY_CANNOT_COME` | `DEFERRED` |
+| `CALL_DID_NOT_CONNECT`, `SWITCHED_OFF` | `NOT_REACHABLE` |
+| `WRONG_NUMBER` | `WRONG_NUMBER` |
+| `NOT_INTERESTED` | `NOT_INTERESTED` |
 
-The last row is why the mapping is still an open question: those chips are reasons, not clean statuses. Do not collapse the two columns to match the frame.
+The group exists for one reason: the funnel and the outcome mix need a coarse bucket, and deriving it in one column means two screens cannot disagree about the mapping. `BUSY` is deliberately not the name of the big group — seven of its nine statuses are deferred conversations, not an engaged line, and a report that calls them busy is a lie.
+
+A call **reached a conversation** when its group is anything except `NOT_REACHABLE` or `WRONG_NUMBER`. Campaign survey questions render only for a reached call; notes render always. `WRONG_NUMBER` is its own group because it is a data-quality outcome: it is attempted, it is not reached, and it is never recalled.
 
 ### `dialer_survey_questions`
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
-| `program_id` | text | FK |
-| `campaign_id` | uuid | not null, FK `dialer_campaigns(id)` on delete cascade |
+| `program_id` | text | scoped, `NOT NULL`; no FK, matching `contacts` |
+| `campaign_id` | uuid | not null, FK `dialer_campaigns(id)` **on delete restrict** — a question lives with its campaign |
 | `question_title` | text | not null |
 | `question_type` | text | not null, check in `TEXT, DROPDOWN, RADIO, MULTI_SELECT, DATE` |
 | `sort_order` | integer | not null |
@@ -202,61 +193,59 @@ Index on `(question_id, sort_order)`. `TEXT` and `DATE` questions have no rows h
 
 **A choice question with no options is rejected at save time.** The source allowed `DROPDOWN` / `RADIO` / `MULTI_SELECT` questions with an empty options string, which rendered as a control the caller could not possibly answer and stored a `null` answer. Since the free-form builder ships (`SPEC.md` Decided), the validation is: if `question_type` is a choice type, at least one option row must exist, and `is_required` questions must actually be enforced on save.
 
-**The final design's `Status?` question is unresolved.** Frame 212 shows a required `Status?` question with a fixed outcome list, while the spec ships a free-form builder. It may be a seeded default that can be edited, or a fixed standard question. That decision also determines whether the Confirmed stat can read this question; it is an open question in `SPEC.md`.
+**The `Status?` card is not a survey question.** The 13-chip list in frame 2456 is the stored `disposition_status`; the builder does not seed a second status question. Frame 212's redundant `Status?` card has been removed from the design; it was a prototype of the disposition control, not part of the campaign survey. The survey remains free-form, and Confirmed reads `disposition_status`, never a survey answer.
 
 ### `dialer_survey_responses`
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | PK |
-| `program_id` | text | FK |
+| `program_id` | text | scoped, `NOT NULL`; no FK, matching `contacts` |
 | `call_log_id` | uuid | not null, FK `dialer_call_logs(id)` on delete cascade |
-| `question_id` | uuid | not null, FK `dialer_survey_questions(id)` on delete cascade |
-| `answer` | text | not null |
+| `question_id` | uuid | not null, FK `dialer_survey_questions(id)` **on delete restrict** — a question with answers cannot be deleted |
+| `answer` | text | scalar answer; null when the question is `MULTI_SELECT` |
+| `answer_values` | text[] | multi-select answers; null for every other type. No delimiter, so an option containing a comma is representable. |
 | `created_at` | timestamptz | |
 
 **Unique on `(call_log_id, question_id)`** — this is what makes the disposition save idempotent, so CAP-7's "never lose data" guarantee survives a retry.
 
 ## `record_call_disposition` — one transaction, always
 
-The disposition write is a single `SECURITY DEFINER` RPC taking the assignment id, outcome, follow-up status, notes, next-call date and the survey answers, and writing the call log, its responses and the assignment status **together**.
+The disposition write is a single service-role-only function taking the assignment id, the disposition status, notes and the survey answers. It reads the contact's phone inside the transaction, snapshots it as `dial_phone`, and writes the call log, its responses and the assignment status **together**.
 
 It exists because the source's save was a loop of individual inserts against `unique (call_log_id, question_id)`: if answer 3 of 5 failed, the retry failed on answers 1 and 2 and the caller was permanently stuck with a half-saved disposition and no way out. One transaction cannot reach that state.
 
-Its arguments are validated server-side against an allowlist — the caller id comes from `getStaffContext()`, never from the payload — and it asserts the assignment belongs to the caller's own program before writing. See `architecture.md` §2.
+Its arguments are validated server-side against an allowlist — the caller id comes from `getStaffContext()`, never from the payload — and it asserts the assignment belongs to the caller's own program before writing. It is `SECURITY INVOKER`: `EXECUTE` is revoked from `PUBLIC`, `anon` and `authenticated` and granted to `service_role` only. Nothing calls it as an authenticated user, so a `SECURITY DEFINER` function would widen the privilege boundary without adding safety. See `architecture.md` §2.
 
-**The final design's single `Status` list is not the data model.** Frame 2456 shows one required `Status` field whose options mix call outcomes (`Switched off`, `Wrong number`, `Call did not connect`) with follow-up statuses (`Confirmed`, `May come`, `Call me back`). The RPC still needs a separate `call_outcome`, a conditional `follow_up_status`, notes and the campaign survey. The mapping is an open question in `SPEC.md`; do not collapse the columns to match the frame.
+**The final design's single `Status` list is the data model.** Frame 2456's 13 chips map one-to-one to `disposition_status`; `status_group` is generated. Notes always render, and the campaign survey renders only when the call reached a conversation. There is no separate `call_outcome` or `follow_up_status` column to collapse.
 
 ### Attempt cap and recall
 
-`dialer_campaigns.max_attempts integer not null default 3`. A session's **Re-queue** action (`ux-flows.md` §3a) returns eligible un-reached assignments to `PENDING` and bumps `attempt`. When `attempt` reaches `max_attempts`, the assignment stops being offered and the summary reports the contact as *closed after N attempts* rather than dropping it.
+`dialer_campaigns.max_attempts integer not null default 3`. A session's **Re-queue** action (`ux-flows.md` §3a) returns only `NOT_REACHABLE` assignments to `PENDING`; it does not bump anything, because `attempt` belongs to the next call log. The cap counts a `dialer_call_logs` row per attempt; when the count reaches `max_attempts`, the assignment stops being offered and the summary reports the contact as *closed after N attempts* rather than dropping it.
 
-Only `BUSY`, `NO_RESPONSE`, `SWITCHED_OFF` and `NOT_REACHABLE` are eligible. An `ANSWERED` contact is never re-queued by that button, and neither is `WRONG_NUMBER` — bad data is corrected through contacts, not by calling again.
+An assignment is offered only when it is `PENDING` and its campaign is `ACTIVE`. A saved disposition sets `COMPLETED`; Skip sets `SKIPPED`; recall returns only `NOT_REACHABLE` `COMPLETED` rows to `PENDING`. A disposition, Skip or recall against a campaign that is not `ACTIVE` is refused with a terminal `409`, and every transition is a conditional update on the current status so a lost race returns `409` instead of double-counting.
 
-**The disposition screen needs the caller's history to render the card's history panel** (`ux-flows.md` §3). That is a read of `dialer_call_logs` scoped to the same assignment's contact, capped to the last N entries — not a general history read.
+Only the `NOT_REACHABLE` group — `CALL_DID_NOT_CONNECT` and `SWITCHED_OFF` — is eligible for that button. A reached contact is never re-queued by it, and neither is `WRONG_NUMBER`: bad data is corrected through contacts, not by calling again. The deferral statuses (`CALL_ME_BACK`, `OUT_OF_STATION`, `VISITING_HOME_TOWN`, `WILL_COME_*`) are recorded and complete the assignment; they do not schedule a future call in v1 and do not inflate the recall.
+
+**The disposition screen needs the caller's history to render the card's history panel** (`ux-flows.md` §3). That is a read of `dialer_call_logs` for the same contact across campaigns in the program, capped to the last N entries — not a general contacts read. Notes are deliberately visible program-wide to any caller assigned that contact; they are not scoped to the current campaign or preacher.
 
 ## Reporting
 
-`campaign_progress(campaign_id)` returns the funnel and per-caller rollup in one call. The source computed all of this with nine separate `count(exact)` queries from the client, and its export paths read whole tables — survivable at ~1,800 contacts, not a design to copy.
+`campaign_progress(campaign_id, scope_preacher_id, program_scope)` returns the funnel, the outcome mix by `status_group`, the per-caller rollup, the summary counts (skipped, wrong number, closed after the attempt cap) and the recent-activity rows in one call. It is `SECURITY INVOKER`; `EXECUTE` is revoked from `PUBLIC`, `anon` and `authenticated` and granted to `service_role`; a null `scope_preacher_id` with `program_scope = false` raises, so an Assistant with no preacher cannot fall through to a program-wide read. It takes the scope as an argument because the service-role client bypasses RLS — so the screen, the session summary and the CSV cannot disagree. The source computed all of this with nine separate `count(exact)` queries from the client, and its export paths read whole tables — survivable at ~1,800 contacts, not a design to copy.
 
-**The funnel has four named buckets, and the fourth is the one that matters operationally:**
+A disposition that is still `Queued — will send` is not counted until its replay lands; the receipt says so rather than letting the funnel look short.
+
+**The funnel has five named buckets, and the last is the one that matters operationally:**
 
 | Bucket | Definition |
 |---|---|
 | **Assigned** | `dialer_assignments` rows for the campaign |
 | **Attempted** | assignments with at least one `dialer_call_logs` row |
-| **Reached** | assignments with a `call_outcome = 'ANSWERED'` call log |
-| **Confirmed** | **open** — must be a standard outcome field, not a free-form survey answer. Candidate: `follow_up_status = 'JOINED'`, or a new `CONFIRMED` value. |
+| **Reached** | assignments with at least one call log whose `status_group` is neither `NOT_REACHABLE` nor `WRONG_NUMBER` |
+| **Confirmed** | the assignment's latest reached call log has `disposition_status = 'CONFIRMED'` |
 | **Never attempted** | assigned minus attempted |
 
-**Confirmed — the schema options:**
-
-1. **Reuse `follow_up_status = 'JOINED'`.** No migration. The metric is "answered and joined"; the UI label would be misleading if Confirmed means "will attend".
-2. **Add `CONFIRMED` to `follow_up_status`.** One CHECK-constraint migration plus regenerated types; metric = latest answered call with `CONFIRMED`. Clean if Confirmed is a relationship state.
-3. **Add a separate `attendance_intent` field** (`CONFIRMED | MAYBE | DECLINED`) on `dialer_call_logs`, collected only when answered. No change to `follow_up_status`; the metric reads this field. More schema, but the semantics are exact.
-4. **Make `Status?` a fixed standard survey question.** No new column, but reporting depends on a question identity that the free-form builder can rename or retire. Fragile; not recommended.
-
-The choice is deferred until the final database shape is reviewed.
+**Confirmed, resolved.** It is the latest reached status, not a survey answer and not a separate column. A later reached call supersedes an earlier one, so a contact who confirmed and then said they were not interested reads as not interested; a later `CALL_DID_NOT_CONNECT` does not erase an earlier confirmation. `WRONG_NUMBER` never counts as reached.
 
 **Never attempted is what makes a stalled volunteer visible.** Under the source's model a volunteer who never opened the app was indistinguishable from one who called everyone and got busy — both produce assignments with no logs. Without this bucket, a campaign at 38% completion is equally consistent with "callers were unlucky" and "callers never showed up", and the admin cannot tell which until the campaign is over.
 
@@ -266,18 +255,18 @@ The choice is deferred until the final database shape is reviewed.
 
 Every table has RLS enabled. Use the existing `SECURITY DEFINER` helpers — `caller_role()`, `caller_program_id()`, `caller_assigned_preacher_id()`, `caller_effective_location_ids()` — rather than writing new ones.
 
-| Table | Admin / Preacher | Caller (any staff role) | Member / anon |
+| Table | Admin / Preacher / Assistant | Caller (any staff role) | Member / anon |
 |---|---|---|---|
-| `dialer_campaigns` | full | select own campaign's | none |
-| `dialer_callers` | full | select own | none |
-| `dialer_assignments` | full | select + update own only | none |
-| `dialer_call_logs` | full | select own; insert own (via service route) | none |
-| `dialer_survey_questions` | full | select campaign's | none |
-| `dialer_survey_responses` | full | select + insert own via own call log | none |
-| `dialer_survey_options` | full | select campaign's | none |
-| `dialer_contact_profiles` | full | select own contacts' | none |
+| `dialer_campaigns` | select program | select own campaign's | none |
+| `dialer_callers` | select program as Admin; select own assigned set as Preacher/Assistant | select own | none |
+| `dialer_assignments` | select scoped | select own only | none |
+| `dialer_call_logs` | select scoped | select own only | none |
+| `dialer_survey_questions` | select program | select campaign's | none |
+| `dialer_survey_responses` | select scoped | select own via own call log | none |
+| `dialer_survey_options` | select program | select campaign's | none |
+| `dialer_contact_profiles` | select scoped | select own contacts' | none |
 
-Every policy filters on `program_id = caller_program_id()`. A caller additionally filters to `caller_id` = their own `dialer_callers.id`. The role does not widen the scope: an Admin who is not the assigned caller sees only what the Admin policy allows, not another caller's queue.
+Every policy filters on `program_id = caller_program_id()`. **No table grants `INSERT`, `UPDATE` or `DELETE` to `authenticated`** — every write goes through a service-role route handler after a scope assertion, and the policies exist so an authenticated read cannot widen the scope. The three admin-surface roles are not equal: **Admin** reads the program; **Preacher** reads contact-linked rows whose contact has `assigned_preacher_id = auth.uid()`; **Assistant** reads contact-linked rows whose contact has `assigned_preacher_id = caller_assigned_preacher_id()`. Campaign, question and option rows are program-level because they carry no contact; assignments, call logs, responses, contact profiles and the caller roster are scoped. The roster's scope is the AD-3 assignable set: a Preacher sees staff users with `assigned_preacher_id = auth.uid()` plus themselves; an Assistant sees their preacher's assignees plus themselves; an Admin sees the program. A caller additionally filters to `caller_id` = their own `dialer_callers.id`: on `/campaigns/assignments` even an Admin sees only their own queue, while the admin surface sees the scope its role allows.
 
 Add a section to `_bmad-output/specs/spec-airtable-to-supabase/rls-policy-matrix.md` **in the same commit as the migration**, and regenerate `lib/supabase/types.ts` with `supabase gen types`.
 

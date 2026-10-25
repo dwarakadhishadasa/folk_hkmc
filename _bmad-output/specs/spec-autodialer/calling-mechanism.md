@@ -2,7 +2,7 @@
 
 **Decided 2026-10-09. Option A. Not an open question.**
 
-A human places every call. The caller presses a button, the native phone app opens with the number, the caller talks, returns to the browser, and records the outcome. The system never dials, and there is no telephony provider in v1. The caller surface is a phone PWA; the desktop is the admin surface and does not place calls.
+A human places every call. The caller presses a button, the native phone app opens with the number, the caller talks, returns to the browser, and records the outcome. The system never dials, and there is no telephony provider in v1. The caller surface is `/campaigns/assignments` on a phone PWA; the desktop is the admin surface and does not place calls.
 
 This is the shape the source app already used, and it is the right shape here: no provider credentials, no cost, no webhook infrastructure, nothing to secure or configure. `folk_hkmc` has no cron, no job queue and no worker today, and programmatic dial-out would require all three before it could place a single call.
 
