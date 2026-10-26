@@ -1,0 +1,51 @@
+{
+  "id": "story-1-3-campaign-chrome",
+  "goal": "Make Campaign a first-class destination: role-resolved header item, Campaign sub-nav, /campaigns and /campaigns/assignments shells with actionable empty states, modules.dialer flag, both app-level proxy matchers, root sw.js paths, and the /manage delete-message fix for the new RESTRICT FK.",
+  "outcome": "The Campaign pill is visible to Admin, Preacher, Assistant always and to Volunteer only with an active caller profile; Assignments sub-nav appears only for active callers; modules.dialer gates the shared nav item in gita-life only; apps/folk/proxy.ts and apps/gita-life/proxy.ts both match /campaigns/:path* and /api/dialer/:path*; public/sw.js adds /campaigns to NETWORK_ONLY_PATH_PREFIXES and /api/dialer/caller/disposition to QUEUED_POST_PATHS; lib/supabase/manage.ts distinguishes dialer history from attendance history; the full suite passes once here (the only full run in the feature).",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-3-CAMPAIGN-CHROME-RULE-1",
+      "kind": "rule",
+      "statement": "Story 1.3 in epics.md; frames 32, 961, 1752, 2217."
+    },
+    {
+      "id": "STORY-1-3-CAMPAIGN-CHROME-RULE-2",
+      "kind": "rule",
+      "statement": "Next reads the matcher in apps/folk/proxy.ts and apps/gita-life/proxy.ts, NOT the root proxy.ts. Add /campaigns/:path* and /api/dialer/:path* to BOTH app matchers."
+    },
+    {
+      "id": "STORY-1-3-CAMPAIGN-CHROME-RULE-3",
+      "kind": "rule",
+      "statement": "apps/*/public is a symlink to ../../public. Edit the ONE root public/sw.js."
+    },
+    {
+      "id": "STORY-1-3-CAMPAIGN-CHROME-RULE-4",
+      "kind": "rule",
+      "statement": "modules.dialer does not exist. Add it to packages/program-config/src/types.ts and both profiles (true folk, false gita-life)."
+    },
+    {
+      "id": "STORY-1-3-CAMPAIGN-CHROME-RULE-5",
+      "kind": "rule",
+      "statement": "Volunteer without active caller profile gets NO Campaign item. With one, the item goes to /campaigns/assignments."
+    },
+    {
+      "id": "STORY-1-3-CAMPAIGN-CHROME-RULE-6",
+      "kind": "rule",
+      "statement": "The /manage delete mapping must distinguish dialer history from attendance — three assertions in manage-contacts-row-lifecycle.spec.ts and grid-row-context-menu.spec.ts pin the attendance behavior."
+    },
+    {
+      "id": "STORY-1-3-CAMPAIGN-CHROME-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "STORY-1-3-CAMPAIGN-CHROME-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "Full pnpm test:e2e passes once (includes campaign-navigation, smoke, theme-switch, manage-contacts-row-lifecycle)."
+    }
+  ],
+  "depends_on": [
+    "story-1-2-campaign-access-boundary"
+  ]
+}

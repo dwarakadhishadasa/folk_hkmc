@@ -1,0 +1,46 @@
+{
+  "id": "story-1-6-caller-roster",
+  "goal": "Build the scoped caller roster with per-campaign performance, active/inactive status as an Admin action, and auto-promotion of an eligible staff user on first assignment — with no invite, add, import, or user-management control.",
+  "outcome": "The Callers screen lists the roster in the viewer's scope (Admin = program; Preacher = their assignees plus themselves; Assistant = their preacher's assignees plus themselves) with per-campaign performance from campaign_progress; there is no add, invite or import control; an inactive caller is excluded from pickers and refused at the disposition write, never reactivated; assigning an eligible staff user creates the dialer_callers row with promoted_by = assigner.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-6-CALLER-ROSTER-RULE-1",
+      "kind": "rule",
+      "statement": "Story 1.6 in epics.md; frames 645, 2639."
+    },
+    {
+      "id": "STORY-1-6-CALLER-ROSTER-RULE-2",
+      "kind": "rule",
+      "statement": "There is NO add, invite, import or manage-user control; both header buttons were removed on purpose (UX-DR32). Do not re-add one because an older screenshot had it."
+    },
+    {
+      "id": "STORY-1-6-CALLER-ROSTER-RULE-3",
+      "kind": "rule",
+      "statement": "PROMOTION: assigning an eligible staff user creates the dialer_callers row with promoted_by = assigner. Never create public.users or auth.users."
+    },
+    {
+      "id": "STORY-1-6-CALLER-ROSTER-RULE-4",
+      "kind": "rule",
+      "statement": "Performance columns come from campaign_progress (story 1.9), not a client-side count and not a second query shape."
+    },
+    {
+      "id": "STORY-1-6-CALLER-ROSTER-CONSTRAINT-1",
+      "kind": "constraint",
+      "statement": "Deactivation and reactivation are an Admin action only."
+    },
+    {
+      "id": "STORY-1-6-CALLER-ROSTER-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "STORY-1-6-CALLER-ROSTER-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e campaign-callers passes."
+    }
+  ],
+  "depends_on": [
+    "story-1-2-campaign-access-boundary"
+  ]
+}

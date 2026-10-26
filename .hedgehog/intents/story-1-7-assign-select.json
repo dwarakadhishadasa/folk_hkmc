@@ -1,0 +1,51 @@
+{
+  "id": "story-1-7-assign-select",
+  "goal": "Build the desktop-only assign-contacts selection surface: server paging, hidden-selected count, whole-set facets from dialer_contact_profiles, the scoped caller picker, weight inputs and a live distribution preview — with no write yet.",
+  "outcome": "An admin-surface user can select contacts in their scope across pages with an explicit hidden-selected count, filter by whole-set centre/level/gender/language facets, choose a campaign and one or more callers from the AD-3 assignable set with weights, and see a live distribution preview; the primary action previews and is disabled at zero selection; a narrow viewport gets an explicit open-on-desktop state.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-7-ASSIGN-SELECT-RULE-1",
+      "kind": "rule",
+      "statement": "Story 1.7 in epics.md; frame 324."
+    },
+    {
+      "id": "STORY-1-7-ASSIGN-SELECT-RULE-2",
+      "kind": "rule",
+      "statement": "DESKTOP ONLY. A narrow viewport gets an explicit 'open this on a desktop' state. Do not invent a phone admin grid."
+    },
+    {
+      "id": "STORY-1-7-ASSIGN-SELECT-RULE-3",
+      "kind": "rule",
+      "statement": "FACETS COME FROM THE WHOLE SET, never the current page. A contact without a profile row is fully callable; missing values give an empty option list, never a crash."
+    },
+    {
+      "id": "STORY-1-7-ASSIGN-SELECT-RULE-4",
+      "kind": "rule",
+      "statement": "PAGING IS CORRECTNESS. Exactly 1000-row PostgREST cap, ~1030 folk contacts. Use the shared pager from lib/supabase/manage.ts; do not write a bare .range() loop."
+    },
+    {
+      "id": "STORY-1-7-ASSIGN-SELECT-RULE-5",
+      "kind": "rule",
+      "statement": "The hidden-selected indicator is load-bearing — without it an admin assigns the wrong people."
+    },
+    {
+      "id": "STORY-1-7-ASSIGN-SELECT-RULE-6",
+      "kind": "rule",
+      "statement": "Weights are UI state only; never store them and never add a weights table."
+    },
+    {
+      "id": "STORY-1-7-ASSIGN-SELECT-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "STORY-1-7-ASSIGN-SELECT-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e campaign-assign-select passes."
+    }
+  ],
+  "depends_on": [
+    "story-1-6-caller-roster"
+  ]
+}

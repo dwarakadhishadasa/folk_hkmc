@@ -1,0 +1,56 @@
+{
+  "id": "story-1-8-assign-write",
+  "goal": "Build the conflict-aware weighted assignment write: the server pre-check that names every conflict, the skip/move choice, one transaction that writes only the confirmed set, floor plus largest-remainder weights, auto-promotion, and named refusals for out-of-set or inactive callers.",
+  "outcome": "The pre-check returns contact name plus current caller for every selected contact already assigned in the campaign, and nothing is written until the assigner chooses skip or move; the confirmed write is one transaction with no partial success that re-runs the pre-check and reports offending rows by name; N = confirmed set size is distributed by floor(N x weight / total weight) plus largest remainders (ties by higher weight then list order) producing whole-number counts summing exactly to N; a destination caller outside the assignable set is rejected by name; an inactive existing caller is refused and never reactivated.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-RULE-1",
+      "kind": "rule",
+      "statement": "Story 1.8 in epics.md; frame 324."
+    },
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-RULE-2",
+      "kind": "rule",
+      "statement": "CONFLICTS ARE NAMED BEFORE ANY WRITE. The primary button's count is the count that will actually be written."
+    },
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-RULE-3",
+      "kind": "rule",
+      "statement": "THE UNIQUE KEY IS (contact_id, campaign_id). Assignment is a move: update the existing row, never insert a second one."
+    },
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-RULE-4",
+      "kind": "rule",
+      "statement": "WEIGHTS ARE WRITE-TIME ONLY. No weights column, no weights table."
+    },
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-RULE-5",
+      "kind": "rule",
+      "statement": "ONE TRANSACTION — re-run the pre-check inside it and roll the whole batch back on any failure."
+    },
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-RULE-6",
+      "kind": "rule",
+      "statement": "DRAFT is allowed; COMPLETED and CANCELLED is refused."
+    },
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-CONSTRAINT-1",
+      "kind": "constraint",
+      "statement": "Fixtures: you may reuse e2e/fixtures/bulk-contacts.ts, but restore any renamed fixture in a finally. The generator is idempotent on exact deterministic names."
+    },
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "STORY-1-8-ASSIGN-WRITE-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e campaign-assign-write passes."
+    }
+  ],
+  "depends_on": [
+    "story-1-7-assign-select"
+  ]
+}

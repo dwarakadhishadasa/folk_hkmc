@@ -1,0 +1,64 @@
+{
+  "id": "story-1-1-dialer-data-model",
+  "goal": "Create the program-scoped dialer storage: seven tables (dialer_campaigns, dialer_callers, dialer_assignments, dialer_contact_profiles, dialer_call_logs, dialer_survey_questions, dialer_survey_options), the total stored status_group generated column over the 13 caller-written dispositions, scoped SELECT-only RLS, exact grants, and regenerated Supabase types.",
+  "outcome": "The local schema has exactly the seven named tables with the columns, checks, indexes and FK actions in _bmad-output/specs/spec-autodialer/data-model.md; status_group is generated and never written; anon and authenticated hold SELECT only and no role holds DELETE; the RLS policy matrix has a row per table and lib/supabase/types.ts is regenerated.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-RULE-1",
+      "kind": "rule",
+      "statement": "Story 1.1 in _bmad-output/specs/spec-autodialer/epics.md; the story file _bmad-output/specs/spec-autodialer/stories/1-1-dialer-data-model-generated-status-group-and-rls.md is the contract."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-RULE-2",
+      "kind": "rule",
+      "statement": "Follow data-model.md exactly — no next_call_date, call_duration, audience_filter, follow_up_status, SCHEDULED, or any column on contacts."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-RULE-3",
+      "kind": "rule",
+      "statement": "dialer_survey_responses and the disposition RPC belong to Epic 2 story 2.3, not here."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-CONSTRAINT-1",
+      "kind": "constraint",
+      "statement": "Additive timestamped migration only. Never edit an earlier migration or weaken a grant or RLS rule."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-CONSTRAINT-2",
+      "kind": "constraint",
+      "statement": "Do not edit lib/supabase/manage.ts — the RESTRICT FK delete-message mapping belongs to story 1.3."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "Exactly seven tables exist with program_id TEXT NOT NULL on each; no response table exists."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "All 13 dispositions map to their exact group; an unknown disposition is rejected; the group cannot be written directly."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-ACCEPTANCE-3",
+      "kind": "acceptance",
+      "statement": "Duplicate (contact_id, campaign_id), (assignment_id, attempt) and (program_id, user_id) are each rejected by a unique constraint."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-ACCEPTANCE-4",
+      "kind": "acceptance",
+      "statement": "anon and authenticated INSERT, UPDATE and DELETE are all denied; SELECT is program- and role-scoped."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-ACCEPTANCE-5",
+      "kind": "acceptance",
+      "statement": "Each of the six ON DELETE RESTRICT foreign keys refuses to delete a history-bearing parent."
+    },
+    {
+      "id": "STORY-1-1-DIALER-DATA-MODEL-ACCEPTANCE-6",
+      "kind": "acceptance",
+      "statement": "Seven RLS policy matrix rows and seven regenerated table types are present."
+    }
+  ],
+  "depends_on": []
+}

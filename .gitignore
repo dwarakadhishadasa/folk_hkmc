@@ -52,3 +52,7 @@ packages/*/.turbo/
 _bmad/render/
 .claude/settings.json
 .github/copilot/settings.json
+.hedgehog/graph-server.json
+.hedgehog/hedgehog.db
+.hedgehog/hedgehog.db-*
+.hedgehog/commit.lock

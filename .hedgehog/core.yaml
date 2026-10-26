@@ -1,0 +1,57 @@
+# Layer chain for folk_hkmc, adopted (brownfield).
+#
+# Every layer is a SEAM of this repo, not a step of one feature. Each intent
+# compiles the whole per-intent chain into its own tasks; a task whose scope
+# has no changes closes as a no-op without running its verify command.
+#
+# The chain is strictly linear and expresses change order for a given batch:
+#
+#   schema -> server -> api -> ui -> chrome -> join
+#
+# `join` is the tail safety net: the only layer whose verify sees the whole
+# repo. It is `once: true`, so it compiles exactly one task for the entire
+# build — never one per intent — and it carries the single full-suite run.
+#
+# No `{module}` anywhere: this chain is adopted onto a repo that is not laid
+# out module-per-directory.
+#
+# `scope` is an inline list — the loader's YAML subset has no block lists.
+id: adopted
+pattern: layered
+layers:
+  - id: schema
+    scope: ["supabase/migrations/**", "supabase/seed.sql", "_bmad-output/specs/spec-airtable-to-supabase/rls-policy-matrix.md", "_bmad-output/specs/spec-autodialer/stories/**"]
+    verify: "pnpm supabase:push && pnpm seed:local"
+    commit: "feat(schema): migration"
+
+  - id: server
+    depends_on: schema
+    scope: ["lib/dialer/**", "lib/authz.ts", "lib/supabase/**", "_bmad-output/specs/spec-autodialer/stories/**"]
+    verify: "pnpm test:static"
+    commit: "feat(server): service layer"
+
+  - id: api
+    depends_on: server
+    scope: ["apps/folk/app/api/dialer/**", "scripts/verify-dialer-route-coverage.mjs", "e2e/specs/dialer-route-sweep.spec.ts", "e2e/fixtures/**", "e2e/auth/**", "playwright.config.ts", "package.json", "_bmad-output/specs/spec-autodialer/stories/**"]
+    verify: "pnpm test:static && pnpm test:e2e dialer-route"
+    commit: "feat(api): dialer endpoints"
+
+  - id: ui
+    depends_on: api
+    scope: ["apps/folk/app/campaigns/**", "components/campaign/**", "e2e/specs/campaign-*.spec.ts", "_bmad-output/specs/spec-autodialer/stories/**"]
+    verify: "pnpm test:static && pnpm test:e2e campaign-"
+    commit: "feat(ui): campaign surfaces"
+
+  - id: chrome
+    depends_on: ui
+    scope: ["components/header.tsx", "apps/folk/proxy.ts", "apps/gita-life/proxy.ts", "public/sw.js", "packages/program-config/src/**", "_bmad-output/specs/spec-autodialer/stories/**"]
+    verify: "pnpm test:static"
+    commit: "feat(chrome): navigation and module flag"
+
+  - id: join
+    depends_on: chrome
+    scope: ["**"]
+    verify: "pnpm test:static && pnpm test:e2e"
+    exclusive: true
+    once: true
+    commit: "chore: join"

@@ -1,0 +1,46 @@
+{
+  "id": "story-1-5-survey-builder",
+  "goal": "Build the per-campaign survey builder: free-form questions and options per campaign, choice questions rejected with zero options, required markers, retire-not-delete for questions with responses, and program scoping.",
+  "outcome": "TEXT, DROPDOWN, RADIO, MULTI_SELECT and DATE questions with ordered options can be added, edited and removed per campaign; a choice question with zero options is rejected at save time; a question with responses can only be retired, and its rows, historical answers and export survive; the builder seeds no status question; survey edits are allowed in DRAFT and ACTIVE.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-5-SURVEY-BUILDER-RULE-1",
+      "kind": "rule",
+      "statement": "Story 1.5 in epics.md; frame 212."
+    },
+    {
+      "id": "STORY-1-5-SURVEY-BUILDER-RULE-2",
+      "kind": "rule",
+      "statement": "Options are a CHILD TABLE, not a comma-separated string. A label may contain a comma; value is the stable key so a rename does not orphan answers."
+    },
+    {
+      "id": "STORY-1-5-SURVEY-BUILDER-RULE-3",
+      "kind": "rule",
+      "statement": "The former Status? survey card was removed on purpose — the 13-chip disposition is the only status. Do not seed a second status question."
+    },
+    {
+      "id": "STORY-1-5-SURVEY-BUILDER-RULE-4",
+      "kind": "rule",
+      "statement": "is_required is enforced by the disposition RPC in story 2.3; render the marker only because it will be enforced."
+    },
+    {
+      "id": "STORY-1-5-SURVEY-BUILDER-RULE-5",
+      "kind": "rule",
+      "statement": "Retire/Delete states are not drawn — implement them from ux-flows.md section 10a (UX-DR13)."
+    },
+    {
+      "id": "STORY-1-5-SURVEY-BUILDER-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "STORY-1-5-SURVEY-BUILDER-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e campaign-survey passes."
+    }
+  ],
+  "depends_on": [
+    "story-1-4-campaign-lifecycle"
+  ]
+}

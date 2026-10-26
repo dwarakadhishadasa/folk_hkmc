@@ -1,0 +1,46 @@
+{
+  "id": "story-1-4-campaign-lifecycle",
+  "goal": "Build the campaign create/edit form with gap duration and max_attempts, the DRAFT default, the four explicit lifecycle transitions, terminal 409s, and the campaign table and status display.",
+  "outcome": "A campaign is created in DRAFT with name, description, campaign date/time, gap duration (5-300s, default 20, presets 5/10/20/30/60) and max_attempts (1-10, default 3); only DRAFT->ACTIVE, ACTIVE->COMPLETED, ACTIVE->CANCELLED and DRAFT->CANCELLED exist and each is a conditional update so a lost race is 409; COMPLETED and CANCELLED are terminal; assignments and survey edits are allowed in DRAFT; the campaign table shows status including CANCELLED.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-4-CAMPAIGN-LIFECYCLE-RULE-1",
+      "kind": "rule",
+      "statement": "Story 1.4 in epics.md; frames 32, 212, 1752."
+    },
+    {
+      "id": "STORY-1-4-CAMPAIGN-LIFECYCLE-RULE-2",
+      "kind": "rule",
+      "statement": "The frame omits three REQUIRED things — gap duration control, max_attempts, and Start/Complete/Cancel. Implement all three (UX-DR17/18)."
+    },
+    {
+      "id": "STORY-1-4-CAMPAIGN-LIFECYCLE-RULE-3",
+      "kind": "rule",
+      "statement": "LIFECYCLE IS EXPLICIT — a new campaign is DRAFT, nothing auto-activates or auto-completes, and a DRAFT campaign must not look like a live campaign."
+    },
+    {
+      "id": "STORY-1-4-CAMPAIGN-LIFECYCLE-RULE-4",
+      "kind": "rule",
+      "statement": "Server-side refusal is required even though the UI hides controls."
+    },
+    {
+      "id": "STORY-1-4-CAMPAIGN-LIFECYCLE-RULE-5",
+      "kind": "rule",
+      "statement": "The form uses useState plus hand-written handlers plus fetch — no react-hook-form, no zod."
+    },
+    {
+      "id": "STORY-1-4-CAMPAIGN-LIFECYCLE-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "STORY-1-4-CAMPAIGN-LIFECYCLE-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e campaign-campaigns passes."
+    }
+  ],
+  "depends_on": [
+    "story-1-2-campaign-access-boundary"
+  ]
+}

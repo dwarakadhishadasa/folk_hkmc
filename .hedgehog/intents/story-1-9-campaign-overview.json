@@ -1,0 +1,51 @@
+{
+  "id": "story-1-9-campaign-overview",
+  "goal": "Build the campaign overview and the one progress computation: campaign_progress as the single source of funnel, outcome mix, caller rollup, summary counts and recent activity, plus the Overview stat cards and campaign table — scoped, fail-closed, and queued-excluded.",
+  "outcome": "campaign_progress returns the five-bucket funnel (Assigned, Attempted, Reached, Confirmed, Never attempted), the outcome mix by status_group, the per-caller rollup, the summary counts and recent activity in one call; the Overview screen shows the scoped stat cards and the campaign table with an actionable no-campaign empty state; a Preacher or Assistant never widens to program scope; a missing scope is refused; a queued disposition is not counted until its replay lands.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-9-CAMPAIGN-OVERVIEW-RULE-1",
+      "kind": "rule",
+      "statement": "Story 1.9 in epics.md; frames 32, 790, 961, 1752."
+    },
+    {
+      "id": "STORY-1-9-CAMPAIGN-OVERVIEW-RULE-2",
+      "kind": "rule",
+      "statement": "ONE FUNCTION, ONE SET OF DEFINITIONS — never recompute a definition in the client."
+    },
+    {
+      "id": "STORY-1-9-CAMPAIGN-OVERVIEW-RULE-3",
+      "kind": "rule",
+      "statement": "SECURITY: SECURITY INVOKER, SET search_path = public, pg_temp, EXECUTE revoked from PUBLIC/anon/authenticated and granted to service_role only. A program_scope=false with a null scope id raises; only Admin passes true."
+    },
+    {
+      "id": "STORY-1-9-CAMPAIGN-OVERVIEW-RULE-4",
+      "kind": "rule",
+      "statement": "Funnel and campaign counts are assignment-grain; leaderboard and activity are log-grain."
+    },
+    {
+      "id": "STORY-1-9-CAMPAIGN-OVERVIEW-RULE-5",
+      "kind": "rule",
+      "statement": "A QUEUED DISPOSITION IS NOT COUNTED until replay. Say so in the UI."
+    },
+    {
+      "id": "STORY-1-9-CAMPAIGN-OVERVIEW-RULE-6",
+      "kind": "rule",
+      "statement": "No campaign empty state is drawn — implement it (UX-DR24)."
+    },
+    {
+      "id": "STORY-1-9-CAMPAIGN-OVERVIEW-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "STORY-1-9-CAMPAIGN-OVERVIEW-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e campaign-overview passes."
+    }
+  ],
+  "depends_on": [
+    "story-1-8-assign-write"
+  ]
+}
