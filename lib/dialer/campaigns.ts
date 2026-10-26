@@ -51,6 +51,16 @@ const TRANSITION_VERBS: Record<CampaignTransitionAction, string> = {
   cancel: "cancelled",
 }
 
+/**
+ * A runtime string is not a `CampaignTransitionAction` just because it reached a
+ * typed parameter: a JSON body carrying `"constructor"` would index
+ * `Object.prototype` and then throw on `.from.length`, turning a bad request
+ * into a 500. The own-key test is the boundary.
+ */
+function isCampaignTransitionAction(value: string): value is CampaignTransitionAction {
+  return Object.prototype.hasOwnProperty.call(CAMPAIGN_TRANSITIONS, value)
+}
+
 const CAMPAIGN_LIST_PAGING_FAILURES: PagingFailures = {
   read: () => new AuthzError(500, "campaign_read_failed", "Unable to read campaigns."),
   truncated: () => new AuthzError(500, "campaign_list_truncated", "The campaign list read was truncated."),
@@ -248,10 +258,11 @@ export async function transitionCampaign(
   requireCampaignAdmin(staff)
   assertCampaignIdShape(campaignId)
 
-  const transition = CAMPAIGN_TRANSITIONS[action]
-  if (!transition) {
+  if (!isCampaignTransitionAction(action)) {
     throw new AuthzError(400, "invalid_campaign_action", "Unknown campaign action.")
   }
+
+  const transition = CAMPAIGN_TRANSITIONS[action]
 
   const supabaseAdmin = createSupabaseAdminClient()
   const update = supabaseAdmin
