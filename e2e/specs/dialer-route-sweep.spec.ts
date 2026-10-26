@@ -185,6 +185,35 @@ test.afterAll(async () => {
 })
 
 // ============================================================================
+// A second campaign, for the assign-contacts read. It must be a real row:
+// `listAssignableContacts` resolves the campaign before reading contacts, so
+// an absent id is a 404 and would prove only that the gate admits the Admin.
+// Nothing is assigned in this file, so the cleanup delete cannot be blocked by
+// `dialer_assignments`.
+// ============================================================================
+
+let assignContactsCampaignId: string
+
+test.beforeAll(async () => {
+  const adminRequest = await playwrightRequest.newContext({
+    baseURL: BASE_URL,
+    storageState: storageStatePath("admin"),
+  })
+
+  try {
+    assignContactsCampaignId = await createDisposableCampaign(adminRequest, "assign contacts")
+  } finally {
+    await adminRequest.dispose()
+  }
+})
+
+test.afterAll(async () => {
+  if (assignContactsCampaignId) {
+    await deleteDisposableCampaign(assignContactsCampaignId)
+  }
+})
+
+// ============================================================================
 // Route registrations — add a sweepRoute() call for every /api/dialer/** route
 // file under apps/folk/app/api/dialer/**, exactly as the route file lands.
 // The static guardrail fails `pnpm guardrails` when a route file has no row.
@@ -282,6 +311,17 @@ sweepRoute({
   body: {},
 })
 
+// The assign-contacts read needs the campaign it would assign into: the
+// service resolves the campaign before reading a single contact, and a contact
+// page for a campaign that does not exist is a 404, not the success case.
+sweepRoute({
+  route: "/api/dialer/admin/campaigns/[campaignId]/contacts",
+  url: () => `/api/dialer/admin/campaigns/${assignContactsCampaignId}/contacts`,
+  method: "GET",
+  kind: "admin",
+  ownerStatuses: [200],
+})
+
 // ============================================================================
 // Caller roster. Neither row needs a fixture row: the roster read answers for
 // whatever the program holds, and the status row pins `404` because the gate
@@ -303,6 +343,26 @@ sweepRoute({
   kind: "admin",
   ownerStatuses: [404],
   body: { isActive: false },
+})
+
+// The assigner's picker reads the AD-3 assignable set, which is a different
+// population from the roster: it excludes deactivated callers. The preview is
+// pure arithmetic behind the same gate, so a one-caller body is a real 200 and
+// writes nothing.
+sweepRoute({
+  route: "/api/dialer/admin/assignable-callers",
+  method: "GET",
+  kind: "admin",
+  ownerStatuses: [200],
+})
+
+sweepRoute({
+  route: "/api/dialer/admin/campaigns/[campaignId]/assignments/preview",
+  url: () => `/api/dialer/admin/campaigns/${assignContactsCampaignId}/assignments/preview`,
+  method: "POST",
+  kind: "admin",
+  ownerStatuses: [200],
+  body: { total: 10, callers: [{ callerId: ABSENT_CALLER_ID, weight: 1 }] },
 })
 
 // ============================================================================
@@ -410,6 +470,70 @@ test.describe("Campaign survey create: the option rule", () => {
 
     expect(response.status(), "a prototype key must be a 400, never a 500").toBe(400)
     expect(await response.json()).toMatchObject({ code: "invalid_question_type" })
+  })
+})
+
+test.describe("Assignable contacts envelope", () => {
+  test("is `{ rows, page, pageSize, total, totalPages, facets }`", async ({ request }) => {
+    const response = await request.get(
+      `${BASE_URL}/api/dialer/admin/campaigns/${assignContactsCampaignId}/contacts`,
+    )
+
+    expect(response.status()).toBe(200)
+
+    const body = (await response.json()) as {
+      rows?: unknown
+      page?: unknown
+      pageSize?: unknown
+      total?: unknown
+      totalPages?: unknown
+      facets?: unknown
+    }
+
+    expect(Array.isArray(body.rows), "the list route answers with a `rows` array").toBe(true)
+    expect(body.page, "an unrequested page is page 1").toBe(1)
+    expect(body.pageSize, "an unrequested page size is 25").toBe(25)
+    expect(body.total, "the total is the real set size, not the page length").toEqual(expect.any(Number))
+    expect(body.totalPages, "totalPages is derived from the real total").toEqual(expect.any(Number))
+    expect(body.facets, "all four facets answer an array, even an empty one").toMatchObject({
+      centre: expect.any(Array),
+      level: expect.any(Array),
+      gender: expect.any(Array),
+      language: expect.any(Array),
+    })
+  })
+})
+
+test.describe("Assignable contacts query: page validation is the service's", () => {
+  const pageUrl = (query: string) =>
+    `${BASE_URL}/api/dialer/admin/campaigns/${assignContactsCampaignId}/contacts${query}`
+
+  test("is a 400 invalid_page for a page that is not a whole number", async ({ request }) => {
+    const response = await request.get(pageUrl("?page=abc"))
+
+    expect(response.status(), "a non-numeric page is a named refusal, not a silent page 1").toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_page" })
+  })
+
+  test("is a 400 invalid_page for a page below 1", async ({ request }) => {
+    const response = await request.get(pageUrl("?page=0"))
+
+    expect(response.status()).toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_page" })
+  })
+
+  test("is a 400 invalid_page_size above the 100-row cap", async ({ request }) => {
+    const response = await request.get(pageUrl("?pageSize=101"))
+
+    expect(response.status(), "the cap is a contract, not a clamp").toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_page_size" })
+  })
+
+  test("is a 400 invalid_page_size for a size that is not a whole number", async ({ request }) => {
+    const response = await request.get(pageUrl("?pageSize=abc"))
+
+    expect(response.status()).toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_page_size" })
   })
 })
 
