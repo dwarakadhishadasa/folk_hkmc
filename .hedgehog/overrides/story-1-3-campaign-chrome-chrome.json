@@ -1,0 +1,7 @@
+{
+  "task": "STORY-1-3-CAMPAIGN-CHROME-CHROME",
+  "scope_add": [
+    "proxy.ts"
+  ],
+  "reason": "Story 1.3's acceptance criteria keep the root proxy.ts matcher in sync with the two app matchers as the shared source. The layer scope names only the app-level files, so the root list would go stale; the path is additive to the layer's scope and the root handler is what both apps delegate to."
+}

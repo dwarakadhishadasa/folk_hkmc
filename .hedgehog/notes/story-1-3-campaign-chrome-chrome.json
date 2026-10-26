@@ -1,0 +1,10 @@
+{
+  "task": "STORY-1-3-CAMPAIGN-CHROME-CHROME",
+  "notes": [
+    {
+      "kind": "decision",
+      "note": "Story 1.3's test scope names a campaign-navigation run but no campaign-navigation spec exists, and chrome's scope holds no e2e/**. The join layer (scope **, verify pnpm test:static && pnpm test:e2e) must add e2e/specs/campaign-navigation.spec.ts before its full run: an Admin/Preacher/Assistant sees Campaign in the desktop pill and the phone bottom nav pointing at /campaigns; a Volunteer with an active dialer_callers profile sees it pointing at /campaigns/assignments; a Volunteer without one sees no Campaign item at all. Without it the header routing this layer added ships unproven.",
+      "logged_at": "2026-10-26T15:56:32.665Z"
+    }
+  ]
+}

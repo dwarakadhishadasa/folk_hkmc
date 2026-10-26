@@ -124,9 +124,12 @@ The sub-nav is hidden below `md`, and frame 2217 ("Campaign (phone) — Menu", O
 
 **Commands run:**
 - `pnpm test:static` — **PASS**, exit 0. Guardrails: "Monorepo guardrails passed." with the same four pre-existing type-import warnings; every workspace typecheck project Done; ESLint "✖ 16 problems (0 errors, 16 warnings)", all pre-existing and outside the files this layer touched.
-- `pnpm test:e2e:list campaign-` — not run for this layer; the full suite and any navigation spec belong to the join layer.
+
+**The full suite — not completed:**
+- `pnpm test:e2e` was started once for Story 1.3 (the intent's single full run) and **interrupted at the user's direction** after 90 of 339 tests, so it is not a verdict on the story. Before the interruption it had recorded 7 failures: `bulk-fixtures` cleanup (33 ms), `grid-cell-metrics` metrics 4, `grid-cell-renderers` type 8, and `grid-column-drag-menu` drags 1–4. Six of those are the failures `docs/architecture/testing.md` §6 already records as pre-existing on a clean tree; the `bulk-fixtures` cleanup row is not on that list and may be leftover tagged-contact state from the interrupted run.
+- The run booted its own dev server (the stale one on :3000 was stopped first); no runner was left behind.
 
 **Not run:**
-- The full `pnpm test:e2e` was not run at this layer. `adoption.md` assigns chrome `pnpm test:static` only and gives the single full-suite run to the join layer; running it here would add a second full execution for a change the join run already covers.
+- The full suite was therefore never completed for this story. Its OUTCOME line ("the full suite passes once here") is **not satisfied**, and the header routing this layer added is still unproven by a browser test. The join layer carries both the full run and a declared decision to add `e2e/specs/campaign-navigation.spec.ts` first.
 - `pnpm test:e2e:determinism` was not run: it is deferred to Epic 4 (Story 4.2), which owns the release gate over the accumulated suite.
 - `pnpm test` was not run: it finds no test script in any package and exits 0 without running anything.
