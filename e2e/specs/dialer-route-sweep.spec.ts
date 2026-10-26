@@ -62,6 +62,9 @@ const ABSENT_CAMPAIGN_ID = "00000000-0000-4000-8000-000000000000"
 /** A question id that is valid in shape and absent by construction, like the campaign id above. */
 const ABSENT_QUESTION_ID = "00000000-0000-4000-8000-000000000001"
 
+/** A caller id that is valid in shape and absent by construction, like the ids above. */
+const ABSENT_CALLER_ID = "00000000-0000-4000-8000-000000000002"
+
 interface SweepRouteOptions {
   /** The route file's path, exactly as the guardrail derives it from the directory. */
   route: string
@@ -280,6 +283,29 @@ sweepRoute({
 })
 
 // ============================================================================
+// Caller roster. Neither row needs a fixture row: the roster read answers for
+// whatever the program holds, and the status row pins `404` because the gate
+// admits the Admin before the deliberately absent caller is looked up. That is
+// also what keeps the sweep from creating or toggling a caller profile.
+// ============================================================================
+
+sweepRoute({
+  route: "/api/dialer/admin/callers",
+  method: "GET",
+  kind: "admin",
+  ownerStatuses: [200],
+})
+
+sweepRoute({
+  route: "/api/dialer/admin/callers/[callerId]",
+  url: `/api/dialer/admin/callers/${ABSENT_CALLER_ID}`,
+  method: "PATCH",
+  kind: "admin",
+  ownerStatuses: [404],
+  body: { isActive: false },
+})
+
+// ============================================================================
 // Payload contracts the three-case denial shape cannot express: what a body
 // that is not a JSON object answers, the list envelope, and the service's own
 // unknown-action refusal. Each is one route's contract, not a population gate.
@@ -384,6 +410,66 @@ test.describe("Campaign survey create: the option rule", () => {
 
     expect(response.status(), "a prototype key must be a 400, never a 500").toBe(400)
     expect(await response.json()).toMatchObject({ code: "invalid_question_type" })
+  })
+})
+
+test.describe("Caller roster list envelope", () => {
+  test("is `{ callers }` for a roster read", async ({ request }) => {
+    const response = await request.get(`${BASE_URL}/api/dialer/admin/callers`)
+
+    expect(response.status()).toBe(200)
+    const body = (await response.json()) as { callers?: unknown }
+    expect(Array.isArray(body.callers), "the list route answers with a `callers` array").toBe(true)
+  })
+})
+
+test.describe("Caller status: a flag that is not a boolean", () => {
+  test("is a 400 invalid_is_active, mapped from the service", async ({ request }) => {
+    const response = await request.patch(
+      `${BASE_URL}/api/dialer/admin/callers/${ABSENT_CALLER_ID}`,
+      { data: { isActive: "false" } },
+    )
+
+    expect(
+      response.status(),
+      "the flag is validated before the caller lookup, so the id's absence is not the reason",
+    ).toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_is_active" })
+  })
+})
+
+test.describe("Caller status: a caller is deactivated, never removed", () => {
+  test("has no DELETE handler", async ({ request }) => {
+    const response = await request.delete(`${BASE_URL}/api/dialer/admin/callers/${ABSENT_CALLER_ID}`)
+
+    expect(response.status(), "deactivation is the is_active switch; the route exports no DELETE").toBe(
+      405,
+    )
+  })
+})
+
+// AD-2's split, on the one pair of routes where it is not implied by the
+// population: a Preacher reads the scoped roster and is still refused the
+// status switch, which stays an Admin action.
+test.describe("Caller roster: a Preacher reads it but cannot switch is_active", () => {
+  test.use({ storageState: storageStatePath("preacher") })
+
+  test("lists their scoped roster", async ({ request }) => {
+    const response = await request.get(`${BASE_URL}/api/dialer/admin/callers`)
+
+    expect(response.status(), `a Preacher's roster read returned ${response.status()}`).toBe(200)
+    const body = (await response.json()) as { callers?: unknown }
+    expect(Array.isArray(body.callers), "the list route answers with a `callers` array").toBe(true)
+  })
+
+  test("is refused a deactivation with 403 forbidden", async ({ request }) => {
+    const response = await request.patch(
+      `${BASE_URL}/api/dialer/admin/callers/${ABSENT_CALLER_ID}`,
+      { data: { isActive: false } },
+    )
+
+    expect(response.status(), "deactivation is an Admin action only").toBe(403)
+    expect(await response.json()).toMatchObject({ code: "forbidden" })
   })
 })
 
