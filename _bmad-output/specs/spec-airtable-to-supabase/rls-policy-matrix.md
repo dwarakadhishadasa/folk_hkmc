@@ -15,6 +15,13 @@ Role-by-entity visibility contract for CAP-3. Scoping semantics are lifted from 
 | `contacts` | All rows in program | Contacts assigned to them (`assigned_preacher_id` = their `users` row) | No contact-list read (collection is write-only via server routes, as today) | Contacts whose `assigned_preacher_id` is their assigned preacher |
 | `locations` | All rows in program | Only locations in their own `location_ids` | Only their assigned preacher's `location_ids` | Only their assigned preacher's `location_ids` |
 | `users` | All rows in program | Own row only | Own row only | Own row only |
+| `dialer_campaigns` | All rows in program | All rows in program | No campaign read (own campaigns only, via a caller profile) | All rows in program |
+| `dialer_callers` | All rows in program | Their AD-3 assignable set (`caller_assignable_user_ids()`) | Own row only | Their AD-3 assignable set (`caller_assignable_user_ids()`) |
+| `dialer_assignments` | All rows in program | Assignments of their own contacts (`assigned_preacher_id`) | Own assignments only | Assignments of their assigned preacher's contacts |
+| `dialer_call_logs` | All rows in program | Call logs of their own contacts' assignments | Own attempts only | Call logs of their assigned preacher's contacts' assignments |
+| `dialer_survey_questions` | All rows in program | All rows in program | Questions of campaigns they are assigned in | All rows in program |
+| `dialer_survey_options` | All rows in program | All rows in program | Options of questions in campaigns they are assigned in | All rows in program |
+| `dialer_contact_profiles` | All rows in program | Profiles of their own contacts | Profiles of their own contacts | Profiles of their assigned preacher's contacts |
 
 `users` note (assumed 2026-10-06): picker lists (preachers, locations) stay server-mediated via the service role, as today, so non-admin roles need no cross-row `users` reads.
 
@@ -23,6 +30,7 @@ Role-by-entity visibility contract for CAP-3. Scoping semantics are lifted from 
 | Table | Policy |
 | --- | --- |
 | All four | No direct authenticated writes. All mutations go through server routes with the service-role key, which bypasses RLS. Authenticated INSERT/UPDATE/DELETE policies are not granted. |
+| The seven `dialer_*` tables | Same rule, and the grants enforce it: `anon` holds **no** privilege on any dialer table; `authenticated` holds **SELECT only**; `service_role` holds SELECT/INSERT/UPDATE. **No role holds DELETE on any dialer table** — a campaign is cancelled (`status = 'CANCELLED'`), never deleted, and a survey question is retired (`retired_at`), never deleted. Story 1.1, migration `20261025000000_create_dialer_tables.sql`. |
 
 ## Program scoping
 
@@ -32,6 +40,16 @@ Every policy is additionally constrained by `program_id`: a folk staff JWT must 
 
 - Contacts scope key is **`assigned_preacher_id`** (decided 2026-10-05): Preacher → contacts assigned to them; Assistant → contacts of their assigned preacher; Admin → all in program; Volunteer → no list read. `collected_by_id` is retained as data (audit/routing) but is not an RLS scope key.
 - Locations are **per-user scoped** (verified in `sessions/page.tsx` and `contact/page.tsx`, 2026-10-05): each `users` row carries `location_ids`; a Preacher sees only their own, a Volunteer/Assistant sees their assigned preacher's (empty set when no active assigned preacher), an Admin sees all in the program. The contact flow additionally hides `Inactive` locations. The SELECT policy shape is therefore: `program_id` matches **and** (caller is Admin **or** `locations.id = ANY(effective_location_ids)`), where effective ids resolve through the assigned preacher for Volunteer/Assistant.
+- **Dialer tables (Story 1.1, 2026-10-25):**
+  - `dialer_campaigns`: Admin/Preacher/Assistant → program; Caller → own campaigns via assignments.
+  - `dialer_callers`: Admin → program; Preacher/Assistant → assignable set via `caller_assignable_user_ids()`; Caller → own row.
+  - `dialer_assignments`: Admin → program; Preacher/Assistant → contact-linked (their contacts); Caller → own queue.
+  - `dialer_call_logs`: Admin → program; Preacher/Assistant → contact-linked; Caller → own attempts.
+  - `dialer_survey_questions`: Admin/Preacher/Assistant → program; Caller → campaigns they're assigned in.
+  - `dialer_survey_options`: Same as questions.
+  - `dialer_contact_profiles`: Admin → program; Preacher/Assistant → contact-linked; Caller → own contacts' profiles.
+  - No table grants `INSERT`, `UPDATE`, or `DELETE` to `authenticated` — all writes are service-role only.
+  - No role holds `DELETE` on any dialer table.
 
 ## Known deltas from today
 
