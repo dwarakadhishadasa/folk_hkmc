@@ -10,12 +10,24 @@ import {
   type AssignableCallerView,
   type AssignableContactPageView,
   type AssignableContactView,
+  type AssignmentConflictView,
+  type AssignmentPrecheckView,
   type AssignmentSplitEntryView,
+  type AssignmentWriteModeView,
+  type AssignmentWriteResultView,
   type ContactFacetKey,
   type LocationOption,
 } from "@/components/campaign/assign-contacts-types"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
@@ -43,6 +55,25 @@ interface ContactQuery {
   filters: Record<ContactFacetKey, string>
   /** Bumped by Retry; it makes a failed query re-runnable without changing the query. */
   nonce: number
+}
+
+/** The pre-check that was actually run, so the panel never guesses a conflict count. */
+interface PrecheckSnapshot {
+  /** The selection this answer describes. */
+  key: string
+  conflicts: AssignmentConflictView[]
+  assignableCount: number
+}
+
+/**
+ * An explicit skip/move choice, bound to the exact conflict list it was made
+ * against: a concurrent assignment that changes that list requires a fresh
+ * choice rather than silently applying the old one.
+ */
+interface WriteDecision {
+  key: string
+  mode: AssignmentWriteModeView
+  assignableCount: number
 }
 
 const EMPTY_FILTERS: Record<ContactFacetKey, string> = {
@@ -73,6 +104,14 @@ function contactsUrl(campaignId: string, query: ContactQuery): string {
   return `/api/dialer/admin/campaigns/${campaignId}/contacts?${params.toString()}`
 }
 
+function assignmentsUrl(campaignId: string): string {
+  return `/api/dialer/admin/campaigns/${campaignId}/assignments`
+}
+
+function precheckUrl(campaignId: string): string {
+  return `/api/dialer/admin/campaigns/${campaignId}/assignments/precheck`
+}
+
 /**
  * The server's named refusal, never a generic failure: the dialer routes answer
  * `{ error, code }`, and `invalid_page` is the code the operator needs to see.
@@ -92,6 +131,18 @@ function errorMessage(payload: { error?: string; code?: string } | null): string
 function parseWeight(value: string): number | null {
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed >= 1 ? parsed : null
+}
+
+/** `1 contact` / `3 contacts`, so no line on this screen reads "1 contacts". */
+function contactCountLabel(count: number): string {
+  return count === 1 ? "1 contact" : `${count} contacts`
+}
+
+function decisionKey(selectionKey: string, conflicts: AssignmentConflictView[]): string {
+  return `${selectionKey}|${conflicts
+    .map((conflict) => conflict.contactId)
+    .sort()
+    .join(",")}`
 }
 
 /**
@@ -128,6 +179,16 @@ export function AssignContactsSelect({
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
+
+  const [lastPrecheck, setLastPrecheck] = useState<PrecheckSnapshot | null>(null)
+  const [lastDecision, setLastDecision] = useState<WriteDecision | null>(null)
+  const [conflictPrompt, setConflictPrompt] = useState<PrecheckSnapshot | null>(null)
+  const [isPrechecking, setIsPrechecking] = useState(false)
+  const [inFlightMode, setInFlightMode] = useState<AssignmentWriteModeView | null>(null)
+  const [writeError, setWriteError] = useState<string | null>(null)
+  const [writeReceipt, setWriteReceipt] = useState<Pick<AssignmentWriteResultView, "written" | "skipped"> | null>(
+    null,
+  )
 
   const query = useMemo<ContactQuery>(
     () => ({ page, search, filters, nonce: reloadToken }),
@@ -207,6 +268,25 @@ export function AssignContactsSelect({
   const previewKey = `${selectedCount}|${selectionFingerprint}|${weightsKey}`
   const allWeightsValid = picker.every((entry) => parseWeight(entry.weight) !== null)
   const currentPreview = preview && preview.key === previewKey ? preview : null
+
+  // A pre-check answers for one exact selection; anything else on screen is
+  // stale and is treated as if it had never been asked.
+  const snapshot = lastPrecheck && lastPrecheck.key === selectionFingerprint ? lastPrecheck : null
+  const snapshotKey = snapshot === null ? null : decisionKey(snapshot.key, snapshot.conflicts)
+  const decision =
+    snapshotKey !== null && lastDecision !== null && lastDecision.key === snapshotKey ? lastDecision : null
+  const isWriting = inFlightMode !== null
+  const isBusy = isPrechecking || isWriting
+  // The button carries the confirmed-set size for the decision in force, and the
+  // selection size while no conflict decision exists — never a skipped count the
+  // admin has not chosen.
+  const writeCount = decision?.mode === "skip" ? decision.assignableCount : selectedCount
+  const assignLabel =
+    isPrechecking
+      ? "Checking conflicts…"
+      : isWriting
+        ? `Assigning ${contactCountLabel(writeCount)}…`
+        : `Assign ${contactCountLabel(writeCount)}`
 
   useEffect(() => {
     if (selectedCount === 0 || picker.length === 0 || !allWeightsValid) {
@@ -336,7 +416,183 @@ export function AssignContactsSelect({
     return row.locationIds.length > 0 ? "Unknown location" : "—"
   }
 
-  const assignLabel = selectedCount === 1 ? "Assign 1 contact" : `Assign ${selectedCount} contacts`
+  const currentCallers = (): { userId: string; weight: number }[] | null => {
+    const entries: { userId: string; weight: number }[] = []
+
+    for (const entry of picker) {
+      const weight = parseWeight(entry.weight)
+
+      if (weight === null) {
+        return null
+      }
+
+      entries.push({ userId: entry.userId, weight })
+    }
+
+    return entries
+  }
+
+  const runWrite = async (mode: AssignmentWriteModeView) => {
+    const callers = currentCallers()
+
+    if (callers === null || callers.length === 0) {
+      setWriteError("Add at least one caller with a whole-number weight before assigning.")
+      return
+    }
+
+    setInFlightMode(mode)
+    setWriteError(null)
+    setWriteReceipt(null)
+
+    try {
+      const response = await fetch(assignmentsUrl(campaignId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactIds: [...selectedIds], callers, mode }),
+      })
+      const payload = (await response.json().catch(() => null)) as
+        | (AssignmentWriteResultView & { error?: string; code?: string })
+        | null
+
+      if (!response.ok || !payload || typeof payload.written !== "number") {
+        setInFlightMode(null)
+        setWriteError(errorMessage(payload))
+        return
+      }
+
+      setInFlightMode(null)
+      setConflictPrompt(null)
+      setLastPrecheck(null)
+      setLastDecision(null)
+      setWriteReceipt({ written: payload.written, skipped: payload.skipped })
+      setSelectedIds(new Set())
+      setPicker([])
+      setCallerToAdd("")
+      setPreview(null)
+      setReloadToken((value) => value + 1)
+    } catch {
+      setInFlightMode(null)
+      setWriteError(
+        "Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.",
+      )
+    }
+  }
+
+  const chooseConflict = (mode: AssignmentWriteModeView) => {
+    if (!conflictPrompt) {
+      return
+    }
+
+    setLastDecision({
+      key: decisionKey(conflictPrompt.key, conflictPrompt.conflicts),
+      mode,
+      assignableCount: conflictPrompt.assignableCount,
+    })
+    setConflictPrompt(null)
+    void runWrite(mode)
+  }
+
+  /**
+   * The write is always preceded by the server's pre-check, on every click: the
+   * conflict list is re-read here, and the write re-reads it again inside its
+   * transaction. A decision already recorded for an identical conflict list is
+   * honoured; a different list is a new choice, never an inherited one.
+   */
+  const beginAssignment = async () => {
+    if (selectedCount === 0 || isBusy) {
+      return
+    }
+
+    setWriteError(null)
+    setWriteReceipt(null)
+
+    if (picker.length === 0) {
+      setWriteError("Add at least one caller before assigning.")
+      return
+    }
+
+    if (!allWeightsValid) {
+      setWriteError("Weights must be whole numbers of 1 or more.")
+      return
+    }
+
+    const key = selectionFingerprint
+    setIsPrechecking(true)
+
+    try {
+      const response = await fetch(precheckUrl(campaignId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactIds: [...selectedIds] }),
+      })
+      const payload = (await response.json().catch(() => null)) as
+        | (AssignmentPrecheckView & { error?: string; code?: string })
+        | null
+
+      if (!response.ok || !payload || !Array.isArray(payload.conflicts)) {
+        setIsPrechecking(false)
+        setWriteError(errorMessage(payload))
+        return
+      }
+
+      const precheck: PrecheckSnapshot = {
+        key,
+        conflicts: payload.conflicts,
+        assignableCount: payload.assignableCount,
+      }
+
+      setIsPrechecking(false)
+      setLastPrecheck(precheck)
+
+      if (precheck.conflicts.length === 0) {
+        await runWrite("move")
+        return
+      }
+
+      if (lastDecision !== null && lastDecision.key === decisionKey(precheck.key, precheck.conflicts)) {
+        await runWrite(lastDecision.mode)
+        return
+      }
+
+      setConflictPrompt(precheck)
+    } catch {
+      setIsPrechecking(false)
+      setWriteError(
+        "Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.",
+      )
+    }
+  }
+
+  const receiptLine =
+    writeReceipt === null
+      ? null
+      : `Assigned ${contactCountLabel(writeReceipt.written)}${
+          writeReceipt.skipped > 0 ? ` · ${writeReceipt.skipped} skipped` : ""
+        }`
+
+  // The dialog's body keeps the last pre-check while it animates closed, so the
+  // counts do not flip to zero for the fraction of a second it is still on screen.
+  const prompt = conflictPrompt ?? lastPrecheck
+  const promptConflicts = prompt?.conflicts ?? []
+
+  const hintLine =
+    selectedCount === 0
+      ? "Select contacts to assign."
+      : isWriting
+        ? "Writing the confirmed set in one transaction."
+        : decision?.mode === "skip"
+          ? `Skipping the ${contactCountLabel(selectedCount - decision.assignableCount)} already assigned in this campaign; ${contactCountLabel(writeCount)} will be written.`
+          : decision?.mode === "move"
+            ? `Moving the already-assigned contacts to the new split; ${contactCountLabel(writeCount)} will be written.`
+            : snapshot !== null && snapshot.conflicts.length > 0
+            ? `${contactCountLabel(snapshot.conflicts.length)} of the ${contactCountLabel(selectedCount)} selected ${
+                snapshot.conflicts.length === 1 ? "is" : "are"
+              } already assigned in this campaign. Choosing assign asks whether to skip or move ${
+                snapshot.conflicts.length === 1 ? "it" : "them"
+              }.`
+            : snapshot !== null
+              ? "None of the selected contacts is assigned in this campaign yet."
+              : "The conflict check runs before anything is written."
 
   return (
     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -636,19 +892,121 @@ export function AssignContactsSelect({
           </p>
         </div>
 
+        {writeError ? (
+          <p role="alert" className="rounded-md border border-[var(--destructive)] px-3 py-2 text-[13px] text-[var(--destructive)]">
+            {writeError}
+          </p>
+        ) : null}
+
+        {receiptLine ? (
+          <p
+            role="status"
+            className="rounded-md border border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_35%,var(--card))] px-3 py-2 text-[13px] font-medium text-[var(--program-text)]"
+          >
+            {receiptLine}
+          </p>
+        ) : null}
+
         <Button
           type="button"
           className="h-10 w-full"
-          disabled
-          aria-describedby="assign-contacts-write-pending"
-          title="The assignment write arrives with the next step."
+          disabled={selectedCount === 0 || isBusy}
+          aria-describedby="assign-contacts-write-hint"
+          onClick={() => {
+            void beginAssignment()
+          }}
         >
           {assignLabel}
         </Button>
-        <p id="assign-contacts-write-pending" className="text-xs text-[var(--muted-foreground)]">
-          The conflict check and the assignment write arrive with the assignment step. Nothing is assigned
-          from this screen yet.
+        <p
+          id="assign-contacts-write-hint"
+          className={cn(
+            "text-xs",
+            snapshot !== null && snapshot.conflicts.length > 0 && decision === null
+              ? // The design's amber warning ink is the only warning colour token in
+                // the app, so it is reused rather than a second amber invented here.
+                "text-[var(--grid-warning-ink)]"
+              : "text-[var(--muted-foreground)]",
+          )}
+        >
+          {hintLine}
         </p>
+
+        <Dialog
+          open={conflictPrompt !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setConflictPrompt(null)
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base">Some contacts are already assigned</DialogTitle>
+              <DialogDescription className="text-[13px]">
+                {promptConflicts.length === 0
+                  ? ""
+                  : `${promptConflicts.length} of the ${selectedCount} selected contacts already ${
+                      promptConflicts.length === 1 ? "has" : "have"
+                    } a caller in this campaign. Choose what happens to ${
+                      promptConflicts.length === 1 ? "it" : "them"
+                    }; closing this dialog writes nothing.`}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--border)]">
+              <Table aria-label="Contacts already assigned">
+                <TableHeader>
+                  <TableRow className="bg-[var(--muted)] hover:bg-[var(--muted)]">
+                    {["Contact", "Currently assigned to", "Status"].map((label) => (
+                      <TableHead
+                        key={label}
+                        className="px-3 text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] whitespace-nowrap uppercase"
+                      >
+                        {label}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {promptConflicts.map((conflict) => (
+                    <TableRow key={conflict.contactId}>
+                      <TableCell className="px-3 py-2 text-[13px] font-medium text-[var(--program-text)]">
+                        {conflict.contactName}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-[13px] text-[var(--program-text)]">
+                        {conflict.callerName}
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-[13px] text-[var(--muted-foreground)]">
+                        {conflict.status}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <DialogFooter className="gap-2 sm:flex-row sm:flex-wrap sm:justify-between">
+              <Button type="button" size="sm" variant="ghost" onClick={() => setConflictPrompt(null)}>
+                Cancel
+              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={isWriting}
+                  onClick={() => chooseConflict("skip")}
+                >
+                  {`Skip them · assign ${contactCountLabel(prompt?.assignableCount ?? 0)}`}
+                </Button>
+                <Button type="button" size="sm" disabled={isWriting} onClick={() => chooseConflict("move")}>
+                  {`Move them · assign ${contactCountLabel(selectedCount)}`}
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </section>
     </div>
   )

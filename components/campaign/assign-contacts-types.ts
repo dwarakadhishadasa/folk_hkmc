@@ -64,6 +64,34 @@ export interface AssignmentSplitEntryView {
   count: number
 }
 
+/** A selected contact already assigned in this campaign, named by contact and current caller. */
+export interface AssignmentConflictView {
+  contactId: string
+  contactName: string
+  /** `dialer_callers.id` of the current owner, not the staff user id. */
+  callerId: string
+  callerName: string
+  /** The stored `dialer_assignments.status` of the conflicting row. */
+  status: string
+}
+
+/** The pre-check's answer: what is already assigned, and what a skip would write. */
+export interface AssignmentPrecheckView {
+  conflicts: AssignmentConflictView[]
+  assignableCount: number
+  conflictCount: number
+}
+
+/** The only two decisions a conflict leaves open. */
+export type AssignmentWriteModeView = "skip" | "move"
+
+/** The write's receipt: whole numbers that sum to the confirmed set size. */
+export interface AssignmentWriteResultView {
+  written: number
+  skipped: number
+  split: AssignmentSplitEntryView[]
+}
+
 export interface LocationOption {
   id: string
   name: string
