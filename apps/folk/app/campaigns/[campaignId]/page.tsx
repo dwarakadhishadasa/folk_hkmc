@@ -6,9 +6,11 @@ import { notFound, redirect } from "next/navigation"
 import { CampaignLifecycleActions } from "@/components/campaign/campaign-lifecycle-actions"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { CampaignStatusPill } from "@/components/campaign/campaign-status-pill"
+import { CampaignSurveyBuilder } from "@/components/campaign/campaign-survey-builder"
 import { formatCampaignDate, formatGapDuration } from "@/components/campaign/campaign-format"
 import { AuthzError } from "@/lib/authz"
 import { getCampaign } from "@/lib/dialer/campaigns"
+import { listCampaignQuestions } from "@/lib/dialer/surveys"
 
 import { getCampaignStaff } from "../staff"
 
@@ -24,7 +26,8 @@ function DetailField({ label, value, wide = false }: { label: string; value: Rea
 }
 
 /**
- * One campaign, its settings and exactly the lifecycle actions AD-12 allows.
+ * One campaign, its settings, exactly the lifecycle actions AD-12 allows and
+ * the call-outcome survey builder that Story 1.5 owns.
  *
  * A missing id, a malformed id and another program's campaign are one 404 —
  * the service's own answer — and land on Next's not-found page rather than a
@@ -41,6 +44,9 @@ export default async function CampaignDetailPage({
   try {
     const staff = await getCampaignStaff()
     const campaign = await getCampaign(staff, campaignId)
+    // Retired questions are history this surface shows read-only; the service's
+    // live-only default is for new call outcomes, not for the builder.
+    const questions = await listCampaignQuestions(staff, campaignId, { includeRetired: true })
 
     return (
       <>
@@ -79,6 +85,12 @@ export default async function CampaignDetailPage({
             />
           </dl>
         </section>
+
+        <CampaignSurveyBuilder
+          campaignId={campaign.id}
+          status={campaign.status}
+          questions={questions}
+        />
       </>
     )
   } catch (error) {
