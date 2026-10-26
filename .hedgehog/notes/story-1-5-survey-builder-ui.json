@@ -1,0 +1,10 @@
+{
+  "task": "STORY-1-5-SURVEY-BUILDER-UI",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "The survey builder is read-only on a COMPLETED/CANCELLED campaign, but lib/dialer/surveys.ts still accepts create/update/reorder/retire/delete there, so a non-UI caller can mutate a closed campaign's survey. Needs a service-layer terminal-status gate; until then the surface rule is the only thing holding.",
+      "logged_at": "2026-10-26T18:14:12.338Z"
+    }
+  ]
+}

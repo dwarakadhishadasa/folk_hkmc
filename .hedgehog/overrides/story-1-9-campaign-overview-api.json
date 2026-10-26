@@ -1,0 +1,7 @@
+{
+  "task": "STORY-1-9-CAMPAIGN-OVERVIEW-API",
+  "scope_add": [
+    "_bmad-output/specs/spec-autodialer/stories/**"
+  ],
+  "reason": "Every layer records its story beside the code; the api layer scope omitted the stories directory, so verification rejects the record it is required to write."
+}

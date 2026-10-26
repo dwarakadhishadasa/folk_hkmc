@@ -1,0 +1,20 @@
+{
+  "task": "STORY-1-7-ASSIGN-SELECT-UI",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "The assign-contacts primary action is disabled at every count until Story 1.8: the button renders 'Assign N contacts', a disabled attribute and the inline handoff note, and campaign-assign-select.spec.ts pins 'Assign 0 contacts'. The write layer must replace that state with the pre-check, skip/move and POST, and update that spec row.",
+      "logged_at": "2026-10-26T19:37:27.575Z"
+    },
+    {
+      "kind": "debt",
+      "note": "The selected-count denominator in components/campaign/assign-contacts-select.tsx is the total of the first unfiltered contacts read, because AssignableContactPage carries no scope total. If a later API adds one, replace the captured scopeTotal; the hidden count is page-relative only, so a tick hidden by a facet counts as hidden.",
+      "logged_at": "2026-10-26T19:37:30.711Z"
+    },
+    {
+      "kind": "debt",
+      "note": "components/campaign/assign-contacts-types.ts mirrors AssignableContactPage, AssignableCaller and AssignmentSplitEntry by hand because lib/dialer/assignments.ts is server-only. A field added to the service page object (for example a 1.8 pre-check column) will not reach the client until this file is updated.",
+      "logged_at": "2026-10-26T19:37:30.838Z"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "task": "STORY-1-4-CAMPAIGN-LIFECYCLE-API",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "The transition route maps an unknown action to 400 invalid_campaign_action only for names absent from Object.prototype: lib/dialer/campaigns.ts indexes CAMPAIGN_TRANSITIONS[action] directly, so {\"action\":\"constructor\"} or \"toString\" finds a truthy inherited value, skips the guard and throws a TypeError that the route reports as 500. Fix belongs in the service layer (own-key check or a Map); this layer's scope excludes lib/**.",
+      "logged_at": "2026-10-26T16:40:48.425Z"
+    },
+    {
+      "kind": "debt",
+      "note": "sweepRoute's kind:\"caller\" branch (404 with an empty body for a non-owner) has no registered row in this layer: every route in this story is an admin route. The branch is unchanged but unexercised until the caller-queue story registers the first caller route, so a regression in it would surface there rather than here.",
+      "logged_at": "2026-10-26T16:40:52.495Z"
+    }
+  ]
+}

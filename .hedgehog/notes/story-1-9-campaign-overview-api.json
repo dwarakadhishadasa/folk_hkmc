@@ -1,0 +1,20 @@
+{
+  "task": "STORY-1-9-CAMPAIGN-OVERVIEW-API",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "Every non-zero funnel state is unasserted: the progress route is only ever read on a campaign with no assignment, so assigned/attempted/reached/confirmed/neverAttempted are all 0 and the assignment-grain-vs-log-grain split and the queued-disposition exclusion are invisible here. dialer_assignments.campaign_id is ON DELETE RESTRICT, so this sweep cannot own the rows its cleanup needs. The UI layer's campaign-overview spec must own that fixture and assert the five definitions against real call logs.",
+      "logged_at": "2026-10-26T20:54:38.028Z"
+    },
+    {
+      "kind": "debt",
+      "note": "A Preacher's scope is pinned only by the payload's programScope:false, not by the counts: an empty campaign reads zeros for Admin and Preacher alike, so a route that dropped the scope argument would still pass every row. Proving the predicate excluded another preacher's contacts needs assignments whose contacts carry different assigned_preacher_id values, which belongs to the UI layer's campaign-overview fixture.",
+      "logged_at": "2026-10-26T20:54:40.502Z"
+    },
+    {
+      "kind": "debt",
+      "note": "The state-bearing refusals are unasserted at HTTP level: 403 campaign_scope_missing needs a seeded Assistant with a null assigned_preacher_id (a fixture mutation this sweep may not make) and 500 campaign_progress_read_failed needs an unreadable payload or an unrecognised SQLSTATE (a database fault it cannot inject). The route forwards getStaffContext() and returns the service error unchanged; the 500 parse arm is the UI layer's or a later integration point's to prove.",
+      "logged_at": "2026-10-26T20:54:43.295Z"
+    }
+  ]
+}

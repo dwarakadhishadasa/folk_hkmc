@@ -1,0 +1,20 @@
+{
+  "task": "STORY-1-6-CALLER-ROSTER-API",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "The PATCH owner case pins 404, so 200 { caller } (deactivate/reactivate) has no automated assertion: no disposable dialer_callers row exists (FK to users is ON DELETE RESTRICT; no route creates a user) and toggling a seeded caller would mutate shared fixture state. The UI layer's campaign-callers spec must own a caller profile and prove both switches.",
+      "logged_at": "2026-10-26T18:38:19.432Z"
+    },
+    {
+      "kind": "debt",
+      "note": "Roster row membership and order are unasserted by the gate: the sweep proves the { callers } envelope and that a Preacher's read is 200, not that Admin sees the program, Preacher/Assistant see their own scope, or a deactivated caller sorts last. Asserting them here would bind the sweep to a seed other specs mutate; the UI campaign-callers spec is where scope membership belongs.",
+      "logged_at": "2026-10-26T18:38:23.042Z"
+    },
+    {
+      "kind": "debt",
+      "note": "The intent's promotion half has no HTTP surface in this story: assigning an eligible staff user still cannot create a dialer_callers row until Story 1.8's assignment write calls promoteCaller/promoteCallers. Do not add a roster promote route to compensate — AD-2/UX-DR32 removed the invite flow.",
+      "logged_at": "2026-10-26T18:38:23.166Z"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task": "STORY-1-4-CAMPAIGN-LIFECYCLE-UI",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "campaign-campaigns.spec.ts establishes its empty-state precondition with an unconditional DELETE of the program's dialer_campaigns rows. Story 1.7 creates dialer_assignments whose campaign_id is ON DELETE RESTRICT, so that delete will start failing and the cleanup must become assignment-aware (delete assignments first, or scope the delete to test-created ids).",
+      "logged_at": "2026-10-26T17:30:57.457Z"
+    }
+  ]
+}

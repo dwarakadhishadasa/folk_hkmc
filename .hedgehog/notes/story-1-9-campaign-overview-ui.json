@@ -1,0 +1,20 @@
+{
+  "task": "STORY-1-9-CAMPAIGN-OVERVIEW-UI",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "The roster's four performance columns are asserted only for an Admin: campaign-overview.spec.ts proves Contact/Campaigns/Calls made/Reached from one promoted caller's three assignments, but no row loads /campaigns/callers as a Preacher or Assistant with a non-zero assignment, and a deactivated caller's columns are unasserted. getRosterProgress applies the reader's scope, so the narrowing is code-only.",
+      "logged_at": "2026-10-26T21:24:27.709Z"
+    },
+    {
+      "kind": "debt",
+      "note": "Each Overview load now reads every campaign twice: listCampaignsWithProgress and getRosterProgress each call listCampaigns and issue one campaign_progress RPC per campaign (4 in flight). On /campaigns/callers that is 2 x (1 + N) reads per page load, and nothing batches the RPC. If a program grows past tens of campaigns, the roster's columns need one scoped aggregate call instead of two per-campaign sweeps.",
+      "logged_at": "2026-10-26T21:24:30.713Z"
+    },
+    {
+      "kind": "debt",
+      "note": "The roster's 'Campaigns' column is the assignment-grain assigned count, not frame 645's per-campaign pill: getRosterProgress returns one aggregate per caller across every visible campaign, so a per-(caller, campaign) breakdown has no service shape. Reports (Story 3.1) will need that shape for its per-campaign table.",
+      "logged_at": "2026-10-26T21:24:33.231Z"
+    }
+  ]
+}
