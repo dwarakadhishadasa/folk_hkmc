@@ -12,9 +12,11 @@ export const config = {
     "/sessions/:path*",
     "/volunteers/:path*",
     "/auth/:path*",
+    "/campaigns/:path*",
     "/api/contact",
     "/api/sessions/:path*",
     "/api/volunteers/:path*",
     "/api/admin/:path*",
+    "/api/dialer/:path*",
   ],
 }

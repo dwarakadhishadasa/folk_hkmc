@@ -3,11 +3,18 @@ const OFFLINE_URL = "/offline.html"
 const DB_NAME = "folk-offline-db"
 const DB_VERSION = 1
 const STORE_NAME = "pending-requests"
-const QUEUED_POST_PATHS = new Set(["/api/contact", "/api/registration", "/registration", "/attendance"])
+const QUEUED_POST_PATHS = new Set([
+  "/api/contact",
+  "/api/registration",
+  "/registration",
+  "/attendance",
+  "/api/dialer/caller/disposition",
+])
 const STATIC_ASSET_DESTINATIONS = new Set(["font", "image", "manifest", "script", "style", "worker"])
 const NETWORK_ONLY_PATH_PREFIXES = [
   "/api/",
   "/auth/",
+  "/campaigns",
   "/login",
   "/admin",
   "/contact",

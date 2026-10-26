@@ -8,6 +8,7 @@ import {
   CalendarDays,
   LogIn,
   LogOut,
+  Megaphone,
   Send,
   Settings2,
   UserRoundPlus,
@@ -40,6 +41,39 @@ function isActivePath(pathname: string, href: string) {
 
 function shouldIgnoreNavigationClick(event: MouseEvent<HTMLAnchorElement>) {
   return event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey
+}
+
+/**
+ * The Campaign destination for this staff member, or `null` when they must see
+ * no item at all.
+ *
+ * FR45: an Admin, Preacher or Assistant always gets the section root, caller
+ * profile or not. A Volunteer gets their own queue, and only while that
+ * profile is active — a Volunteer without one gets nothing rather than a link
+ * that lands on a 403. `modules.dialer` gates the item itself, so the shared
+ * header renders no Campaign entry in Gita Life, where no Campaign route
+ * exists to send them to.
+ */
+function campaignHrefFor({
+  dialerEnabled,
+  canUseCampaignAdmin,
+  isVolunteer,
+  hasActiveCallerProfile,
+}: {
+  dialerEnabled: boolean
+  canUseCampaignAdmin: boolean
+  isVolunteer: boolean
+  hasActiveCallerProfile: boolean
+}): string | null {
+  if (!dialerEnabled) {
+    return null
+  }
+
+  if (canUseCampaignAdmin) {
+    return "/campaigns"
+  }
+
+  return isVolunteer && hasActiveCallerProfile ? "/campaigns/assignments" : null
 }
 
 function NavAnchor({
@@ -195,7 +229,8 @@ const headerThemeVars = {
 } as CSSProperties
 
 export function Header() {
-  const { isLoggedIn, logout, isAdmin, isPreacher, isAssistant, username, role, isHydrated } = useAuth()
+  const { isLoggedIn, logout, isAdmin, isPreacher, isVolunteer, isAssistant, username, role, isHydrated, staff } =
+    useAuth()
   const pathname = usePathname()
   const { isNavigating, pendingPath } = useNavigationFeedback()
   const { branding } = currentProgramProfile
@@ -207,6 +242,13 @@ export function Header() {
     !hasHeaderLogoOverride &&
       "rounded-xl bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)]",
   )
+
+  const campaignHref = campaignHrefFor({
+    dialerEnabled: currentProgramProfile.modules.dialer,
+    canUseCampaignAdmin: isPreacher || isAssistant,
+    isVolunteer,
+    hasActiveCallerProfile: staff?.hasActiveCallerProfile ?? false,
+  })
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
@@ -220,6 +262,7 @@ export function Header() {
                 { href: "/manage", label: "Manage", icon: Settings2, prefetch: false },
               ]
             : []),
+        ...(campaignHref ? [{ href: campaignHref, label: "Campaign", icon: Megaphone }] : []),
       ]
     : []
 

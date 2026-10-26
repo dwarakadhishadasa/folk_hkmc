@@ -22,6 +22,7 @@ export interface PublicProgramProfile {
     staffContacts: boolean
     sessions: boolean
     staffInvites: boolean
+    dialer: boolean
   }
 }
 

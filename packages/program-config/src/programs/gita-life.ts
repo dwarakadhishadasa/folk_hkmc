@@ -21,5 +21,6 @@ export const gitaLifeProgramProfile = {
     staffContacts: true,
     sessions: true,
     staffInvites: true,
+    dialer: false,
   },
 } satisfies ServerProgramProfile

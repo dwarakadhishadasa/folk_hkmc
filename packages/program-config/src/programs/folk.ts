@@ -19,5 +19,6 @@ export const folkProgramProfile = {
     staffContacts: true,
     sessions: true,
     staffInvites: true,
+    dialer: true,
   },
 } satisfies ServerProgramProfile
