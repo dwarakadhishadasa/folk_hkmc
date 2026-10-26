@@ -247,6 +247,37 @@ test.afterAll(async () => {
 })
 
 // ============================================================================
+// A fourth campaign, for Story 1.9's campaign-progress read. `getCampaignProgress`
+// resolves the campaign through `getCampaign` before the RPC, so an absent id is
+// a 404 and would prove only that the gate admits the Admin. The owner row is a
+// real 200: a fresh campaign has no assignment, so the function answers an
+// all-zero summary and three empty lists without writing anything. Nothing is
+// assigned into it, so the cleanup delete cannot be blocked by
+// `dialer_assignments`.
+// ============================================================================
+
+let progressCampaignId: string
+
+test.beforeAll(async () => {
+  const adminRequest = await playwrightRequest.newContext({
+    baseURL: BASE_URL,
+    storageState: storageStatePath("admin"),
+  })
+
+  try {
+    progressCampaignId = await createDisposableCampaign(adminRequest, "campaign progress")
+  } finally {
+    await adminRequest.dispose()
+  }
+})
+
+test.afterAll(async () => {
+  if (progressCampaignId) {
+    await deleteDisposableCampaign(progressCampaignId)
+  }
+})
+
+// ============================================================================
 // Route registrations — add a sweepRoute() call for every /api/dialer/** route
 // file under apps/folk/app/api/dialer/**, exactly as the route file lands.
 // The static guardrail fails `pnpm guardrails` when a route file has no row.
@@ -420,6 +451,17 @@ sweepRoute({
   kind: "admin",
   ownerStatuses: [400],
   body: {},
+})
+
+// AD-5's one reporting read. The owner is a genuine 200 because the campaign
+// exists and a fresh one answers an all-zero summary, so this row proves the
+// route reaches `campaign_progress` and not merely that it admits an Admin.
+sweepRoute({
+  route: "/api/dialer/admin/campaigns/[campaignId]/progress",
+  url: () => `/api/dialer/admin/campaigns/${progressCampaignId}/progress`,
+  method: "GET",
+  kind: "admin",
+  ownerStatuses: [200],
 })
 
 // ============================================================================
@@ -722,6 +764,105 @@ test.describe("Caller roster: a Preacher reads it but cannot switch is_active", 
 
     expect(response.status(), "deactivation is an Admin action only").toBe(403)
     expect(await response.json()).toMatchObject({ code: "forbidden" })
+  })
+})
+
+test.describe("Campaign progress envelope", () => {
+  const progressUrl = () => `${BASE_URL}/api/dialer/admin/campaigns/${progressCampaignId}/progress`
+
+  test("is `{ progress }` with a zeroed funnel for a campaign nothing is assigned into", async ({
+    request,
+  }) => {
+    const response = await request.get(progressUrl())
+
+    expect(response.status()).toBe(200)
+
+    const body = (await response.json()) as {
+      progress?: {
+        campaignId?: unknown
+        programScope?: unknown
+        summary?: Record<string, unknown>
+        outcomes?: unknown
+        callers?: unknown
+        recent?: unknown
+      }
+    }
+    const progress = body.progress
+
+    if (!progress) {
+      throw new Error("the progress route answered 200 without a `progress` object")
+    }
+
+    expect(progress.campaignId, "the payload names the campaign that was requested").toBe(
+      progressCampaignId,
+    )
+    expect(progress.programScope, "an Admin's read is a program-scope read").toBe(true)
+
+    // The five funnel buckets AD-5 defines, plus the three assignment status
+    // counts the session summary reads. A fresh campaign is the only state this
+    // file can create, and there a measured zero is the true answer.
+    expect(progress.summary, "the summary is the service DTO's eight counts, all measured").toMatchObject({
+      assigned: 0,
+      attempted: 0,
+      reached: 0,
+      confirmed: 0,
+      neverAttempted: 0,
+      completed: 0,
+      skipped: 0,
+      pending: 0,
+    })
+
+    for (const key of ["assigned", "attempted", "reached", "confirmed", "neverAttempted"]) {
+      expect(progress.summary, `the funnel key \`${key}\` must survive the route`).toHaveProperty(key)
+    }
+
+    expect(progress.outcomes, "the outcome mix is an array even with no call log").toEqual([])
+    expect(progress.callers, "the caller rollup is an array even with no assignment").toEqual([])
+    expect(progress.recent, "recent activity is an array even with no call log").toEqual([])
+  })
+})
+
+// AD-3's scope is decided by `campaignScope` and travels as an argument to
+// `campaign_progress`, so the payload's own `programScope` is the one place the
+// HTTP surface can be seen to carry a Preacher's scope rather than widening it.
+test.describe("Campaign progress: the scope the function is called with", () => {
+  test.use({ storageState: storageStatePath("preacher") })
+
+  test("answers programScope false for a Preacher, never the programme", async ({ request }) => {
+    const response = await request.get(
+      `${BASE_URL}/api/dialer/admin/campaigns/${progressCampaignId}/progress`,
+    )
+
+    expect(response.status(), `a Preacher's progress read returned ${response.status()}`).toBe(200)
+    const body = (await response.json()) as { progress?: { programScope?: unknown } }
+    expect(
+      body.progress?.programScope,
+      "a Preacher's read is scoped to their contacts, never widened to the programme",
+    ).toBe(false)
+  })
+})
+
+test.describe("Campaign progress: a read-only route", () => {
+  test("has no POST handler", async ({ request }) => {
+    const response = await request.post(
+      `${BASE_URL}/api/dialer/admin/campaigns/${progressCampaignId}/progress`,
+    )
+
+    expect(response.status(), "the progress route exports GET only").toBe(405)
+  })
+})
+
+// The admin surface keeps the 403/404 distinction (AD-7), and the progress
+// route's 404 is `getCampaign`'s program-scoped lookup, not the RPC's: an id
+// that names no campaign is refused before `campaign_progress` is called.
+test.describe("Campaign progress: a campaign that is not in the program", () => {
+  test("is a 404 campaign_not_found naming no counts", async ({ request }) => {
+    const response = await request.get(
+      `${BASE_URL}/api/dialer/admin/campaigns/${ABSENT_CAMPAIGN_ID}/progress`,
+    )
+
+    expect(response.status()).toBe(404)
+    expect(await response.json()).toMatchObject({ code: "campaign_not_found" })
   })
 })
 
