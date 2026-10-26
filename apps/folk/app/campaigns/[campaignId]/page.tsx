@@ -8,6 +8,7 @@ import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { CampaignStatusPill } from "@/components/campaign/campaign-status-pill"
 import { CampaignSurveyBuilder } from "@/components/campaign/campaign-survey-builder"
 import { formatCampaignDate, formatGapDuration } from "@/components/campaign/campaign-format"
+import { Button } from "@/components/ui/button"
 import { AuthzError } from "@/lib/authz"
 import { getCampaign } from "@/lib/dialer/campaigns"
 import { listCampaignQuestions } from "@/lib/dialer/surveys"
@@ -23,6 +24,15 @@ function DetailField({ label, value, wide = false }: { label: string; value: Rea
       <dd className="mt-1 text-[13px] whitespace-pre-line text-[var(--program-text)]">{value}</dd>
     </div>
   )
+}
+
+/**
+ * AD-12: a completed or cancelled campaign is terminal, so it takes no new
+ * assignments. The entry point is absent there rather than disabled: a control
+ * that can never succeed is not an affordance.
+ */
+function campaignAcceptsAssignments(status: string): boolean {
+  return status === "DRAFT" || status === "ACTIVE"
 }
 
 /**
@@ -71,7 +81,14 @@ export default async function CampaignDetailPage({
               <CampaignStatusPill status={campaign.status} />
             </div>
 
-            <CampaignLifecycleActions campaignId={campaign.id} status={campaign.status} />
+            <div className="flex flex-wrap items-center gap-2">
+              {campaignAcceptsAssignments(campaign.status) ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/campaigns/${campaign.id}/assign-contacts`}>Assign contacts</Link>
+                </Button>
+              ) : null}
+              <CampaignLifecycleActions campaignId={campaign.id} status={campaign.status} />
+            </div>
           </div>
 
           <dl className="grid gap-4 p-4 sm:grid-cols-2">
