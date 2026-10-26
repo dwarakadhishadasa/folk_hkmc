@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -39,6 +34,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      airtable_id_map: {
+        Row: {
+          airtable_record_id: string
+          created_at: string
+          entity: string
+          program_id: string
+          target_id: string
+        }
+        Insert: {
+          airtable_record_id: string
+          created_at?: string
+          entity: string
+          program_id: string
+          target_id: string
+        }
+        Update: {
+          airtable_record_id?: string
+          created_at?: string
+          entity?: string
+          program_id?: string
+          target_id?: string
+        }
+        Relationships: []
+      }
       attendance: {
         Row: {
           contact_id: string
@@ -233,6 +252,378 @@ export type Database = {
             columns: ["collected_by_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dialer_assignments: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          caller_id: string
+          campaign_id: string
+          contact_id: string
+          created_at: string
+          id: string
+          program_id: string
+          sort_order: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          caller_id: string
+          campaign_id: string
+          contact_id: string
+          created_at?: string
+          id?: string
+          program_id: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          caller_id?: string
+          campaign_id?: string
+          contact_id?: string
+          created_at?: string
+          id?: string
+          program_id?: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_assignments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dialer_assignments_caller_id_fkey"
+            columns: ["caller_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_callers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dialer_assignments_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dialer_assignments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contact_attendance_counts"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "dialer_assignments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dialer_call_logs: {
+        Row: {
+          assignment_id: string
+          attempt: number
+          called_at: string
+          caller_id: string
+          dial_phone: string
+          disposition_status: string
+          follow_up_notes: string | null
+          id: string
+          program_id: string
+          status_group: string
+        }
+        Insert: {
+          assignment_id: string
+          attempt: number
+          called_at?: string
+          caller_id: string
+          dial_phone: string
+          disposition_status: string
+          follow_up_notes?: string | null
+          id?: string
+          program_id: string
+          status_group?: string
+        }
+        Update: {
+          assignment_id?: string
+          attempt?: number
+          called_at?: string
+          caller_id?: string
+          dial_phone?: string
+          disposition_status?: string
+          follow_up_notes?: string | null
+          id?: string
+          program_id?: string
+          status_group?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_call_logs_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dialer_call_logs_caller_id_fkey"
+            columns: ["caller_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_callers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dialer_callers: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          program_id: string
+          promoted_at: string | null
+          promoted_by: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id?: string
+          is_active?: boolean
+          program_id: string
+          promoted_at?: string | null
+          promoted_by?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          is_active?: boolean
+          program_id?: string
+          promoted_at?: string | null
+          promoted_by?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_callers_promoted_by_fkey"
+            columns: ["promoted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dialer_callers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dialer_campaigns: {
+        Row: {
+          campaign_date: string
+          campaign_time: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          gap_duration: number
+          id: string
+          max_attempts: number
+          name: string
+          program_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_date: string
+          campaign_time?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          gap_duration?: number
+          id?: string
+          max_attempts?: number
+          name: string
+          program_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_date?: string
+          campaign_time?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          gap_duration?: number
+          id?: string
+          max_attempts?: number
+          name?: string
+          program_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dialer_contact_profiles: {
+        Row: {
+          centre: string | null
+          contact_id: string
+          created_at: string
+          gender: string | null
+          language: string | null
+          level: string | null
+          program_id: string
+          updated_at: string
+        }
+        Insert: {
+          centre?: string | null
+          contact_id: string
+          created_at?: string
+          gender?: string | null
+          language?: string | null
+          level?: string | null
+          program_id: string
+          updated_at?: string
+        }
+        Update: {
+          centre?: string | null
+          contact_id?: string
+          created_at?: string
+          gender?: string | null
+          language?: string | null
+          level?: string | null
+          program_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_contact_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contact_attendance_counts"
+            referencedColumns: ["contact_id"]
+          },
+          {
+            foreignKeyName: "dialer_contact_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dialer_survey_options: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          program_id: string
+          question_id: string
+          sort_order: number
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          program_id: string
+          question_id: string
+          sort_order: number
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          program_id?: string
+          question_id?: string
+          sort_order?: number
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_survey_options_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_survey_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dialer_survey_questions: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          is_required: boolean
+          program_id: string
+          question_title: string
+          question_type: string
+          retired_at: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          program_id: string
+          question_title: string
+          question_type: string
+          retired_at?: string | null
+          sort_order: number
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          program_id?: string
+          question_title?: string
+          question_type?: string
+          retired_at?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_survey_questions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_campaigns"
             referencedColumns: ["id"]
           },
         ]
@@ -479,6 +870,7 @@ export type Database = {
       }
     }
     Functions: {
+      caller_assignable_user_ids: { Args: never; Returns: string[] }
       caller_assigned_preacher_id: { Args: never; Returns: string }
       caller_can_read_attendance_session: {
         Args: { p_session_id: string }
@@ -505,12 +897,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -534,11 +926,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -559,11 +951,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -584,11 +976,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -601,11 +993,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -622,3 +1014,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
