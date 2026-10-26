@@ -20,8 +20,9 @@
  * its nav expectations fail, so the cleanup is part of the assertion.
  *
  * The story's performance columns (Contact / Campaigns / Calls made / Reached)
- * need `campaign_progress`, which Story 1.9 creates. This spec pins their
- * absence rather than letting a later edit fill them with a zero.
+ * were absent while `campaign_progress` did not exist; Story 1.9 supplies them
+ * from `getRosterProgress`, so this spec now pins their presence and reads the
+ * fixture's own numbers out of the row instead of pinning the absence.
  */
 
 import { expect, test, type Page } from "@playwright/test"
@@ -341,15 +342,25 @@ test.describe("the Callers roster — an Admin", () => {
       await expect(page.getByRole("columnheader", { name: "Caller", exact: true })).toBeVisible()
       await expect(page.getByRole("columnheader", { name: "Status", exact: true })).toBeVisible()
 
-      // Story 1.9 owns these four; this surface cannot compute them and must not
-      // render them as a zero.
+      // Story 1.9 fills these four from `campaign_progress`. The absence this
+      // spec used to pin is now a presence assertion; the fixture row's own
+      // numbers are read below.
       for (const column of ["Contact", "Campaigns", "Calls made", "Reached"]) {
-        await expect(page.getByRole("columnheader", { name: column, exact: true })).toHaveCount(0)
+        await expect(page.getByRole("columnheader", { name: column, exact: true })).toBeVisible()
       }
 
       const fixtureRow = callerRow(page, fixture.name)
       await expect(fixtureRow.getByText("Active", { exact: true })).toBeVisible()
       await expect(fixtureRow.getByRole("button", { name: "Deactivate", exact: true })).toBeVisible()
+
+      await expect(
+        fixtureRow.getByRole("cell", { name: fixtureEmail("volunteer"), exact: true }),
+        "Contact is the staff email, whether or not the row holds a caller profile",
+      ).toBeVisible()
+      await expect(
+        fixtureRow.getByRole("cell", { name: "0", exact: true }),
+        "a promoted caller with no assignment measures zero in Campaigns, Calls made and Reached",
+      ).toHaveCount(3)
 
       // A staff user with no profile is neither active nor inactive, and has no
       // switch to offer.

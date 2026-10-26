@@ -2,29 +2,42 @@ import { redirect } from "next/navigation"
 
 import { CampaignEmptyState } from "@/components/campaign/campaign-empty-state"
 import { CampaignList } from "@/components/campaign/campaign-list"
+import { CampaignOverviewCards } from "@/components/campaign/campaign-overview-cards"
+import { CampaignOverviewStats } from "@/components/campaign/campaign-overview-stats"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { AuthzError } from "@/lib/authz"
-import { listCampaigns } from "@/lib/dialer/campaigns"
+import { listCampaignsWithProgress } from "@/lib/dialer/progress"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
 
 import { getCampaignStaff } from "./staff"
 
 export const dynamic = "force-dynamic"
 
+function pluralise(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`
+}
+
 /**
- * The Campaign overview: AD-2's admin gate, then the program's campaigns.
+ * The Campaign Overview: AD-2's admin gate, then each visible campaign with its
+ * scoped `campaign_progress` summary.
  *
  * Campaign rows are program-level (AD-3), so every admin role reads the same
- * list and no preacher scope narrows it. The table carries only the columns
- * this story can compute — the frame's Assigned / Reached / Confirmed / Never
- * attempted counts belong to the reporting story and are absent, not zeroed.
+ * list; a Preacher's rows are not filtered, only their counts are narrowed, and
+ * a campaign holding none of their contacts reads a true zero rather than
+ * disappearing. The tiles and the table are both summed from the same summaries,
+ * so no number here is computed a second time.
+ *
+ * Zero campaigns renders the empty state **instead of** the tiles: a screen of
+ * five zeroes is not an answer, and UX-DR24's action is.
  */
 export default async function CampaignsOverviewPage() {
   try {
     const staff = await getCampaignStaff()
     requireCampaignAdmin(staff)
 
-    const campaigns = await listCampaigns(staff)
+    const { campaigns } = await listCampaignsWithProgress(staff)
+    const draft = campaigns.filter((entry) => entry.campaign.status === "DRAFT").length
+    const cancelled = campaigns.filter((entry) => entry.campaign.status === "CANCELLED").length
 
     return (
       <>
@@ -42,7 +55,26 @@ export default async function CampaignsOverviewPage() {
             actionLabel="Create campaign"
           />
         ) : (
-          <CampaignList campaigns={campaigns} />
+          <div className="flex flex-col gap-4">
+            <CampaignOverviewStats entries={campaigns} />
+
+            {/*
+              AD-5: a queued disposition has no call log until its replay lands,
+              so it is not in any count above. There is no queue yet and no
+              number to show; the line qualifies the totals rather than counting
+              a queue.
+            */}
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Queued dispositions are not counted until their replay lands.
+            </p>
+
+            <CampaignList entries={campaigns} />
+            <CampaignOverviewCards entries={campaigns} />
+
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {pluralise(campaigns.length, "campaign")} · {draft} draft · {cancelled} cancelled
+            </p>
+          </div>
         )}
       </>
     )

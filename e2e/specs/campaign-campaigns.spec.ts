@@ -258,17 +258,23 @@ test.describe("the campaign list — an Admin with a campaign", () => {
       await expect(detailLink).toHaveAttribute("href", `/campaigns/${campaignId}`)
 
       // The frame's four count columns are Story 1.9's `campaign_progress`
-      // counts. Rendering them now would mean rendering a zero this surface
-      // cannot compute, so their absence is pinned here on purpose.
+      // counts. This spec used to pin their absence, when the surface could not
+      // compute one; it now pins their presence, and the row's own measured
+      // zeroes on a campaign nothing is assigned into.
       for (const column of ["Assigned", "Reached", "Confirmed", "Never attempted"]) {
-        await expect(page.getByRole("columnheader", { name: column, exact: true })).toHaveCount(0)
+        await expect(page.getByRole("columnheader", { name: column, exact: true })).toBeVisible()
       }
 
       for (const column of ["Campaign", "End Date", "Status"]) {
         await expect(page.getByRole("columnheader", { name: column, exact: true })).toBeVisible()
       }
 
-      await expect(page.getByText(/^\d+ campaigns?$/)).toBeVisible()
+      await expect(
+        row.getByRole("cell", { name: "0", exact: true }),
+        "a campaign with no assignments measures zero in each count column",
+      ).toHaveCount(4)
+
+      await expect(page.getByText("1 campaign · 1 draft · 0 cancelled", { exact: true })).toBeVisible()
 
       await detailLink.click()
       await expect(page).toHaveURL(new RegExp(`/campaigns/${campaignId}$`))

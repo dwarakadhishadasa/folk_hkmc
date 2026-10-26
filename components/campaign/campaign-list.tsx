@@ -3,61 +3,67 @@ import Link from "next/link"
 import { CampaignStatusPill } from "@/components/campaign/campaign-status-pill"
 import { formatCampaignDate } from "@/components/campaign/campaign-format"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import type { CampaignRow } from "@/lib/dialer/campaigns"
+import type { CampaignOverviewEntry } from "@/lib/dialer/progress"
+
+const HEAD_CLASS =
+  "px-2 text-xs font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase sm:px-4"
 
 /**
- * The campaign table (frame 32), carrying exactly the three columns this story
- * can fill.
+ * Frame 32's campaign table, on the `campaign_progress` summary each row was
+ * given. Every count is that campaign's own scoped number, so the row cannot
+ * disagree with the tile beside it or with the detail page behind the link.
  *
- * The frame also shows Assigned, Reached, Confirmed and Never attempted. Those
- * are `campaign_progress` counts owned by the reporting story, so they are
- * absent rather than rendered as `0`: a zero is a claim about a campaign, and
- * this surface cannot compute one yet.
+ * Desktop only: frame 1752 replaces the table with cards below `md`, and the
+ * hidden table is not in the accessibility tree there.
  */
-export function CampaignList({ campaigns }: { campaigns: CampaignRow[] }) {
+export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-[var(--muted)] hover:bg-[var(--muted)]">
-              <TableHead className="px-2 text-xs font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase sm:px-4">
-                Campaign
-              </TableHead>
-              <TableHead className="px-2 text-xs font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase sm:px-4">
-                End Date
-              </TableHead>
-              <TableHead className="px-2 text-xs font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase sm:px-4">
-                Status
-              </TableHead>
+    <div className="hidden overflow-hidden rounded-xl border border-[var(--border)] bg-card md:block">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-[var(--muted)] hover:bg-[var(--muted)]">
+            <TableHead className={HEAD_CLASS}>Campaign</TableHead>
+            <TableHead className={HEAD_CLASS}>End Date</TableHead>
+            <TableHead className={HEAD_CLASS}>Status</TableHead>
+            <TableHead className={HEAD_CLASS}>Assigned</TableHead>
+            <TableHead className={HEAD_CLASS}>Reached</TableHead>
+            <TableHead className={HEAD_CLASS}>Confirmed</TableHead>
+            <TableHead className={HEAD_CLASS}>Never attempted</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {entries.map(({ campaign, summary }) => (
+            <TableRow key={campaign.id}>
+              <TableCell className="px-2 py-3 sm:px-4">
+                <Link
+                  href={`/campaigns/${campaign.id}`}
+                  className="text-[13px] font-medium text-[var(--program-text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+                >
+                  {campaign.name}
+                </Link>
+              </TableCell>
+              <TableCell className="px-2 py-3 text-[13px] whitespace-nowrap text-[var(--muted-foreground)] sm:px-4">
+                {formatCampaignDate(campaign.campaign_date)}
+              </TableCell>
+              <TableCell className="px-2 py-3 sm:px-4">
+                <CampaignStatusPill status={campaign.status} />
+              </TableCell>
+              <TableCell className="px-2 py-3 text-[13px] text-[var(--program-text)] tabular-nums sm:px-4">
+                {summary.assigned}
+              </TableCell>
+              <TableCell className="px-2 py-3 text-[13px] text-[var(--muted-foreground)] tabular-nums sm:px-4">
+                {summary.reached}
+              </TableCell>
+              <TableCell className="px-2 py-3 text-[13px] text-[var(--program-text)] tabular-nums sm:px-4">
+                {summary.confirmed}
+              </TableCell>
+              <TableCell className="px-2 py-3 text-[13px] text-[var(--program-text)] tabular-nums sm:px-4">
+                {summary.neverAttempted}
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {campaigns.map((campaign) => (
-              <TableRow key={campaign.id}>
-                <TableCell className="px-2 py-3 sm:px-4">
-                  <Link
-                    href={`/campaigns/${campaign.id}`}
-                    className="text-[13px] font-medium text-[var(--program-text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
-                  >
-                    {campaign.name}
-                  </Link>
-                </TableCell>
-                <TableCell className="px-2 py-3 text-[13px] text-[var(--muted-foreground)] whitespace-nowrap sm:px-4">
-                  {formatCampaignDate(campaign.campaign_date)}
-                </TableCell>
-                <TableCell className="px-2 py-3 sm:px-4">
-                  <CampaignStatusPill status={campaign.status} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <p className="text-xs text-[var(--muted-foreground)]">
-        {campaigns.length} {campaigns.length === 1 ? "campaign" : "campaigns"}
-      </p>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }

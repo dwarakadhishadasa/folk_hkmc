@@ -5,6 +5,7 @@ import { CampaignEmptyState } from "@/components/campaign/campaign-empty-state"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { AuthzError } from "@/lib/authz"
 import { listRoster } from "@/lib/dialer/callers"
+import { getRosterProgress } from "@/lib/dialer/progress"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
 
 import { getCampaignStaff } from "../staff"
@@ -19,6 +20,10 @@ export const dynamic = "force-dynamic"
  * counts in the subtitle are the returned rows', which is why they are computed
  * here rather than in a second read.
  *
+ * `getRosterProgress` is the roster's performance columns: one aggregation of
+ * `campaign_progress` across every campaign the same reader can see, so a
+ * Preacher's column is narrowed by the same predicate as the campaign table.
+ *
  * There is deliberately no add, invite, import or manage-user control (UX-DR32):
  * a caller is a staff user promoted on their first assignment (Story 1.8), and
  * the header's two design buttons were removed on purpose.
@@ -29,6 +34,7 @@ export default async function CampaignCallersPage() {
     requireCampaignAdmin(staff)
 
     const callers = await listRoster(staff)
+    const progress = await getRosterProgress(staff)
     const active = callers.filter((caller) => caller.isActive).length
     const inactive = callers.filter((caller) => caller.deactivated).length
 
@@ -47,7 +53,7 @@ export default async function CampaignCallersPage() {
             actionLabel="View campaigns"
           />
         ) : (
-          <CallerRoster entries={callers} canManage={staff.role === "Admin"} />
+          <CallerRoster entries={callers} progress={progress} canManage={staff.role === "Admin"} />
         )}
       </>
     )
