@@ -1,7 +1,8 @@
 import "server-only"
 
 import { AuthzError, type StaffContext } from "@/lib/authz"
-import { getCampaign } from "@/lib/dialer/campaigns"
+import { type CallerProfile, promoteCallers } from "@/lib/dialer/callers"
+import { getCampaign, type CampaignRow } from "@/lib/dialer/campaigns"
 import {
   campaignScope,
   requireCampaignAdmin,
@@ -16,9 +17,13 @@ const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 25
 const MAX_PAGE_SIZE = 100
 const CONTACT_PROFILE_CHUNK_SIZE = 200
+const ASSIGNMENT_CHUNK_SIZE = 200
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const CONTACT_COLUMNS = "id,name,phone,location_ids,assigned_preacher_id"
 const CONTACT_PROFILE_COLUMNS = "contact_id,centre,level,gender,language"
+const ASSIGNMENT_COLUMNS = "contact_id,caller_id,status,contacts(name),dialer_callers(display_name)"
 
 const CONTACT_FACET_KEYS = ["centre", "level", "gender", "language"] as const
 
@@ -92,6 +97,58 @@ export interface AssignmentSplitEntry {
   count: number
 }
 
+/** A selected contact already assigned in this campaign, named by contact and current caller. */
+export interface AssignmentConflict {
+  contactId: string
+  contactName: string
+  callerId: string
+  callerName: string
+  /** The stored `dialer_assignments.status` of the conflicting row. */
+  status: string
+}
+
+/** The conflict list plus the two counts the assign screen's primary button needs. */
+export interface AssignmentPrecheck {
+  conflicts: AssignmentConflict[]
+  /** Selected contacts with no row in this campaign: what `skip` would distribute. */
+  assignableCount: number
+  conflictCount: number
+}
+
+export type AssignmentWriteMode = "skip" | "move"
+
+export interface AssignmentCallerInput {
+  /** `public.users.id`; auto-promoted to a `dialer_callers` profile when absent. */
+  userId: string
+  weight: number
+}
+
+export interface WriteAssignmentsInput {
+  contactIds: string[]
+  callers: AssignmentCallerInput[]
+  /** Absent means the assigner has not chosen yet; a selection with conflicts is refused. */
+  mode?: AssignmentWriteMode
+}
+
+/** One row of the assignment RPC's `p_rows` payload; `sortOrder` restarts at 0 per caller. */
+export type AssignmentWriteRow = { contactId: string; callerId: string; sortOrder: number }
+
+export interface WriteAssignmentsResult {
+  written: number
+  /** Contacts the `skip` decision left alone, plus any the RPC skipped on a concurrent write. */
+  skipped: number
+  /** `callerId` is a `dialer_callers.id`; the counts sum to the confirmed set size. */
+  split: AssignmentSplitEntry[]
+}
+
+type AssignmentConflictRow = {
+  contact_id: string
+  caller_id: string
+  status: string
+  contacts: { name: string } | null
+  dialer_callers: { display_name: string } | null
+}
+
 const CONTACT_READ_FAILURES: PagingFailures = {
   read: () => new AuthzError(500, "contact_list_read_failed", "Unable to read the campaign contacts."),
   truncated: () => new AuthzError(500, "contact_list_truncated", "The campaign contact read was truncated."),
@@ -100,6 +157,11 @@ const CONTACT_READ_FAILURES: PagingFailures = {
 const CONTACT_PROFILE_READ_FAILURES: PagingFailures = {
   read: () => new AuthzError(500, "contact_profile_read_failed", "Unable to read the contact profiles."),
   truncated: () => new AuthzError(500, "contact_list_truncated", "The campaign contact read was truncated."),
+}
+
+const ASSIGNMENT_READ_FAILURES: PagingFailures = {
+  read: () => new AuthzError(500, "assignment_read_failed", "Unable to read the campaign assignments."),
+  truncated: () => new AuthzError(500, "assignment_read_truncated", "The campaign assignment read was truncated."),
 }
 
 /**
@@ -426,4 +488,406 @@ export function previewAssignmentSplit(
     weight: part.weight,
     count: part.count,
   }))
+}
+
+function normalizeContactIds(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new AuthzError(400, "invalid_contact_ids", "Select at least one contact.")
+  }
+
+  const seen = new Set<string>()
+  const ids: string[] = []
+
+  for (const entry of value) {
+    if (typeof entry !== "string" || !UUID_PATTERN.test(entry)) {
+      throw new AuthzError(400, "invalid_contact_ids", "Every contact id must be a UUID.")
+    }
+
+    const id = entry.toLowerCase()
+    if (seen.has(id)) {
+      continue
+    }
+
+    seen.add(id)
+    ids.push(id)
+  }
+
+  return ids
+}
+
+function requireCallerWeights(value: unknown): AssignmentWeight[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new AuthzError(400, "invalid_caller_list", "Select at least one caller.")
+  }
+
+  return value.map((entry) => {
+    if (!entry || typeof entry !== "object") {
+      throw new AuthzError(400, "invalid_caller_list", "Each caller needs a user id and a weight.")
+    }
+
+    const { userId, weight } = entry as { userId?: unknown; weight?: unknown }
+
+    if (typeof userId !== "string" || userId.trim().length === 0) {
+      throw new AuthzError(400, "invalid_caller_list", "Each caller needs a user id.")
+    }
+
+    return {
+      callerId: userId.trim().toLowerCase(),
+      weight: typeof weight === "number" ? weight : Number.NaN,
+    }
+  })
+}
+
+function normalizeAssignmentMode(value: unknown): AssignmentWriteMode | undefined {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+
+  if (value === "skip" || value === "move") {
+    return value
+  }
+
+  throw new AuthzError(400, "invalid_mode", "The assignment mode must be skip or move.")
+}
+
+async function readContactsByIds(
+  programId: StaffContext["programId"],
+  contactIds: string[],
+): Promise<Map<string, ContactRow>> {
+  const contacts = new Map<string, ContactRow>()
+
+  if (contactIds.length === 0) {
+    return contacts
+  }
+
+  const supabaseAdmin = createSupabaseAdminClient()
+
+  for (let offset = 0; offset < contactIds.length; offset += ASSIGNMENT_CHUNK_SIZE) {
+    const chunk = contactIds.slice(offset, offset + ASSIGNMENT_CHUNK_SIZE)
+    const rows = await collectPagedRows<ContactRow>(async (from, to) => {
+      const response = await supabaseAdmin
+        .from("contacts")
+        .select(CONTACT_COLUMNS)
+        .eq("program_id", programId)
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to)
+
+      return { data: response.data, error: response.error }
+    }, CONTACT_READ_FAILURES)
+
+    for (const row of rows) {
+      contacts.set(row.id, row)
+    }
+  }
+
+  return contacts
+}
+
+async function readAssignmentConflicts(
+  programId: StaffContext["programId"],
+  campaignId: string,
+  contactIds: string[],
+): Promise<Map<string, AssignmentConflictRow>> {
+  const rows = new Map<string, AssignmentConflictRow>()
+
+  if (contactIds.length === 0) {
+    return rows
+  }
+
+  const supabaseAdmin = createSupabaseAdminClient()
+
+  for (let offset = 0; offset < contactIds.length; offset += ASSIGNMENT_CHUNK_SIZE) {
+    const chunk = contactIds.slice(offset, offset + ASSIGNMENT_CHUNK_SIZE)
+    const chunkRows = await collectPagedRows<AssignmentConflictRow>(async (from, to) => {
+      const response = await supabaseAdmin
+        .from("dialer_assignments")
+        .select(ASSIGNMENT_COLUMNS)
+        .eq("program_id", programId)
+        .eq("campaign_id", campaignId)
+        .in("contact_id", chunk)
+        .order("contact_id", { ascending: true })
+        .range(from, to)
+
+      return { data: response.data, error: response.error }
+    }, ASSIGNMENT_READ_FAILURES)
+
+    for (const row of chunkRows) {
+      rows.set(row.contact_id, row)
+    }
+  }
+
+  return rows
+}
+
+/**
+ * The read half of Story 1.8: every selected contact already assigned in this
+ * campaign, named by contact and current caller, before anything is written.
+ * A contact outside the caller's AD-3 scope is refused by id, never dropped —
+ * a silently shortened list would make the primary button's count lie.
+ */
+export async function precheckAssignments(
+  staff: StaffContext,
+  campaignId: string,
+  contactIds: string[],
+): Promise<AssignmentPrecheck> {
+  requireCampaignAdmin(staff)
+
+  // The campaign resolution is this read's 404 gate, as in `listAssignableContacts`.
+  await getCampaign(staff, campaignId)
+
+  const scope = await campaignScope(staff)
+  const ids = normalizeContactIds(contactIds)
+  const contacts = await readContactsByIds(staff.programId, ids)
+
+  const outsideScope = ids.filter((id) => {
+    const contact = contacts.get(id)
+    if (!contact) {
+      return true
+    }
+
+    return scope.kind === "preacher" && contact.assigned_preacher_id !== scope.userId
+  })
+
+  if (outsideScope.length > 0) {
+    throw new AuthzError(
+      403,
+      "contact_not_assignable",
+      `These contacts are not in your assignable set: ${outsideScope.join(", ")}.`,
+    )
+  }
+
+  const assigned = await readAssignmentConflicts(staff.programId, campaignId, ids)
+  const conflicts: AssignmentConflict[] = []
+
+  for (const id of ids) {
+    const row = assigned.get(id)
+    if (!row) {
+      continue
+    }
+
+    conflicts.push({
+      contactId: id,
+      contactName: row.contacts?.name ?? contacts.get(id)?.name ?? id,
+      callerId: row.caller_id,
+      callerName: row.dialer_callers?.display_name.trim() || row.caller_id,
+      status: row.status,
+    })
+  }
+
+  return {
+    conflicts,
+    assignableCount: ids.length - conflicts.length,
+    conflictCount: conflicts.length,
+  }
+}
+
+function assignmentWriteError(
+  error: { message?: string; code?: string } | null,
+  campaign: CampaignRow,
+  callerNameById: Map<string, string>,
+): AuthzError {
+  const message = typeof error?.message === "string" ? error.message : ""
+  const code = typeof error?.code === "string" ? error.code : ""
+
+  if (code === "P0002" || message.startsWith("campaign_not_found")) {
+    return new AuthzError(404, "campaign_not_found", "Campaign not found in this program.")
+  }
+
+  if (message.startsWith("campaign_not_assignable")) {
+    return new AuthzError(
+      409,
+      "campaign_not_assignable",
+      `Only a DRAFT or ACTIVE campaign accepts assignments; this campaign is now ${campaign.status}.`,
+    )
+  }
+
+  if (message.startsWith("caller_inactive:")) {
+    const callerId = message.slice("caller_inactive:".length)
+    return new AuthzError(
+      409,
+      "caller_inactive",
+      `Deactivated callers cannot receive assignments: ${callerNameById.get(callerId) ?? callerId}.`,
+    )
+  }
+
+  if (message.startsWith("caller_not_assignable:")) {
+    const callerId = message.slice("caller_not_assignable:".length)
+    return new AuthzError(
+      403,
+      "caller_not_assignable",
+      `${callerNameById.get(callerId) ?? callerId} is not in your assignable caller set.`,
+    )
+  }
+
+  if (message === "invalid_rows") {
+    return new AuthzError(400, "invalid_rows", "The assignment rows were rejected.")
+  }
+
+  if (message === "invalid_mode") {
+    return new AuthzError(400, "invalid_mode", "The assignment mode was rejected.")
+  }
+
+  return new AuthzError(
+    500,
+    "assignment_write_failed",
+    "The assignment write failed and the whole batch was rolled back; nothing was written.",
+  )
+}
+
+function readWriteCounts(data: unknown): { written: number; skipped: number } | null {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return null
+  }
+
+  const record = data as { [key: string]: unknown }
+  const written = record.written
+  const skipped = record.skipped
+
+  if (!Number.isSafeInteger(written) || !Number.isSafeInteger(skipped)) {
+    return null
+  }
+
+  return { written: written as number, skipped: skipped as number }
+}
+
+/**
+ * AD-11's one transactional write. The pre-check is re-run here on the same
+ * selection rather than trusted from the client, so the skip/move decision is
+ * made against rows as they are now; the RPC then re-validates what a
+ * concurrent request could still change and rolls the whole batch back.
+ */
+export async function writeAssignments(
+  staff: StaffContext,
+  campaignId: string,
+  input: WriteAssignmentsInput,
+): Promise<WriteAssignmentsResult> {
+  requireCampaignAdmin(staff)
+
+  const campaign = await getCampaign(staff, campaignId)
+  const scope = await campaignScope(staff)
+
+  const contactIds = normalizeContactIds(input.contactIds)
+  const weights = requireCallerWeights(input.callers)
+  const mode = normalizeAssignmentMode(input.mode)
+
+  const precheck = await precheckAssignments(staff, campaignId, contactIds)
+
+  if (precheck.conflictCount > 0 && mode === undefined) {
+    const named = precheck.conflicts
+      .map((conflict) => `${conflict.contactName} (currently ${conflict.callerName})`)
+      .join(", ")
+
+    throw new AuthzError(
+      409,
+      "conflicts_require_decision",
+      `These contacts are already assigned in this campaign — choose skip or move: ${named}.`,
+    )
+  }
+
+  const conflicted = new Set(precheck.conflicts.map((conflict) => conflict.contactId))
+  const confirmed =
+    mode === "skip" ? contactIds.filter((id) => !conflicted.has(id)) : contactIds
+
+  if (confirmed.length === 0) {
+    throw new AuthzError(
+      409,
+      "nothing_to_assign",
+      "Every selected contact is already assigned in this campaign.",
+    )
+  }
+
+  // The split is the weight validator: running it before promotion means a bad
+  // weight cannot leave a caller profile behind, and it is the same function
+  // that computes the counts once the profiles exist.
+  previewAssignmentSplit(confirmed.length, weights)
+
+  // Promotion runs before the membership assertion because a deactivated
+  // profile is deliberately absent from `assignableCallers`: checking
+  // membership first would turn `409 caller_inactive` into a 403 and lose the
+  // named state. Promotion classifies the whole batch before it writes.
+  const { promoted, existing } = await promoteCallers(
+    staff,
+    weights.map((caller) => caller.callerId),
+  )
+
+  const profileByUserId = new Map<string, CallerProfile>()
+  const callerNameById = new Map<string, string>()
+
+  for (const profile of [...promoted, ...existing]) {
+    profileByUserId.set(profile.userId, profile)
+    callerNameById.set(profile.id, profile.displayName.trim() || profile.id)
+  }
+
+  const assignable = new Set(scope.assignableCallers.map((caller) => caller.userId))
+
+  for (const caller of weights) {
+    if (!assignable.has(caller.callerId)) {
+      throw new AuthzError(
+        403,
+        "caller_not_assignable",
+        `${profileByUserId.get(caller.callerId)?.displayName ?? caller.callerId} is not in your assignable caller set.`,
+      )
+    }
+  }
+
+  const weighted: AssignmentWeight[] = weights.map((caller) => {
+    const profile = profileByUserId.get(caller.callerId)
+
+    if (!profile) {
+      throw new AuthzError(
+        500,
+        "caller_profile_missing",
+        "A caller profile could not be resolved after promotion.",
+      )
+    }
+
+    return { callerId: profile.id, weight: caller.weight }
+  })
+
+  const split = previewAssignmentSplit(confirmed.length, weighted)
+
+  // Callers in request order, contacts in `contactIds` order, `sortOrder`
+  // restarting at 0 per caller: the queue rail reads this order, so it must not
+  // depend on how Postgres happens to iterate the payload.
+  const rows: AssignmentWriteRow[] = []
+  let cursor = 0
+
+  for (const entry of split) {
+    for (let sortOrder = 0; sortOrder < entry.count; sortOrder += 1) {
+      rows.push({ contactId: confirmed[cursor], callerId: entry.callerId, sortOrder })
+      cursor += 1
+    }
+  }
+
+  const effectiveMode: AssignmentWriteMode = mode ?? "move"
+
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin.rpc("assign_dialer_contacts", {
+    p_program_id: staff.programId,
+    p_campaign_id: campaignId,
+    p_assigned_by: staff.userId,
+    p_rows: rows,
+    p_mode: effectiveMode,
+  })
+
+  if (error) {
+    throw assignmentWriteError(error, campaign, callerNameById)
+  }
+
+  const counts = readWriteCounts(data)
+
+  if (!counts || counts.written + counts.skipped !== rows.length) {
+    throw new AuthzError(
+      500,
+      "assignment_write_unverified",
+      "The assignment write returned an unreadable result; the batch may have been written.",
+    )
+  }
+
+  return {
+    written: counts.written,
+    skipped: contactIds.length - confirmed.length + counts.skipped,
+    split,
+  }
 }

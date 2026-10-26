@@ -870,6 +870,16 @@ export type Database = {
       }
     }
     Functions: {
+      assign_dialer_contacts: {
+        Args: {
+          p_assigned_by: string
+          p_campaign_id: string
+          p_mode: string
+          p_program_id: string
+          p_rows: Json
+        }
+        Returns: Json
+      }
       caller_assignable_user_ids: { Args: never; Returns: string[] }
       caller_assigned_preacher_id: { Args: never; Returns: string }
       caller_can_read_attendance_session: {
