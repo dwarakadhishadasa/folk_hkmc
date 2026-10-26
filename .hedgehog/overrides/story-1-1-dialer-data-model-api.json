@@ -1,0 +1,7 @@
+{
+  "task": "STORY-1-1-DIALER-DATA-MODEL-API",
+  "scope_add": [
+    "scripts/verify-monorepo-guardrails.mjs"
+  ],
+  "reason": "AD-8 requires the dialer route-coverage check to fail inside pnpm guardrails. The root guardrails script is asserted byte-exactly by verify-monorepo-guardrails.mjs, so package.json cannot carry the chain; the check is spawned from the guardrail instead, which adds enforcement without changing that assertion."
+}
