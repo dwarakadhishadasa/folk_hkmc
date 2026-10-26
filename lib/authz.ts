@@ -30,6 +30,12 @@ export interface StaffContext {
    * routed through a Preacher, otherwise `undefined`.
    */
   assignedPreacherUserId?: string
+  /**
+   * Whether this staff user holds an active `dialer_callers` profile. The
+   * Campaign header item and its Assignments sub-nav resolve from this; it is
+   * never an authorization decision on its own.
+   */
+  hasActiveCallerProfile: boolean
   lastSyncedAt: string
 }
 
@@ -96,7 +102,7 @@ export async function writeAuditEvent(data: {
   }
 }
 
-function mapUsersRowToStaffContext(row: UsersRow): StaffContext {
+function mapUsersRowToStaffContext(row: UsersRow, hasActiveCallerProfile: boolean): StaffContext {
   if (!isProgramId(row.program_id)) {
     throw new AuthzError(403, "unsupported_program", "This program is not supported.")
   }
@@ -128,6 +134,7 @@ function mapUsersRowToStaffContext(row: UsersRow): StaffContext {
     status: row.status as StaffMembershipStatusValue,
     locationIds: Array.isArray(row.location_ids) ? row.location_ids.filter(Boolean) : [],
     assignedPreacherUserId: row.assigned_preacher_id || undefined,
+    hasActiveCallerProfile,
     lastSyncedAt: new Date().toISOString(),
   }
 }
@@ -137,22 +144,37 @@ async function loadStaffContextForUser(params: {
   programId: ProgramId
 }): Promise<StaffContext> {
   const supabaseAdmin = createSupabaseAdminClient()
-  const { data, error } = await supabaseAdmin
-    .from("users")
-    .select("id,program_id,email,name,role,status,location_ids,assigned_preacher_id")
-    .eq("id", params.authUserId)
-    .eq("program_id", params.programId)
-    .maybeSingle()
+  const [userResult, callerResult] = await Promise.all([
+    supabaseAdmin
+      .from("users")
+      .select("id,program_id,email,name,role,status,location_ids,assigned_preacher_id")
+      .eq("id", params.authUserId)
+      .eq("program_id", params.programId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("dialer_callers")
+      .select("id")
+      .eq("user_id", params.authUserId)
+      .eq("program_id", params.programId)
+      .eq("is_active", true)
+      .maybeSingle(),
+  ])
 
-  if (error) {
+  if (userResult.error) {
     throw new AuthzError(500, "staff_user_read_failed", "Unable to read the staff user.")
   }
 
-  if (!data) {
+  if (!userResult.data) {
     throw new AuthzError(403, "staff_not_found", "No staff user is linked to this email.")
   }
 
-  return mapUsersRowToStaffContext(data as UsersRow)
+  // Refusing to answer is the honest failure here: defaulting to `false` would
+  // silently hide a caller's Campaign entry behind a broken read.
+  if (callerResult.error) {
+    throw new AuthzError(500, "staff_caller_profile_read_failed", "Unable to read the staff caller profile.")
+  }
+
+  return mapUsersRowToStaffContext(userResult.data as UsersRow, Boolean(callerResult.data))
 }
 
 export async function syncStaffProfileByEmail(params: {
