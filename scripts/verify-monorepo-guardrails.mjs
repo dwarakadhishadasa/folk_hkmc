@@ -1,5 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
+import { spawnSync } from "node:child_process"
 import ts from "typescript"
 
 const rootDir = process.cwd()
@@ -631,6 +632,24 @@ if (errors.length > 0) {
     console.error(`- ${error}`)
   }
   process.exit(1)
+}
+
+// AD-8: every /api/dialer/** route file must have a denial-sweep row. Run as a
+// child so the check stays a standalone script, and so CI — which runs this
+// guardrail, not the e2e suite — cannot ship an unlisted route.
+const routeCoverage = spawnSync(
+  process.execPath,
+  [path.join(rootDir, "scripts", "verify-dialer-route-coverage.mjs")],
+  { stdio: "inherit" },
+)
+
+if (routeCoverage.error) {
+  console.error(`Monorepo guardrails failed: could not run the dialer route-coverage check: ${routeCoverage.error.message}`)
+  process.exit(1)
+}
+
+if (routeCoverage.status !== 0) {
+  process.exit(routeCoverage.status ?? 1)
 }
 
 console.log("Monorepo guardrails passed.")

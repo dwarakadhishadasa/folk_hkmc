@@ -99,8 +99,14 @@ export default defineConfig({
       timeout: SETUP_TIMEOUT_MS,
     },
     {
+      name: "setup-assistant",
+      testDir: "e2e/auth",
+      testMatch: /assistant\.setup\.ts/,
+      timeout: SETUP_TIMEOUT_MS,
+    },
+    {
       name: "smoke",
-      dependencies: ["setup-admin", "setup-preacher", "setup-volunteer"],
+      dependencies: ["setup-admin", "setup-preacher", "setup-volunteer", "setup-assistant"],
       testMatch: /\.spec\.ts$/,
       use: { storageState: storageStatePath("admin") },
     },

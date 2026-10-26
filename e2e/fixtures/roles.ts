@@ -24,16 +24,17 @@
 import path from "node:path"
 
 /** Role keys the harness signs in as. Mirrors `lib/authz`'s `StaffRole`. */
-export type E2ERole = "admin" | "preacher" | "volunteer"
+export type E2ERole = "admin" | "preacher" | "volunteer" | "assistant"
 
 /** The roles that need a `storageState` file, in setup order. */
-export const E2E_ROLES: readonly E2ERole[] = ["admin", "preacher", "volunteer"] as const
+export const E2E_ROLES: readonly E2ERole[] = ["admin", "preacher", "volunteer", "assistant"] as const
 
 /** Staff role name as stored in `public.users.role`. */
 const STAFF_ROLE: Record<E2ERole, string> = {
   admin: "Admin",
   preacher: "Preacher",
   volunteer: "Volunteer",
+  assistant: "Assistant",
 }
 
 /**
@@ -44,6 +45,7 @@ const LANDING_PATH: Record<E2ERole, string> = {
   admin: "/",
   preacher: "/",
   volunteer: "/contact",
+  assistant: "/contact",
 }
 
 /** Program whose fixtures are exercised; the folk app is `PROGRAM_ID=folk`. */
@@ -80,11 +82,13 @@ const FIXTURE_EMAILS: Readonly<Record<string, Readonly<Record<E2ERole, string>>>
     admin: "kavitha.raman@folk.fixture.test",
     preacher: "anand.narayanan@folk.fixture.test",
     volunteer: "divya.parthasarathy@folk.fixture.test",
+    assistant: "suresh.kannan@folk.fixture.test",
   },
   "gita-life": {
     admin: "kavitha.raman@gita-life.fixture.test",
     preacher: "anand.narayanan@gita-life.fixture.test",
     volunteer: "divya.parthasarathy@gita-life.fixture.test",
+    assistant: "suresh.kannan@gita-life.fixture.test",
   },
 }
 
