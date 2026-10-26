@@ -3,12 +3,16 @@
  *
  * Three roles, three surfaces, three boundaries:
  *
- * - an Admin, Preacher or Assistant reaches `/campaigns` and finds the empty
- *   state naming the next action (`Create campaign`) with a link to it, plus
- *   the admin sub-nav;
+ * - an Admin, Preacher or Assistant reaches `/campaigns` and finds the
+ *   "Overview" title, the "New campaign" action and the admin sub-nav;
  * - a Volunteer with no caller profile is refused at `/campaigns` and never
  *   sees the admin surface;
  * - a staff member with no caller profile is refused at `/campaigns/assignments`.
+ *
+ * The "Create campaign" empty state used to be asserted here, when `/campaigns`
+ * had no data to render. The list is data-driven from Story 1.4, so that
+ * assertion moved to `campaign-campaigns.spec.ts`, which controls the
+ * precondition (no campaigns) instead of depending on a run's leftovers.
  *
  * The fourth row needs a caller profile that the seed does not create, so the
  * spec provisions one and puts the table back the way it found it. The
@@ -210,15 +214,11 @@ for (const role of CAMPAIGN_ADMIN_ROLES) {
   test.describe(`the Campaign overview — ${role}`, () => {
     test.use({ storageState: storageStatePath(role) })
 
-    test("shows the Create campaign empty state and the admin sub-nav", async ({ page }) => {
+    test("shows the Overview title, the New campaign action and the admin sub-nav", async ({ page }) => {
       await page.goto("/campaigns")
 
       await expect(page).toHaveURL(/\/campaigns$/)
       await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toBeVisible()
-
-      const createCampaign = page.getByRole("link", { name: "Create campaign" })
-      await expect(createCampaign).toBeVisible()
-      await expect(createCampaign).toHaveAttribute("href", "/campaigns/new")
 
       const newCampaign = page.getByRole("link", { name: "New campaign" })
       await expect(newCampaign).toBeVisible()

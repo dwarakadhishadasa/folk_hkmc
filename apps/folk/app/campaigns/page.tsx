@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation"
 
 import { CampaignEmptyState } from "@/components/campaign/campaign-empty-state"
+import { CampaignList } from "@/components/campaign/campaign-list"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { AuthzError } from "@/lib/authz"
+import { listCampaigns } from "@/lib/dialer/campaigns"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
 
 import { getCampaignStaff } from "./staff"
@@ -10,17 +12,19 @@ import { getCampaignStaff } from "./staff"
 export const dynamic = "force-dynamic"
 
 /**
- * The Campaign overview.
+ * The Campaign overview: AD-2's admin gate, then the program's campaigns.
  *
- * AD-2's admin gate and nothing else: `requireCampaignAdmin` admits an admin,
- * preacher or assistant and refuses a volunteer. The scope helpers that would
- * narrow the page to a preacher's own campaigns belong to the story that
- * lists campaigns, so this page shows the shell and the empty state only.
+ * Campaign rows are program-level (AD-3), so every admin role reads the same
+ * list and no preacher scope narrows it. The table carries only the columns
+ * this story can compute — the frame's Assigned / Reached / Confirmed / Never
+ * attempted counts belong to the reporting story and are absent, not zeroed.
  */
 export default async function CampaignsOverviewPage() {
   try {
     const staff = await getCampaignStaff()
     requireCampaignAdmin(staff)
+
+    const campaigns = await listCampaigns(staff)
 
     return (
       <>
@@ -30,12 +34,16 @@ export default async function CampaignsOverviewPage() {
           actionHref="/campaigns/new"
           actionLabel="New campaign"
         />
-        <CampaignEmptyState
-          title="No campaigns yet"
-          description="Create a campaign to start reaching contacts in this programme."
-          actionHref="/campaigns/new"
-          actionLabel="Create campaign"
-        />
+        {campaigns.length === 0 ? (
+          <CampaignEmptyState
+            title="No campaigns yet"
+            description="Create a campaign to start reaching contacts in this programme."
+            actionHref="/campaigns/new"
+            actionLabel="Create campaign"
+          />
+        ) : (
+          <CampaignList campaigns={campaigns} />
+        )}
       </>
     )
   } catch (error) {
@@ -43,7 +51,10 @@ export default async function CampaignsOverviewPage() {
       redirect("/login?redirect=/campaigns")
     }
 
-    if (error instanceof AuthzError) {
+    // Only the gate's refusal is an authorization failure. A read error is a
+    // 500 and belongs on the error page, not on a redirect that would blame the
+    // reader's role for a database fault.
+    if (error instanceof AuthzError && error.status === 403) {
       redirect("/auth/error?code=staff-authorization-failed")
     }
 
