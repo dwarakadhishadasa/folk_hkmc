@@ -32,7 +32,7 @@ layers:
 
   - id: api
     depends_on: server
-    scope: ["apps/folk/app/api/dialer/**", "scripts/verify-dialer-route-coverage.mjs", "e2e/specs/dialer-route-sweep.spec.ts", "e2e/fixtures/**", "e2e/auth/**", "playwright.config.ts", "package.json", "_bmad-output/specs/spec-autodialer/stories/**"]
+    scope: ["apps/folk/app/api/dialer/**", "scripts/verify-dialer-route-coverage.mjs", "e2e/specs/dialer-route-sweep.spec.ts", "e2e/fixtures/**", "e2e/auth/**", "playwright.config.ts", "package.json"]
     verify: "pnpm test:static && pnpm test:e2e dialer-route"
     commit: "feat(api): dialer endpoints"
 

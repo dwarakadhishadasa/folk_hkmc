@@ -1,0 +1,16 @@
+{
+  "task": "STORY-1-1-DIALER-DATA-MODEL-SCHEMA",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "lib/supabase/types.ts regeneration needed — the regenerated types are at /tmp/dialer-types.ts and contain all seven dialer table types. The server layer's scope covers lib/supabase/**, so the follow-up to land them belongs to STORY-1-1-DIALER-DATA-MODEL-SERVER. The temp file also differs from the committed types in unrelated places (no airtable_id_map table locally; missing __InternalSupabase header) so it should be landed as a reviewable diff rather than a blind overwrite.",
+      "logged_at": "2026-10-26T02:21:29.588Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T02:21:29.588Z",
+      "reason": "Types landed in server layer commit bec5ea4; fresh generation matches committed types; airtable_id_map present; __InternalSupabase header omission is cosmetic and harmless",
+      "logged_at": "2026-10-26T02:49:00.927Z"
+    }
+  ]
+}

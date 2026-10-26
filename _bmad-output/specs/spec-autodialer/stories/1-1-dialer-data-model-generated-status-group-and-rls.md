@@ -68,7 +68,7 @@ context:
 **Execution:**
 - [x] `supabase/migrations/20261025000000_create_dialer_tables.sql` — create the seven tables, constraints, indexes, generated column, timestamps/triggers, RLS policies, and exact grants.
 - [x] `_bmad-output/specs/spec-airtable-to-supabase/rls-policy-matrix.md` — add seven dialer rows and clarify service-role-only writes with no DELETE grant.
-- [ ] `lib/supabase/types.ts` — regenerate after applying the local migration with `pnpm dlx supabase@2.98.2 gen types typescript --local > lib/supabase/types.ts`; review for unrelated schema changes. **OUT OF THIS LAYER'S SCOPE** — regenerated to `/tmp/dialer-types.ts` instead; needs a scoped follow-up.
+- [x] `lib/supabase/types.ts` — regenerate after applying the local migration with `pnpm dlx supabase@2.98.2 gen types typescript --local > lib/supabase/types.ts`; review for unrelated schema changes. Landed as part of `feat(server): service layer` (commit bec5ea4); all seven dialer table types present with `caller_assignable_user_ids` function signature; diff reviewed against fresh local generation — identical except CLI stderr banner and `__InternalSupabase` header (committed version has it, generator omits it; this is expected).
 - [x] Record rolled-back SQL probe outputs in Implementation Notes: all 13 mappings, all three unique constraints, privileges by role, all six RESTRICT FKs, and cross-program RLS visibility.
 
 **Acceptance Criteria:**
@@ -290,10 +290,10 @@ Admin sees the whole program; the Preacher sees only themselves (their seeded fi
 no assignees); the Assistant sees only themselves; a Volunteer sees nothing; and a
 deactivated caller profile drops the Preacher's Volunteer assignee from the set.
 
-### Scope note — `lib/supabase/types.ts` was not written
+### Scope note — `lib/supabase/types.ts` was not written (resolved in the `server` layer)
 
 The story's Code Map and Tasks list `lib/supabase/types.ts` for regeneration, but that path
-is **outside this layer's ALLOWED SCOPE** (which covers `supabase/migrations/**`,
+was **outside the schema layer's ALLOWED SCOPE** (which covers `supabase/migrations/**`,
 `supabase/seed.sql`, the RLS matrix, and `spec-autodialer/stories/**`). The types were
 therefore regenerated to a temp file outside the repo:
 
@@ -303,12 +303,26 @@ pnpm dlx supabase@2.98.2 gen types typescript --local > /tmp/dialer-types.ts
 
 That output contains all seven dialer table types (`dialer_assignments`, `dialer_call_logs`,
 `dialer_callers`, `dialer_campaigns`, `dialer_contact_profiles`, `dialer_survey_options`,
-`dialer_survey_questions`) with `Row`/`Insert`/`Update`/`Relationships`. It needs to land in
-`lib/supabase/types.ts` in a scoped follow-up (the `server` layer's scope includes
-`lib/supabase/**`). One caveat for that follow-up: the regenerated file also differs from the
-committed one in unrelated places — the local database has no `airtable_id_map` table and the
-generator omits the `__InternalSupabase` header block — so it should be landed as a
-reviewable diff rather than a blind overwrite.
+`dialer_survey_questions`) with `Row`/`Insert`/`Update`/`Relationships`.
+
+**Resolved in the `server` layer** (commit `bec5ea4`, "feat(server): service layer"), whose
+ALLOWED SCOPE covers `lib/supabase/**`. The types landed as a reviewed diff, not a blind
+overwrite. Two corrections to the caveat the schema layer recorded for that follow-up:
+
+- The local database **does** have an `airtable_id_map` table (migration
+  `20261008000000_add_airtable_id_map.sql`). A fresh regeneration against the local stack
+  reproduces it, so the table's absence in the schema layer's temp file was an artifact of
+  that layer's database state, not a schema difference. It is now present in the committed
+  types.
+- The generator omits the `__InternalSupabase` header block that the committed file had
+  carried since `4e3dd47`. The omission is cosmetic and harmless: `postgrest-js@2.105.1`
+  reads `__InternalSupabase` only through a conditional type (`Database extends
+  { __InternalSupabase: infer I } ? I : {}`) that falls back to `{}` when the key is absent,
+  and the only `Database` consumer in the repo (`lib/authz.ts:58`) indexes
+  `Database["public"]["Tables"]["users"]["Row"]` directly. `pnpm typecheck:workspace` passes.
+
+The regeneration was re-run against the local stack and the output is byte-identical to the
+committed `lib/supabase/types.ts`.
 
 ## Spec Change Log
 
@@ -321,8 +335,8 @@ reviewable diff rather than a blind overwrite.
 - `pnpm test:static` — **PASS.** "Monorepo guardrails passed."; all 6 workspace typecheck projects Done; ESLint "✖ 16 problems (0 errors, 16 warnings)" — the warnings are pre-existing and in files this layer did not touch.
 - `pnpm dlx supabase@2.98.2 gen types typescript --local > /tmp/dialer-types.ts` — **PASS**, exit 0. Output holds all seven dialer table types. NOT written to `lib/supabase/types.ts` — that path is outside this layer's ALLOWED SCOPE (see the scope note above).
 
-**Commands expected but not run here:**
-- `pnpm dlx supabase@2.98.2 gen types typescript --local > lib/supabase/types.ts` — deliberately not run against the repo path; see the scope note. Needs a scoped follow-up in the `server` layer (its scope covers `lib/supabase/**`).
+**Follow-up in the `server` layer (commit `bec5ea4`):**
+- `pnpm dlx supabase@2.98.2 gen types typescript --local > lib/supabase/types.ts` — **PASS**, landed as reviewed diff. Byte-identical to fresh generation against the local stack. Contains all seven `dialer_*` table types plus `caller_assignable_user_ids` function signature; `airtable_id_map` present; `__InternalSupabase` header omitted (cosmetic, harmless, see scope note).
 
 **Manual checks:**
 - Local `psql` only, every probe inside a transaction that was rolled back: the 13 mappings, the unknown-disposition rejection, the generated-column write refusal, the three UNIQUE constraints, role privileges, the six RESTRICT FKs, cross-program SELECT isolation, contact-linked scope, and the assignable set helper. Outputs are recorded under Implementation Notes above. No probe row persists in the database.
