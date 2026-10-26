@@ -65,6 +65,9 @@ const ABSENT_QUESTION_ID = "00000000-0000-4000-8000-000000000001"
 /** A caller id that is valid in shape and absent by construction, like the ids above. */
 const ABSENT_CALLER_ID = "00000000-0000-4000-8000-000000000002"
 
+/** A contact id that is valid in shape and absent by construction, like the ids above. */
+const ABSENT_CONTACT_ID = "00000000-0000-4000-8000-000000000003"
+
 interface SweepRouteOptions {
   /** The route file's path, exactly as the guardrail derives it from the directory. */
   route: string
@@ -210,6 +213,36 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (assignContactsCampaignId) {
     await deleteDisposableCampaign(assignContactsCampaignId)
+  }
+})
+
+// ============================================================================
+// A third campaign, for Story 1.8's assignment routes. Both the pre-check and
+// the write resolve the campaign before they read a contact, so an absent id
+// would be a 404 and prove only that the gate admits the Admin. Their owner
+// rows send `{}`, which the service refuses before any read or write, so this
+// file still creates no assignment — the delete cannot be blocked by
+// `dialer_assignments`.
+// ============================================================================
+
+let assignWriteCampaignId: string
+
+test.beforeAll(async () => {
+  const adminRequest = await playwrightRequest.newContext({
+    baseURL: BASE_URL,
+    storageState: storageStatePath("admin"),
+  })
+
+  try {
+    assignWriteCampaignId = await createDisposableCampaign(adminRequest, "assign write")
+  } finally {
+    await adminRequest.dispose()
+  }
+})
+
+test.afterAll(async () => {
+  if (assignWriteCampaignId) {
+    await deleteDisposableCampaign(assignWriteCampaignId)
   }
 })
 
@@ -363,6 +396,30 @@ sweepRoute({
   kind: "admin",
   ownerStatuses: [200],
   body: { total: 10, callers: [{ callerId: ABSENT_CALLER_ID, weight: 1 }] },
+})
+
+// `{}` carries no `contactIds`, so the service refuses it with 400
+// invalid_contact_ids before any contact or assignment read: the owner case
+// proves the gate admits this actor and writes nothing.
+sweepRoute({
+  route: "/api/dialer/admin/campaigns/[campaignId]/assignments/precheck",
+  url: () => `/api/dialer/admin/campaigns/${assignWriteCampaignId}/assignments/precheck`,
+  method: "POST",
+  kind: "admin",
+  ownerStatuses: [400],
+  body: {},
+})
+
+// `{}` carries no `contactIds` either, so the write refuses it with the same
+// 400 before anything is written — no contact, caller or assignment row is
+// created by this row.
+sweepRoute({
+  route: "/api/dialer/admin/campaigns/[campaignId]/assignments",
+  url: () => `/api/dialer/admin/campaigns/${assignWriteCampaignId}/assignments`,
+  method: "POST",
+  kind: "admin",
+  ownerStatuses: [400],
+  body: {},
 })
 
 // ============================================================================
@@ -534,6 +591,77 @@ test.describe("Assignable contacts query: page validation is the service's", () 
 
     expect(response.status()).toBe(400)
     expect(await response.json()).toMatchObject({ code: "invalid_page_size" })
+  })
+})
+
+test.describe("Assignment pre-check: the selection gate is the service's", () => {
+  const precheckUrl = () =>
+    `${BASE_URL}/api/dialer/admin/campaigns/${assignWriteCampaignId}/assignments/precheck`
+
+  test("is a 400 invalid_body for unparseable JSON", async ({ request }) => {
+    const response = await request.post(precheckUrl(), {
+      headers: { "content-type": "application/json" },
+      data: "{not json",
+    })
+
+    expect(response.status(), "a parse failure is the caller's mistake, not a 500").toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_body" })
+  })
+
+  test("is a 403 contact_not_assignable naming an out-of-set contact, and writes nothing", async ({
+    request,
+  }) => {
+    const response = await request.post(precheckUrl(), {
+      data: { contactIds: [ABSENT_CONTACT_ID] },
+    })
+
+    expect(response.status(), "a contact outside the AD-3 set is refused, never dropped").toBe(403)
+    const payload = (await response.json()) as { code?: string; error?: string }
+    expect(payload.code).toBe("contact_not_assignable")
+    expect(payload.error, "the refusal names the offending id").toContain(ABSENT_CONTACT_ID)
+  })
+})
+
+test.describe("Assignment write: the pre-check runs inside the write", () => {
+  const writeUrl = () => `${BASE_URL}/api/dialer/admin/campaigns/${assignWriteCampaignId}/assignments`
+  const callers = [{ userId: ABSENT_CALLER_ID, weight: 1 }]
+
+  test("is a 400 invalid_body for a JSON array", async ({ request }) => {
+    const response = await request.post(writeUrl(), { data: [] })
+
+    expect(response.status(), "an array is valid JSON but not a request body").toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_body" })
+  })
+
+  test("is a 400 invalid_caller_list before any contact is read", async ({ request }) => {
+    const response = await request.post(writeUrl(), { data: { contactIds: [ABSENT_CONTACT_ID] } })
+
+    expect(response.status(), "a selection with no callers is refused before the pre-check").toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_caller_list" })
+  })
+
+  test("is a 403 contact_not_assignable naming an out-of-set contact, and writes nothing", async ({
+    request,
+  }) => {
+    const response = await request.post(writeUrl(), {
+      data: { contactIds: [ABSENT_CONTACT_ID], callers },
+    })
+
+    expect(response.status(), "the write re-runs the pre-check rather than trusting the client").toBe(403)
+    const payload = (await response.json()) as { code?: string; error?: string }
+    expect(payload.code).toBe("contact_not_assignable")
+    expect(payload.error, "the refusal names the offending id").toContain(ABSENT_CONTACT_ID)
+  })
+
+  test("forwards mode untouched: an unknown mode is the service's 400 invalid_mode", async ({
+    request,
+  }) => {
+    const response = await request.post(writeUrl(), {
+      data: { contactIds: [ABSENT_CONTACT_ID], callers, mode: "pause" },
+    })
+
+    expect(response.status(), "the route must not default or rewrite the mode").toBe(400)
+    expect(await response.json()).toMatchObject({ code: "invalid_mode" })
   })
 })
 
