@@ -1006,16 +1006,29 @@ function toContactWriteResult(row: ContactRow): ManageContactWriteResult {
  * Postgres unique-violation and foreign-key-violation codes.
  *
  * Named because the generic 500 would tell an operator nothing: the difference
- * between "someone else already has that phone number" and "this row has
- * attendance recorded against it" is the difference between fixing a typo and
+ * between "someone else already has that phone number" and "this row still has
+ * history recorded against it" is the difference between fixing a typo and
  * giving up.
  */
 const PG_UNIQUE_VIOLATION = "23505"
 const PG_FOREIGN_KEY_VIOLATION = "23503"
+const PG_FK_CONSTRAINT_PATTERN = /violates foreign key constraint "([^"]+)"/
+const ATTENDANCE_CONTACT_FK = "attendance_contact_id_fkey"
+const DIALER_ASSIGNMENT_CONTACT_FK = "dialer_assignments_contact_id_fkey"
 
 function pgErrorCode(error: { code?: unknown } | null): string | null {
   const code = error?.code
   return typeof code === "string" ? code : null
+}
+
+/**
+ * PostgREST exposes no field for the violated constraint and forwards Postgres'
+ * message verbatim, so the name has to be read back out of that message.
+ */
+function pgForeignKeyConstraint(error: { message?: unknown } | null): string | null {
+  const message = error?.message
+  if (typeof message !== "string") return null
+  return PG_FK_CONSTRAINT_PATTERN.exec(message)?.[1] ?? null
 }
 
 export async function updateManageContact(params: {
@@ -1125,10 +1138,11 @@ export async function createManageContact(params: {
  * place and a delete cannot be broader than an edit.
  *
  * There is deliberately no cascade. `attendance.contact_id` references
- * `contacts(id)` without `ON DELETE CASCADE`, so a contact with recorded
- * attendance is refused with a named reason instead of silently taking its
- * attendance history with it — which is the outcome an operator would never
- * choose and cannot undo.
+ * `contacts(id)` without `ON DELETE CASCADE`, and `dialer_assignments.contact_id`
+ * is `ON DELETE RESTRICT`, so a contact with recorded attendance or campaign
+ * assignments is refused with a named reason instead of silently taking that
+ * history with it — which is the outcome an operator would never choose and
+ * cannot undo.
  */
 export async function deleteManageContact(params: {
   staff: StaffContext
@@ -1148,10 +1162,28 @@ export async function deleteManageContact(params: {
 
   if (error) {
     if (pgErrorCode(error) === PG_FOREIGN_KEY_VIOLATION) {
+      const constraint = pgForeignKeyConstraint(error)
+
+      if (constraint === ATTENDANCE_CONTACT_FK) {
+        throw new AuthzError(
+          409,
+          "manage_contact_has_attendance",
+          "This contact has attendance recorded against it and cannot be deleted.",
+        )
+      }
+
+      if (constraint === DIALER_ASSIGNMENT_CONTACT_FK) {
+        throw new AuthzError(
+          409,
+          "manage_contact_has_dialer_history",
+          "This contact has dialer campaign assignment history and cannot be deleted.",
+        )
+      }
+
       throw new AuthzError(
         409,
-        "manage_contact_has_attendance",
-        "This contact has attendance recorded against it and cannot be deleted.",
+        "manage_contact_has_related_records",
+        "This contact has related records that block the delete.",
       )
     }
 
