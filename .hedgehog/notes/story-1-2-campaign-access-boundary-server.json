@@ -1,0 +1,20 @@
+{
+  "task": "STORY-1-2-CAMPAIGN-ACCESS-BOUNDARY-SERVER",
+  "notes": [
+    {
+      "kind": "debt",
+      "note": "The four helpers in lib/dialer/scope.ts are unexercised by any automated check: this repo has no unit runner, and no /api/dialer/** route or seeded caller profile reaches them yet, so pnpm test:static only proves types and import boundaries.",
+      "logged_at": "2026-10-26T09:40:24.788Z"
+    },
+    {
+      "kind": "debt",
+      "note": "requireDialerCaller refuses a missing or inactive profile with 403, not 404, so a denial-sweep row for a caller route must choose a non-owning role that actually holds a caller profile rather than the default preacher.",
+      "logged_at": "2026-10-26T09:40:25.190Z"
+    },
+    {
+      "kind": "debt",
+      "note": "The paging loop in lib/dialer/scope.ts duplicates the unexported collectPagedRows in lib/supabase/manage.ts; AD-16's single shared pager still needs extracting when manage.ts is next in scope.",
+      "logged_at": "2026-10-26T09:40:25.581Z"
+    }
+  ]
+}
