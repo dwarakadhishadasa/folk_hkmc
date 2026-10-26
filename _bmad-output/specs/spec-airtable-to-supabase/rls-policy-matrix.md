@@ -30,7 +30,7 @@ Role-by-entity visibility contract for CAP-3. Scoping semantics are lifted from 
 | Table | Policy |
 | --- | --- |
 | All four | No direct authenticated writes. All mutations go through server routes with the service-role key, which bypasses RLS. Authenticated INSERT/UPDATE/DELETE policies are not granted. |
-| The seven `dialer_*` tables | Same rule, and the grants enforce it: `anon` holds **no** privilege on any dialer table; `authenticated` holds **SELECT only**; `service_role` holds SELECT/INSERT/UPDATE. **No role holds DELETE on any dialer table** — a campaign is cancelled (`status = 'CANCELLED'`), never deleted, and a survey question is retired (`retired_at`), never deleted. Story 1.1, migration `20261025000000_create_dialer_tables.sql`. |
+| The seven `dialer_*` tables | Same rule, and the grants enforce it: `anon` holds **no** privilege on any dialer table; `authenticated` holds **SELECT only**; `service_role` holds SELECT/INSERT/UPDATE. No browser role holds DELETE on any dialer table — a campaign is cancelled (`status = 'CANCELLED'`), never deleted. A survey question is retired (`retired_at`) once it has responses; a question that still has none may be deleted by the service role, which is the one DELETE grant that exists (`20261026000000_grant_dialer_survey_delete.sql`, Story 1.5). Story 1.1, migration `20261025000000_create_dialer_tables.sql`. |
 
 ## Program scoping
 
@@ -49,7 +49,7 @@ Every policy is additionally constrained by `program_id`: a folk staff JWT must 
   - `dialer_survey_options`: Same as questions.
   - `dialer_contact_profiles`: Admin → program; Preacher/Assistant → contact-linked; Caller → own contacts' profiles.
   - No table grants `INSERT`, `UPDATE`, or `DELETE` to `authenticated` — all writes are service-role only.
-  - No role holds `DELETE` on any dialer table.
+  - No browser role holds `DELETE` on any dialer table. `service_role` holds it only on `dialer_survey_questions` and `dialer_survey_options`, for a question with zero responses (`20261026000000_grant_dialer_survey_delete.sql`, Story 1.5).
 
 ## Known deltas from today
 
