@@ -1,6 +1,5 @@
 import type { ReactNode } from "react"
 
-import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
 import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, type StaffContext } from "@/lib/authz"
@@ -49,8 +48,7 @@ export default async function CampaignsLayout({ children }: { children: ReactNod
       */}
       <div className="flex min-h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
         <Header />
-        <main className="flex w-full flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
-          <CampaignSubNav role={staff.role} hasActiveCallerProfile={staff.hasActiveCallerProfile} />
+        <main className="flex w-full flex-1 flex-col gap-5 p-6">
           {children}
         </main>
       </div>

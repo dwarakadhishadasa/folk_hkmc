@@ -5,6 +5,8 @@ import { CampaignList } from "@/components/campaign/campaign-list"
 import { CampaignOverviewCards } from "@/components/campaign/campaign-overview-cards"
 import { CampaignOverviewStats } from "@/components/campaign/campaign-overview-stats"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
+import { CampaignStatusFilter } from "@/components/campaign/campaign-status-filter"
+import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
 import { AuthzError } from "@/lib/authz"
 import { listCampaignsWithProgress } from "@/lib/dialer/progress"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
@@ -13,8 +15,16 @@ import { getCampaignStaff } from "./staff"
 
 export const dynamic = "force-dynamic"
 
+const STATUS_FILTERS = ["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"] as const
+type StatusFilter = (typeof STATUS_FILTERS)[number]
+
 function pluralise(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`
+}
+
+function readStatusFilter(value: string | string[] | undefined): StatusFilter | "all" {
+  const raw = Array.isArray(value) ? value[0] : value
+  return STATUS_FILTERS.find((status) => status === raw) ?? "all"
 }
 
 /**
@@ -30,14 +40,23 @@ function pluralise(count: number, noun: string): string {
  * Zero campaigns renders the empty state **instead of** the tiles: a screen of
  * five zeroes is not an answer, and UX-DR24's action is.
  */
-export default async function CampaignsOverviewPage() {
+export default async function CampaignsOverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   try {
     const staff = await getCampaignStaff()
     requireCampaignAdmin(staff)
 
+    const params = await searchParams
+    const statusFilter = readStatusFilter(params.status)
+
     const { campaigns } = await listCampaignsWithProgress(staff)
-    const draft = campaigns.filter((entry) => entry.campaign.status === "DRAFT").length
-    const cancelled = campaigns.filter((entry) => entry.campaign.status === "CANCELLED").length
+    const visible =
+      statusFilter === "all" ? campaigns : campaigns.filter((entry) => entry.campaign.status === statusFilter)
+    const draft = visible.filter((entry) => entry.campaign.status === "DRAFT").length
+    const cancelled = visible.filter((entry) => entry.campaign.status === "CANCELLED").length
 
     return (
       <>
@@ -46,7 +65,9 @@ export default async function CampaignsOverviewPage() {
           subtitle={`${campaigns.length} ${campaigns.length === 1 ? "campaign" : "campaigns"} · folk programme`}
           actionHref="/campaigns/new"
           actionLabel="New campaign"
+          filters={<CampaignStatusFilter value={statusFilter === "all" ? "all" : statusFilter} />}
         />
+        <CampaignSubNav role={staff.role} hasActiveCallerProfile={staff.hasActiveCallerProfile} />
         {campaigns.length === 0 ? (
           <CampaignEmptyState
             title="No campaigns yet"
@@ -54,9 +75,16 @@ export default async function CampaignsOverviewPage() {
             actionHref="/campaigns/new"
             actionLabel="Create campaign"
           />
+        ) : visible.length === 0 ? (
+          <CampaignEmptyState
+            title={`No ${statusFilter.toLowerCase()} campaigns`}
+            description="No campaign in this programme holds that status right now."
+            actionHref="/campaigns"
+            actionLabel="Show all campaigns"
+          />
         ) : (
           <div className="flex flex-col gap-4">
-            <CampaignOverviewStats entries={campaigns} />
+            <CampaignOverviewStats entries={visible} />
 
             {/*
               AD-5: a queued disposition has no call log until its replay lands,
@@ -68,11 +96,11 @@ export default async function CampaignsOverviewPage() {
               Queued dispositions are not counted until their replay lands.
             </p>
 
-            <CampaignList entries={campaigns} />
-            <CampaignOverviewCards entries={campaigns} />
+            <CampaignList entries={visible} />
+            <CampaignOverviewCards entries={visible} />
 
             <p className="text-xs text-[var(--muted-foreground)]">
-              {pluralise(campaigns.length, "campaign")} · {draft} draft · {cancelled} cancelled
+              {pluralise(visible.length, "campaign")} · {draft} draft · {cancelled} cancelled
             </p>
           </div>
         )}

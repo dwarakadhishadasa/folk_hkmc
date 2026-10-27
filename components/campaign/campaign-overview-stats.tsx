@@ -5,6 +5,8 @@ interface StatTile {
   label: string
   value: number
   caption: string
+  /** The frame gives Never attempted its own amber edge, as a distinct bucket. */
+  accent?: boolean
   /**
    * The phone grid is two columns, so the frame's second row is Reached and
    * Never attempted with Confirmed alone beneath it. The desktop row is the
@@ -57,30 +59,34 @@ export function CampaignOverviewStats({ entries }: { entries: CampaignOverviewEn
       label: "Never attempted",
       value: totalOf(entries, "neverAttempted"),
       caption: "Assigned − attempted",
+      accent: true,
       className: "order-4 md:order-none",
     },
   ]
 
   return (
     <section aria-label="Campaign totals">
-      <dl className="grid grid-cols-2 gap-2 md:grid-cols-5">
+      <dl className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
         {tiles.map((tile) => (
           <div
             key={tile.label}
             data-campaign-stat={tile.label}
             className={cn(
-              "rounded-xl border border-[var(--border)] bg-card px-4 py-3",
+              "flex flex-col gap-1.5 rounded-xl border bg-card p-5",
+              tile.accent ? "border-[#f97f29]" : "border-[var(--border)]",
               tile.className,
             )}
           >
-            <dt className="text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">
+            <dt className="text-[11px] font-semibold text-[#64748b] dark:text-[var(--muted-foreground)]">
               {tile.label}
             </dt>
-            <dd className="mt-1">
-              <span className="block font-[family-name:var(--font-poppins)] text-[28px] leading-none font-semibold text-[var(--program-text)]">
+            <dd className="flex flex-col gap-1.5">
+              <span className="block font-[family-name:var(--font-poppins)] text-[32px] leading-none font-bold text-[var(--program-text)]">
                 {tile.value}
               </span>
-              <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">{tile.caption}</span>
+              <span className="block text-[12px] text-[#64748b] dark:text-[var(--muted-foreground)]">
+                {tile.caption}
+              </span>
             </dd>
           </div>
         ))}

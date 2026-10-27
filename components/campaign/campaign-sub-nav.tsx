@@ -38,7 +38,7 @@ export function CampaignSubNav({
 
   return (
     <nav aria-label="Campaign" className="hidden w-full shrink-0 md:block">
-      <ul className="flex w-full flex-wrap items-start gap-x-6 gap-y-2 border-b border-[var(--tab-border)]">
+      <ul className="flex w-full flex-wrap items-start gap-x-8 gap-y-2 border-b border-[var(--tab-border)]">
         {items.map((item) => {
           const isActive = item.href === activeHref
 

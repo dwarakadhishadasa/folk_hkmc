@@ -19,9 +19,9 @@ function statusFor(entry: CallerRosterEntry): "active" | "inactive" | "unassigne
 }
 
 const HEAD_CLASS =
-  "px-2 text-xs font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase sm:px-4"
+  "h-11 px-2 text-[11px] font-semibold text-[#64748b] dark:text-[var(--muted-foreground)] sm:px-4"
 
-const COUNT_CLASS = "px-2 py-3 text-[13px] text-[var(--program-text)] tabular-nums sm:px-4"
+const COUNT_CLASS = "px-2 py-3 text-[14px] text-[var(--program-text)] tabular-nums sm:px-4"
 
 /**
  * Frame 645's roster, with its four performance columns filled from
@@ -47,7 +47,7 @@ export function CallerRoster({
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-card">
       <Table>
         <TableHeader>
-          <TableRow className="bg-[var(--muted)] hover:bg-[var(--muted)]">
+          <TableRow className="border-b border-[var(--border)] bg-[#f8fafc] hover:bg-[#f8fafc] dark:bg-[var(--secondary)] dark:hover:bg-[var(--secondary)]">
             <TableHead className={HEAD_CLASS}>Caller</TableHead>
             <TableHead className={HEAD_CLASS}>Contact</TableHead>
             <TableHead className={HEAD_CLASS}>Campaigns</TableHead>
@@ -64,11 +64,11 @@ export function CallerRoster({
             const callerProgress = entry.callerId ? progress.get(entry.callerId) : undefined
 
             return (
-              <TableRow key={entry.userId}>
+              <TableRow key={entry.userId} className="h-14 border-b border-[var(--border)]">
                 <TableCell className="px-2 py-3 sm:px-4">
                   <span
                     className={cn(
-                      "text-[13px] font-medium",
+                      "text-[14px] font-medium",
                       entry.deactivated ? "text-[var(--muted-foreground)]" : "text-[var(--program-text)]",
                     )}
                   >
@@ -76,7 +76,7 @@ export function CallerRoster({
                   </span>
                 </TableCell>
                 <TableCell className="px-2 py-3 sm:px-4">
-                  <span className="block max-w-[180px] truncate text-[13px] text-[var(--muted-foreground)]">
+                  <span className="block max-w-[180px] truncate text-[14px] text-[var(--muted-foreground)]">
                     {entry.email}
                   </span>
                 </TableCell>

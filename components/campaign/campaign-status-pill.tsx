@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
  */
 const STATUS_CLASSES: Record<string, string> = {
   DRAFT: "bg-[var(--muted)] text-[var(--grid-linked-fg)]",
-  ACTIVE: "bg-[color-mix(in_oklab,var(--success)_12%,var(--card))] text-[var(--success)]",
+  ACTIVE: "bg-[#e8f5ec] text-[#15803d] dark:bg-[#10331c] dark:text-[#7ee2a3]",
   COMPLETED: "bg-[color-mix(in_oklab,var(--info)_10%,var(--card))] text-[var(--info)]",
   CANCELLED: "bg-[color-mix(in_oklab,var(--destructive)_10%,var(--card))] text-[var(--destructive)]",
 }
@@ -36,7 +36,7 @@ export function CampaignStatusPill({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-[0.04em]",
+        "inline-flex items-center rounded-full px-2 py-[3px] text-[12px] font-medium",
         classesFor(status),
       )}
     >

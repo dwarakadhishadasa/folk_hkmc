@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
@@ -23,11 +24,13 @@ export function CampaignPageHeader({
   subtitle,
   actionHref,
   actionLabel,
+  filters,
 }: {
   title: string
   subtitle: string
   actionHref?: string
   actionLabel?: string
+  filters?: ReactNode
 }) {
   return (
     <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -41,10 +44,15 @@ export function CampaignPageHeader({
         <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{subtitle}</p>
       </div>
 
-      {actionHref && actionLabel ? (
-        <Button asChild size="lg" className="h-10 self-start rounded-lg px-4 sm:self-auto">
-          <Link href={actionHref}>{actionLabel}</Link>
-        </Button>
+      {filters || (actionHref && actionLabel) ? (
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {filters}
+          {actionHref && actionLabel ? (
+            <Button asChild size="lg" className="h-10 rounded-lg px-4">
+              <Link href={actionHref}>{actionLabel}</Link>
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

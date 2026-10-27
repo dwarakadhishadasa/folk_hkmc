@@ -595,7 +595,7 @@ export function AssignContactsSelect({
               : "The conflict check runs before anything is written."
 
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_408px]">
       <section aria-labelledby="assign-contacts-grid-heading" className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

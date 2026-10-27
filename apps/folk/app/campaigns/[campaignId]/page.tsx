@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation"
 
 import { CampaignLifecycleActions } from "@/components/campaign/campaign-lifecycle-actions"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
+import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
 import { CampaignStatusPill } from "@/components/campaign/campaign-status-pill"
 import { CampaignSurveyBuilder } from "@/components/campaign/campaign-survey-builder"
 import { formatCampaignDate, formatGapDuration } from "@/components/campaign/campaign-format"
@@ -70,6 +71,7 @@ export default async function CampaignDetailPage({
           </Link>
 
           <CampaignPageHeader title={campaign.name} subtitle="Campaign · folk programme" />
+          <CampaignSubNav role={staff.role} hasActiveCallerProfile={staff.hasActiveCallerProfile} />
         </div>
 
         <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card">

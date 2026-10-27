@@ -214,7 +214,7 @@ test.describe("the new-campaign form — an Admin", () => {
       await expect(page.getByRole("button", { name: "30s", exact: true })).toHaveAttribute("aria-pressed", "true")
 
       await page.getByLabel("Max attempts").fill("5")
-      await page.getByRole("button", { name: "Create campaign", exact: true }).click()
+      await page.getByRole("button", { name: "Next", exact: true }).click()
 
       await expect(page).toHaveURL(/\/campaigns\/[0-9a-f-]{36}$/)
       campaignId = new URL(page.url()).pathname.split("/").filter(Boolean).pop() ?? null

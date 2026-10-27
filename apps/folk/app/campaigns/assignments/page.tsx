@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 
 import { CampaignEmptyState } from "@/components/campaign/campaign-empty-state"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
+import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
 import { AuthzError } from "@/lib/authz"
 import { requireDialerCaller } from "@/lib/dialer/scope"
 
@@ -25,6 +26,7 @@ export default async function CampaignAssignmentsPage() {
     return (
       <>
         <CampaignPageHeader title="Assignments" subtitle="Your call queue" />
+        <CampaignSubNav role={staff.role} hasActiveCallerProfile={staff.hasActiveCallerProfile} />
         <CampaignEmptyState
           title="No calls assigned yet"
           description="An Admin or Preacher assigns contacts to you. Your next call appears here as soon as one is assigned."

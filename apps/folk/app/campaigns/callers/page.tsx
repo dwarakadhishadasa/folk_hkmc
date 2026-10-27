@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { CallerRoster } from "@/components/campaign/caller-roster"
 import { CampaignEmptyState } from "@/components/campaign/campaign-empty-state"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
+import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
 import { AuthzError } from "@/lib/authz"
 import { listRoster } from "@/lib/dialer/callers"
 import { getRosterProgress } from "@/lib/dialer/progress"
@@ -44,6 +45,7 @@ export default async function CampaignCallersPage() {
           title="Callers"
           subtitle={`${active} active · ${inactive} inactive · folk programme`}
         />
+        <CampaignSubNav role={staff.role} hasActiveCallerProfile={staff.hasActiveCallerProfile} />
 
         {callers.length === 0 ? (
           <CampaignEmptyState

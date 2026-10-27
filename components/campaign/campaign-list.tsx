@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { CampaignOverviewEntry } from "@/lib/dialer/progress"
 
 const HEAD_CLASS =
-  "px-2 text-xs font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase sm:px-4"
+  "h-11 px-2 text-[11px] font-semibold text-[#64748b] dark:text-[var(--muted-foreground)] sm:px-4"
 
 /**
  * Frame 32's campaign table, on the `campaign_progress` summary each row was
@@ -21,7 +21,7 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
     <div className="hidden overflow-hidden rounded-xl border border-[var(--border)] bg-card md:block">
       <Table>
         <TableHeader>
-          <TableRow className="bg-[var(--muted)] hover:bg-[var(--muted)]">
+          <TableRow className="border-b border-[var(--border)] bg-[#f8fafc] hover:bg-[#f8fafc] dark:bg-[var(--secondary)] dark:hover:bg-[var(--secondary)]">
             <TableHead className={HEAD_CLASS}>Campaign</TableHead>
             <TableHead className={HEAD_CLASS}>End Date</TableHead>
             <TableHead className={HEAD_CLASS}>Status</TableHead>
@@ -33,31 +33,31 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
         </TableHeader>
         <TableBody>
           {entries.map(({ campaign, summary }) => (
-            <TableRow key={campaign.id}>
+            <TableRow key={campaign.id} className="h-12 border-b border-[var(--border)]">
               <TableCell className="px-2 py-3 sm:px-4">
                 <Link
                   href={`/campaigns/${campaign.id}`}
-                  className="text-[13px] font-medium text-[var(--program-text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+                  className="text-[14px] font-medium text-[var(--program-text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
                 >
                   {campaign.name}
                 </Link>
               </TableCell>
-              <TableCell className="px-2 py-3 text-[13px] whitespace-nowrap text-[var(--muted-foreground)] sm:px-4">
+              <TableCell className="px-2 py-3 text-[14px] whitespace-nowrap text-[var(--muted-foreground)] sm:px-4">
                 {formatCampaignDate(campaign.campaign_date)}
               </TableCell>
               <TableCell className="px-2 py-3 sm:px-4">
                 <CampaignStatusPill status={campaign.status} />
               </TableCell>
-              <TableCell className="px-2 py-3 text-[13px] text-[var(--program-text)] tabular-nums sm:px-4">
+              <TableCell className="px-2 py-3 text-[14px] text-[var(--program-text)] tabular-nums sm:px-4">
                 {summary.assigned}
               </TableCell>
-              <TableCell className="px-2 py-3 text-[13px] text-[var(--muted-foreground)] tabular-nums sm:px-4">
+              <TableCell className="px-2 py-3 text-[14px] text-[var(--muted-foreground)] tabular-nums sm:px-4">
                 {summary.reached}
               </TableCell>
-              <TableCell className="px-2 py-3 text-[13px] text-[var(--program-text)] tabular-nums sm:px-4">
+              <TableCell className="px-2 py-3 text-[14px] text-[var(--program-text)] tabular-nums sm:px-4">
                 {summary.confirmed}
               </TableCell>
-              <TableCell className="px-2 py-3 text-[13px] text-[var(--program-text)] tabular-nums sm:px-4">
+              <TableCell className="px-2 py-3 text-[14px] text-[var(--program-text)] tabular-nums sm:px-4">
                 {summary.neverAttempted}
               </TableCell>
             </TableRow>
