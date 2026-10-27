@@ -9,52 +9,54 @@ version with the reasoning and the lookup tables.
 
 ---
 
-## 1. Read this first: `pnpm test` is a trap
+## 1. Read this first: `pnpm test` is the unit layer, not the suite
 
-```bash
-$ pnpm test
-WARNING  No tasks were executed as part of this run.
- Tasks:    0 successful, 0 total
-$ echo $?
-0
-```
+`pnpm test` is `pnpm test:unit`, which is `turbo run test && vitest run`:
 
-`pnpm test` is `turbo run test`, and **no package in this monorepo defines a
-`test` script** — verified across all six non-root manifests
-(`apps/folk`, `apps/gita-life`, `packages/{ui,authz,program-config,data-contracts}`).
-Turbo finds nothing to run, warns, and **exits 0**.
+- `turbo run test` runs the two package Vitest projects
+  (`@hkmc/data-contracts`, `@hkmc/program-config`).
+- `vitest run` then covers root code: `lib/`, `components/`, `hooks/`, `tests/`.
 
-**A green `pnpm test` is not evidence that anything was tested.** It is the
-single most likely way an agent convinces itself a change is verified when it
-is not. Never report `pnpm test` as a passing test run.
+**A green `pnpm test` says the unit layer passed. It says nothing about a page
+render, a route's status code, or a database write.** Those are `test:e2e:*`,
+and reporting unit results as behavioural verification is the failure this
+section exists to prevent.
 
-The real suites are `pnpm test:static`, the feature-scoped `test:e2e:*`
-scripts, and full `pnpm test:e2e`.
+Some `_bmad-output/` specs and stories still say `pnpm test` runs zero tests.
+They record the repository before the unit layer existed; this file is the
+contract. The inverse trap is the live one: a green `pnpm test` is still not an
+e2e run.
+
+The complete set of suites is `pnpm test:static`, `pnpm test:unit`, the
+feature-scoped `test:e2e:*` scripts, and full `pnpm test:e2e`.
 
 ---
 
-## 2. There is no unit-test runner
+## 2. Three test surfaces, and which one a test belongs to
 
-Verified absent from the repository: `vitest.config.*`, `jest.config.*`,
-`cypress.config.*`, `mocha`, `ava`, any `__tests__/` directory, any
-`*.test.ts` / `*.test.tsx` file, and `@testing-library/*` / `jsdom` /
-`happy-dom` / `ts-jest` in any manifest.
+| Surface | Where | Runner | Needs the stack? |
+|---|---|---|---|
+| **Source/contract gates** | `scripts/*.mjs` | `node`, via `pnpm` | mostly no |
+| **Unit** | `lib/**/*.test.ts`, `components/**`, `hooks/**`, `tests/**`, `packages/*/src/**` | Vitest 5, node environment | no |
+| **End-to-end behaviour** | `e2e/specs/` | `@playwright/test` | **yes** |
 
-There are exactly two test surfaces:
+The split is mechanical: if the thing under test is callable as a function with
+no database, no HTTP and no harness-provided environment, it is a unit test. If
+it needs a rendered page, a session, or a row, it is an e2e spec.
 
-| Surface | Mechanism | Runner |
-|---|---|---|
-| **Source/contract gates** | Standalone Node scripts in `scripts/` | `node`, via `pnpm` |
-| **End-to-end behaviour** | Playwright specs in `e2e/specs/` | `@playwright/test` |
+The unit layer is **node environment only**. There is no `jsdom`, no
+`@testing-library/react` and no component-testing setup; a component whose only
+observable behaviour is in the DOM is covered by e2e. See
+[`tests/README.md`](../../tests/README.md) for the layer's own conventions,
+including the `server-only` alias that makes `lib/` importable at all.
 
-Both are assertions with real exits. Use them; do not introduce a third runner
-for a single story without a decision from Dwaraka.
+Do not add a fourth runner for a single story without a decision from Dwaraka.
 
 ---
 
 ## 3. Command reference
 
-### 3a. Source and contract gates
+### 3a. Source, contract and unit gates
 
 Fast and safe to run constantly. Run these first, on every change. **The
 "Stack" column is the important one** — a gate marked *yes* needs Supabase and
@@ -66,19 +68,20 @@ Mailpit up, everything marked *no* runs anywhere.
 | `pnpm guardrails` | Monorepo architecture: server-only boundaries, import direction, script wiring | no |
 | `pnpm typecheck:workspace` | `tsc --noEmit` across all 6 packages. **The type gate** | no |
 | `pnpm lint` | ESLint | no |
+| `pnpm test:unit` | The Vitest unit layer: package projects via turbo, then root code | no |
 | `pnpm test:seed-local-guard` | The seeder refuses non-local targets; the override routes work | no |
 | `pnpm test:program-readiness` | Program-scoped signin wiring in both apps | no |
 | `pnpm test:airtable-removal` | Airtable is gone: deletions, env/import grep, wire contracts | no — **currently failing, see §6** |
 | `pnpm test:attendance-contract` | 21 attendance-eligibility contract rows | **yes** |
 | `pnpm test:offline-queue` | 19 PWA offline-queue rows | **yes** |
 | `pnpm build:apps` | Both apps build | no |
-| `pnpm quality:ci` | `guardrails && typecheck:workspace && build:apps && lint` | no |
+| `pnpm quality:ci` | `guardrails && typecheck:workspace && test:unit && build:apps && lint` | no |
 
 The two *yes* rows create and remove their own rows, so they leave the database
 as they found it — but they do need the stack running.
 
-`pnpm lint` currently reports **0 errors, 12 warnings**; the warnings are
-pre-existing and do not fail the command.
+`pnpm lint` currently reports **0 errors**, with pre-existing warnings that do
+not fail the command; none are in the unit-test files.
 
 > `pnpm test:static` deliberately excludes `build:apps` to stay fast. A build is
 > needed before a release or a CI-shaped check, not before every edit.
@@ -372,17 +375,20 @@ to `dev`:
 ```yaml
 pnpm guardrails
 pnpm typecheck:workspace
+pnpm test:unit
 pnpm build:apps
 pnpm lint
 ```
 
-That is `pnpm quality:ci`, in the same order.
+That is `pnpm quality:ci`, in the same order. The unit layer runs in CI because
+it needs no secrets and no services.
 
 **CI does not run the e2e suite, and does not run the contract gates
 (`test:attendance-contract`, `test:offline-queue`, `test:airtable-removal`,
 `test:seed-local-guard`).** A green CI run therefore says **nothing** about
-e2e. E2E needs Supabase + Mailpit + a seeded database, so it is a local-only
-gate by design; that is a deliberate trade, not an oversight.
+e2e, and a green `test:unit` says nothing about a route or a page. E2E needs
+Supabase + Mailpit + a seeded database, so it is a local-only gate by design;
+that is a deliberate trade, not an oversight.
 
 Two consequences for agents:
 
@@ -398,10 +404,14 @@ runs no tests.
 
 | Level | When | Command |
 |---|---|---|
-| **Targeted** | Default. Every edit, before reporting done. | `pnpm test:static`, then the `test:e2e:*` script for the feature |
+| **Targeted** | Default. Every edit, before reporting done. | `pnpm test:static && pnpm test:unit`, then the `test:e2e:*` script for the feature |
 | **Feature regression** | A shared component in §5 changed; before finishing a story; before claiming a matrix row | `pnpm test:e2e:manage` / `:grid` / `:theme` / `:guards` (or `smoke`) |
 | **Full regression** | `lib/authz.ts`, `lib/supabase/*`, `proxy.ts`, `components/header.tsx`, `components/providers.tsx`, a shared `components/ui/*` primitive; before a PR; after touching specs/fixtures/config | `pnpm test:e2e` |
 | **Determinism** | After editing specs, fixtures, or `playwright.config.ts` | `pnpm test:e2e:determinism` |
+
+The unit layer is the cheapest real assertion in the repo. If a change adds or
+alters pure logic, `pnpm test:unit` should carry a new or updated test: a green
+`test:static` proves the code compiles, not that it is correct.
 
 Escalate one level when the file you touched appears in §5, when a targeted run
 surfaces an unrelated failure, or when the change crosses feature boundaries.
@@ -410,8 +420,9 @@ surfaces an unrelated failure, or when the change crosses feature boundaries.
 
 ## 9. Rules
 
-1. **Never report `pnpm test` as a test run.** It executes zero tests and
-   exits 0 (§1).
+1. **`pnpm test` is the unit layer, not the e2e suite.** A green run is real
+   evidence about pure logic and no evidence about behaviour (§1). Say which
+   layer you ran.
 2. **Always go through `pnpm test:e2e` or a `test:e2e:*` script**, never bare
    `pnpm exec playwright test` — the readiness gate lives in the script.
 3. **Filter with regexes, never globs.** A glob selects nothing and still exits

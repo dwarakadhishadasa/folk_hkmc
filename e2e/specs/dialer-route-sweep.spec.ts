@@ -309,6 +309,17 @@ sweepRoute({
   ownerStatuses: [404],
 })
 
+// The edit page's Save. The body is valid, so the 404 proves the campaign
+// lookup runs after the gate admitted this actor.
+sweepRoute({
+  route: "/api/dialer/admin/campaigns/[campaignId]",
+  url: `/api/dialer/admin/campaigns/${ABSENT_CAMPAIGN_ID}`,
+  method: "PATCH",
+  kind: "admin",
+  ownerStatuses: [404],
+  body: { name: "Sweep campaign", campaignDate: "2026-11-14" },
+})
+
 sweepRoute({
   route: "/api/dialer/admin/campaigns/[campaignId]/transition",
   url: `/api/dialer/admin/campaigns/${ABSENT_CAMPAIGN_ID}/transition`,

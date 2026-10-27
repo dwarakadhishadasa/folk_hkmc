@@ -67,7 +67,7 @@ Two things make this worth doing now rather than never:
 - **One reversible migration file.** The convention is `YYYYMMDDHHMMSS_name.sql` (latest: `20261008000000_add_airtable_id_map.sql`). The down path must be provided, because converting `date` back to `text` cannot restore values that were `NULL`.
 - **Do not edit `scripts/verify-monorepo-guardrails.mjs`.** `scripts/verify-airtable-removal.mjs` asserts its contents.
 - **Production is never touched.** Per `AGENTS.md`, the audit runs against the local stack. If the hosted project holds rows the local one does not, that audit requires Dwaraka's explicit approval and is a separate step.
-- **Verification is the gate.** `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails`, `scripts/apply-migrations.mjs`, `pnpm test:e2e`. `pnpm test` runs zero tests, CI does not run e2e, and one e2e runner at a time on a shared seeded database.
+- **Verification is the gate.** `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails`, `pnpm test:unit`, `scripts/apply-migrations.mjs`, `pnpm test:e2e`. CI runs `test:unit` but not e2e, and one e2e runner at a time on a shared seeded database.
 
 ## Non-goals
 

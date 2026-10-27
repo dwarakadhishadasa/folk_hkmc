@@ -11,15 +11,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
-/** AD-12's gap bounds and frame 212's default, mirrored from the service. */
-const GAP_PRESETS = [5, 10, 20, 30, 60] as const
-const GAP_MIN = 5
-const GAP_MAX = 300
-const GAP_DEFAULT = 20
-const MAX_ATTEMPTS_MIN = 1
-const MAX_ATTEMPTS_MAX = 10
-const MAX_ATTEMPTS_DEFAULT = 3
-
 type QuestionType = "TEXT" | "DROPDOWN" | "RADIO" | "MULTI_SELECT" | "DATE"
 
 const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
@@ -62,23 +53,21 @@ function isChoice(type: QuestionType): boolean {
  * after the campaign is created. A question that fails to write leaves the
  * campaign on its detail page, named in the message, where the builder can
  * finish it; a partial write is never reported as success.
+ *
+ * Frame 212's own prototype sends Next to frame 324, so the campaign lands on
+ * its assign-contacts screen: a DRAFT campaign with nobody to call is not a
+ * finished step.
  */
 export function NewCampaignForm() {
   const router = useRouter()
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [campaignDate, setCampaignDate] = useState("")
-  const [campaignTime, setCampaignTime] = useState("")
-  const [gapDuration, setGapDuration] = useState(String(GAP_DEFAULT))
-  const [maxAttempts, setMaxAttempts] = useState(String(MAX_ATTEMPTS_DEFAULT))
   const [questions, setQuestions] = useState<DraftQuestion[]>([])
   const [draft, setDraft] = useState<DraftQuestion | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [partialHref, setPartialHref] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const gapValue = Number(gapDuration)
-  const selectedPreset = GAP_PRESETS.find((preset) => preset === gapValue) ?? null
 
   const saveDraft = () => {
     if (!draft) {
@@ -130,17 +119,6 @@ export function NewCampaignForm() {
       return
     }
 
-    if (!Number.isInteger(gapValue) || gapValue < GAP_MIN || gapValue > GAP_MAX) {
-      setError(`Gap duration must be a whole number between ${GAP_MIN} and ${GAP_MAX} seconds.`)
-      return
-    }
-
-    const attemptsValue = Number(maxAttempts)
-    if (!Number.isInteger(attemptsValue) || attemptsValue < MAX_ATTEMPTS_MIN || attemptsValue > MAX_ATTEMPTS_MAX) {
-      setError(`Max attempts must be a whole number between ${MAX_ATTEMPTS_MIN} and ${MAX_ATTEMPTS_MAX}.`)
-      return
-    }
-
     setIsSubmitting(true)
 
     try {
@@ -151,9 +129,6 @@ export function NewCampaignForm() {
           name: name.trim(),
           description: description.trim() || null,
           campaignDate,
-          campaignTime: campaignTime || null,
-          gapDuration: gapValue,
-          maxAttempts: attemptsValue,
         }),
       })
 
@@ -196,7 +171,7 @@ export function NewCampaignForm() {
         }
       }
 
-      router.push(`/campaigns/${campaignId}`)
+      router.push(`/campaigns/${campaignId}/assign-contacts`)
     } catch {
       setError("Unable to reach the server. Your campaign was not created.")
       setIsSubmitting(false)
@@ -267,87 +242,17 @@ export function NewCampaignForm() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-1.5">
-                <Label htmlFor="campaign-end-date" className="text-[13px] font-semibold text-[var(--program-text)]">
-                  Campaign end date
-                </Label>
-                <Input
-                  id="campaign-end-date"
-                  type="date"
-                  value={campaignDate}
-                  onChange={(event) => setCampaignDate(event.target.value)}
-                  className="h-10 rounded-lg"
-                />
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="campaign-time" className="text-[13px] font-semibold text-[var(--program-text)]">
-                  Time
-                </Label>
-                <Input
-                  id="campaign-time"
-                  type="time"
-                  value={campaignTime}
-                  onChange={(event) => setCampaignTime(event.target.value)}
-                  className="h-10 rounded-lg"
-                />
-                <p className="text-xs text-[var(--muted-foreground)]">Optional.</p>
-              </div>
-            </div>
-
             <div className="grid gap-1.5">
-              <Label htmlFor="campaign-gap-duration" className="text-[13px] font-semibold text-[var(--program-text)]">
-                Gap duration (seconds)
-              </Label>
-              <div className="flex flex-wrap items-center gap-2">
-                {GAP_PRESETS.map((preset) => (
-                  <Button
-                    key={preset}
-                    type="button"
-                    size="sm"
-                    variant={selectedPreset === preset ? "default" : "outline"}
-                    aria-pressed={selectedPreset === preset}
-                    onClick={() => setGapDuration(String(preset))}
-                  >
-                    {preset}s
-                  </Button>
-                ))}
-                <Input
-                  id="campaign-gap-duration"
-                  type="number"
-                  inputMode="numeric"
-                  min={GAP_MIN}
-                  max={GAP_MAX}
-                  step={1}
-                  value={gapDuration}
-                  onChange={(event) => setGapDuration(event.target.value)}
-                  className="h-10 w-24 rounded-lg"
-                />
-              </div>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                {GAP_MIN}–{GAP_MAX} seconds. A caller waits this long between calls in this campaign.
-              </p>
-            </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="campaign-max-attempts" className="text-[13px] font-semibold text-[var(--program-text)]">
-                Max attempts
+              <Label htmlFor="campaign-end-date" className="text-[13px] font-semibold text-[var(--program-text)]">
+                Campaign end date
               </Label>
               <Input
-                id="campaign-max-attempts"
-                type="number"
-                inputMode="numeric"
-                min={MAX_ATTEMPTS_MIN}
-                max={MAX_ATTEMPTS_MAX}
-                step={1}
-                value={maxAttempts}
-                onChange={(event) => setMaxAttempts(event.target.value)}
-                className="h-10 w-24 rounded-lg"
+                id="campaign-end-date"
+                type="date"
+                value={campaignDate}
+                onChange={(event) => setCampaignDate(event.target.value)}
+                className="h-10 rounded-lg"
               />
-              <p className="text-xs text-[var(--muted-foreground)]">
-                {MAX_ATTEMPTS_MIN}–{MAX_ATTEMPTS_MAX}. A contact closes after this many attempts.
-              </p>
             </div>
           </div>
         </section>

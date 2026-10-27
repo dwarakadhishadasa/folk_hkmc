@@ -31,7 +31,7 @@ FR6: The system shall change nothing outside the three columns: no RLS modificat
 
 NFR1: The audit gates the migration — no ALTER runs until the CAP-1 report has been read; a cast that throws partway leaves a partially-migrated table with no working read path.
 NFR2: No timestamp or timezone conversion — Postgres `date` is timezone-naive and the existing `currentProgramDate()` (Asia/Kolkata program-local calendar date) is already compatible; introducing `AT TIME ZONE` shifts dates across the day boundary.
-NFR3: Verification is the gate: `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails`, `scripts/apply-migrations.mjs` on a fresh local stack, `pnpm test:e2e` (one runner, 5–7 min, shared seeded database). `pnpm test` runs zero tests and is not a gate; CI does not run e2e; `pnpm build` is not a type gate (`ignoreBuildErrors`).
+NFR3: Verification is the gate: `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails`, `pnpm test:unit`, `scripts/apply-migrations.mjs` on a fresh local stack, `pnpm test:e2e` (one runner, 5–7 min, shared seeded database). `pnpm test:unit` covers pure logic only and proves nothing about SQL; CI runs it and does not run e2e; `pnpm build` is not a type gate (`ignoreBuildErrors`).
 NFR4: Production is never touched — audit and migration run against the local stack; a hosted-project audit is a separate Dwaraka-approved step.
 NFR5: Date comparisons are correct by type after conversion; unparseable values are handled explicitly with a visible reason — rows never silently vanish from filtered views or the Contact Generation chart.
 NFR6: No backfilling (NULL stays NULL), no retroactive repair of imported data beyond report-and-null, no `timestamptz`, no attendance-table changes.

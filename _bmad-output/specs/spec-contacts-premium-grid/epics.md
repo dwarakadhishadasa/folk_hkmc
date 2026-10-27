@@ -173,9 +173,10 @@ FR18 (CAP-9)  Scope preservation: TanStack Table v8 and @tanstack/react-virtual 
 ### NonFunctional Requirements
 
 ```
-NFR1  VERIFICATION IS THE GATE: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:e2e.
-      `pnpm test` runs ZERO tests and exits 0 — it is never a passing test run. `pnpm build` is not
-      a type gate because next.config.mjs sets typescript.ignoreBuildErrors.
+NFR1  VERIFICATION IS THE GATE: pnpm typecheck:workspace, pnpm lint, pnpm guardrails, pnpm test:unit,
+      pnpm test:e2e. `pnpm test` runs the unit layer only — it is never evidence about a route, a
+      page or a database write. `pnpm build` is not a type gate because next.config.mjs sets
+      typescript.ignoreBuildErrors.
 NFR2  ONE e2e runner at a time. Every spec shares one seeded database; concurrent runs produce false
       failures. A full run is 5–7 minutes at one worker. Always run through `pnpm test:e2e` or a
       `test:e2e:*` script — never bare `pnpm exec playwright test`, because the readiness gate lives
@@ -725,7 +726,7 @@ mistaken for evidence the keyboard model is intact.
 **Given** verification is run,
 **When** the gates execute,
 **Then** `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails` and `pnpm test:e2e` are green,
-**And** `pnpm test` is never reported as a passing run — it executes zero tests and exits 0 (NFR1).
+**And** `pnpm test` is never reported as an e2e run — it executes the unit layer only (NFR1).
 
 
 ## Epic 2: A grid that reads as one premium surface

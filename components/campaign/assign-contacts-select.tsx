@@ -1,39 +1,92 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Plus, X } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import { createColumnHelper } from "@tanstack/react-table"
+import type { RowSelectionState, Table } from "@tanstack/react-table"
+import { Minus, Plus, TriangleAlert, X } from "lucide-react"
 
 import {
-  CONTACT_FACET_KEYS,
-  EMPTY_FACETS,
-  FACET_LABELS,
   type AssignableCallerView,
-  type AssignableContactPageView,
   type AssignableContactView,
-  type AssignmentConflictView,
-  type AssignmentPrecheckView,
   type AssignmentSplitEntryView,
-  type AssignmentWriteModeView,
-  type AssignmentWriteResultView,
-  type ContactFacetKey,
   type LocationOption,
 } from "@/components/campaign/assign-contacts-types"
+import {
+  Grid,
+  GRID_DEFAULT_DENSITY,
+  useGridViewState,
+  type GridColumnDef,
+  type GridDensity,
+  type GridFieldType,
+} from "@/components/grid"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { cn } from "@/lib/utils"
 
-const PAGE_SIZE = 25
+const SELECT_COLUMN_ID = "select"
+const NAME_COLUMN_ID = "name"
+const PHONE_COLUMN_ID = "phone"
+const LOCATION_COLUMN_ID = "location"
+const ASSIGNED_TO_COLUMN_ID = "assignedTo"
+const NOTES_COLUMN_ID = "notes"
+const CENTRE_COLUMN_ID = "centre"
+const LEVEL_COLUMN_ID = "level"
+const GENDER_COLUMN_ID = "gender"
+const LANGUAGE_COLUMN_ID = "language"
+
+/**
+ * Frame 324's grid: the five columns the frame draws, then the four calling
+ * facets the assignment rules actually filter on.
+ *
+ * The facet columns ship hidden. The frame's own toolbar reports hidden fields,
+ * and these are the fields this screen has that the frame's five do not: an
+ * operator who wants "everyone in Adyar who speaks Tamil" unhides them and
+ * filters without leaving the screen.
+ */
+const COLUMN_IDS = [
+  SELECT_COLUMN_ID,
+  NAME_COLUMN_ID,
+  PHONE_COLUMN_ID,
+  LOCATION_COLUMN_ID,
+  ASSIGNED_TO_COLUMN_ID,
+  NOTES_COLUMN_ID,
+  CENTRE_COLUMN_ID,
+  LEVEL_COLUMN_ID,
+  GENDER_COLUMN_ID,
+  LANGUAGE_COLUMN_ID,
+] as const
+
+const DEFAULT_HIDDEN_COLUMNS: readonly string[] = [
+  CENTRE_COLUMN_ID,
+  LEVEL_COLUMN_ID,
+  GENDER_COLUMN_ID,
+  LANGUAGE_COLUMN_ID,
+]
+
+const FIELD_TYPES: Record<string, GridFieldType> = {
+  [NAME_COLUMN_ID]: "text",
+  [PHONE_COLUMN_ID]: "text",
+  [LOCATION_COLUMN_ID]: "linked",
+  [ASSIGNED_TO_COLUMN_ID]: "text",
+  [NOTES_COLUMN_ID]: "longtext",
+  [CENTRE_COLUMN_ID]: "text",
+  [LEVEL_COLUMN_ID]: "text",
+  [GENDER_COLUMN_ID]: "text",
+  [LANGUAGE_COLUMN_ID]: "text",
+}
+
+const UNRESOLVED_LOCATION = "Unknown location"
 const PREVIEW_DEBOUNCE_MS = 250
+const PRECHECK_DEBOUNCE_MS = 300
+const MIN_WEIGHT = 1
+const MAX_WEIGHT = 10
 
 interface PickerEntry {
   userId: string
@@ -46,76 +99,14 @@ interface PreviewState {
   /** The selection and weights this split was computed for. */
   key: string
   split: AssignmentSplitEntryView[]
-  total: number
 }
 
-interface ContactQuery {
-  page: number
-  search: string
-  filters: Record<ContactFacetKey, string>
-  /** Bumped by Retry; it makes a failed query re-runnable without changing the query. */
-  nonce: number
-}
-
-/** The pre-check that was actually run, so the panel never guesses a conflict count. */
-interface PrecheckSnapshot {
-  /** The selection this answer describes. */
+interface PrecheckState {
   key: string
-  conflicts: AssignmentConflictView[]
-  assignableCount: number
+  conflictCount: number
 }
 
-/**
- * An explicit skip/move choice, bound to the exact conflict list it was made
- * against: a concurrent assignment that changes that list requires a fresh
- * choice rather than silently applying the old one.
- */
-interface WriteDecision {
-  key: string
-  mode: AssignmentWriteModeView
-  assignableCount: number
-}
-
-const EMPTY_FILTERS: Record<ContactFacetKey, string> = {
-  centre: "",
-  level: "",
-  gender: "",
-  language: "",
-}
-
-const SELECT_CLASS =
-  "focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border border-[var(--border)] bg-transparent px-2 text-[13px] text-[var(--program-text)] outline-none focus-visible:ring-[3px]"
-
-function contactsUrl(campaignId: string, query: ContactQuery): string {
-  const params = new URLSearchParams({ page: String(query.page), pageSize: String(PAGE_SIZE) })
-  const search = query.search.trim()
-
-  if (search.length > 0) {
-    params.set("search", search)
-  }
-
-  for (const key of CONTACT_FACET_KEYS) {
-    const value = query.filters[key]
-    if (value.length > 0) {
-      params.set(key, value)
-    }
-  }
-
-  return `/api/dialer/admin/campaigns/${campaignId}/contacts?${params.toString()}`
-}
-
-function assignmentsUrl(campaignId: string): string {
-  return `/api/dialer/admin/campaigns/${campaignId}/assignments`
-}
-
-function precheckUrl(campaignId: string): string {
-  return `/api/dialer/admin/campaigns/${campaignId}/assignments/precheck`
-}
-
-/**
- * The server's named refusal, never a generic failure: the dialer routes answer
- * `{ error, code }`, and `invalid_page` is the code the operator needs to see.
- */
+/** The server's named refusal, never a generic failure. */
 function errorMessage(payload: { error?: string; code?: string } | null): string {
   if (!payload) {
     return "The server refused the request."
@@ -128,168 +119,211 @@ function errorMessage(payload: { error?: string; code?: string } | null): string
   return payload.error ?? payload.code ?? "The server refused the request."
 }
 
-function parseWeight(value: string): number | null {
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed >= 1 ? parsed : null
-}
-
-/** `1 contact` / `3 contacts`, so no line on this screen reads "1 contacts". */
 function contactCountLabel(count: number): string {
   return count === 1 ? "1 contact" : `${count} contacts`
 }
 
-function decisionKey(selectionKey: string, conflicts: AssignmentConflictView[]): string {
-  return `${selectionKey}|${conflicts
-    .map((conflict) => conflict.contactId)
-    .sort()
-    .join(",")}`
+/** The two initials the frame's avatars carry. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+
+  if (parts.length === 0) {
+    return "?"
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase()
+  }
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+}
+
+/** A whole number in the stepper's 1–10 range, or `null` for a half-typed value. */
+function parseWeight(value: string): number | null {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= MIN_WEIGHT && parsed <= MAX_WEIGHT ? parsed : null
 }
 
 /**
- * Frame 324's selection surface: the scoped contact grid, the four facet
- * filters, the caller picker with write-only weights, and the live split.
+ * Frame 324's selection control: tick a row, or tick the header to take every
+ * row the current filter shows.
  *
- * Selection is a `Set` of contact ids rather than a per-page list, because the
- * only honest count on this screen is over everything the admin ticked. A page
- * change or a facet filter therefore never drops a tick, and the footer names
- * the part of the selection the current page cannot show.
+ * Toggling the header acts on the visible rows only, so narrowing a filter never
+ * silently discards a selection made before it.
+ */
+function SelectAllControl({
+  table,
+  onToggle,
+}: {
+  table: Table<AssignableContactView>
+  onToggle: (selected: boolean, visibleIds: readonly string[]) => void
+}) {
+  const visibleRows = table.getRowModel().rows
+  const visibleIds = visibleRows.map((row) => row.id)
+  const selectedInView = visibleRows.filter((row) => row.getIsSelected()).length
+
+  return (
+    <span
+      className="flex justify-center"
+      onPointerDown={(event) => {
+        // Without this the cell takes the pointer, the grid moves cell focus to
+        // a non-editable column, and the next double-click becomes a no-op.
+        event.stopPropagation()
+      }}
+    >
+      <Checkbox
+        checked={
+          selectedInView === 0 ? false : selectedInView === visibleIds.length ? true : "indeterminate"
+        }
+        disabled={visibleIds.length === 0}
+        onCheckedChange={(checked) => onToggle(checked === true, visibleIds)}
+        aria-label={
+          selectedInView > 0
+            ? `Select all contacts in view (${selectedInView} of ${visibleIds.length} in view selected)`
+            : "Select all contacts in view"
+        }
+      />
+    </span>
+  )
+}
+
+/**
+ * Frame 324's assign-contacts surface: the shared grid on the left, the
+ * weighted caller panel on the right, and one primary action.
+ *
+ * Every contact in scope is handed to the grid in one read, because the grid's
+ * search, sort, filters and selection all describe the whole set — a page at a
+ * time would make the toolbar and the "N of M selected" footer describe
+ * different populations.
+ *
+ * The primary action assigns with `skip`: the frame states that a selected
+ * contact already assigned in this campaign "will be skipped", and asks that
+ * the campaign be started in the same click. A campaign that is already ACTIVE
+ * is not transitioned again, so the same control works from the edit page.
  */
 export function AssignContactsSelect({
   campaignId,
+  campaignStatus,
+  contacts,
   callers,
   locations,
 }: {
   campaignId: string
+  campaignStatus: string
+  contacts: AssignableContactView[]
   callers: AssignableCallerView[]
   locations: LocationOption[]
 }) {
-  const [page, setPage] = useState(1)
-  const [searchDraft, setSearchDraft] = useState("")
-  const [search, setSearch] = useState("")
-  const [filters, setFilters] = useState<Record<ContactFacetKey, string>>(EMPTY_FILTERS)
-  const [reloadToken, setReloadToken] = useState(0)
-  const [data, setData] = useState<AssignableContactPageView | null>(null)
-  const [scopeTotal, setScopeTotal] = useState<number | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
+  const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [picker, setPicker] = useState<PickerEntry[]>([])
-  const [callerToAdd, setCallerToAdd] = useState("")
   const [preview, setPreview] = useState<PreviewState | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
 
-  const [lastPrecheck, setLastPrecheck] = useState<PrecheckSnapshot | null>(null)
-  const [lastDecision, setLastDecision] = useState<WriteDecision | null>(null)
-  const [conflictPrompt, setConflictPrompt] = useState<PrecheckSnapshot | null>(null)
+  const [precheck, setPrecheck] = useState<PrecheckState | null>(null)
   const [isPrechecking, setIsPrechecking] = useState(false)
-  const [inFlightMode, setInFlightMode] = useState<AssignmentWriteModeView | null>(null)
   const [writeError, setWriteError] = useState<string | null>(null)
-  const [writeReceipt, setWriteReceipt] = useState<Pick<AssignmentWriteResultView, "written" | "skipped"> | null>(
-    null,
+  const [isWriting, setIsWriting] = useState(false)
+
+  const locationNames = useMemo(
+    () => new Map(locations.map((location) => [location.id, location.name])),
+    [locations],
   )
 
-  const query = useMemo<ContactQuery>(
-    () => ({ page, search, filters, nonce: reloadToken }),
-    [page, search, filters, reloadToken],
+  const {
+    state: viewState,
+    filterConnective,
+    onStateChange,
+    setFilterConnective,
+    clearFilters,
+    beginTransientChange,
+    commitTransientChange,
+    cancelTransientChange,
+  } = useGridViewState({
+    columnIds: COLUMN_IDS,
+    fieldTypes: FIELD_TYPES,
+    defaultHiddenColumnIds: DEFAULT_HIDDEN_COLUMNS,
+  })
+
+  const selectedIds = useMemo(
+    () => Object.keys(rowSelection).filter((id) => rowSelection[id] === true),
+    [rowSelection],
   )
-
-  const hasActiveQuery =
-    query.search.trim().length > 0 || CONTACT_FACET_KEYS.some((key) => query.filters[key].length > 0)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    let cancelled = false
-
-    setIsLoading(true)
-    setLoadError(null)
-
-    void (async () => {
-      try {
-        const response = await fetch(contactsUrl(campaignId, query), { signal: controller.signal })
-        const payload = (await response.json().catch(() => null)) as
-          | (AssignableContactPageView & { error?: string; code?: string })
-          | null
-
-        if (cancelled) {
-          return
-        }
-
-        if (!response.ok || !payload || !Array.isArray(payload.rows)) {
-          setData(null)
-          setLoadError(errorMessage(payload))
-          setIsLoading(false)
-          return
-        }
-
-        setData(payload)
-        // The whole-set total is only observable on an unfiltered read; keeping
-        // it means the selected count's denominator does not shrink when a facet
-        // filters the list underneath a selection made across pages.
-        if (!hasActiveQuery) {
-          setScopeTotal(payload.total)
-        }
-        setIsLoading(false)
-      } catch {
-        if (cancelled || controller.signal.aborted) {
-          return
-        }
-
-        setData(null)
-        setLoadError("Unable to reach the server. The contact list did not load.")
-        setIsLoading(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [campaignId, query, hasActiveQuery])
-
-  const locationNames = useMemo(() => new Map(locations.map((location) => [location.id, location.name])), [locations])
-
-  const pageRows = data?.rows ?? []
-  const pageIds = pageRows.map((row) => row.contactId)
-  const selectedOnPage = pageIds.filter((id) => selectedIds.has(id)).length
-  const selectedCount = selectedIds.size
-  const hiddenCount = selectedCount - selectedOnPage
-  const allOnPageSelected = pageIds.length > 0 && selectedOnPage === pageIds.length
-  const someOnPageSelected = selectedOnPage > 0 && !allOnPageSelected
-  const facets = data?.facets ?? EMPTY_FACETS
-  const totalPages = data?.totalPages ?? 0
-  const rangeStart = !data || data.total === 0 ? 0 : (data.page - 1) * data.pageSize + 1
-  const rangeEnd = !data ? 0 : Math.min(data.page * data.pageSize, data.total)
-  const showingLine = `Showing ${rangeStart}–${rangeEnd} of ${data?.total ?? 0}`
-
-  const selectionFingerprint = useMemo(() => [...selectedIds].sort().join(","), [selectedIds])
-  const weightsKey = picker.map((entry) => `${entry.userId}:${entry.weight}`).join("|")
-  const previewKey = `${selectedCount}|${selectionFingerprint}|${weightsKey}`
-  const allWeightsValid = picker.every((entry) => parseWeight(entry.weight) !== null)
-  const currentPreview = preview && preview.key === previewKey ? preview : null
+  const selectedCount = selectedIds.length
+  const selectionKey = selectedIds.join(",")
 
   // A pre-check answers for one exact selection; anything else on screen is
   // stale and is treated as if it had never been asked.
-  const snapshot = lastPrecheck && lastPrecheck.key === selectionFingerprint ? lastPrecheck : null
-  const snapshotKey = snapshot === null ? null : decisionKey(snapshot.key, snapshot.conflicts)
-  const decision =
-    snapshotKey !== null && lastDecision !== null && lastDecision.key === snapshotKey ? lastDecision : null
-  const isWriting = inFlightMode !== null
-  const isBusy = isPrechecking || isWriting
-  // The button carries the confirmed-set size for the decision in force, and the
-  // selection size while no conflict decision exists — never a skipped count the
-  // admin has not chosen.
-  const writeCount = decision?.mode === "skip" ? decision.assignableCount : selectedCount
-  const assignLabel =
-    isPrechecking
-      ? "Checking conflicts…"
-      : isWriting
-        ? `Assigning ${contactCountLabel(writeCount)}…`
-        : `Assign ${contactCountLabel(writeCount)}`
+  const conflictCount = precheck !== null && precheck.key === selectionKey ? precheck.conflictCount : 0
+  const assignableCount = Math.max(selectedCount - conflictCount, 0)
+
+  const weightsKey = picker.map((entry) => `${entry.userId}:${entry.weight}`).join("|")
+  const previewKey = `${assignableCount}|${weightsKey}`
+  const allWeightsValid = picker.every((entry) => parseWeight(entry.weight) !== null)
+  const currentPreview = preview !== null && preview.key === previewKey ? preview : null
+
+  const availableCallers = callers.filter((caller) => !picker.some((entry) => entry.userId === caller.userId))
+  const weightsAreEqual =
+    picker.length > 0 && picker.every((entry) => entry.weight === picker[0].weight)
 
   useEffect(() => {
-    if (selectedCount === 0 || picker.length === 0 || !allWeightsValid) {
+    if (selectedCount === 0) {
+      setPrecheck(null)
+      setIsPrechecking(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      setIsPrechecking(true)
+
+      void (async () => {
+        try {
+          const response = await fetch(`/api/dialer/admin/campaigns/${campaignId}/assignments/precheck`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ contactIds: selectedIds }),
+            signal: controller.signal,
+          })
+          const payload = (await response.json().catch(() => null)) as
+            | { conflicts?: unknown[]; error?: string; code?: string }
+            | null
+
+          if (controller.signal.aborted) {
+            return
+          }
+
+          setIsPrechecking(false)
+
+          if (!response.ok || !payload || !Array.isArray(payload.conflicts)) {
+            setPrecheck(null)
+            setWriteError(errorMessage(payload))
+            return
+          }
+
+          setPrecheck({ key: selectionKey, conflictCount: payload.conflicts.length })
+        } catch {
+          if (controller.signal.aborted) {
+            return
+          }
+
+          setIsPrechecking(false)
+          setPrecheck(null)
+        }
+      })()
+    }, PRECHECK_DEBOUNCE_MS)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [campaignId, selectedCount, selectedIds, selectionKey])
+
+  useEffect(() => {
+    if (assignableCount === 0 || picker.length === 0 || !allWeightsValid) {
       setPreview(null)
       setPreviewError(null)
       setIsPreviewing(false)
@@ -306,7 +340,7 @@ export function AssignContactsSelect({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              total: selectedCount,
+              total: assignableCount,
               // The picker's identity is the staff user, not `dialer_callers.id`:
               // AD-13's auto-promote means most eligible callers have no profile
               // row until their first assignment writes one.
@@ -330,11 +364,7 @@ export function AssignContactsSelect({
             return
           }
 
-          setPreview({
-            key: previewKey,
-            split: payload.split,
-            total: payload.split.reduce((sum, entry) => sum + entry.count, 0),
-          })
+          setPreview({ key: previewKey, split: payload.split })
           setPreviewError(null)
           setIsPreviewing(false)
         } catch {
@@ -353,49 +383,37 @@ export function AssignContactsSelect({
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [campaignId, picker, selectedCount, allWeightsValid, previewKey])
+  }, [assignableCount, campaignId, picker, allWeightsValid, previewKey])
 
-  const toggleRows = (ids: string[], select: boolean) => {
-    setSelectedIds((current) => {
-      const next = new Set(current)
+  const setVisibleSelection = useCallback((selected: boolean, visibleIds: readonly string[]) => {
+    setRowSelection((current) => {
+      const next: RowSelectionState = { ...current }
 
-      for (const id of ids) {
-        if (select) {
-          next.add(id)
+      for (const id of visibleIds) {
+        if (selected) {
+          next[id] = true
         } else {
-          next.delete(id)
+          delete next[id]
         }
       }
 
       return next
     })
-  }
+  }, [])
 
-  const updateFilter = (key: ContactFacetKey, value: string) => {
-    setFilters((current) => ({ ...current, [key]: value }))
-    setPage(1)
-  }
-
-  const applySearch = () => {
-    setSearch(searchDraft)
-    setPage(1)
-  }
-
-  const availableCallers = callers.filter((caller) => !picker.some((entry) => entry.userId === caller.userId))
-
-  const addCaller = () => {
-    const caller = callers.find((entry) => entry.userId === callerToAdd)
-
-    if (!caller) {
-      return
-    }
-
+  const addCaller = (caller: AssignableCallerView) => {
     setPicker((current) => [...current, { userId: caller.userId, name: caller.name, weight: "1" }])
-    setCallerToAdd("")
   }
 
   const updateWeight = (userId: string, weight: string) => {
     setPicker((current) => current.map((entry) => (entry.userId === userId ? { ...entry, weight } : entry)))
+  }
+
+  const stepWeight = (entry: PickerEntry, direction: -1 | 1) => {
+    const current = parseWeight(entry.weight) ?? MIN_WEIGHT
+    const next = Math.min(MAX_WEIGHT, Math.max(MIN_WEIGHT, current + direction))
+
+    updateWeight(entry.userId, String(next))
   }
 
   const removeCaller = (userId: string) => {
@@ -413,454 +431,413 @@ export function AssignContactsSelect({
 
     // A contact whose stored id has no row in this programme's lexicon is
     // surfaced as unknown, never silently rendered as "no location".
-    return row.locationIds.length > 0 ? "Unknown location" : "—"
+    return row.locationIds.length > 0 ? UNRESOLVED_LOCATION : ""
   }
 
-  const currentCallers = (): { userId: string; weight: number }[] | null => {
-    const entries: { userId: string; weight: number }[] = []
+  const columns = useMemo<GridColumnDef<AssignableContactView>[]>(() => {
+    const helper = createColumnHelper<AssignableContactView>()
 
-    for (const entry of picker) {
-      const weight = parseWeight(entry.weight)
+    return [
+      helper.display({
+        id: SELECT_COLUMN_ID,
+        header: ({ table }) => <SelectAllControl table={table} onToggle={setVisibleSelection} />,
+        cell: ({ row }) => (
+          <span
+            className="flex justify-center"
+            onPointerDown={(event) => {
+              event.stopPropagation()
+            }}
+          >
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(checked) => {
+                row.toggleSelected(checked === true)
+              }}
+              aria-label={`Select ${row.original.name}`}
+            />
+          </span>
+        ),
+        size: 40,
+        minSize: 40,
+        maxSize: 40,
+        enableSorting: false,
+        enableHiding: false,
+        meta: { grid: { selectable: true, align: "center" } },
+      }),
 
-      if (weight === null) {
-        return null
-      }
+      helper.accessor("name", {
+        id: NAME_COLUMN_ID,
+        header: "Name",
+        size: 220,
+        meta: {
+          grid: {
+            frozen: true,
+            fieldType: "text",
+            emphasis: true,
+            hideable: false,
+          },
+        },
+      }),
 
-      entries.push({ userId: entry.userId, weight })
-    }
+      helper.accessor("phone", {
+        id: PHONE_COLUMN_ID,
+        header: "Phone",
+        size: 150,
+        meta: { grid: { fieldType: "text" } },
+      }),
 
-    return entries
-  }
+      helper.accessor((row) => locationLabel(row), {
+        id: LOCATION_COLUMN_ID,
+        header: "Location",
+        size: 160,
+        meta: { grid: { fieldType: "linked", unresolvedText: UNRESOLVED_LOCATION } },
+      }),
 
-  const runWrite = async (mode: AssignmentWriteModeView) => {
-    const callers = currentCallers()
+      helper.accessor((row) => row.assignedCallerName ?? "", {
+        id: ASSIGNED_TO_COLUMN_ID,
+        header: "Assigned To",
+        size: 170,
+        cell: ({ getValue }) => {
+          const value = getValue()
 
-    if (callers === null || callers.length === 0) {
-      setWriteError("Add at least one caller with a whole-number weight before assigning.")
+          return value.length > 0 ? (
+            <span className="truncate text-[var(--program-primary)]">{value}</span>
+          ) : (
+            <span className="text-[var(--muted-foreground)]">—</span>
+          )
+        },
+        meta: { grid: { fieldType: "text" } },
+      }),
+
+      helper.accessor((row) => row.notes ?? "", {
+        id: NOTES_COLUMN_ID,
+        header: "Notes",
+        size: 220,
+        meta: { grid: { fieldType: "longtext" } },
+      }),
+
+      helper.accessor((row) => row.profile.centre ?? "", {
+        id: CENTRE_COLUMN_ID,
+        header: "Centre",
+        size: 140,
+        meta: { grid: { fieldType: "text" } },
+      }),
+
+      helper.accessor((row) => row.profile.level ?? "", {
+        id: LEVEL_COLUMN_ID,
+        header: "Level",
+        size: 120,
+        meta: { grid: { fieldType: "text" } },
+      }),
+
+      helper.accessor((row) => row.profile.gender ?? "", {
+        id: GENDER_COLUMN_ID,
+        header: "Gender",
+        size: 120,
+        meta: { grid: { fieldType: "text" } },
+      }),
+
+      helper.accessor((row) => row.profile.language ?? "", {
+        id: LANGUAGE_COLUMN_ID,
+        header: "Language",
+        size: 140,
+        meta: { grid: { fieldType: "text" } },
+      }),
+    ]
+    // `locationLabel` reads the location lexicon, so the defs depend on it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setVisibleSelection, locationNames])
+
+  const submit = async () => {
+    if (selectedCount === 0 || picker.length === 0 || !allWeightsValid || isWriting) {
       return
     }
 
-    setInFlightMode(mode)
     setWriteError(null)
-    setWriteReceipt(null)
+    setIsWriting(true)
+
+    const callersPayload = picker.map((entry) => ({
+      userId: entry.userId,
+      weight: parseWeight(entry.weight) as number,
+    }))
 
     try {
-      const response = await fetch(assignmentsUrl(campaignId), {
+      const response = await fetch(`/api/dialer/admin/campaigns/${campaignId}/assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactIds: [...selectedIds], callers, mode }),
+        body: JSON.stringify({
+          contactIds: selectedIds,
+          callers: callersPayload,
+          // The frame states what happens to a contact already assigned here:
+          // it is skipped. That is the whole decision, so the click needs no
+          // second dialog.
+          mode: "skip",
+        }),
       })
       const payload = (await response.json().catch(() => null)) as
-        | (AssignmentWriteResultView & { error?: string; code?: string })
+        | { written?: number; error?: string; code?: string }
         | null
 
       if (!response.ok || !payload || typeof payload.written !== "number") {
-        setInFlightMode(null)
         setWriteError(errorMessage(payload))
+        setIsWriting(false)
         return
       }
 
-      setInFlightMode(null)
-      setConflictPrompt(null)
-      setLastPrecheck(null)
-      setLastDecision(null)
-      setWriteReceipt({ written: payload.written, skipped: payload.skipped })
-      setSelectedIds(new Set())
-      setPicker([])
-      setCallerToAdd("")
-      setPreview(null)
-      setReloadToken((value) => value + 1)
+      if (campaignStatus === "DRAFT") {
+        const transitionResponse = await fetch(`/api/dialer/admin/campaigns/${campaignId}/transition`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start" }),
+        })
+        const transitionPayload = (await transitionResponse.json().catch(() => null)) as
+          | { error?: string; code?: string }
+          | null
+
+        if (!transitionResponse.ok) {
+          // The contacts are assigned; only the start failed. Saying so is the
+          // difference between "nothing happened" and "try Start again".
+          setWriteError(
+            `Assigned ${contactCountLabel(payload.written)}, but the campaign could not be started: ` +
+              errorMessage(transitionPayload),
+          )
+          setIsWriting(false)
+          router.refresh()
+          return
+        }
+      }
+
+      router.push("/campaigns")
     } catch {
-      setInFlightMode(null)
-      setWriteError(
-        "Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.",
-      )
+      setWriteError("Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.")
+      setIsWriting(false)
     }
   }
 
-  const chooseConflict = (mode: AssignmentWriteModeView) => {
-    if (!conflictPrompt) {
-      return
+  const primaryLabel = (() => {
+    if (selectedCount === 0) {
+      return "Select contacts to assign"
     }
 
-    setLastDecision({
-      key: decisionKey(conflictPrompt.key, conflictPrompt.conflicts),
-      mode,
-      assignableCount: conflictPrompt.assignableCount,
-    })
-    setConflictPrompt(null)
-    void runWrite(mode)
-  }
-
-  /**
-   * The write is always preceded by the server's pre-check, on every click: the
-   * conflict list is re-read here, and the write re-reads it again inside its
-   * transaction. A decision already recorded for an identical conflict list is
-   * honoured; a different list is a new choice, never an inherited one.
-   */
-  const beginAssignment = async () => {
-    if (selectedCount === 0 || isBusy) {
-      return
+    if (assignableCount === 0 && !isPrechecking) {
+      return "Every selected contact is already assigned"
     }
-
-    setWriteError(null)
-    setWriteReceipt(null)
 
     if (picker.length === 0) {
-      setWriteError("Add at least one caller before assigning.")
-      return
+      return "Add a caller to assign"
     }
 
-    if (!allWeightsValid) {
-      setWriteError("Weights must be whole numbers of 1 or more.")
-      return
+    if (isWriting) {
+      return "Assigning…"
     }
 
-    const key = selectionFingerprint
-    setIsPrechecking(true)
+    return `Assign ${contactCountLabel(assignableCount)}`
+  })()
 
-    try {
-      const response = await fetch(precheckUrl(campaignId), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactIds: [...selectedIds] }),
-      })
-      const payload = (await response.json().catch(() => null)) as
-        | (AssignmentPrecheckView & { error?: string; code?: string })
-        | null
-
-      if (!response.ok || !payload || !Array.isArray(payload.conflicts)) {
-        setIsPrechecking(false)
-        setWriteError(errorMessage(payload))
-        return
-      }
-
-      const precheck: PrecheckSnapshot = {
-        key,
-        conflicts: payload.conflicts,
-        assignableCount: payload.assignableCount,
-      }
-
-      setIsPrechecking(false)
-      setLastPrecheck(precheck)
-
-      if (precheck.conflicts.length === 0) {
-        await runWrite("move")
-        return
-      }
-
-      if (lastDecision !== null && lastDecision.key === decisionKey(precheck.key, precheck.conflicts)) {
-        await runWrite(lastDecision.mode)
-        return
-      }
-
-      setConflictPrompt(precheck)
-    } catch {
-      setIsPrechecking(false)
-      setWriteError(
-        "Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.",
-      )
-    }
-  }
-
-  const receiptLine =
-    writeReceipt === null
-      ? null
-      : `Assigned ${contactCountLabel(writeReceipt.written)}${
-          writeReceipt.skipped > 0 ? ` · ${writeReceipt.skipped} skipped` : ""
-        }`
-
-  // The dialog's body keeps the last pre-check while it animates closed, so the
-  // counts do not flip to zero for the fraction of a second it is still on screen.
-  const prompt = conflictPrompt ?? lastPrecheck
-  const promptConflicts = prompt?.conflicts ?? []
-
-  const hintLine =
-    selectedCount === 0
-      ? "Select contacts to assign."
-      : isWriting
-        ? "Writing the confirmed set in one transaction."
-        : decision?.mode === "skip"
-          ? `Skipping the ${contactCountLabel(selectedCount - decision.assignableCount)} already assigned in this campaign; ${contactCountLabel(writeCount)} will be written.`
-          : decision?.mode === "move"
-            ? `Moving the already-assigned contacts to the new split; ${contactCountLabel(writeCount)} will be written.`
-            : snapshot !== null && snapshot.conflicts.length > 0
-            ? `${contactCountLabel(snapshot.conflicts.length)} of the ${contactCountLabel(selectedCount)} selected ${
-                snapshot.conflicts.length === 1 ? "is" : "are"
-              } already assigned in this campaign. Choosing assign asks whether to skip or move ${
-                snapshot.conflicts.length === 1 ? "it" : "them"
-              }.`
-            : snapshot !== null
-              ? "None of the selected contacts is assigned in this campaign yet."
-              : "The conflict check runs before anything is written."
+  const primaryDisabled =
+    selectedCount === 0 ||
+    picker.length === 0 ||
+    !allWeightsValid ||
+    isWriting ||
+    isPrechecking ||
+    assignableCount === 0
 
   return (
-    <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_408px]">
-      <section aria-labelledby="assign-contacts-grid-heading" className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2
-              id="assign-contacts-grid-heading"
-              className="font-[family-name:var(--font-poppins)] text-[15px] font-semibold text-[var(--program-text)]"
-            >
-              Contacts in scope
-            </h2>
-            <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{showingLine}</p>
-          </div>
-
-          <form
-            className="flex items-center gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              applySearch()
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_408px]">
+      <section aria-label="Contacts in scope" className="min-w-0">
+        <div className="flex h-[520px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card">
+          <Grid<AssignableContactView>
+            rows={contacts}
+            columns={columns}
+            getRowId={(contact) => contact.contactId}
+            state={{ ...viewState, rowSelection }}
+            onStateChange={onStateChange}
+            filterConnective={filterConnective}
+            onFilterConnectiveChange={setFilterConnective}
+            onRowSelectionChange={setRowSelection}
+            ariaLabel="Contacts in scope"
+            density={density}
+            onDensityChange={setDensity}
+            transient={{
+              begin: beginTransientChange,
+              commit: commitTransientChange,
+              cancel: cancelTransientChange,
             }}
-          >
-            <Input
-              aria-label="Search contacts"
-              placeholder="Search name or phone"
-              value={searchDraft}
-              onChange={(event) => setSearchDraft(event.target.value)}
-              autoComplete="off"
-              className="h-9 w-56"
-            />
-            <Button type="submit" size="sm" variant="outline">
-              Search
-            </Button>
-          </form>
-        </div>
+            onClearFilters={clearFilters}
+            className="rounded-none border-0"
+          />
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {CONTACT_FACET_KEYS.map((key) => (
-            <label key={key} className="flex flex-col gap-1">
-              <span className="text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">
-                {FACET_LABELS[key]}
-              </span>
-              <select
-                aria-label={FACET_LABELS[key]}
-                value={filters[key]}
-                onChange={(event) => updateFilter(key, event.target.value)}
-                className={SELECT_CLASS}
-              >
-                <option value="">Any {FACET_LABELS[key].toLowerCase()}</option>
-                {facets[key].map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_35%,var(--card))] px-3 py-2">
-          <p className="text-[13px] font-medium text-[var(--program-text)]">
-            {scopeTotal === null ? `${selectedCount} selected` : `${selectedCount} of ${scopeTotal} selected`}
-          </p>
-          {hiddenCount > 0 ? (
-            <p className="text-xs font-medium text-[var(--program-text)]">+ {hiddenCount} hidden selected</p>
-          ) : null}
-        </div>
-
-        {loadError ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--destructive)] px-3 py-2">
-            <p role="alert" className="text-[13px] text-[var(--destructive)]">
-              {loadError}
+          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] px-4 py-3">
+            <p className="text-[13px] font-semibold text-[var(--program-text)]">
+              {selectedCount} of {contacts.length} selected
             </p>
-            <Button type="button" size="sm" variant="outline" onClick={() => setReloadToken((value) => value + 1)}>
-              Try again
-            </Button>
+            {isPrechecking ? (
+              <p className="text-[12px] text-[var(--muted-foreground)]">Checking assignments…</p>
+            ) : conflictCount > 0 ? (
+              <p className="text-[12px] text-[var(--grid-warning-ink)]">
+                · {conflictCount} already assigned
+              </p>
+            ) : null}
           </div>
-        ) : null}
-
-        <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-card">
-          <Table aria-busy={isLoading}>
-            <TableHeader>
-              <TableRow className="bg-[var(--muted)] hover:bg-[var(--muted)]">
-                <TableHead className="w-10 px-3">
-                  <Checkbox
-                    aria-label="Select all contacts on this page"
-                    checked={allOnPageSelected ? true : someOnPageSelected ? "indeterminate" : false}
-                    disabled={pageIds.length === 0}
-                    onCheckedChange={(checked) => toggleRows(pageIds, checked === true)}
-                  />
-                </TableHead>
-                {["Name", "Phone", "Location", "Centre", "Level", "Gender", "Language"].map((label) => (
-                  <TableHead
-                    key={label}
-                    className="px-3 text-xs font-semibold tracking-[0.04em] text-[var(--muted-foreground)] whitespace-nowrap uppercase"
-                  >
-                    {label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageRows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="px-3 py-6 text-center text-[13px] text-[var(--muted-foreground)]">
-                    {isLoading ? "Loading contacts…" : "No contacts match this filter."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                pageRows.map((row) => {
-                  const isSelected = selectedIds.has(row.contactId)
-
-                  return (
-                    <TableRow key={row.contactId} data-state={isSelected ? "selected" : undefined}>
-                      <TableCell className="px-3">
-                        <Checkbox
-                          aria-label={`Select ${row.name}`}
-                          checked={isSelected}
-                          onCheckedChange={(checked) => toggleRows([row.contactId], checked === true)}
-                        />
-                      </TableCell>
-                      <TableCell className="px-3 py-2.5 text-[13px] font-medium text-[var(--program-text)]">
-                        {row.name}
-                      </TableCell>
-                      <TableCell className="px-3 py-2.5 text-[13px] whitespace-nowrap text-[var(--muted-foreground)]">
-                        {row.phone}
-                      </TableCell>
-                      <TableCell className="px-3 py-2.5 text-[13px] text-[var(--program-text)]">
-                        {locationLabel(row)}
-                      </TableCell>
-                      {CONTACT_FACET_KEYS.map((key) => (
-                        <TableCell key={key} className="px-3 py-2.5 text-[13px] whitespace-nowrap text-[var(--program-text)]">
-                          {row.profile[key] ?? "—"}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={page <= 1 || isLoading}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={isLoading || totalPages === 0 || page >= totalPages}
-              onClick={() => setPage((current) => current + 1)}
-            >
-              Next
-            </Button>
-          </div>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Page {page} of {Math.max(totalPages, 1)}
-          </p>
         </div>
       </section>
 
       <section
         aria-labelledby="assign-contacts-callers-heading"
-        className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-card p-4"
+        className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-card p-5"
       >
-        <div>
+        <div className="flex flex-col gap-4">
           <h2
             id="assign-contacts-callers-heading"
-            className="font-[family-name:var(--font-poppins)] text-[15px] font-semibold text-[var(--program-text)]"
+            className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
           >
             Assign to
           </h2>
-          <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-            Higher weight gets more contacts. Equal weights split evenly.
-          </p>
-        </div>
 
-        {picker.length === 0 ? (
-          <p className="text-[13px] text-[var(--muted-foreground)]">No callers chosen yet.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="px-1 text-[11px] tracking-[0.04em] uppercase">Caller</TableHead>
-                <TableHead className="px-1 text-[11px] tracking-[0.04em] uppercase">Weight</TableHead>
-                <TableHead className="px-1 text-[11px] tracking-[0.04em] uppercase">Contacts</TableHead>
-                <TableHead className="w-8 px-1">
-                  <span className="sr-only">Remove</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {picker.map((entry) => {
-                const count = currentPreview?.split.find((part) => part.callerId === entry.userId)?.count
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[14px] font-medium text-[var(--program-text)]">Callers</p>
+            <p className="text-[12px] text-[var(--muted-foreground)]">
+              Higher weight gets more contacts. Equal weights split evenly.
+            </p>
+          </div>
 
-                return (
-                  <TableRow key={entry.userId}>
-                    <TableCell className="px-1 py-2 text-[13px] font-medium text-[var(--program-text)]">
-                      {entry.name}
-                    </TableCell>
-                    <TableCell className="px-1 py-2">
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        step={1}
-                        aria-label={`Weight for ${entry.name}`}
-                        value={entry.weight}
-                        onChange={(event) => updateWeight(entry.userId, event.target.value)}
-                        className={cn("h-8 w-16 px-2 text-[13px]")}
-                      />
-                    </TableCell>
-                    <TableCell className="px-1 py-2 text-[13px] text-[var(--program-text)]">
-                      {typeof count === "number" ? count : "—"}
-                    </TableCell>
-                    <TableCell className="px-1 py-2">
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Remove ${entry.name}`}
-                        onClick={() => removeCaller(entry.userId)}
-                      >
-                        <X aria-hidden="true" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        )}
+          {picker.length === 0 ? (
+            <p className="text-[13px] text-[var(--muted-foreground)]">No callers chosen yet.</p>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="text-[12px] text-[var(--muted-foreground)]">
+                  <th scope="col" className="pb-1 text-left font-normal">
+                    Caller
+                  </th>
+                  <th scope="col" className="w-[100px] pb-1 text-center font-normal">
+                    Weight
+                  </th>
+                  <th scope="col" className="w-11 pb-1 text-right font-normal">
+                    Contacts
+                  </th>
+                  <th scope="col" className="w-4 pb-1">
+                    <span className="sr-only">Remove</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {picker.map((entry) => {
+                  const count = currentPreview?.split.find((part) => part.callerId === entry.userId)?.count
+                  const weight = parseWeight(entry.weight)
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Add caller"
-            value={callerToAdd}
-            onChange={(event) => setCallerToAdd(event.target.value)}
-            disabled={availableCallers.length === 0}
-            className={cn(SELECT_CLASS, "w-auto min-w-40 flex-1")}
-          >
-            <option value="">
-              {availableCallers.length === 0 ? "Every caller is chosen" : "Select a caller"}
-            </option>
-            {availableCallers.map((caller) => (
-              <option key={caller.userId} value={caller.userId}>
-                {caller.name}
-              </option>
-            ))}
-          </select>
-          <Button type="button" size="sm" variant="outline" disabled={callerToAdd === ""} onClick={addCaller}>
-            <Plus aria-hidden="true" />
-            Add caller
-          </Button>
+                  return (
+                    <tr key={entry.userId} className="border-t border-[var(--border)] first:border-t-0">
+                      <td className="pr-2">
+                        <div className="flex h-12 items-center gap-2">
+                          <span
+                            aria-hidden="true"
+                            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--program-primary)] text-[11px] font-semibold text-white"
+                          >
+                            {initials(entry.name)}
+                          </span>
+                          <span
+                            className="min-w-0 flex-1 truncate text-[14px] text-[var(--program-text)]"
+                            title={entry.name}
+                          >
+                            {entry.name}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-0">
+                        <div className="mx-auto flex h-8 w-[100px] items-center overflow-hidden rounded-lg border border-[var(--border)] bg-card">
+                          <button
+                            type="button"
+                            aria-label={`Decrease weight for ${entry.name}`}
+                            disabled={(weight ?? MIN_WEIGHT) <= MIN_WEIGHT}
+                            onClick={() => stepWeight(entry, -1)}
+                            className="flex h-full w-8 items-center justify-center text-[var(--muted-foreground)] disabled:opacity-40"
+                          >
+                            <Minus className="size-3.5" aria-hidden="true" />
+                          </button>
+                          <Input
+                            type="number"
+                            inputMode="numeric"
+                            min={MIN_WEIGHT}
+                            max={MAX_WEIGHT}
+                            step={1}
+                            aria-label={`Weight for ${entry.name}`}
+                            value={entry.weight}
+                            onChange={(event) => updateWeight(entry.userId, event.target.value)}
+                            className="h-full w-9 rounded-none border-x border-y-0 px-0 text-center text-[15px] font-semibold tabular-nums"
+                          />
+                          <button
+                            type="button"
+                            aria-label={`Increase weight for ${entry.name}`}
+                            disabled={(weight ?? MIN_WEIGHT) >= MAX_WEIGHT}
+                            onClick={() => stepWeight(entry, 1)}
+                            className="flex h-full w-8 items-center justify-center text-[var(--muted-foreground)] disabled:opacity-40"
+                          >
+                            <Plus className="size-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </td>
+
+                      <td className="text-right text-[16px] font-semibold tabular-nums text-[var(--program-text)]">
+                        {typeof count === "number" ? count : "—"}
+                      </td>
+
+                      <td className="pl-1">
+                        <button
+                          type="button"
+                          aria-label={`Remove ${entry.name}`}
+                          onClick={() => removeCaller(entry.userId)}
+                          className="flex size-4 items-center justify-center text-[var(--muted-foreground)] transition-colors hover:text-[var(--program-text)]"
+                        >
+                          <X className="size-4" aria-hidden="true" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+
+          <div className="flex items-center justify-between gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={availableCallers.length === 0}
+                  className="flex items-center gap-1.5 text-[14px] font-medium text-[var(--program-primary)] disabled:opacity-50"
+                >
+                  <Plus className="size-3.5" aria-hidden="true" />
+                  Add caller
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 w-56 overflow-y-auto">
+                {availableCallers.map((caller) => (
+                  <DropdownMenuItem key={caller.userId} onSelect={() => addCaller(caller)} className="text-[13px]">
+                    {caller.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {weightsAreEqual ? null : (
+              <button
+                type="button"
+                onClick={() => {
+                  setPicker((current) => current.map((entry) => ({ ...entry, weight: "1" })))
+                }}
+                className="text-[13px] text-[var(--muted-foreground)] hover:text-[var(--program-text)]"
+              >
+                Reset to equal
+              </button>
+            )}
+          </div>
         </div>
 
         {!allWeightsValid ? (
           <p role="alert" className="text-[13px] text-[var(--destructive)]">
-            Weights must be whole numbers of 1 or more.
+            Weights must be whole numbers between {MIN_WEIGHT} and {MAX_WEIGHT}.
           </p>
         ) : null}
 
@@ -870,143 +847,37 @@ export function AssignContactsSelect({
           </p>
         ) : null}
 
-        <div className="border-t border-[var(--border)] pt-3">
-          <p className="text-[13px] font-medium text-[var(--program-text)]">
-            Preview:{" "}
-            {currentPreview === null
-              ? "—"
-              : `${currentPreview.total} contacts across ${picker.length} ${
-                  picker.length === 1 ? "caller" : "callers"
-                }`}
+        {conflictCount > 0 ? (
+          <p className="flex items-start gap-2 text-[13px] text-[var(--grid-warning-ink)]">
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              {conflictCount} selected {conflictCount === 1 ? "contact is" : "contacts are"} already assigned and
+              will be skipped.
+            </span>
           </p>
-          <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-            {selectedCount === 0
-              ? "Select contacts to preview the split."
-              : picker.length === 0
-                ? "Add a caller to preview the split."
-                : !allWeightsValid
-                  ? "Fix the weights to preview the split."
-                  : isPreviewing
-                    ? "Previewing…"
-                    : "The split comes from the assignment service, not this screen."}
-          </p>
-        </div>
+        ) : null}
 
         {writeError ? (
-          <p role="alert" className="rounded-md border border-[var(--destructive)] px-3 py-2 text-[13px] text-[var(--destructive)]">
+          <p
+            role="alert"
+            className="rounded-md border border-[var(--destructive)] px-3 py-2 text-[13px] text-[var(--destructive)]"
+          >
             {writeError}
           </p>
         ) : null}
 
-        {receiptLine ? (
-          <p
-            role="status"
-            className="rounded-md border border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_35%,var(--card))] px-3 py-2 text-[13px] font-medium text-[var(--program-text)]"
-          >
-            {receiptLine}
-          </p>
-        ) : null}
+        {isPreviewing ? <p className="sr-only">Previewing the split</p> : null}
 
         <Button
           type="button"
-          className="h-10 w-full"
-          disabled={selectedCount === 0 || isBusy}
-          aria-describedby="assign-contacts-write-hint"
+          className="h-11 w-full rounded-lg"
+          disabled={primaryDisabled}
           onClick={() => {
-            void beginAssignment()
+            void submit()
           }}
         >
-          {assignLabel}
+          {primaryLabel}
         </Button>
-        <p
-          id="assign-contacts-write-hint"
-          className={cn(
-            "text-xs",
-            snapshot !== null && snapshot.conflicts.length > 0 && decision === null
-              ? // The design's amber warning ink is the only warning colour token in
-                // the app, so it is reused rather than a second amber invented here.
-                "text-[var(--grid-warning-ink)]"
-              : "text-[var(--muted-foreground)]",
-          )}
-        >
-          {hintLine}
-        </p>
-
-        <Dialog
-          open={conflictPrompt !== null}
-          onOpenChange={(open) => {
-            if (!open) {
-              setConflictPrompt(null)
-            }
-          }}
-        >
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-base">Some contacts are already assigned</DialogTitle>
-              <DialogDescription className="text-[13px]">
-                {promptConflicts.length === 0
-                  ? ""
-                  : `${promptConflicts.length} of the ${selectedCount} selected contacts already ${
-                      promptConflicts.length === 1 ? "has" : "have"
-                    } a caller in this campaign. Choose what happens to ${
-                      promptConflicts.length === 1 ? "it" : "them"
-                    }; closing this dialog writes nothing.`}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--border)]">
-              <Table aria-label="Contacts already assigned">
-                <TableHeader>
-                  <TableRow className="bg-[var(--muted)] hover:bg-[var(--muted)]">
-                    {["Contact", "Currently assigned to", "Status"].map((label) => (
-                      <TableHead
-                        key={label}
-                        className="px-3 text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] whitespace-nowrap uppercase"
-                      >
-                        {label}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {promptConflicts.map((conflict) => (
-                    <TableRow key={conflict.contactId}>
-                      <TableCell className="px-3 py-2 text-[13px] font-medium text-[var(--program-text)]">
-                        {conflict.contactName}
-                      </TableCell>
-                      <TableCell className="px-3 py-2 text-[13px] text-[var(--program-text)]">
-                        {conflict.callerName}
-                      </TableCell>
-                      <TableCell className="px-3 py-2 text-[13px] text-[var(--muted-foreground)]">
-                        {conflict.status}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            <DialogFooter className="gap-2 sm:flex-row sm:flex-wrap sm:justify-between">
-              <Button type="button" size="sm" variant="ghost" onClick={() => setConflictPrompt(null)}>
-                Cancel
-              </Button>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={isWriting}
-                  onClick={() => chooseConflict("skip")}
-                >
-                  {`Skip them · assign ${contactCountLabel(prompt?.assignableCount ?? 0)}`}
-                </Button>
-                <Button type="button" size="sm" disabled={isWriting} onClick={() => chooseConflict("move")}>
-                  {`Move them · assign ${contactCountLabel(selectedCount)}`}
-                </Button>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </section>
     </div>
   )

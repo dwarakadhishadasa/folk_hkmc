@@ -21,11 +21,11 @@ HKMC program-operations monorepo for the FOLK Chennai and Gita Life web apps. Ne
 
 ## Running and verifying
 
-- `pnpm test` runs **zero tests** and exits 0 — no package defines a `test` script. Verify e2e work with `pnpm test:e2e`.
+- `pnpm test` is `pnpm test:unit` (`turbo run test && vitest run`) and runs the Vitest unit layer. It is not the e2e suite — verify e2e work with `pnpm test:e2e`.
 - `pnpm test:e2e` needs the local stack up once (`pnpm dev:local`) and boots the app itself. Never `pnpm exec playwright test`: the readiness gate lives in the script, so a bare invocation runs against an unasserted stack.
 - A full e2e run is ~5-7 minutes at one worker. **One runner at a time** — every spec shares one seeded database, so concurrent runs corrupt each other's fixtures and produce false failures.
 - After touching specs, fixtures, or `playwright.config.ts`, run `pnpm test:e2e:determinism` (two runs back to back, no reset).
-- CI runs guardrails, `typecheck:workspace`, `build:apps`, and lint — and **not** the e2e suite. A green CI run says nothing about e2e.
+- CI runs guardrails, `typecheck:workspace`, `test:unit`, `build:apps`, and lint — and **not** the e2e suite. A green CI run says nothing about e2e.
 - `next.config.mjs` sets `typescript.ignoreBuildErrors: true`, so a green `pnpm build` is not type-safety. `pnpm typecheck:workspace` is the gate.
 - Run `pnpm guardrails` after changing `apps/*`, `packages/*`, `lib/*`, `components/*`, `hooks/*`, package manifests, `tsconfig*.json`, or `turbo.json`. Turborepo is the task runner, not the architecture enforcer; `--graph` on `scripts/verify-monorepo-guardrails.mjs` shows the dependency shape.
 - Supabase commands are version-pinned through `pnpm supabase:start` (`pnpm dlx supabase@2.98.2`). Use the pnpm scripts; a bare `supabase` CLI is a different version.
@@ -58,13 +58,18 @@ HKMC program-operations monorepo for the FOLK Chennai and Gita Life web apps. Ne
 
 ### The one trap
 
-`pnpm test` runs **zero tests** and exits 0 — no package defines a `test` script, so `turbo run test` finds nothing. **Never report `pnpm test` as a passing test run.** There is no unit runner; the only surfaces are the `scripts/` gates and the Playwright suite.
+`pnpm test` is an alias for `pnpm test:unit` (`turbo run test && vitest run`) and
+runs real tests — the Vitest unit layer over `lib/`, `components/`, `hooks/`,
+`tests/`, and `packages/{data-contracts,program-config}`. It is **not** the e2e
+suite: a green run is no evidence about a route, a page, or a database write.
+Say which layer you ran. The unit layer is node-environment only — no jsdom, no
+`@testing-library/react`.
 
 ### Three levels
 
 | Level | When | Command |
 |---|---|---|
-| **Targeted** | Every change, before reporting done | `pnpm test:static` (guardrails + typecheck + lint, no stack), then the feature script |
+| **Targeted** | Every change, before reporting done | `pnpm test:static` (guardrails + typecheck + lint, no stack), then `pnpm test:unit`, then the feature script |
 | **Feature** | A shared component changed; finishing a story; claiming a matrix row | `pnpm test:e2e:manage` / `:grid` / `:theme` / `:guards` |
 | **Full** | `lib/authz.ts`, `lib/supabase/*`, `proxy.ts`, `components/header.tsx`, `components/providers.tsx`, a shared `components/ui/*`; before a PR | `pnpm test:e2e` (~5–7 min) |
 
@@ -78,7 +83,7 @@ Escalate one level when the file you touched is in the shared-components table i
 - **One e2e runner at a time.** Every spec shares one seeded database; concurrent runs produce false failures.
 - `pnpm typecheck:workspace` is the type gate — `next.config.mjs` sets `ignoreBuildErrors`, so a green build is not type-safety.
 - **Never weaken a gate to make it pass.** Fix the source; the suite asserts `package.json` and `playwright.config.ts` as text to catch exactly that.
-- CI runs guardrails, typecheck, build, lint — **not** e2e and not the contract gates. A green CI run is not verification of a behavioural change.
+- CI runs guardrails, typecheck, `test:unit`, build, lint — **not** e2e and not the contract gates. A green CI run is not verification of a behavioural change.
 - Known pre-existing failure: `pnpm test:airtable-removal` fails 3 of 30 checks on `dev`/`main` as of `44d9812` (story 7-9 WIP `scripts/migrate-airtable-data.mjs` and a comment at `components/manage/manage-contacts-table.tsx:122` are not in its allowlist). Confirm with `git stash` and report it as pre-existing; do not edit the gate to hide it.
 
 ### Reporting

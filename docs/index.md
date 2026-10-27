@@ -38,7 +38,7 @@ The older generated docs described a single root app and no longer reflected the
 
 ## Existing Reference Documentation
 
-- [Testing Architecture and Policy](./architecture/testing.md) - **Read before changing code.** What to run at each level, the feature-to-test registry, which shared files widen the regression blast radius, and how to diagnose a failure. Notes that `pnpm test` runs zero tests and exits 0.
+- [Testing Architecture and Policy](./architecture/testing.md) - **Read before changing code.** What to run at each level, the feature-to-test registry, which shared files widen the regression blast radius, and how to diagnose a failure. Covers the Vitest unit layer and the Playwright e2e suite.
 - [Manage Grid Pattern](./manage-grid-pattern.md) - The contract every `/manage` table follows: column conventions, commit/rollback, selection, bulk semantics, and the URL state contract. Read it before porting a table onto `components/grid/`.
 - [Claiming a Matrix Row](./claiming-a-matrix-row.md) - How to satisfy the six rules that turn a matrix row from Manual to Covered, and what evidence to record.
 - [Airtable Legacy Base](./airtable-legacy-base.md) - Reference snapshot of the retired Airtable base: table and field identities with types, the Interface pages it served, and a field-by-field validation of the migration map in `scripts/migrate-airtable-data.mjs`
@@ -61,14 +61,15 @@ For production-like behavior, provide Supabase credentials and `PROGRAM_ID`/`NEX
 
 ```bash
 pnpm test:static   # guardrails + typecheck + lint
+pnpm test:unit     # Vitest unit layer (no stack)
 pnpm test:e2e      # full Playwright suite (needs the local stack)
 ```
 
-Note that `pnpm test` runs **zero tests** and exits 0 — no package defines a
-`test` script. There is no unit-test runner in this repository; the automated
-suites are the `scripts/` verification gates and the Playwright specs under
-`e2e/specs/`. See [Testing Architecture and Policy](./architecture/testing.md)
-for the feature-to-test registry and the three testing levels.
+`pnpm test` is the Vitest unit layer (`pnpm test:unit`): the package projects
+through Turbo, then root code under `lib/`, `components/`, `hooks/` and `tests/`.
+It is not the e2e suite — a green run says nothing about a route, a page or a
+database write. See [Testing Architecture and Policy](./architecture/testing.md)
+for the feature-to-test registry and the testing levels.
 
 ## For AI-Assisted Development
 

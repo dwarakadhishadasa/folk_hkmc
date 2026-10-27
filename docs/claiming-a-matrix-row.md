@@ -17,7 +17,9 @@ Three questions, in order:
 ## 1. Which layer observes this row?
 
 The layer is chosen by **what the row asserts**, not by which page the feature
-lives on. There are three, and no unit runner.
+lives on. There are three e2e layers. The Vitest unit layer (`pnpm test:unit`)
+is not one of them: every row here is a browser- or HTTP-observable behaviour,
+and a unit test cannot reach one.
 
 | Layer | Mechanism | The row asserts something about | Rows like |
 |---|---|---|---|

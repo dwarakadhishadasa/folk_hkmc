@@ -49,7 +49,7 @@ FR18: Grid gestures shall not collide: checkbox clicks neither edit nor open the
 
 ### NonFunctional Requirements
 
-NFR1: Verification gates stay green: `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails`, `pnpm test:e2e` (one runner, 5–7 min, shared seeded database). `pnpm test` runs zero tests and is not a gate; CI does not run e2e; `pnpm build` is not a type gate (`ignoreBuildErrors`).
+NFR1: Verification gates stay green: `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails`, `pnpm test:unit`, `pnpm test:e2e` (one runner, 5–7 min, shared seeded database). CI runs `test:unit` and does not run e2e; `pnpm build` is not a type gate (`ignoreBuildErrors`).
 NFR2: Default row height stays 32px (dense 28px remains a user option); cell text 13px, headers 12–13px, ~8px horizontal / 4–6px vertical padding, vertically centred, ellipsis truncation with full value reachable, right-aligned tabular numbers; no cell ever changes its row height.
 NFR3: The grid stays token-clean: zero raw hex / `rgb(` / `white` / `black` / `dark:` under `components/grid/`; hierarchy via weight, space and existing semantic tokens.
 NFR4: No layout shift: hover is background-only, the active indicator never changes cell dimensions, no gratuitous rerenders, no new virtualization; usable at 1024px.

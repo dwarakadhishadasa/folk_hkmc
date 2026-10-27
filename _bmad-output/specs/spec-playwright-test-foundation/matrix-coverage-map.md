@@ -11,7 +11,9 @@ Two verdicts are possible and only one of them is honest:
 
 ## Method
 
-Three layers, no unit runner:
+Three e2e layers. The repository also has a Vitest unit layer
+(`pnpm test:unit`), but it proves nothing about these rows: every row below is a
+browser- or HTTP-observable behaviour, and a unit test cannot reach one.
 
 | Layer | Mechanism | Fits rows that are |
 |---|---|---|

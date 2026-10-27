@@ -35,6 +35,8 @@ export interface AssignableContactView {
   phone: string
   locationIds: string[]
   assignedPreacherUserId?: string
+  notes: string | null
+  assignedCallerName: string | null
   profile: AssignableContactProfileView
 }
 

@@ -271,8 +271,8 @@ new UI to build. They are deliberately not linked per story.
 This is not a requirement to re-derive; it is the rule every story's
 `Verification` section must obey.
 
-- **TP1** — `pnpm test` runs zero tests and exits 0. It is never a test run and is never reported as one.
-- **TP2** — Gate order per story: `pnpm typecheck:workspace` → `pnpm lint` → `pnpm guardrails` → the narrowest e2e filter. `pnpm test:static` may replace the first three.
+- **TP1** — `pnpm test` runs the unit layer (`pnpm test:unit`). It is never the e2e suite and is never reported as behavioural verification.
+- **TP2** — Gate order per story: `pnpm typecheck:workspace` → `pnpm lint` → `pnpm guardrails` → `pnpm test:unit` → the narrowest e2e filter. `pnpm test:static` may replace the first three.
 - **TP3** — E2E always runs through `pnpm test:e2e` or a `test:e2e:*` script. Never `pnpm exec playwright test`; the readiness gate lives in the script.
 - **TP4** — Filter with a regex, never a glob. `pnpm test:e2e campaign-callers` selects tests; `... "e2e/specs/campaign-*.spec.ts"` selects nothing and exits 0.
 - **TP5** — Check scope with `pnpm test:e2e:list <filter>` first; it starts no browser and costs seconds.
@@ -480,7 +480,7 @@ generated groups are the reporting buckets frame 790 renders.
 `pnpm seed:local`. SQL probes for the generated column, the two unique
 constraints, the six grants and the four RESTRICT FKs are recorded in the story
 file. No e2e — there is no UI yet, and the full suite would prove nothing about
-the schema. Do **not** run `pnpm test` (zero tests).
+the schema. `pnpm test:unit` covers pure logic only, and this layer has none.
 
 ---
 
@@ -652,6 +652,13 @@ controls (UX-DR17, UX-DR18).
 
 **Test scope:** `pnpm test:static`; `pnpm test:e2e campaign-campaigns`. Do **not**
 run the full suite — this story touches only campaign files.
+
+**Implementation note (2026-10-27).** The story's edit surface landed after the
+layer-by-layer build: `/campaigns/[campaignId]/edit` saves name, description and
+end date through `PATCH /api/dialer/admin/campaigns/[campaignId]`, never the
+status, and frame 212's `Next` now hands the new campaign to its
+`assign-contacts` screen. Recorded with the rest of the late Epic 1 changes in
+[`stories/1-epic-amendments-2026-10-27.md`](stories/1-epic-amendments-2026-10-27.md).
 
 ---
 
@@ -842,6 +849,14 @@ be written; conflicts are a readable list, not a uniqueness error (UX-DR9).
 **Test scope:** `pnpm test:static`; `pnpm test:e2e campaign-assign-write`. The
 spec may reuse `e2e/fixtures/bulk-contacts.ts` but must restore any renamed
 fixture in a `finally`, per `matrix-coverage-map.md`.
+
+**Implementation note (2026-10-27).** A confirmed write now starts the campaign
+in the same action: after the batch lands the client requests `start`, and an
+already-`ACTIVE` campaign is not transitioned again. If the assignment succeeds
+and the start fails, only the start is reported as failed. The assign-contacts
+surface is composed from `components/grid` (frame 324) without changing
+`components/grid/**`. Recorded in
+[`stories/1-epic-amendments-2026-10-27.md`](stories/1-epic-amendments-2026-10-27.md).
 
 **Split point if this exceeds one context:** (a) the pre-check endpoint and
 conflict UI, then (b) the transactional weighted write and its named refusals.

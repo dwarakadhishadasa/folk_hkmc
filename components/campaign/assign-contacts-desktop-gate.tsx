@@ -5,6 +5,7 @@ import { useSyncExternalStore } from "react"
 import { AssignContactsSelect } from "@/components/campaign/assign-contacts-select"
 import type {
   AssignableCallerView,
+  AssignableContactView,
   LocationOption,
 } from "@/components/campaign/assign-contacts-types"
 
@@ -33,10 +34,14 @@ function isDesktopOnServer(): boolean {
  */
 export function AssignContactsDesktopGate({
   campaignId,
+  campaignStatus,
+  contacts,
   callers,
   locations,
 }: {
   campaignId: string
+  campaignStatus: string
+  contacts: AssignableContactView[]
   callers: AssignableCallerView[]
   locations: LocationOption[]
 }) {
@@ -62,5 +67,13 @@ export function AssignContactsDesktopGate({
     )
   }
 
-  return <AssignContactsSelect campaignId={campaignId} callers={callers} locations={locations} />
+  return (
+    <AssignContactsSelect
+      campaignId={campaignId}
+      campaignStatus={campaignStatus}
+      contacts={contacts}
+      callers={callers}
+      locations={locations}
+    />
+  )
 }

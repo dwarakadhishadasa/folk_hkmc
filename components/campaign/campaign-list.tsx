@@ -36,7 +36,7 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
             <TableRow key={campaign.id} className="h-12 border-b border-[var(--border)]">
               <TableCell className="px-2 py-3 sm:px-4">
                 <Link
-                  href={`/campaigns/${campaign.id}`}
+                  href={`/campaigns/${campaign.id}/edit`}
                   className="text-[14px] font-medium text-[var(--program-text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
                 >
                   {campaign.name}

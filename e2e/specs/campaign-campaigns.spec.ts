@@ -205,28 +205,29 @@ test.describe("the new-campaign form — an Admin", () => {
       await page.getByLabel("Campaign name").fill(name)
       await page.getByLabel("Description").fill("Created by the campaign lifecycle spec.")
       await page.getByLabel("Campaign end date").fill("2026-11-14")
-      await page.getByLabel("Time").fill("18:30")
 
-      // The frame omits this control and UX-DR18 requires it: the preset writes
-      // the same field the numeric input reads.
-      await page.getByRole("button", { name: "30s", exact: true }).click()
-      await expect(page.getByLabel("Gap duration (seconds)")).toHaveValue("30")
-      await expect(page.getByRole("button", { name: "30s", exact: true })).toHaveAttribute("aria-pressed", "true")
+      // Frame 212 draws three fields and one Next. Time, gap duration and max
+      // attempts are not on it, so they are not on this form either: the
+      // service's own defaults stand.
+      await expect(page.getByLabel("Time")).toHaveCount(0)
+      await expect(page.getByLabel("Gap duration (seconds)")).toHaveCount(0)
+      await expect(page.getByLabel("Max attempts")).toHaveCount(0)
 
-      await page.getByLabel("Max attempts").fill("5")
       await page.getByRole("button", { name: "Next", exact: true }).click()
 
-      await expect(page).toHaveURL(/\/campaigns\/[0-9a-f-]{36}$/)
-      campaignId = new URL(page.url()).pathname.split("/").filter(Boolean).pop() ?? null
+      // Frame 212's prototype sends Next to frame 324, so the campaign is
+      // created and then handed to the assign-contacts screen.
+      await expect(page).toHaveURL(/\/campaigns\/[0-9a-f-]{36}\/assign-contacts$/)
+      campaignId = new URL(page.url()).pathname.split("/").filter(Boolean)[1] ?? null
 
+      await expect(page.getByRole("heading", { level: 1, name: "Assign contacts" })).toBeVisible()
+
+      await page.goto(`/campaigns/${campaignId}`)
       await expect(page.getByRole("heading", { level: 1, name })).toBeVisible()
       await expect(page.getByText("DRAFT", { exact: true })).toBeVisible()
       await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toHaveCount(1)
       await expect(page.getByRole("button", { name: "Complete", exact: true })).toHaveCount(0)
       await expect(page.getByRole("button", { name: "Cancel", exact: true })).toHaveCount(0)
-
-      await expect(page.getByText("30 seconds", { exact: true })).toBeVisible()
-      await expect(page.getByText("5 attempts", { exact: true })).toBeVisible()
     } finally {
       if (campaignId) {
         await deleteCampaign(campaignId)
@@ -242,7 +243,7 @@ test.describe("the new-campaign form — an Admin", () => {
 test.describe("the campaign list — an Admin with a campaign", () => {
   test.use({ storageState: storageStatePath("admin") })
 
-  test("lists the campaign with its status and links to the detail", async ({ page }) => {
+  test("lists the campaign with its status and links to the edit page", async ({ page }) => {
     const name = campaignName("Listed Camp")
     const campaignId = await createCampaignViaApi(page, "Listed Camp")
 
@@ -255,7 +256,7 @@ test.describe("the campaign list — an Admin with a campaign", () => {
       await expect(row.getByText("14 Nov 2026", { exact: true })).toBeVisible()
 
       const detailLink = row.getByRole("link", { name })
-      await expect(detailLink).toHaveAttribute("href", `/campaigns/${campaignId}`)
+      await expect(detailLink).toHaveAttribute("href", `/campaigns/${campaignId}/edit`)
 
       // The frame's four count columns are Story 1.9's `campaign_progress`
       // counts. This spec used to pin their absence, when the surface could not
@@ -277,9 +278,59 @@ test.describe("the campaign list — an Admin with a campaign", () => {
       await expect(page.getByText("1 campaign · 1 draft · 0 cancelled", { exact: true })).toBeVisible()
 
       await detailLink.click()
-      await expect(page).toHaveURL(new RegExp(`/campaigns/${campaignId}$`))
+      await expect(page).toHaveURL(new RegExp(`/campaigns/${campaignId}/edit$`))
       await expect(page.getByRole("heading", { level: 1, name })).toBeVisible()
       await expect(page.getByText("DRAFT", { exact: true })).toBeVisible()
+    } finally {
+      await deleteCampaign(campaignId)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The edit page
+// ---------------------------------------------------------------------------
+
+test.describe("the campaign edit page — an Admin", () => {
+  test.use({ storageState: storageStatePath("admin") })
+
+  test("saves the details and offers Reassign contacts instead of a start", async ({ page }) => {
+    const campaignId = await createCampaignViaApi(page, "Editable Camp")
+    const renamed = campaignName("Renamed Camp")
+
+    try {
+      await page.goto(`/campaigns/${campaignId}/edit`)
+
+      await expect(page.getByRole("heading", { level: 1, name: campaignName("Editable Camp") })).toBeVisible()
+
+      // The detail page's two actions are replaced, not duplicated.
+      await expect(page.getByRole("link", { name: "Reassign contacts", exact: true })).toHaveAttribute(
+        "href",
+        `/campaigns/${campaignId}/assign-contacts`,
+      )
+      await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toHaveCount(0)
+
+      await page.getByLabel("Campaign name").fill(renamed)
+      await page.getByLabel("Description").fill("Edited by the campaign lifecycle spec.")
+      await page.getByLabel("Campaign end date").fill("2026-12-01")
+      await page.getByRole("button", { name: "Save", exact: true }).click()
+
+      await expect(page.getByText("Campaign saved.", { exact: true })).toBeVisible()
+
+      const read = await page.request.get(`/api/dialer/admin/campaigns/${campaignId}`)
+      expect(read.status(), await read.text()).toBe(200)
+
+      const { campaign } = (await read.json()) as {
+        campaign: { name: string; description: string | null; campaign_date: string }
+      }
+
+      expect(campaign.name).toBe(renamed)
+      expect(campaign.description).toBe("Edited by the campaign lifecycle spec.")
+      expect(campaign.campaign_date).toBe("2026-12-01")
+
+      // The survey stays editable here: a question is written by its own route,
+      // not by the page-wide Save.
+      await expect(page.getByRole("button", { name: "Add question", exact: true })).toBeVisible()
     } finally {
       await deleteCampaign(campaignId)
     }

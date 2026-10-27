@@ -3,9 +3,8 @@ import { ArrowLeft } from "lucide-react"
 import { notFound, redirect } from "next/navigation"
 
 import { AssignContactsDesktopGate } from "@/components/campaign/assign-contacts-desktop-gate"
-import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { AuthzError } from "@/lib/authz"
-import { listAssignableCallers } from "@/lib/dialer/assignments"
+import { listAllAssignableContacts, listAssignableCallers } from "@/lib/dialer/assignments"
 import { getCampaign } from "@/lib/dialer/campaigns"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
 import { listLocations } from "@/lib/supabase/data"
@@ -17,12 +16,11 @@ export const dynamic = "force-dynamic"
 /**
  * Frame 324's assign-contacts surface.
  *
- * The page is the AD-2 gate and the two reads the client cannot do itself: the
+ * The page is the AD-2 gate and the reads the client cannot do itself: the
  * campaign (which turns a missing, malformed or other-program id into one 404),
- * AD-3's assignable caller set, and the programme's location lexicon so the
- * grid can print a location name instead of the stored id. Paging, selection,
- * facets and the split preview are the client surface's state, because they
- * change without a navigation.
+ * AD-3's assignable caller set, the programme's location lexicon, and the whole
+ * scoped contact set — the grid sorts, filters and selects across all of it, so
+ * a page would make its toolbar and its footer describe different populations.
  */
 export default async function AssignContactsPage({
   params,
@@ -35,24 +33,41 @@ export default async function AssignContactsPage({
     const staff = await getCampaignStaff()
     requireCampaignAdmin(staff)
     const campaign = await getCampaign(staff, campaignId)
-    const callers = await listAssignableCallers(staff)
-    const locations = (await listLocations()).map((location) => ({ id: location.id, name: location.name }))
+    const [contacts, callers, locations] = await Promise.all([
+      listAllAssignableContacts(staff, campaign.id),
+      listAssignableCallers(staff),
+      listLocations(),
+    ])
 
     return (
       <>
-        <div className="flex flex-col gap-3">
+        <div className="flex h-[50px] items-center gap-4">
           <Link
-            href={`/campaigns/${campaign.id}`}
-            className="inline-flex w-fit items-center gap-1.5 text-[13px] font-medium text-[var(--muted-foreground)] transition-colors hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+            href={`/campaigns/${campaign.id}/edit`}
+            aria-label="Back to campaign"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-card text-[var(--program-text)] transition-colors hover:bg-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
           >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            Back to campaign
+            <ArrowLeft className="size-[18px]" aria-hidden="true" />
           </Link>
 
-          <CampaignPageHeader title="Assign contacts" subtitle={`${campaign.name} · folk programme`} />
+          <h1 className="font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)]">
+            Assign contacts
+          </h1>
         </div>
 
-        <AssignContactsDesktopGate campaignId={campaign.id} callers={callers} locations={locations} />
+        <AssignContactsDesktopGate
+          campaignId={campaign.id}
+          campaignStatus={campaign.status}
+          contacts={contacts}
+          callers={callers.map((caller) => ({
+            userId: caller.userId,
+            name: caller.name,
+            email: caller.email,
+            role: caller.role,
+            ...(caller.callerId ? { callerId: caller.callerId } : {}),
+          }))}
+          locations={locations.map((location) => ({ id: location.id, name: location.name }))}
+        />
       </>
     )
   } catch (error) {

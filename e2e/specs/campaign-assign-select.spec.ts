@@ -3,12 +3,12 @@
  *
  * Frame 324 is desktop only (UX-DR9/UX-DR10), so this spec drives it at the
  * smoke project's desktop viewport and checks the narrow state with an explicit
- * override. Everything it asserts about paging, facets and the split is read
- * from the routes the surface itself calls: the seeded contact population is
- * another spec's fixture, so a hard-coded total or facet list would rot.
+ * override. The contact grid is the shared grid (frame 324's toolbar is that
+ * component's), so this spec asserts the grid contract — whole-set toolbar,
+ * whole-set footer, selection — rather than a bespoke paging control.
  *
  * The one fixture the seed does not provide is a `dialer_contact_profiles` row:
- * the seed has none, so a whole-set facet could not be proved without one. The
+ * the seed has none, so the facet columns could not be proved without one. The
  * row is created through the service role and removed in the same run through
  * the local stack's SQL endpoint — `service_role` holds no DELETE on the dialer
  * tables, and the endpoint is reached only after the target is asserted
@@ -37,6 +37,8 @@ interface AssignableContactRow {
   name: string
   phone: string
   locationIds: string[]
+  notes: string | null
+  assignedCallerName: string | null
   profile: { centre: string | null; level: string | null; gender: string | null; language: string | null }
 }
 
@@ -169,9 +171,16 @@ async function transitionViaApi(page: Page, campaignId: string, action: "start" 
   expect(response.status(), `the campaign could not ${action}: ${await response.text()}`).toBe(200)
 }
 
+/** The grid's own scroll surface, so the contact rows never collide with another table. */
+function contactGrid(page: Page) {
+  return page.getByRole("group", { name: "Contacts in scope" })
+}
+
 /** The contact row for one phone number; phones are unique per programme. */
 function contactRow(page: Page, phone: string) {
-  return page.getByRole("row").filter({ has: page.getByRole("cell", { name: phone, exact: true }) })
+  return contactGrid(page)
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: phone, exact: true }) })
 }
 
 /** The caller panel, scoped so a caller name that is also a contact name cannot collide. */
@@ -190,193 +199,108 @@ function selectedLine(count: number, total: number): string {
   return `${count} of ${total} selected`
 }
 
-function showingLine(first: number, last: number, total: number): string {
-  return `Showing ${first}–${last} of ${total}`
+/** Bring one contact into the grid's rendered window by searching its phone. */
+async function showContact(page: Page, phone: string): Promise<void> {
+  const search = page.getByLabel("Search every column")
+  await search.fill(phone)
+  await expect(contactRow(page, phone)).toHaveCount(1)
+}
+
+async function clearSearch(page: Page): Promise<void> {
+  await page.getByLabel("Search every column").fill("")
 }
 
 // ---------------------------------------------------------------------------
-// Paging
+// The grid
 // ---------------------------------------------------------------------------
 
 test.describe("the assign-contacts surface — an Admin", () => {
   test.use({ storageState: storageStatePath("admin") })
 
-  test("pages the scoped contact set and reports the range it is showing", async ({ page }) => {
-    const campaignId = await createDisposableCampaign(page.request, "assign select page")
+  test("draws frame 324's grid over the whole scoped contact set", async ({ page }) => {
+    const campaignId = await createDisposableCampaign(page.request, "assign select grid")
 
     try {
       const firstPage = await readContactPage(page.request, campaignId)
-      expect(firstPage.total, "the seeded programme must need more than one page").toBeGreaterThan(25)
-      expect(firstPage.rows).toHaveLength(25)
-
-      const secondPage = await readContactPage(page.request, campaignId, { page: 2 })
 
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
 
       await expect(page.getByRole("heading", { name: "Assign contacts", level: 1 })).toBeVisible()
-      await expect(page.getByText(showingLine(1, 25, firstPage.total), { exact: true })).toBeVisible()
-      await expect(contactRow(page, firstPage.rows[0].phone)).toHaveCount(1)
 
-      const previous = page.getByRole("button", { name: "Previous", exact: true })
-      const next = page.getByRole("button", { name: "Next", exact: true })
-
-      await expect(previous).toBeDisabled()
-
-      await next.click()
-
-      await expect(page.getByText(showingLine(26, 50, firstPage.total), { exact: true })).toBeVisible()
-      await expect(contactRow(page, secondPage.rows[0].phone)).toHaveCount(1)
-      await expect(contactRow(page, firstPage.rows[0].phone)).toHaveCount(0)
-      await expect(previous).toBeEnabled()
-
-      await previous.click()
-
-      await expect(page.getByText(showingLine(1, 25, firstPage.total), { exact: true })).toBeVisible()
-      await expect(contactRow(page, firstPage.rows[0].phone)).toHaveCount(1)
-    } finally {
-      await deleteDisposableCampaign(campaignId)
-    }
-  })
-
-  // -------------------------------------------------------------------------
-  // Selection across pages
-  // -------------------------------------------------------------------------
-
-  test("keeps a selection that spans pages and names the hidden count", async ({ page }) => {
-    const campaignId = await createDisposableCampaign(page.request, "assign select pages")
-
-    try {
-      const firstPage = await readContactPage(page.request, campaignId)
-      const secondPage = await readContactPage(page.request, campaignId, { page: 2 })
-      const first = firstPage.rows[0]
-      const second = secondPage.rows[0]
-      const total = firstPage.total
-
-      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
-      await expect(page.getByText(showingLine(1, 25, total), { exact: true })).toBeVisible()
-
-      await contactRow(page, first.phone).getByRole("checkbox").click()
-      await expect(page.getByText(selectedLine(1, total), { exact: true })).toBeVisible()
-      await expect(page.getByText(/hidden selected/)).toHaveCount(0)
-
-      await page.getByRole("button", { name: "Next", exact: true }).click()
-      await expect(page.getByText(showingLine(26, 50, total), { exact: true })).toBeVisible()
-
-      await contactRow(page, second.phone).getByRole("checkbox").click()
-      await expect(page.getByText(selectedLine(2, total), { exact: true })).toBeVisible()
-      await expect(page.getByText("+ 1 hidden selected", { exact: true })).toBeVisible()
-
-      await page.getByRole("button", { name: "Previous", exact: true }).click()
-      await expect(page.getByText(showingLine(1, 25, total), { exact: true })).toBeVisible()
-
-      await expect(contactRow(page, first.phone).getByRole("checkbox")).toBeChecked()
-      await expect(contactRow(page, second.phone)).toHaveCount(0)
-      await expect(page.getByText(selectedLine(2, total), { exact: true })).toBeVisible()
-      await expect(page.getByText("+ 1 hidden selected", { exact: true })).toBeVisible()
-    } finally {
-      await deleteDisposableCampaign(campaignId)
-    }
-  })
-
-  // -------------------------------------------------------------------------
-  // Whole-set facets
-  // -------------------------------------------------------------------------
-
-  test("builds every facet's options from the whole set, not the current page", async ({ page }) => {
-    const campaignId = await createDisposableCampaign(page.request, "assign select facets")
-    const secondPage = await readContactPage(page.request, campaignId, { page: 2 })
-    const profiled = await readProfiledContactIds()
-    const target = secondPage.rows.find((row) => !profiled.has(row.contactId))
-
-    if (!target) {
-      throw new Error("No profile-less contact on page 2, so the whole-set facet could not be proved.")
-    }
-
-    const marker = `e2e-centre-${Date.now().toString(36)}`
-    await insertContactProfile(target.contactId, marker)
-
-    try {
-      // The response's own facets are the expectation: the marker belongs to a
-      // contact page 1 cannot show, so its presence there is the whole-set proof.
-      const firstPage = await readContactPage(page.request, campaignId)
-      expect(firstPage.facets.centre).toContain(marker)
-      expect(firstPage.rows.some((row) => row.profile.centre === marker)).toBe(false)
-
-      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
-      await expect(page.getByText(showingLine(1, 25, firstPage.total), { exact: true })).toBeVisible()
-
-      // A contact without a profile row is fully callable: its four facet cells
-      // read em dashes, never `null`. A located row keeps the count at four.
-      const profileless = firstPage.rows.find(
-        (row) => row.locationIds.length > 0 && row.profile.centre === null && row.profile.level === null,
-      )
-
-      if (!profileless) {
-        throw new Error("No located, profile-less page-1 contact to assert the em-dash cells on.")
+      // The five columns the frame draws, in its order. A grid header's
+      // accessible name also carries its menu and resize controls, so the
+      // label is matched on the cell's text.
+      for (const label of ["Name", "Phone", "Location", "Assigned To", "Notes"]) {
+        await expect(page.getByRole("columnheader").filter({ hasText: label })).toBeVisible()
       }
 
-      await expect(contactRow(page, profileless.phone).getByRole("cell", { name: "—", exact: true })).toHaveCount(4)
+      // The shared grid's toolbar, which is what the frame's toolbar is.
+      await expect(page.getByLabel("Search every column")).toBeVisible()
+      await expect(page.getByRole("button", { name: "Filter conditions", exact: true })).toBeVisible()
+      await expect(page.getByRole("button", { name: "Sort", exact: true })).toBeVisible()
+      await expect(page.getByRole("combobox", { name: "Row density" })).toContainText("Default rows")
 
-      for (const [label, options] of [
-        ["Centre", firstPage.facets.centre],
-        ["Level", firstPage.facets.level],
-        ["Gender", firstPage.facets.gender],
-        ["Language", firstPage.facets.language],
-      ] as const) {
-        const select = page.getByLabel(label, { exact: true })
-        await expect(select.locator("option")).toHaveText([`Any ${label.toLowerCase()}`, ...options])
-      }
-
-      await page.getByLabel("Centre", { exact: true }).selectOption(marker)
-
-      await expect(page.getByText(showingLine(1, 1, 1), { exact: true })).toBeVisible()
-      await expect(contactRow(page, target.phone)).toHaveCount(1)
-      await expect(contactRow(page, firstPage.rows[0].phone)).toHaveCount(0)
-      // The filter did not shrink the options it was chosen from.
-      await expect(page.getByLabel("Centre", { exact: true }).locator("option")).toHaveText([
-        "Any centre",
-        ...firstPage.facets.centre,
-      ])
+      // One read for the whole set: the footer's denominator is the scope, and
+      // there is no pager because everything is in the grid.
+      await expect(page.getByText(selectedLine(0, firstPage.total), { exact: true })).toBeVisible()
+      await expect(page.getByRole("button", { name: "Next", exact: true })).toHaveCount(0)
+      await expect(page.getByRole("button", { name: "Previous", exact: true })).toHaveCount(0)
     } finally {
-      await deleteContactProfile(target.contactId)
       await deleteDisposableCampaign(campaignId)
     }
   })
 
-  // -------------------------------------------------------------------------
-  // Search
-  // -------------------------------------------------------------------------
-
-  test("narrows the set when a seeded name is searched for", async ({ page }) => {
+  test("narrows the grid with the toolbar search and keeps the whole-set denominator", async ({ page }) => {
     const campaignId = await createDisposableCampaign(page.request, "assign select search")
 
     try {
       const firstPage = await readContactPage(page.request, campaignId)
-      const needle = firstPage.rows[0].name
-      const expected = await readContactPage(page.request, campaignId, { search: needle })
-      const otherRow = firstPage.rows.find((row) => !row.name.includes(needle))
-
-      expect(expected.total, "a whole seeded name must match at least one contact").toBeGreaterThan(0)
-
-      if (!otherRow) {
-        throw new Error("No page-1 row fails the search, so exclusion could not be proved.")
-      }
+      const total = firstPage.total
+      const target = firstPage.rows[0]
 
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+      await expect(page.getByText(selectedLine(0, total), { exact: true })).toBeVisible()
 
-      const search = page.getByLabel("Search contacts")
-      await search.fill(needle)
-      await search.press("Enter")
+      await showContact(page, target.phone)
 
-      await expect(
-        page.getByText(showingLine(1, Math.min(25, expected.total), expected.total), { exact: true }),
-      ).toBeVisible()
+      await expect(contactRow(page, target.phone)).toHaveCount(1)
+      await expect(page.getByText(selectedLine(0, total), { exact: true })).toBeVisible()
 
-      for (const row of expected.rows) {
-        await expect(contactRow(page, row.phone)).toHaveCount(1)
-      }
+      await clearSearch(page)
 
-      await expect(contactRow(page, otherRow.phone)).toHaveCount(0)
+      // The denominator is the scope, not the filtered view.
+      await expect(page.getByText(selectedLine(0, total), { exact: true })).toBeVisible()
+    } finally {
+      await deleteDisposableCampaign(campaignId)
+    }
+  })
+
+  test("keeps a selection that spans two searches", async ({ page }) => {
+    const campaignId = await createDisposableCampaign(page.request, "assign select pages")
+
+    try {
+      const firstPage = await readContactPage(page.request, campaignId)
+      const first = firstPage.rows[0]
+      const secondPage = await readContactPage(page.request, campaignId, { page: 2 })
+      const second = secondPage.rows[0]
+      const total = firstPage.total
+
+      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+      await expect(page.getByText(selectedLine(0, total), { exact: true })).toBeVisible()
+
+      await showContact(page, first.phone)
+      await contactRow(page, first.phone).getByRole("checkbox").click()
+      await expect(page.getByText(selectedLine(1, total), { exact: true })).toBeVisible()
+
+      await showContact(page, second.phone)
+      await contactRow(page, second.phone).getByRole("checkbox").click()
+      await expect(page.getByText(selectedLine(2, total), { exact: true })).toBeVisible()
+
+      await clearSearch(page)
+      await expect(page.getByText(selectedLine(2, total), { exact: true })).toBeVisible()
+
+      await showContact(page, first.phone)
+      await expect(contactRow(page, first.phone).getByRole("checkbox")).toBeChecked()
     } finally {
       await deleteDisposableCampaign(campaignId)
     }
@@ -398,25 +322,28 @@ test.describe("the assign-contacts surface — an Admin", () => {
       expect(callers.length, "the assigner needs at least two callers to weight").toBeGreaterThanOrEqual(2)
 
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
-      await expect(page.getByText(showingLine(1, 25, firstPage.total), { exact: true })).toBeVisible()
+      await expect(page.getByText(selectedLine(0, firstPage.total), { exact: true })).toBeVisible()
 
       for (const row of firstPage.rows.slice(0, 6)) {
+        await showContact(page, row.phone)
         await contactRow(page, row.phone).getByRole("checkbox").click()
       }
 
       await expect(page.getByText(selectedLine(6, firstPage.total), { exact: true })).toBeVisible()
 
-      await page.getByRole("combobox", { name: "Add caller", exact: true }).selectOption({ label: callers[0].name })
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
-      await page.getByRole("combobox", { name: "Add caller", exact: true }).selectOption({ label: callers[1].name })
+      await page.getByRole("menuitem", { name: callers[0].name, exact: true }).click()
+
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
+      await page.getByRole("menuitem", { name: callers[1].name, exact: true }).click()
 
       await page.getByLabel(`Weight for ${callers[0].name}`, { exact: true }).fill("2")
 
       // 2:1 over 6 is 4 and 2 — the split the route returns, not a local tally.
       await expect(pickerRow(page, callers[0].name).getByRole("cell", { name: "4", exact: true })).toBeVisible()
       await expect(pickerRow(page, callers[1].name).getByRole("cell", { name: "2", exact: true })).toBeVisible()
-      await expect(page.getByText("Preview: 6 contacts across 2 callers", { exact: true })).toBeVisible()
+
+      await expect(page.getByRole("button", { name: "Assign 6 contacts", exact: true })).toBeEnabled()
     } finally {
       await deleteDisposableCampaign(campaignId)
     }
@@ -439,10 +366,8 @@ test.describe("the assign-contacts surface — an Admin", () => {
     try {
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
 
-      const assign = page.getByRole("button", { name: "Assign 0 contacts", exact: true })
+      const assign = page.getByRole("button", { name: "Select contacts to assign", exact: true })
       await expect(assign).toBeDisabled()
-      await expect(page.getByText("Select contacts to preview the split.", { exact: true })).toBeVisible()
-      await expect(page.getByText(/^Preview: —$/)).toBeVisible()
 
       // A disabled button cannot be activated by a click; waiting for it to
       // become actionable is the assertion that it never does.
@@ -451,6 +376,45 @@ test.describe("the assign-contacts surface — an Admin", () => {
       expect(dialerWrites, "a zero selection must not open a dialer write").toEqual([])
       await expect(page).toHaveURL(new RegExp(`/campaigns/${campaignId}/assign-contacts$`))
     } finally {
+      await deleteDisposableCampaign(campaignId)
+    }
+  })
+
+  // -------------------------------------------------------------------------
+  // The hidden facet columns
+  // -------------------------------------------------------------------------
+
+  test("carries the four calling facets as hidden grid columns", async ({ page }) => {
+    const campaignId = await createDisposableCampaign(page.request, "assign select facets")
+    const secondPage = await readContactPage(page.request, campaignId, { page: 2 })
+    const profiled = await readProfiledContactIds()
+    const target = secondPage.rows.find((row) => !profiled.has(row.contactId))
+
+    if (!target) {
+      throw new Error("No profile-less contact on page 2, so the facet column could not be proved.")
+    }
+
+    const marker = `e2e-centre-${Date.now().toString(36)}`
+    await insertContactProfile(target.contactId, marker)
+
+    try {
+      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+
+      // Four facets hidden by default: the frame's toolbar reports hidden
+      // fields, and these are the fields its five columns do not show.
+      await expect(page.getByRole("button", { name: "4 hidden fields", exact: true })).toBeVisible()
+
+      await page.getByRole("button", { name: "4 hidden fields", exact: true }).click()
+      await expect(page.getByRole("checkbox", { name: "Centre" })).not.toBeChecked()
+      await page.getByRole("checkbox", { name: "Centre" }).click()
+      await page.keyboard.press("Escape")
+
+      await expect(page.getByRole("columnheader").filter({ hasText: "Centre" })).toBeVisible()
+
+      await showContact(page, target.phone)
+      await expect(contactRow(page, target.phone).getByRole("cell", { name: marker, exact: true })).toBeVisible()
+    } finally {
+      await deleteContactProfile(target.contactId)
       await deleteDisposableCampaign(campaignId)
     }
   })
@@ -500,21 +464,13 @@ test.describe("the assign-contacts surface — a narrow viewport", () => {
 
   test("asks for a desktop and never mounts the contact grid", async ({ page }) => {
     const campaignId = await createDisposableCampaign(page.request, "assign select narrow")
-    const contactReads: string[] = []
-
-    page.on("request", (request) => {
-      if (/\/contacts(\?|$)/.test(request.url())) {
-        contactReads.push(request.url())
-      }
-    })
 
     try {
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
 
       await expect(page.getByRole("heading", { name: "Open this on a desktop", level: 2 })).toBeVisible()
       await expect(page.getByRole("table")).toHaveCount(0)
-      await expect(page.getByRole("combobox", { name: "Add caller", exact: true })).toHaveCount(0)
-      expect(contactReads, "the contact list must not be fetched on a narrow viewport").toEqual([])
+      await expect(page.getByRole("group", { name: "Contacts in scope" })).toHaveCount(0)
     } finally {
       await deleteDisposableCampaign(campaignId)
     }

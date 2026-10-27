@@ -250,6 +250,52 @@ export async function createCampaign(staff: StaffContext, input: CreateCampaignI
   return data as CampaignRow
 }
 
+export interface UpdateCampaignInput {
+  name?: unknown
+  description?: unknown
+  campaignDate?: unknown
+}
+
+/**
+ * The editable half of a campaign: its name, description and end date.
+ *
+ * Status is deliberately not here. A transition is a lifecycle action with its
+ * own matrix and its own race guard (`transitionCampaign`); letting a metadata
+ * save write `status` as a side effect would give the campaign two ways to
+ * become active and only one of them would be checked.
+ */
+export async function updateCampaign(
+  staff: StaffContext,
+  campaignId: string,
+  input: UpdateCampaignInput,
+): Promise<CampaignRow> {
+  requireCampaignAdmin(staff)
+  assertCampaignIdShape(campaignId)
+
+  const name = requireCampaignName(input.name)
+  const description = optionalCampaignDescription(input.description)
+  const campaignDate = requireCampaignDate(input.campaignDate)
+
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin
+    .from("dialer_campaigns")
+    .update({ name, description, campaign_date: campaignDate })
+    .eq("id", campaignId)
+    .eq("program_id", staff.programId)
+    .select(CAMPAIGN_COLUMNS)
+    .maybeSingle()
+
+  if (error) {
+    throw new AuthzError(500, "campaign_write_failed", "Unable to save the campaign.")
+  }
+
+  if (!data) {
+    throw campaignNotFound()
+  }
+
+  return data as CampaignRow
+}
+
 export async function transitionCampaign(
   staff: StaffContext,
   campaignId: string,

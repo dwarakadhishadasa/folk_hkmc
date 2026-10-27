@@ -27,6 +27,7 @@
     "../../hooks/**/*.ts",
     "../../hooks/**/*.tsx",
     "../../lib/**/*.ts",
+    "../../tests/**/*.ts",
     "../../packages/**/*.ts",
     "../../packages/**/*.tsx",
     "../../proxy.ts"

@@ -278,9 +278,22 @@ async function transition(page: Page, campaignId: string, action: "start" | "com
   expect(response.status(), `the campaign could not ${action}: ${await response.text()}`).toBe(200)
 }
 
+/** The grid's own scroll surface, so the contact rows never collide with the picker's table. */
+function contactGrid(page: Page) {
+  return page.getByRole("group", { name: "Contacts in scope" })
+}
+
 /** The contact row for one phone number; phones are unique per programme. */
 function contactRow(page: Page, phone: string) {
-  return page.getByRole("row").filter({ has: page.getByRole("cell", { name: phone, exact: true }) })
+  return contactGrid(page)
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: phone, exact: true }) })
+}
+
+/** Bring one contact into the grid's rendered window by searching its phone. */
+async function showContact(page: Page, phone: string): Promise<void> {
+  await page.getByLabel("Search every column").fill(phone)
+  await expect(contactRow(page, phone)).toHaveCount(1)
 }
 
 function selectedLine(count: number, total: number): string {
@@ -477,7 +490,7 @@ test.describe("the assignment write — an Admin", () => {
 test.describe("the assign-contacts screen — an Admin", () => {
   test.use({ storageState: storageStatePath("admin"), viewport: { width: 1440, height: 1000 } })
 
-  test("assigns an unconflicted selection and reports the receipt", async ({ page }) => {
+  test("assigns a selection, starts the campaign and lands on the list", async ({ page }) => {
     const campaignId = await createDisposableCampaign(page.request, "assign write screen")
     const callersBefore = await readCallerUserIds()
 
@@ -490,25 +503,23 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await expect(page.getByRole("heading", { name: "Assign contacts", level: 1 })).toBeVisible()
 
       for (const target of targets) {
+        await showContact(page, target.phone)
         await contactRow(page, target.phone).getByRole("checkbox").click()
       }
 
       await expect(page.getByText(selectedLine(2, page1.total), { exact: true })).toBeVisible()
 
-      await page.getByRole("combobox", { name: "Add caller", exact: true }).selectOption({ label: caller.name })
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
+      await page.getByRole("menuitem", { name: caller.name, exact: true }).click()
 
       const assign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
       await expect(assign).toBeEnabled()
       await assign.click()
 
-      await expect(page.getByRole("status").filter({ hasText: "Assigned 2 contacts" })).toBeVisible()
-
-      await expect(
-        page.getByText(selectedLine(0, page1.total), { exact: true }),
-        "a completed write clears the selection",
-      ).toBeVisible()
-      await expect(page.getByText("No callers chosen yet.", { exact: true })).toBeVisible()
+      // Frame 324's prototype sends the assign action back to the campaigns
+      // list, and the campaign is ACTIVE by the time the page gets there.
+      await expect(page).toHaveURL(/\/campaigns$/)
+      await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toBeVisible()
 
       const landed = await precheck(
         page.request,
@@ -521,6 +532,10 @@ test.describe("the assign-contacts screen — an Admin", () => {
       expect(landed.body.conflicts.map((conflict) => conflict.contactId).sort()).toEqual(
         targets.map((target) => target.contactId).sort(),
       )
+
+      const campaign = await page.request.get(`/api/dialer/admin/campaigns/${campaignId}`)
+      expect(campaign.status(), await campaign.text()).toBe(200)
+      expect(((await campaign.json()) as { campaign: { status: string } }).campaign.status).toBe("ACTIVE")
     } finally {
       await deleteAssignments(campaignId)
       await deletePromotedCallers(callersBefore)
@@ -528,7 +543,7 @@ test.describe("the assign-contacts screen — an Admin", () => {
     }
   })
 
-  test("writes nothing until the conflict dialog's skip or move is chosen", async ({ page }) => {
+  test("skips the already-assigned contact the panel names", async ({ page }) => {
     const campaignId = await createDisposableCampaign(page.request, "assign write conflict")
     const callersBefore = await readCallerUserIds()
 
@@ -550,45 +565,37 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
 
       for (const target of [conflicted, unassigned]) {
+        await showContact(page, target.phone)
         await contactRow(page, target.phone).getByRole("checkbox").click()
       }
 
-      await page.getByRole("combobox", { name: "Add caller", exact: true }).selectOption({ label: replacement.name })
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
+      await page.getByRole("menuitem", { name: replacement.name, exact: true }).click()
 
-      const assign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
-      await assign.click()
-
-      const dialog = page.getByRole("dialog")
-      await expect(dialog).toBeVisible()
-      await expect(dialog.getByRole("cell", { name: conflicted.name, exact: true })).toBeVisible()
-      await expect(dialog.getByRole("cell", { name: owner.name, exact: true })).toBeVisible()
-      await expect(dialog.getByRole("cell", { name: "PENDING", exact: true })).toBeVisible()
+      // Frame 324 states the decision instead of asking for it: a selected
+      // contact already assigned here will be skipped, and the button counts
+      // only what will be written.
       await expect(
-        dialog.getByRole("button", { name: "Skip them · assign 1 contact", exact: true }),
+        page.getByText("1 selected contact is already assigned and will be skipped.", { exact: true }),
       ).toBeVisible()
-      await expect(dialog.getByRole("button", { name: "Move them · assign 2 contacts", exact: true })).toBeVisible()
 
-      await page.keyboard.press("Escape")
-      await expect(dialog).toHaveCount(0)
-
-      expect(await readAssignments(campaignId), "closing the dialog writes nothing").toHaveLength(1)
-
+      const assign = page.getByRole("button", { name: "Assign 1 contact", exact: true })
+      await expect(assign).toBeEnabled()
       await assign.click()
-      await expect(dialog).toBeVisible()
-      await dialog.getByRole("button", { name: "Move them · assign 2 contacts", exact: true }).click()
 
-      await expect(page.getByRole("status").filter({ hasText: "Assigned 2 contacts" })).toBeVisible()
+      await expect(page).toHaveURL(/\/campaigns$/)
 
       const rows = await readAssignments(campaignId)
       const byContact = new Map(rows.map((row) => [row.contact_id, row]))
 
-      expect(rows).toHaveLength(2)
-      expect(byContact.get(conflicted.contactId)?.dialer_callers?.user_id, "the conflict moved").toBe(
-        replacement.userId,
+      expect(rows, "the skipped contact is not rewritten").toHaveLength(2)
+      expect(byContact.get(conflicted.contactId)?.dialer_callers?.user_id, "the conflict was skipped").toBe(
+        owner.userId,
       )
       expect(byContact.get(unassigned.contactId)?.dialer_callers?.user_id).toBe(replacement.userId)
-      await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
+
+      const campaign = await page.request.get(`/api/dialer/admin/campaigns/${campaignId}`)
+      expect(((await campaign.json()) as { campaign: { status: string } }).campaign.status).toBe("ACTIVE")
     } finally {
       await deleteAssignments(campaignId)
       await deletePromotedCallers(callersBefore)

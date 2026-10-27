@@ -66,7 +66,7 @@ Separately, the app has a dark theme that is **never activated**. `next-themes` 
 - **Theme work follows the shadcn recipe the user named:** `next-themes` `ThemeProvider` with `attribute="class"`, `defaultTheme="system"`, `enableSystem`, `disableTransitionOnChange`, plus `suppressHydrationWarning` on `<html>`. `components/theme-provider.tsx` already exists and needs no rewrite.
 - **Both apps must stay byte-identical where they already are.** `apps/folk` and `apps/gita-life` `layout.tsx` and `globals.css` mirror each other; edits land in both.
 - **Grid colors stay semantic.** Zero occurrences of a raw hex or a `white`/`black` literal under `components/grid/` today and that must remain true — it is what makes CAP-7 a token question rather than a rewrite. `components/manage/` already has `text-white` and `hover:bg-black/5` on program-primary headers; those are in scope for the theme story, the grid is not.
-- **Verification.** `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails`, and `pnpm test:e2e`. Per `AGENTS.md`, `pnpm test` runs zero tests, CI does not run e2e, and `pnpm build` is not a type gate. One runner at a time — the suite shares one seeded database.
+- **Verification.** `pnpm typecheck:workspace`, `pnpm lint`, `pnpm guardrails`, `pnpm test:unit`, and `pnpm test:e2e`. Per `AGENTS.md`, `pnpm test` runs the unit layer only, CI runs `test:unit` but not e2e, and `pnpm build` is not a type gate. One runner at a time — the suite shares one seeded database.
 - **`scripts/verify-monorepo-guardrails.mjs` must not be edited**; `scripts/verify-airtable-removal.mjs` asserts its contents.
 
 ## Non-goals

@@ -21,7 +21,7 @@ const ASSIGNMENT_CHUNK_SIZE = 200
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const CONTACT_COLUMNS = "id,name,phone,location_ids,assigned_preacher_id"
+const CONTACT_COLUMNS = "id,name,phone,location_ids,assigned_preacher_id,notes"
 const CONTACT_PROFILE_COLUMNS = "contact_id,centre,level,gender,language"
 const ASSIGNMENT_COLUMNS = "contact_id,caller_id,status,contacts(name),dialer_callers(display_name)"
 
@@ -34,7 +34,7 @@ export type ContactFacets = Record<ContactFacetKey, string[]>
 
 type ContactRow = Pick<
   Database["public"]["Tables"]["contacts"]["Row"],
-  "id" | "name" | "phone" | "location_ids" | "assigned_preacher_id"
+  "id" | "name" | "phone" | "location_ids" | "assigned_preacher_id" | "notes"
 >
 
 type ContactProfileRow = Pick<
@@ -58,6 +58,14 @@ export interface AssignableContact {
   locationIds: string[]
   /** Absent when `contacts.assigned_preacher_id` is null. */
   assignedPreacherUserId?: string
+  /** Free-text note the operator wrote on the contact; `null` when unset. */
+  notes: string | null
+  /**
+   * The caller holding this contact in *this campaign*, or `null` when the
+   * contact is unassigned there. Read from `dialer_assignments`, not from the
+   * contact's own `assigned_preacher_id`, which is a different fact.
+   */
+  assignedCallerName: string | null
   profile: AssignableContactProfile
 }
 
@@ -223,13 +231,18 @@ function toContactProfile(row: ContactProfileRow | undefined): AssignableContact
 function toAssignableContact(
   row: ContactRow,
   profile: AssignableContactProfile,
+  assignment: AssignmentConflictRow | undefined,
 ): AssignableContact {
+  const callerName = assignment?.dialer_callers?.display_name.trim()
+
   return {
     contactId: row.id,
     name: row.name,
     phone: row.phone,
     locationIds: row.location_ids ?? [],
     ...(row.assigned_preacher_id ? { assignedPreacherUserId: row.assigned_preacher_id } : {}),
+    notes: row.notes ?? null,
+    assignedCallerName: callerName && callerName.length > 0 ? callerName : null,
     profile,
   }
 }
@@ -332,6 +345,34 @@ async function readContactProfiles(
 }
 
 /**
+ * The scoped contacts plus the two lookups each row needs: its calling profile
+ * and the caller holding it in this campaign.
+ *
+ * `dialer_assignments` is read for the whole scope because the assign screen's
+ * grid shows "Assigned To" on every row, and a per-page read would leave the
+ * column blank for rows the current page does not happen to hold.
+ */
+async function readAssignableEntries(
+  staff: StaffContext,
+  scope: CampaignScope,
+  campaignId: string,
+) {
+  const contacts = await readScopedContacts(staff, scope)
+  const contactIds = contacts.map((contact) => contact.id)
+
+  const [profileRows, assignmentRows] = await Promise.all([
+    readContactProfiles(staff.programId, contactIds),
+    readAssignmentConflicts(staff.programId, campaignId, contactIds),
+  ])
+
+  return contacts.map((contact) => ({
+    contact,
+    profile: toContactProfile(profileRows.get(contact.id)),
+    assignment: assignmentRows.get(contact.id),
+  }))
+}
+
+/**
  * AD-3-scoped contacts for the assign-contacts screen. Contact selection is a
  * live facet over `dialer_contact_profiles`, not a stored audience filter
  * (AD-11), and contacts already assigned in the campaign stay in the list:
@@ -353,16 +394,7 @@ export async function listAssignableContacts(
   const page = requirePage(query.page)
   const pageSize = requirePageSize(query.pageSize)
 
-  const contacts = await readScopedContacts(staff, scope)
-  const profileRows = await readContactProfiles(
-    staff.programId,
-    contacts.map((contact) => contact.id),
-  )
-
-  const entries = contacts.map((contact) => ({
-    contact,
-    profile: toContactProfile(profileRows.get(contact.id)),
-  }))
+  const entries = await readAssignableEntries(staff, scope, campaignId)
 
   const filters: Record<ContactFacetKey, string | null> = {
     centre: normalizeFacetValue(query.centre),
@@ -390,7 +422,7 @@ export async function listAssignableContacts(
   const start = (page - 1) * pageSize
   const rows = filtered
     .slice(start, start + pageSize)
-    .map(({ contact, profile }) => toAssignableContact(contact, profile))
+    .map(({ contact, profile, assignment }) => toAssignableContact(contact, profile, assignment))
 
   return {
     rows,
@@ -400,6 +432,29 @@ export async function listAssignableContacts(
     totalPages,
     facets: buildFacets(entries.map((entry) => entry.profile)),
   }
+}
+
+/**
+ * The whole scoped set in one answer, for a grid that sorts, filters and
+ * selects across every row rather than one page at a time.
+ *
+ * This is the same read the screen's own route performs, minus the page slice:
+ * the grid's toolbar and its "N of M selected" footer both describe the whole
+ * scope, so handing it a page would make both numbers wrong.
+ */
+export async function listAllAssignableContacts(
+  staff: StaffContext,
+  campaignId: string,
+): Promise<AssignableContact[]> {
+  requireCampaignAdmin(staff)
+  await getCampaign(staff, campaignId)
+
+  const scope = await campaignScope(staff)
+  const entries = await readAssignableEntries(staff, scope, campaignId)
+
+  return entries
+    .sort((left, right) => compareContacts(left.contact, right.contact))
+    .map(({ contact, profile, assignment }) => toAssignableContact(contact, profile, assignment))
 }
 
 /** AD-3's assignable caller set for the picker; no second derivation. */
