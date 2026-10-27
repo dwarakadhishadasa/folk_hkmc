@@ -3,7 +3,14 @@ import { spawnSync } from "node:child_process"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { createDisposableCampaign, deleteDisposableCampaign } from "../fixtures/dialer-campaign"
-import { storageStatePath, repoRoot, type E2ERole } from "../fixtures/roles"
+import {
+  createCallerAssignment,
+  ensureActiveCaller,
+  firstContactId,
+  type AssignmentFixture,
+  type CallerFixture,
+} from "../fixtures/dialer-caller"
+import { e2eProgramId, fixtureEmail, repoRoot, storageStatePath, type E2ERole } from "../fixtures/roles"
 
 /**
  * Denial sweep for every /api/dialer/** route.
@@ -68,6 +75,9 @@ const ABSENT_CALLER_ID = "00000000-0000-4000-8000-000000000002"
 /** A contact id that is valid in shape and absent by construction, like the ids above. */
 const ABSENT_CONTACT_ID = "00000000-0000-4000-8000-000000000003"
 
+/** An assignment id that is valid in shape and absent by construction, like the ids above. */
+const ABSENT_ASSIGNMENT_ID = "00000000-0000-4000-8000-000000000004"
+
 interface SweepRouteOptions {
   /** The route file's path, exactly as the guardrail derives it from the directory. */
   route: string
@@ -79,14 +89,21 @@ interface SweepRouteOptions {
   url?: string | (() => string)
   method?: "GET" | "POST" | "PATCH" | "DELETE"
   /** Which boundary the route sits behind. Defaults to the caller boundary. */
-  kind?: "caller" | "admin"
+  kind?: "caller" | "caller-collection" | "admin"
   /** The role whose storageState holds this route's legitimate access. */
   owningCallerRole?: E2ERole
   /** A different signed-in role that must be refused. */
   nonOwningCallerRole?: E2ERole
   /** Statuses the owner's request may return; anything else is a denial. */
   ownerStatuses?: number[]
-  body?: Record<string, unknown>
+  /**
+   * `caller-collection` only: the status a different caller's own request may
+   * return. A collection is not a foreign row — another caller gets their own
+   * (usually empty) view, never a 404.
+   */
+  nonOwnerStatuses?: number[]
+  /** Body for the request; a function is resolved per request, for an id created in `beforeAll`. */
+  body?: Record<string, unknown> | (() => Record<string, unknown>)
 }
 
 /**
@@ -103,17 +120,20 @@ export function sweepRoute(options: SweepRouteOptions) {
     owningCallerRole = "admin",
     nonOwningCallerRole = kind === "admin" ? "volunteer" : "preacher",
     ownerStatuses = [200, 201, 202, 204],
+    nonOwnerStatuses = [200],
     body,
   } = options
 
   const resolveUrl = () => `${BASE_URL}${typeof url === "function" ? url() : url}`
+  const resolveBody = () => (typeof body === "function" ? body() : body)
   const isAdmin = kind === "admin"
+  const isCollection = kind === "caller-collection"
 
   test.describe(`Denial sweep: ${method} ${route} — unauthenticated`, () => {
     test.use({ storageState: { cookies: [], origins: [] } })
 
     test("is refused", async ({ request }) => {
-      const response = await request.fetch(resolveUrl(), { method, data: body })
+      const response = await request.fetch(resolveUrl(), { method, data: resolveBody() })
       expect([401, 403], `unauthenticated ${method} ${route} returned ${response.status()}`).toContain(
         response.status(),
       )
@@ -125,7 +145,7 @@ export function sweepRoute(options: SweepRouteOptions) {
 
     if (isAdmin) {
       test("is refused as a 403 with a JSON error", async ({ request }) => {
-        const response = await request.fetch(resolveUrl(), { method, data: body })
+        const response = await request.fetch(resolveUrl(), { method, data: resolveBody() })
         expect(response.status(), `non-owner ${method} ${route}`).toBe(403)
         expect(
           response.headers()["content-type"] ?? "",
@@ -135,9 +155,17 @@ export function sweepRoute(options: SweepRouteOptions) {
         const payload = (await response.json()) as { code?: unknown }
         expect(payload.code, `non-owner ${method} ${route} must name the refusal`).toEqual(expect.any(String))
       })
+    } else if (isCollection) {
+      test("gets their own scoped view, not a foreign row", async ({ request }) => {
+        const response = await request.fetch(resolveUrl(), { method, data: resolveBody() })
+        expect(
+          nonOwnerStatuses,
+          `non-owner ${method} ${route} returned ${response.status()}`,
+        ).toContain(response.status())
+      })
     } else {
       test("is refused as a 404 with no payload", async ({ request }) => {
-        const response = await request.fetch(resolveUrl(), { method, data: body })
+        const response = await request.fetch(resolveUrl(), { method, data: resolveBody() })
         expect(response.status(), `non-owner ${method} ${route}`).toBe(404)
         expect(await response.text(), `non-owner ${method} ${route} must not leak a body`).toBe("")
       })
@@ -148,7 +176,7 @@ export function sweepRoute(options: SweepRouteOptions) {
     test.use({ storageState: storageStatePath(owningCallerRole) })
 
     test("is not denied", async ({ request }) => {
-      const response = await request.fetch(resolveUrl(), { method, data: body })
+      const response = await request.fetch(resolveUrl(), { method, data: resolveBody() })
       expect(
         ownerStatuses,
         `owner ${method} ${route} returned ${response.status()}`,
@@ -274,6 +302,58 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (progressCampaignId) {
     await deleteDisposableCampaign(progressCampaignId)
+  }
+})
+
+// ============================================================================
+// A fifth campaign, for the caller routes. It is ACTIVE and holds one PENDING
+// assignment owned by the Admin's caller profile; the Preacher also holds an
+// active profile, so the caller branch's non-owner case reaches the body-less
+// 404 rather than `requireDialerCaller`'s 403. The assignment and profiles are
+// removed before the campaign, because `campaign_id` is ON DELETE RESTRICT.
+// ============================================================================
+
+let callerCampaignId: string
+let callerAssignmentId: string
+let adminCaller: CallerFixture
+let preacherCaller: CallerFixture
+let callerAssignment: AssignmentFixture
+
+test.beforeAll(async () => {
+  const adminRequest = await playwrightRequest.newContext({
+    baseURL: BASE_URL,
+    storageState: storageStatePath("admin"),
+  })
+
+  try {
+    callerCampaignId = await createDisposableCampaign(adminRequest, "caller routes")
+
+    const started = await adminRequest.post(
+      `/api/dialer/admin/campaigns/${callerCampaignId}/transition`,
+      { data: { action: "start" } },
+    )
+    expect(started.status(), `starting the caller fixture campaign: ${await started.text()}`).toBe(200)
+
+    adminCaller = await ensureActiveCaller(fixtureEmail("admin"))
+    preacherCaller = await ensureActiveCaller(fixtureEmail("preacher"))
+    callerAssignment = await createCallerAssignment(
+      callerCampaignId,
+      adminCaller.callerId,
+      await firstContactId(),
+    )
+    callerAssignmentId = callerAssignment.assignmentId
+  } finally {
+    await adminRequest.dispose()
+  }
+})
+
+test.afterAll(async () => {
+  await callerAssignment?.cleanup()
+  await preacherCaller?.cleanup()
+  await adminCaller?.cleanup()
+
+  if (callerCampaignId) {
+    await deleteDisposableCampaign(callerCampaignId)
   }
 })
 
@@ -472,6 +552,84 @@ sweepRoute({
   url: () => `/api/dialer/admin/campaigns/${progressCampaignId}/progress`,
   method: "GET",
   kind: "admin",
+  ownerStatuses: [200],
+})
+
+// ============================================================================
+// Caller routes. The queue is a collection: another caller is not a foreign
+// row, so their own read succeeds with their own view. The assignment-keyed
+// routes use the real fixture assignment; the Preacher has an active profile
+// too, so the 404 is the no-oracle refusal rather than requireDialerCaller's
+// 403. Skip is registered after the summary and recall rows because it writes
+// SKIPPED into the fixture assignment.
+// ============================================================================
+
+sweepRoute({
+  route: "/api/dialer/caller/queue",
+  method: "GET",
+  kind: "caller-collection",
+  owningCallerRole: "admin",
+  nonOwningCallerRole: "preacher",
+  ownerStatuses: [200],
+  nonOwnerStatuses: [200],
+})
+
+sweepRoute({
+  route: "/api/dialer/caller/assignments/[assignmentId]",
+  url: () => `/api/dialer/caller/assignments/${callerAssignmentId}`,
+  method: "GET",
+  kind: "caller",
+  owningCallerRole: "admin",
+  nonOwningCallerRole: "preacher",
+  ownerStatuses: [200],
+})
+
+sweepRoute({
+  route: "/api/dialer/caller/session/summary",
+  url: () => `/api/dialer/caller/session/summary?campaignId=${callerCampaignId}`,
+  method: "GET",
+  kind: "caller",
+  owningCallerRole: "admin",
+  nonOwningCallerRole: "preacher",
+  ownerStatuses: [200],
+})
+
+sweepRoute({
+  route: "/api/dialer/caller/session/recall",
+  method: "POST",
+  kind: "caller",
+  owningCallerRole: "admin",
+  nonOwningCallerRole: "preacher",
+  ownerStatuses: [200],
+  body: () => ({ campaignId: callerCampaignId }),
+})
+
+// A valid body with an assignment that does not exist still reaches the RPC:
+// the owner 404 is the function's assignment_not_found, and the Preacher's is
+// the same body-less refusal because the assignment is not theirs either.
+sweepRoute({
+  route: "/api/dialer/caller/disposition",
+  method: "POST",
+  kind: "caller",
+  owningCallerRole: "admin",
+  nonOwningCallerRole: "preacher",
+  ownerStatuses: [404],
+  body: {
+    assignmentId: ABSENT_ASSIGNMENT_ID,
+    attempt: 1,
+    dispositionStatus: "CONFIRMED",
+    followUpNotes: null,
+    responses: [],
+  },
+})
+
+sweepRoute({
+  route: "/api/dialer/caller/assignments/[assignmentId]/skip",
+  url: () => `/api/dialer/caller/assignments/${callerAssignmentId}/skip`,
+  method: "POST",
+  kind: "caller",
+  owningCallerRole: "admin",
+  nonOwningCallerRole: "preacher",
   ownerStatuses: [200],
 })
 
