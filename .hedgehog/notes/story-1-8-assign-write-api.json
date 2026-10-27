@@ -15,6 +15,24 @@
       "kind": "debt",
       "note": "Every refusal that needs state is unasserted at HTTP level: 409 conflicts_require_decision, 409 nothing_to_assign, 409 caller_inactive, 403 caller_not_assignable, 409 campaign_not_assignable and auto-promotion all need a pre-existing assignment row, a caller profile or a non-DRAFT campaign, which this sweep may not create. The routes forward the inputs and return the service error unchanged; the states are the UI layer's campaign-assign-write spec.",
       "logged_at": "2026-10-26T20:04:53.412Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T20:04:49.383Z",
+      "reason": "campaign-assign-write.spec.ts owns the write fixture and deletes assignments before the campaign",
+      "logged_at": "2026-10-27T02:35:06.762Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T20:04:53.411Z",
+      "reason": "campaign-assign-write.spec.ts asserts 409 conflicts_require_decision when mode is absent",
+      "logged_at": "2026-10-27T02:35:07.044Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T20:04:53.412Z",
+      "reason": "campaign-assign-write.spec.ts asserts the state-bearing refusals (caller set, inactive, terminal campaign, nothing to assign)",
+      "logged_at": "2026-10-27T02:35:07.324Z"
     }
   ]
 }

@@ -15,6 +15,12 @@
       "kind": "debt",
       "note": "The roster's zero-row state is unasserted: an Admin always has staff and a Preacher/Assistant has themselves, so CampaignEmptyState('No callers in your scope yet', 'View campaigns') has no browser coverage without deleting seeded staff.",
       "logged_at": "2026-10-26T18:51:15.514Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T18:51:15.387Z",
+      "reason": "Story 1.9 replaced the four absence assertions with the presence and measured-zero assertions",
+      "logged_at": "2026-10-27T02:35:06.162Z"
     }
   ]
 }

@@ -15,6 +15,18 @@
       "kind": "debt",
       "note": "The state-bearing refusals are unasserted at HTTP level: 403 campaign_scope_missing needs a seeded Assistant with a null assigned_preacher_id (a fixture mutation this sweep may not make) and 500 campaign_progress_read_failed needs an unreadable payload or an unrecognised SQLSTATE (a database fault it cannot inject). The route forwards getStaffContext() and returns the service error unchanged; the 500 parse arm is the UI layer's or a later integration point's to prove.",
       "logged_at": "2026-10-26T20:54:43.295Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T20:54:38.028Z",
+      "reason": "campaign-overview.spec.ts seeds three assignments and a CONFIRMED log and asserts all five buckets",
+      "logged_at": "2026-10-27T02:35:07.629Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T20:54:40.502Z",
+      "reason": "campaign-overview.spec.ts asserts a Preacher keeps the row and counts only their own contacts",
+      "logged_at": "2026-10-27T02:35:07.906Z"
     }
   ]
 }

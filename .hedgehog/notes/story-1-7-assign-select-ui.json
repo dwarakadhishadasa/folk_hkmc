@@ -15,6 +15,12 @@
       "kind": "debt",
       "note": "components/campaign/assign-contacts-types.ts mirrors AssignableContactPage, AssignableCaller and AssignmentSplitEntry by hand because lib/dialer/assignments.ts is server-only. A field added to the service page object (for example a 1.8 pre-check column) will not reach the client until this file is updated.",
       "logged_at": "2026-10-26T19:37:30.838Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T19:37:27.575Z",
+      "reason": "Story 1.8's UI layer replaced the disabled stub with precheck -> skip/move -> write",
+      "logged_at": "2026-10-27T02:35:06.484Z"
     }
   ]
 }

@@ -15,6 +15,12 @@
       "kind": "debt",
       "note": "The Campaign sub-nav links to /campaigns/callers, /campaigns/reports and /campaigns/new, none of which exist yet - they are Story 1.4 and later - and a Volunteer has no phone route into Campaign at all until the chrome layer lands the header pill, the bottom-nav entry and the Campaign menu. Until then the caller surface is reachable only by URL.",
       "logged_at": "2026-10-26T15:25:37.855Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T15:25:10.607Z",
+      "reason": "Story 1.9's overview reads listCampaignsWithProgress, which calls campaignScope; the shell has real rows and counts now",
+      "logged_at": "2026-10-27T02:35:04.088Z"
     }
   ]
 }

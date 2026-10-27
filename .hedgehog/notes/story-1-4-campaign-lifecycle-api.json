@@ -10,6 +10,18 @@
       "kind": "debt",
       "note": "sweepRoute's kind:\"caller\" branch (404 with an empty body for a non-owner) has no registered row in this layer: every route in this story is an admin route. The branch is unchanged but unexercised until the caller-queue story registers the first caller route, so a regression in it would surface there rather than here.",
       "logged_at": "2026-10-26T16:40:52.495Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T16:40:48.424Z",
+      "reason": "The 1.4 UI spec creates campaigns through the form and later specs use createDisposableCampaign",
+      "logged_at": "2026-10-27T02:35:04.440Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T16:40:48.425Z",
+      "reason": "Fixed at the source in 6943e1f: the transition lookup is own-key gated",
+      "logged_at": "2026-10-27T02:35:04.817Z"
     }
   ]
 }

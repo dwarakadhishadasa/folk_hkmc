@@ -15,6 +15,24 @@
       "kind": "debt",
       "note": "The intent's promotion half has no HTTP surface in this story: assigning an eligible staff user still cannot create a dialer_callers row until Story 1.8's assignment write calls promoteCaller/promoteCallers. Do not add a roster promote route to compensate — AD-2/UX-DR32 removed the invite flow.",
       "logged_at": "2026-10-26T18:38:23.166Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T18:38:19.432Z",
+      "reason": "campaign-callers.spec.ts drives both the deactivate and reactivate switches on a disposable profile",
+      "logged_at": "2026-10-27T02:35:05.155Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T18:38:23.042Z",
+      "reason": "campaign-callers.spec.ts asserts Admin, Preacher and Volunteer roster membership and the absent control",
+      "logged_at": "2026-10-27T02:35:05.495Z"
+    },
+    {
+      "kind": "debt-resolve",
+      "resolves": "2026-10-26T18:38:23.166Z",
+      "reason": "Story 1.8's writeAssignments calls promoteCallers before the RPC, so assignment auto-promotes",
+      "logged_at": "2026-10-27T02:35:05.841Z"
     }
   ]
 }
