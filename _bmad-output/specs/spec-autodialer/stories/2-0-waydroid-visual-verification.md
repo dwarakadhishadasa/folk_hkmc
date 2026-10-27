@@ -17,6 +17,14 @@ assignments; the first contact had one prior `NOT_INTERESTED` call.
 | `figcraft://node/2360` — Queue | Full-screen drawer, close circle, `showing X of Y`, four stat tiles (Pending in amber), current row in the pale blue highlight with the navy phone mark and `← you`, pending rows with the grey dot. |
 | `figcraft://node/2456` — Disposition | Full-screen screen with no app bar or bottom nav, `How did it go?`, close circle, Status + green Required pill, the thirteen chips in frame order, Notes + Optional, placeholder, pinned Save & continue. Selected chip is navy and the button is active. |
 
+## Screenshots
+
+![Assignments card in Waydroid](./waydroid/assignments-card.png)
+
+![Queue drawer in Waydroid](./waydroid/queue.png)
+
+![Disposition screen with Confirmed selected](./waydroid/disposition-selected.png)
+
 ## Adjustments made during the pass
 
 - The contact card header now gives the name the full card width; Skip and
