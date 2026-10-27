@@ -1,0 +1,51 @@
+{
+  "id": "story-1-10-phone-campaign-menu",
+  "goal": "Give the Campaign section its phone navigation: the page title's chevron opens the full-screen Campaign menu (frame 2217) with the same role- and caller-profile-gated destinations as the desktop sub-nav.",
+  "outcome": "On a phone, every Campaign page title carries the 18px chevron frame 1752/2263/2639 draw; tapping it opens a full-screen menu matching frame 2217 exactly — the 'Campaign' head with the page's scope line, a 40px radius-999 close button, a 1px divider, 56px rows for Overview, Callers and Reports (Admin/Preacher/Assistant) with Assignments inserted for an active caller, a right chevron and an active underline exactly the label's width, then a bottom divider. The destination set is the sub-nav's own rule, not a second copy. Desktop keeps the sub-nav and renders no chevron.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "STORY-1-10-PHONE-CAMPAIGN-MENU-RULE-1",
+      "kind": "rule",
+      "statement": "Design authority is figcraft frame 2217 (Campaign (phone) — Menu); the trigger is the chevron-down on the title rows of frames 1752, 2263 and 2639, and the current page's scope line is the menu subtitle."
+    },
+    {
+      "id": "STORY-1-10-PHONE-CAMPAIGN-MENU-RULE-2",
+      "kind": "rule",
+      "statement": "Exact measurements: head 390x96 with padding 20/16/16/16 and gap 4; title Poppins SemiBold 22; subtitle Inter Regular 13; close button 40x40 radius 999 on #F2F4F7 with a 12x12 X stroked #24324A; divider 1px. Items: padding 8/16/0/16, each row 358x56 containing an 18px line and a 2px underline 4px beneath it; label Inter SemiBold 15; chevron-right 4x8 stroked #9195A0 at weight 1.4; a 1px divider closes the frame."
+    },
+    {
+      "id": "STORY-1-10-PHONE-CAMPAIGN-MENU-RULE-3",
+      "kind": "rule",
+      "statement": "Colours use the design's own values through the existing tokens where they exist (--program-text #24324a, --muted-foreground #4a5568, --border #e2e8f0, --tab-active-text/--tab-active-underline #0f1e54) so dark mode stays legible; only the close pill #F2F4F7 and the chevron #9195A0 are literal."
+    },
+    {
+      "id": "STORY-1-10-PHONE-CAMPAIGN-MENU-RULE-4",
+      "kind": "rule",
+      "statement": "The destination set is the sub-nav's rule: Admin/Preacher/Assistant get Overview, Callers, Reports; Assignments is inserted for an active caller profile; a Volunteer sees Assignments alone. Extract it once and consume it from both surfaces."
+    },
+    {
+      "id": "STORY-1-10-PHONE-CAMPAIGN-MENU-RULE-5",
+      "kind": "rule",
+      "statement": "The trigger is phone-only (below 768px). Desktop keeps the existing sub-nav and shows no chevron."
+    },
+    {
+      "id": "STORY-1-10-PHONE-CAMPAIGN-MENU-RULE-6",
+      "kind": "rule",
+      "statement": "Every Campaign phone page opens it (Overview, Assignments, Callers, campaign detail, assign contacts); the menu subtitle is that page's own subtitle line."
+    },
+    {
+      "id": "STORY-1-10-PHONE-CAMPAIGN-MENU-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "STORY-1-10-PHONE-CAMPAIGN-MENU-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e campaign- passes with a phone-viewport spec that opens the menu from a page title, asserts the gated rows and the active underline, navigates by a row, and closes with the 40px button."
+    }
+  ],
+  "depends_on": [
+    "story-1-9-campaign-overview"
+  ]
+}
