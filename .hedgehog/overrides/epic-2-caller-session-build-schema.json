@@ -1,0 +1,7 @@
+{
+  "task": "EPIC-2-CALLER-SESSION-BUILD-SCHEMA",
+  "scope_add": [
+    "lib/supabase/types.ts"
+  ],
+  "reason": "The regenerated database types accompany the migration that adds dialer_survey_responses and record_call_disposition; the schema layer owns the type surface the server layer consumes."
+}

@@ -74,5 +74,6 @@
       "kind": "acceptance",
       "statement": "pnpm supabase:push and pnpm seed:local pass; dialer_survey_responses and record_call_disposition exist with the documented grants."
     }
-  ]
+  ],
+  "depends_on": []
 }
