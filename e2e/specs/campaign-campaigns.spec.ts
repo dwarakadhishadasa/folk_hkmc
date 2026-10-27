@@ -96,20 +96,62 @@ async function deleteCampaign(id: string): Promise<void> {
     throw new Error(`Refusing to delete a dialer campaign with a non-UUID id: ${id}`)
   }
 
-  await runLocalSql(`DELETE FROM public.dialer_campaigns WHERE id = '${id}'`)
+  await runLocalSql(
+    `DELETE FROM public.dialer_survey_responses WHERE call_log_id IN (
+       SELECT id FROM public.dialer_call_logs WHERE assignment_id IN (
+         SELECT id FROM public.dialer_assignments WHERE campaign_id = '${id}'
+       )
+     );
+     DELETE FROM public.dialer_call_logs WHERE assignment_id IN (
+       SELECT id FROM public.dialer_assignments WHERE campaign_id = '${id}'
+     );
+     DELETE FROM public.dialer_assignments WHERE campaign_id = '${id}';
+     DELETE FROM public.dialer_survey_options WHERE question_id IN (
+       SELECT id FROM public.dialer_survey_questions WHERE campaign_id = '${id}'
+     );
+     DELETE FROM public.dialer_survey_questions WHERE campaign_id = '${id}';
+     DELETE FROM public.dialer_campaigns WHERE id = '${id}'`,
+  )
 }
 
 /**
  * Every campaign in the e2e program, deleted.
  *
- * This is what makes the empty state a real precondition. The delete is
- * deliberately unconditional: if a later story's assignments reference a
- * campaign, the foreign key refuses the statement and this spec fails loudly
- * rather than reporting an empty list it did not establish.
+ * This is what makes the empty state a real precondition. Epic 2 put
+ * assignments, call logs and survey responses behind a campaign, and every one
+ * of those foreign keys is `ON DELETE RESTRICT` or `ON DELETE CASCADE`; the
+ * delete therefore removes the dependants first, in dependency order, rather
+ * than relying on the campaign row alone succeeding. The condition stays
+ * unconditional: the spec wants a genuinely empty program, not a filtered one.
  */
 async function deleteCampaignsForProgram(): Promise<void> {
   const program = e2eProgramId().replace(/'/g, "''")
-  await runLocalSql(`DELETE FROM public.dialer_campaigns WHERE program_id = '${program}'`)
+  await runLocalSql(
+    `DELETE FROM public.dialer_survey_responses WHERE call_log_id IN (
+       SELECT id FROM public.dialer_call_logs WHERE assignment_id IN (
+         SELECT id FROM public.dialer_assignments WHERE campaign_id IN (
+           SELECT id FROM public.dialer_campaigns WHERE program_id = '${program}'
+         )
+       )
+     );
+     DELETE FROM public.dialer_call_logs WHERE assignment_id IN (
+       SELECT id FROM public.dialer_assignments WHERE campaign_id IN (
+         SELECT id FROM public.dialer_campaigns WHERE program_id = '${program}'
+       )
+     );
+     DELETE FROM public.dialer_assignments WHERE campaign_id IN (
+       SELECT id FROM public.dialer_campaigns WHERE program_id = '${program}'
+     );
+     DELETE FROM public.dialer_survey_options WHERE question_id IN (
+       SELECT id FROM public.dialer_survey_questions WHERE campaign_id IN (
+         SELECT id FROM public.dialer_campaigns WHERE program_id = '${program}'
+       )
+     );
+     DELETE FROM public.dialer_survey_questions WHERE campaign_id IN (
+       SELECT id FROM public.dialer_campaigns WHERE program_id = '${program}'
+     );
+     DELETE FROM public.dialer_campaigns WHERE program_id = '${program}'`,
+  )
 }
 
 /** A campaign created through the route the form uses, for a focused test. */

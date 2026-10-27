@@ -77,7 +77,7 @@ function CampaignCard({ entry }: { entry: CampaignOverviewEntry }) {
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-[13px] font-medium text-[var(--program-text)]">
           <Link
-            href={`/campaigns/${campaign.id}/edit`}
+            href={`/campaigns/${campaign.id}`}
             className="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
           >
             {campaign.name}
