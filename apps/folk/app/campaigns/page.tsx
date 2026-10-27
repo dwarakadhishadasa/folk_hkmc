@@ -43,7 +43,7 @@ export default async function CampaignsOverviewPage() {
       <>
         <CampaignPageHeader
           title="Overview"
-          subtitle="Campaigns · folk programme"
+          subtitle={`${campaigns.length} ${campaigns.length === 1 ? "campaign" : "campaigns"} · folk programme`}
           actionHref="/campaigns/new"
           actionLabel="New campaign"
         />
