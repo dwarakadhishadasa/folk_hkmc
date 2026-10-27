@@ -1,0 +1,78 @@
+{
+  "id": "epic-2-caller-session-build",
+  "goal": "Build Epic 2 of SPEC-autodialer: a staff member with an active caller profile opens /campaigns/assignments, works only their own caller-grain queue through tel: with a clipboard fallback, paces with a countdown derived from elapsed time, skips or pauses without wedging the session, records one of the thirteen statuses plus notes and the campaign survey in one transaction, survives reload, offline gaps and named refusals without losing an answer, and finishes with a caller-grain summary that re-queues only their own unreachable contacts within max_attempts.",
+  "outcome": "The caller queue payload, call card, contact history, queue drawer, pacing controls, single-tab lock, disposition screen, record_call_disposition RPC and its survey-response table, persistent save receipts, offline disposition queue, draft recovery and session summary all exist and are denial-swept; the UI matches campaign.figcraft frames 2263, 2360, 2456 and 2737 at phone width, with every required design omission implemented; a caller cannot see or act on another caller's assignment; and every caller route refuses unauthenticated requests and returns a body-less 404 for a foreign or missing assignment.",
+  "priority": 100,
+  "requirements": [
+    {
+      "id": "EPIC-2-RULE-1",
+      "kind": "rule",
+      "statement": "CALLER-GRAIN, CALLER-OWNED. The queue is only PENDING assignments on ACTIVE campaigns, resolved through dialer_assignments -> dialer_callers by caller_id, user_id and program_id, ordered by campaign date, campaign, sort_order, then assignment id. A missing and a foreign assignment are both a 404 with no body (AD-7). The caller id comes from getStaffContext(), never a request payload."
+    },
+    {
+      "id": "EPIC-2-RULE-2",
+      "kind": "rule",
+      "statement": "DESIGN AUTHORITY. campaign.figcraft frames 2263 (call card), 2360 (queue), 2456 (disposition) and 2737 (second card state) win on layout, labels and visible states. Frame 2737's stuck 'Call Priya' label is a known defect: the primary action must read 'Call <current contact>'. Required design omissions are implemented, not dropped: Skip/Pause, the visible gap countdown, campaign-switch notice, resume after tab loss, cross-tab refusal, conditional survey, save receipt, queued state, summary and recall, and the actionable empty state."
+    },
+    {
+      "id": "EPIC-2-RULE-3",
+      "kind": "rule",
+      "statement": "PHONE-FIRST. The call card is full width; Queue opens over it as a full-screen drawer with the current row marked 'you', the next row immediately below, tap-to-jump, a virtualised window and an honest 'Showing X of Y'. A wide viewport gets the same phone-first session or an explicit open-on-phone state, never a desktop rail. tel: opens only after the number is copied; an empty phone number is a visible failure and does not advance."
+    },
+    {
+      "id": "EPIC-2-RULE-4",
+      "kind": "rule",
+      "statement": "PACING AND CONTROLS. The gap countdown is derived from Date.now() against a target timestamp, never a decrementing counter, is visible, and gates the call button rather than navigation. Presets 5/10/20/30/60, default 20, range 5-300, and an off-preset value renders as the current value. Pause reads as a normal state, not an error. Skip writes SKIPPED, is bounded on the last row, and never drops the contact. A next assignment in another campaign shows an awaited notice naming the campaign and date, pauses the gap and blocks the next call until dismissed. A BroadcastChannel lock with a localStorage fallback refuses a second tab loudly. A reload restores the same contact and in-flight draft from the URL plus a refetch."
+    },
+    {
+      "id": "EPIC-2-RULE-5",
+      "kind": "rule",
+      "statement": "ONE TRANSACTION. record_call_disposition is SECURITY INVOKER, search_path pinned, EXECUTE revoked from PUBLIC/anon/authenticated and granted to service_role only. It re-reads the assignment and caller, refuses an inactive caller or a reassigned assignment, requires the campaign to be ACTIVE, snapshots dial_phone from contacts at save time, enforces required survey answers and choice questions with zero options, and writes the call log, survey responses and assignment status together. Idempotent on (assignment_id, attempt): the same payload returns 200 with the stored row, a different payload returns 409 and changes nothing, never 500. attempt is supplied by the queue payload, never invented."
+    },
+    {
+      "id": "EPIC-2-RULE-6",
+      "kind": "rule",
+      "statement": "THE DESIGN'S 13 CHIPS ARE THE DATA MODEL. Copy the labels exactly, including 'Not interested - do not call again'. Status is required; Notes always render and are optional; the campaign survey renders only when the selected status_group is neither NOT_REACHABLE nor WRONG_NUMBER. A non-reached status never carries survey answers. The generated status_group stays the only mapping."
+    },
+    {
+      "id": "EPIC-2-RULE-7",
+      "kind": "rule",
+      "statement": "RECEIPTS AND REFUSALS. The save receipt is persistent on the disposition screen, never a toast: Saving..., Saved HH:MM, Queued - will send, Save failed - session paused. A network gap is the 202 { success:false, queued:true, message } contract and 'Queued - will send' is a success state. A deactivated caller, reassigned assignment, cancelled campaign and second tab each get a named refusal; the session pauses and every answer stays editable and retryable. An Assistant who cannot correct a wrong number sees 'Ask an Admin or Preacher' and no failing /manage link."
+    },
+    {
+      "id": "EPIC-2-RULE-8",
+      "kind": "rule",
+      "statement": "OFFLINE AND DRAFT. /api/dialer/caller/disposition is in public/sw.js QUEUED_POST_PATHS and /campaigns is in NETWORK_ONLY_PATH_PREFIXES; no other dialer path is queued. The queue drains on ok or 409. A 200 replay does not duplicate the call log. The localStorage draft is keyed dialer:disposition:<assignmentId>:<attempt>, survives a permanent refusal, is discarded when the assignment or attempt changes or the write is confirmed, and is surfaced next session as a call that could not be saved with its answers intact. No app-shell offline promise is made; the tab must already be open."
+    },
+    {
+      "id": "EPIC-2-RULE-9",
+      "kind": "rule",
+      "statement": "SESSION SUMMARY IS CALLER-GRAIN. When the queue empties, Session complete shows the caller's own called, reached, no answer, wrong number and skipped-early counts; 'Re-queue those N and continue' returns only their NOT_REACHABLE rows under max_attempts to PENDING; reached and WRONG_NUMBER are never re-queued; attempt is not bumped; an assignment at the cap is reported as closed after N attempts and not offered; a non-ACTIVE campaign returns terminal 409; another caller's row is absent from the count and a recall of it is 404. Recall is the primary phone action and Done is secondary."
+    },
+    {
+      "id": "EPIC-2-RULE-10",
+      "kind": "rule",
+      "statement": "EVERY ROUTE IS DENIAL-SWEPT. Each /api/dialer/caller/** route adds its row to e2e/specs/dialer-route-sweep.spec.ts in the same commit; pnpm guardrails fails otherwise. A caller route's non-owner case must use a role that actually holds an active caller profile, so the 404 is the no-oracle refusal, not requireDialerCaller's 403."
+    },
+    {
+      "id": "EPIC-2-ACCEPTANCE-1",
+      "kind": "acceptance",
+      "statement": "pnpm test:static passes."
+    },
+    {
+      "id": "EPIC-2-ACCEPTANCE-2",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e campaign- passes, including campaign-queue, campaign-session, campaign-disposition, campaign-receipts, campaign-offline and campaign-summary."
+    },
+    {
+      "id": "EPIC-2-ACCEPTANCE-3",
+      "kind": "acceptance",
+      "statement": "pnpm test:e2e dialer-route passes with every caller route swept."
+    },
+    {
+      "id": "EPIC-2-ACCEPTANCE-4",
+      "kind": "acceptance",
+      "statement": "pnpm supabase:push and pnpm seed:local pass; dialer_survey_responses and record_call_disposition exist with the documented grants."
+    }
+  ]
+}
