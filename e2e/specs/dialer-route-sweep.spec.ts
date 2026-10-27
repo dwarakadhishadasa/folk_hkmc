@@ -10,7 +10,7 @@ import {
   type AssignmentFixture,
   type CallerFixture,
 } from "../fixtures/dialer-caller"
-import { e2eProgramId, fixtureEmail, repoRoot, storageStatePath, type E2ERole } from "../fixtures/roles"
+import { fixtureEmail, repoRoot, storageStatePath, type E2ERole } from "../fixtures/roles"
 
 /**
  * Denial sweep for every /api/dialer/** route.
