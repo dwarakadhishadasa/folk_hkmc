@@ -1,0 +1,5 @@
+{
+  "intent": "epic-2-caller-session",
+  "reason": "Its dependencies were already complete when the intent was added, which would create an unnecessary worktree; the epic re-enters as a fresh intent with no intent dependency so it compiles on the current branch.",
+  "abandoned_at": "2026-10-27T13:02:35.347Z"
+}
