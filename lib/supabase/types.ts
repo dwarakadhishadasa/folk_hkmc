@@ -628,6 +628,51 @@ export type Database = {
           },
         ]
       }
+      dialer_survey_responses: {
+        Row: {
+          answer: string | null
+          answer_values: string[] | null
+          call_log_id: string
+          created_at: string
+          id: string
+          program_id: string
+          question_id: string
+        }
+        Insert: {
+          answer?: string | null
+          answer_values?: string[] | null
+          call_log_id: string
+          created_at?: string
+          id?: string
+          program_id: string
+          question_id: string
+        }
+        Update: {
+          answer?: string | null
+          answer_values?: string[] | null
+          call_log_id?: string
+          created_at?: string
+          id?: string
+          program_id?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_survey_responses_call_log_id_fkey"
+            columns: ["call_log_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_call_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dialer_survey_responses_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_survey_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invite_log: {
         Row: {
           accepted_at: string | null
@@ -897,6 +942,18 @@ export type Database = {
       caller_effective_location_ids: { Args: never; Returns: string[] }
       caller_program_id: { Args: never; Returns: string }
       caller_role: { Args: never; Returns: string }
+      record_call_disposition: {
+        Args: {
+          p_assignment_id: string
+          p_attempt: number
+          p_caller_id: string
+          p_disposition_status: string
+          p_follow_up_notes: string | null
+          p_program_id: string
+          p_responses: Json
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

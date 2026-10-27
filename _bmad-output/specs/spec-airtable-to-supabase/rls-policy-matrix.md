@@ -21,6 +21,7 @@ Role-by-entity visibility contract for CAP-3. Scoping semantics are lifted from 
 | `dialer_call_logs` | All rows in program | Call logs of their own contacts' assignments | Own attempts only | Call logs of their assigned preacher's contacts' assignments |
 | `dialer_survey_questions` | All rows in program | All rows in program | Questions of campaigns they are assigned in | All rows in program |
 | `dialer_survey_options` | All rows in program | All rows in program | Options of questions in campaigns they are assigned in | All rows in program |
+| `dialer_survey_responses` | All rows in program | Responses of their own contacts' assignments | Own attempts only | Responses of their assigned preacher's contacts' assignments |
 | `dialer_contact_profiles` | All rows in program | Profiles of their own contacts | Profiles of their own contacts | Profiles of their assigned preacher's contacts |
 
 `users` note (assumed 2026-10-06): picker lists (preachers, locations) stay server-mediated via the service role, as today, so non-admin roles need no cross-row `users` reads.
@@ -30,7 +31,7 @@ Role-by-entity visibility contract for CAP-3. Scoping semantics are lifted from 
 | Table | Policy |
 | --- | --- |
 | All four | No direct authenticated writes. All mutations go through server routes with the service-role key, which bypasses RLS. Authenticated INSERT/UPDATE/DELETE policies are not granted. |
-| The seven `dialer_*` tables | Same rule, and the grants enforce it: `anon` holds **no** privilege on any dialer table; `authenticated` holds **SELECT only**; `service_role` holds SELECT/INSERT/UPDATE. No browser role holds DELETE on any dialer table — a campaign is cancelled (`status = 'CANCELLED'`), never deleted. A survey question is retired (`retired_at`) once it has responses; a question that still has none may be deleted by the service role, which is the one DELETE grant that exists (`20261026000000_grant_dialer_survey_delete.sql`, Story 1.5). Story 1.1, migration `20261025000000_create_dialer_tables.sql`. |
+| The eight `dialer_*` tables | Same rule, and the grants enforce it: `anon` holds **no** privilege on any dialer table; `authenticated` holds **SELECT only**; `service_role` holds SELECT/INSERT/UPDATE. No browser role holds DELETE on any dialer table — a campaign is cancelled (`status = 'CANCELLED'`), never deleted. A survey question is retired (`retired_at`) once it has responses; a question that still has none may be deleted by the service role, which is the one DELETE grant that exists (`20261026000000_grant_dialer_survey_delete.sql`, Story 1.5). `record_call_disposition` (Story 2.3) is `SECURITY INVOKER`, has EXECUTE revoked from `PUBLIC`, `anon` and `authenticated`, and is granted to `service_role` only. Story 1.1, migration `20261025000000_create_dialer_tables.sql`; the eighth table and the disposition function are in `20261028000000_dialer_survey_responses.sql`. |
 
 ## Program scoping
 
