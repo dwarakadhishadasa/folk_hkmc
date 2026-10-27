@@ -1,0 +1,5 @@
+{
+  "intent": "story-1-11-campaign-desktop-parity",
+  "reason": "The graph rebuild false-completed its schema/server/api/ui layers by matching story 1.10's identical layer commit messages and overlapping scopes, so the chain could not gate this work; it is being built in trunk as one reviewed commit instead.",
+  "abandoned_at": "2026-10-27T08:01:08.233Z"
+}
