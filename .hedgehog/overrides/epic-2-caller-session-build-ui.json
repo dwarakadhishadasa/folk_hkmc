@@ -1,0 +1,7 @@
+{
+  "task": "EPIC-2-CALLER-SESSION-BUILD-UI",
+  "scope_add": [
+    "e2e/specs/campaign-caller-helpers.ts"
+  ],
+  "reason": "Shared fixture module for the six campaign-*.spec.ts caller specs; it is test code owned by this UI layer."
+}
