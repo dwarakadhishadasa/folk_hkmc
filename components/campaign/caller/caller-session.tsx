@@ -173,32 +173,21 @@ function payloadFor(
 function namedSaveFailure(code: string | undefined, fallback: string): string {
   switch (code) {
     case "caller_deactivated":
-      return "Caller deactivated — session paused"
+      return "Caller deactivated — the call was not saved"
     case "assignment_reassigned":
-      return "Assignment reassigned — session paused"
+      return "Assignment reassigned — the call was not saved"
     case "campaign_not_active":
-      return "This campaign is no longer active — session paused"
+      return "This campaign is no longer active — the call was not saved"
     case "assignment_not_pending":
-      return "This assignment has already been completed — session paused"
+      return "This assignment has already been completed"
     case "disposition_conflict":
-      return "A different answer was already saved for this attempt — session paused"
+      return "A different answer was already saved for this attempt"
     case "attempt_conflict":
-      return "This attempt was already saved — session paused"
+      return "This attempt was already saved"
     case "disposition_validation_failed":
-      return "Check the required survey answers — session paused"
+      return "Check the required survey answers"
     case "phone_missing":
-      return "This contact has no phone number — session paused"
-    default:
-      return fallback
-  }
-}
-
-function namedSkipFailure(code: string | undefined, fallback: string): string {
-  switch (code) {
-    case "campaign_not_active":
-      return "This campaign is no longer active — session paused"
-    case "assignment_not_pending":
-      return "This assignment has already been completed — session paused"
+      return "This contact has no phone number"
     default:
       return fallback
   }
@@ -278,13 +267,11 @@ export function CallerSession({
   const [phase, setPhase] = useState<Phase>(() =>
     resolveInitialPhase(initialQueue, initialAssignmentId, initialCampaignId, initialPhase),
   )
-  const [paused, setPaused] = useState(false)
   const [callStarted, setCallStarted] = useState(false)
   const [queueOpen, setQueueOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [tabConflict, setTabConflict] = useState(false)
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle")
-  const [skipBusy, setSkipBusy] = useState(false)
   const [status, setStatus] = useState<DispositionStatus | null>(null)
   const [notes, setNotes] = useState("")
   const [answers, setAnswers] = useState<DispositionAnswers>({})
@@ -644,8 +631,8 @@ export function CallerSession({
     (
       from: CallerQueueEntry,
       counted: boolean,
-      statusGroup?: string,
-      outcome?: { status: "COMPLETED" | "SKIPPED"; dispositionStatus: string | null },
+      statusGroup: string | undefined,
+      outcome: { status: "COMPLETED"; dispositionStatus: string | null },
     ) => {
       const index = entries.findIndex((entry) => entry.assignmentId === from.assignmentId)
       const remaining = entries.filter((entry) => entry.assignmentId !== from.assignmentId)
@@ -657,8 +644,8 @@ export function CallerSession({
           row.assignmentId === from.assignmentId
             ? {
                 ...row,
-                status: outcome?.status ?? row.status,
-                latestDispositionStatus: outcome?.dispositionStatus ?? row.latestDispositionStatus,
+                status: outcome.status,
+                latestDispositionStatus: outcome.dispositionStatus ?? row.latestDispositionStatus,
                 latestStatusGroup: statusGroup ?? row.latestStatusGroup,
                 actionable: false,
               }
@@ -792,7 +779,6 @@ export function CallerSession({
     }
 
     setNotice(null)
-    setPaused(false)
     setCallStarted(false)
   }
 
@@ -818,7 +804,7 @@ export function CallerSession({
   }
 
   async function handleCall() {
-    if (!current || tabConflict || paused || notice || callStarted) {
+    if (!current || tabConflict || notice || callStarted) {
       return
     }
 
@@ -866,38 +852,6 @@ export function CallerSession({
       window.clearTimeout(copyTimerRef.current)
     }
     copyTimerRef.current = window.setTimeout(() => setCopyState("idle"), 2_500)
-  }
-
-  async function handleSkip() {
-    if (!current || skipBusy) {
-      return
-    }
-
-    setSkipBusy(true)
-    setCallError(null)
-
-    try {
-      const response = await fetch(`/api/dialer/caller/assignments/${current.assignmentId}/skip`, {
-        method: "POST",
-      })
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { code?: string; message?: string } | null
-        setCallError(namedSkipFailure(body?.code, body?.message ?? "Skip failed — session paused"))
-        setPaused(true)
-        return
-      }
-
-      removeDraft(current.assignmentId, current.attempt)
-      setSessionReceipt(null)
-      advance(current, false, undefined, { status: "SKIPPED", dispositionStatus: null })
-      void refreshMeta()
-    } catch {
-      setCallError("Skip failed — session paused")
-      setPaused(true)
-    } finally {
-      setSkipBusy(false)
-    }
   }
 
   async function handleSave() {
@@ -949,11 +903,10 @@ export function CallerSession({
       }
 
       const body = (await response.json().catch(() => null)) as { code?: string; message?: string } | null
-      const message = namedSaveFailure(body?.code, body?.message ?? "Save failed — session paused")
+      const message = namedSaveFailure(body?.code, body?.message ?? "Save failed — try again")
       setFailure(message)
-      setReceipt({ kind: "failed", text: "Save failed — session paused" })
-      setSessionReceipt({ kind: "failed", text: "Save failed — session paused" })
-      setPaused(true)
+      setReceipt({ kind: "failed", text: "Save failed — try again" })
+      setSessionReceipt({ kind: "failed", text: "Save failed — try again" })
       setSaving(false)
     } catch {
       const queued = readOffline().filter(
@@ -998,7 +951,6 @@ export function CallerSession({
       if (first) {
         setCurrentId(first.assignmentId)
         setPhase("card")
-        setPaused(false)
         setCallStarted(false)
         setSessionReceipt({ kind: "saved", text: "Re-queued — your unreachable contacts are back" })
       } else {
@@ -1018,7 +970,6 @@ export function CallerSession({
     if (first) {
       setCurrentId(first.assignmentId)
       setPhase("card")
-      setPaused(false)
       setCallStarted(false)
       setSessionReceipt(null)
     } else {
@@ -1032,7 +983,6 @@ export function CallerSession({
     setPhase("card")
     setQueueOpen(false)
     setCallStarted(false)
-    setPaused(false)
     setCallError(null)
     setReceipt(null)
     setFailure(null)
@@ -1111,7 +1061,6 @@ export function CallerSession({
             setAnswers((previous) => ({ ...previous, [questionId]: next }))
           }
           onSave={() => void handleSave()}
-          onClose={() => setPhase("card")}
         />
       </div>
     )
@@ -1121,7 +1070,7 @@ export function CallerSession({
     return (
       <div className="-m-6 flex min-h-full flex-1 flex-col bg-background md:mx-auto md:my-0 md:max-w-[430px] md:border-x md:border-[#E2E8F0] dark:md:border-[var(--border)]">
         <div className="hidden px-4 pt-4 md:block">
-          <CampaignSubNav role={role} hasActiveCallerProfile />
+          <CampaignSubNav role={role} />
         </div>
         <SessionSummary
           summary={summary}
@@ -1140,7 +1089,7 @@ export function CallerSession({
     return (
       <div className="-m-6 flex min-h-full flex-1 flex-col bg-background">
         <div className="hidden px-4 pt-4 md:block">
-          <CampaignSubNav role={role} hasActiveCallerProfile />
+          <CampaignSubNav role={role} />
         </div>
         <div className="flex flex-1 flex-col gap-4 p-4">
           <CampaignPageHeader title="Assignments" subtitle="Your call queue" />
@@ -1153,12 +1102,12 @@ export function CallerSession({
     )
   }
 
-  const callBlocked = paused || notice !== null
+  const callBlocked = notice !== null
 
   return (
     <div className="-m-6 flex min-h-full flex-1 flex-col bg-background md:mx-auto md:my-0 md:max-w-[430px] md:border-x md:border-[#E2E8F0] dark:md:border-[var(--border)]">
       <div className="hidden w-full px-4 pt-4 md:block">
-        <CampaignSubNav role={role} hasActiveCallerProfile />
+        <CampaignSubNav role={role} />
       </div>
       <div className="flex min-h-0 flex-1 flex-col p-4 pb-5">
         <CampaignPageHeader title="Assignments" subtitle={subtitle} />
@@ -1243,15 +1192,11 @@ export function CallerSession({
         <div className="mt-3">
           <CallCard
             entry={current}
-            paused={paused}
             callStarted={callStarted}
             copyState={copyState}
-            skipBusy={skipBusy}
             draftNotice={draftNotice}
             receipt={sessionReceipt}
             onCopy={() => void handleCopy()}
-            onSkip={() => void handleSkip()}
-            onTogglePause={() => setPaused((value) => !value)}
             onResumeDraft={resumeDraft}
           />
         </div>
@@ -1271,13 +1216,11 @@ export function CallerSession({
 
       <div className="sticky bottom-[var(--mobile-app-nav-inset,0px)] z-20 mt-auto shrink-0 border-t border-[#E2E8F0] bg-card px-4 py-4 dark:border-[var(--border)]">
         <p className="mb-2 text-center text-[11px] leading-4 text-[var(--muted-foreground)]">
-          {paused
-            ? "Paused — resume when you are ready"
-            : notice
-              ? "Dismiss the campaign notice to continue"
-              : callStarted
-                ? "Call in progress — come back to this tab to record the outcome"
-                : "Ready to call"}
+          {notice
+            ? "Dismiss the campaign notice to continue"
+            : callStarted
+              ? "Call in progress — come back to this tab to record the outcome"
+              : "Ready to call"}
         </p>
         <button
           type="button"
@@ -1286,7 +1229,7 @@ export function CallerSession({
           className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[var(--program-primary)] text-[16px] font-semibold text-white transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Phone className="size-4" strokeWidth={1.5} aria-hidden="true" />
-          {paused ? "Paused" : callStarted ? "Call in progress" : `Call ${firstName(current.contactName)}`}
+          {callStarted ? "Call in progress" : `Call ${firstName(current.contactName)}`}
         </button>
       </div>
 

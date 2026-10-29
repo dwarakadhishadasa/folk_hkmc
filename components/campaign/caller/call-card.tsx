@@ -37,33 +37,24 @@ function historyDetail(entry: CallerContactHistoryEntry): string {
  * The call card — frame 2263.
  *
  * The design's card is name, phone with Copy, a divider and the last N calls.
- * Skip and Pause are required design omissions: they live in the card header so
- * they are always reachable without a separate control surface. Pause is a
- * normal state, not an error, and a draft banner is neutral paper, not a toast.
+ * The card carries no session controls: a call is started from the footer, and
+ * the outcome is recorded on the disposition screen that follows it.
  */
 export function CallCard({
   entry,
-  paused,
   callStarted,
   copyState,
-  skipBusy,
   draftNotice,
   receipt,
   onCopy,
-  onSkip,
-  onTogglePause,
   onResumeDraft,
 }: {
   entry: CallerQueueEntry
-  paused: boolean
   callStarted: boolean
   copyState: "idle" | "copied" | "failed"
-  skipBusy: boolean
   draftNotice: boolean
   receipt?: { kind: "saving" | "saved" | "queued" | "failed"; text: string } | null
   onCopy: () => void
-  onSkip: () => void
-  onTogglePause: () => void
   onResumeDraft: () => void
 }) {
   return (
@@ -81,33 +72,9 @@ export function CallCard({
         </p>
       ) : null}
 
-      <div className="flex items-center justify-end gap-3">
-        <button
-          type="button"
-          onClick={onSkip}
-          disabled={skipBusy}
-          className="text-[11px] font-semibold text-[var(--muted-foreground)] underline-offset-4 hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:opacity-50"
-        >
-          {skipBusy ? "Skipping…" : "Skip"}
-        </button>
-        <button
-          type="button"
-          onClick={onTogglePause}
-          className="text-[11px] font-semibold text-[var(--muted-foreground)] underline-offset-4 hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
-        >
-          {paused ? "Resume" : "Pause"}
-        </button>
-      </div>
-
-      <h2 className="mt-0.5 font-[family-name:var(--font-poppins)] text-[26px] leading-[1.15] font-semibold tracking-tight text-[var(--program-text)]">
+      <h2 className="font-[family-name:var(--font-poppins)] text-[26px] leading-[1.15] font-semibold tracking-tight text-[var(--program-text)]">
         {entry.contactName}
       </h2>
-
-      {paused ? (
-        <span className="mt-2 w-fit rounded-full bg-[#F1F5F9] px-2.5 py-1 text-[10px] font-semibold text-[#4A5568] dark:bg-[var(--secondary)] dark:text-[var(--muted-foreground)]">
-          Paused — answers and place kept
-        </span>
-      ) : null}
 
       <div className="mt-2 flex items-center gap-2">
         <p className="text-[15px] leading-6 text-[var(--program-text)]">{entry.phone || "No phone number"}</p>
