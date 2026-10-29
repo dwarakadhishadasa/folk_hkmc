@@ -20,6 +20,7 @@ import {
   seededContacts,
 } from "./campaign-caller-helpers"
 import type { AssignmentFixtureRow, ContactFixture } from "./campaign-caller-helpers"
+import { serviceRoleClient } from "../fixtures/dialer-caller"
 import { storageStatePath } from "../fixtures/roles"
 
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000"
@@ -74,7 +75,7 @@ test.describe("the caller card and queue", () => {
     await expect(page.getByRole("button", { name: /^Call / })).toBeVisible()
     await expect(page.getByRole("button", { name: "Copy" })).toBeVisible()
     await expect(page.getByText("Previous", { exact: true })).toBeVisible()
-    await expect(page.getByText("Answered", { exact: true })).toBeVisible()
+    await expect(page.getByText("Answered", { exact: true }).first()).toBeVisible()
     await expect(page.getByText(/Not interested · shift timings/)).toBeVisible()
     await expect(page.getByText("03 Aug")).toBeVisible()
 
@@ -113,6 +114,25 @@ test.describe("the caller card and queue", () => {
     const assistant = await callerForRole("assistant")
 
     try {
+      // The empty-state fixture must already be empty. Deleting rows it did not
+      // create would wipe a developer's local assignments, so a dirty queue is
+      // a loud failure rather than a silent clean-up.
+      const { data: existing, error } = await serviceRoleClient()
+        .from("dialer_assignments")
+        .select("id")
+        .eq("caller_id", assistant.callerId)
+        .limit(1)
+
+      if (error) {
+        throw new Error(`Checking the assistant queue failed: ${error.message}`)
+      }
+
+      if (existing && existing.length > 0) {
+        throw new Error(
+          "The assistant fixture already has assignments. Refusing to delete them; run the suite against a seeded database.",
+        )
+      }
+
       await runLocalSql(
         `DELETE FROM public.dialer_call_logs WHERE caller_id = '${assistant.callerId}';
          DELETE FROM public.dialer_assignments WHERE caller_id = '${assistant.callerId}';`,
