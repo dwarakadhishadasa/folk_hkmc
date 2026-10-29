@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { Phone, X } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Check, Phone, X } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -66,7 +66,12 @@ export function QueueDrawer({
   currentId: string | null
   onJump: (assignmentId: string) => void
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+  // A callback ref in state, not a plain ref: the drawer's content mounts in a
+  // portal one render after the virtualizer's layout effect runs, so a ref read
+  // through `getScrollElement` is still null then and no scroll listener is
+  // attached. Setting the element into state re-renders the virtualizer once
+  // the node exists, and that render is what wires up the observer.
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const currentIndex = Math.max(
     0,
     roster.findIndex((row) => row.assignmentId === currentId),
@@ -74,18 +79,22 @@ export function QueueDrawer({
 
   const virtualizer = useVirtualizer({
     count: roster.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollElement,
     estimateSize: () => ROW_HEIGHT + ROW_GAP,
     overscan: 8,
+    // The drawer mounts inside a portal, so the scroll element has no measured
+    // height on the first pass. The seed rect paints the first window before
+    // the observer reports the real size.
+    initialRect: { width: 390, height: 640 },
   })
 
   useEffect(() => {
-    if (!open || roster.length === 0) {
+    if (!open || roster.length === 0 || !scrollElement) {
       return
     }
 
     virtualizer.scrollToIndex(currentIndex, { align: "center" })
-  }, [open, currentIndex, roster.length, virtualizer])
+  }, [open, currentIndex, roster.length, virtualizer, scrollElement])
 
   const rendered = virtualizer.getVirtualItems()
   const renderedCount = rendered.length > 0 ? rendered.length : Math.min(roster.length, 8)
@@ -140,11 +149,12 @@ export function QueueDrawer({
 
         <div className="h-px w-full shrink-0 bg-[#E2E8F0] dark:bg-[var(--border)]" />
 
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+        <div ref={setScrollElement} className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {rendered.map((virtualRow) => {
               const row = roster[virtualRow.index]
               const isCurrent = row.assignmentId === currentId
+              const isDone = row.status === "COMPLETED"
               const status = rowStatus(row)
 
               return (
@@ -168,11 +178,17 @@ export function QueueDrawer({
                 >
                   <span
                     className={`flex size-[22px] shrink-0 items-center justify-center rounded-full ${
-                      isCurrent ? "bg-[var(--program-primary)] text-white" : "bg-[#F1F5F9] dark:bg-[var(--secondary)]"
+                      isCurrent
+                        ? "bg-[var(--program-primary)] text-white"
+                        : isDone
+                          ? "bg-[#15803D] text-white dark:bg-[#4ADE80] dark:text-[#12311F]"
+                          : "bg-[#F1F5F9] dark:bg-[var(--secondary)]"
                     }`}
                   >
                     {isCurrent ? (
                       <Phone className="size-2.5" strokeWidth={1.6} aria-hidden="true" />
+                    ) : isDone ? (
+                      <Check className="size-[13px]" strokeWidth={2.5} aria-hidden="true" />
                     ) : (
                       <span className="size-1 rounded-full bg-[#CBD5E1]" aria-hidden="true" />
                     )}
@@ -184,7 +200,7 @@ export function QueueDrawer({
                     className={`min-w-0 flex-1 truncate text-[14px] ${
                       isCurrent
                         ? "font-semibold text-[var(--program-text)]"
-                        : row.actionable
+                        : isDone || row.actionable
                           ? "font-normal text-[var(--program-text)]"
                           : "font-normal text-[#94A3B8] dark:text-[var(--muted-foreground)]"
                     }`}
