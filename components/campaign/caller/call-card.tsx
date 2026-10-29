@@ -160,7 +160,7 @@ export function CallCard({
       {callStarted ? (
         <p className="mt-3 flex items-center gap-1.5 text-[11px] text-[var(--muted-foreground)]">
           <Phone className="size-3" strokeWidth={1.5} aria-hidden="true" />
-          Call started. When you are back, tap “I’m back”.
+          Call in progress. Return to this tab and the outcome screen opens automatically.
         </p>
       ) : null}
     </article>

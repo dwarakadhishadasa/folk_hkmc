@@ -55,6 +55,20 @@ export interface CallerQueueEntry {
   campaignProgress: { called: number; total: number }
 }
 
+export interface CallerQueueRosterItem {
+  assignmentId: string
+  campaignId: string
+  campaignName: string
+  campaignDate: string
+  contactId: string
+  contactName: string
+  sortOrder: number
+  status: "PENDING" | "COMPLETED" | "SKIPPED"
+  latestDispositionStatus: string | null
+  latestStatusGroup: string | null
+  actionable: boolean
+}
+
 export interface CallerQueueCounts {
   called: number
   reached: number
@@ -75,6 +89,7 @@ export interface CallerQueueCampaign {
 export interface CallerQueuePayload {
   caller: { id: string; displayName: string }
   entries: CallerQueueEntry[]
+  roster: CallerQueueRosterItem[]
   counts: CallerQueueCounts
   campaigns: CallerQueueCampaign[]
   surveysByCampaign: Record<string, CallerSurveyQuestion[]>

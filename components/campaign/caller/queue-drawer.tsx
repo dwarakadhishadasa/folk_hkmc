@@ -5,63 +5,90 @@ import { Phone, X } from "lucide-react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { dispositionLabel } from "@/lib/dialer/disposition"
 
-import type { CallerQueueCounts, CallerQueueEntry } from "./caller-types"
+import type { CallerQueueCounts, CallerQueueRosterItem } from "./caller-types"
 
 const ROW_HEIGHT = 56
 const ROW_GAP = 2
 
-function campaignLabel(entries: CallerQueueEntry[]): string {
-  const names = [...new Set(entries.map((entry) => entry.campaignName))]
+function campaignLabel(roster: CallerQueueRosterItem[]): string {
+  const names = [...new Set(roster.map((row) => row.campaignName))]
   return names.length === 1 ? names[0] : "All campaigns"
+}
+
+function rowStatus(row: CallerQueueRosterItem): string {
+  if (row.status === "SKIPPED") {
+    return "Skipped"
+  }
+
+  if (row.status === "COMPLETED") {
+    if (row.latestStatusGroup === "NOT_REACHABLE") {
+      return "No answer"
+    }
+
+    if (row.latestStatusGroup === "WRONG_NUMBER") {
+      return "Wrong number"
+    }
+
+    if (row.latestDispositionStatus) {
+      return dispositionLabel(row.latestDispositionStatus).split(" — ")[0]
+    }
+
+    return "Called"
+  }
+
+  return row.actionable ? "Pending" : "Closed"
 }
 
 /**
  * The queue drawer — frame 2360.
  *
- * It opens over the card as a full-screen list, marks the current row, and
- * makes every row tappable. The list is virtualised: a 300–500 row queue must
- * advance without jank, and the subtitle reports the rendered window rather
- * than pretending the whole count is on screen.
+ * It opens over the card as a full-screen list of the session roster, not just
+ * what is left to call: a contact who has already been reached keeps their row
+ * and its outcome, so the list reads the same before and after a call. Only
+ * actionable rows jump; the list is virtualised because a 300–500 row queue
+ * must advance without jank, and the subtitle reports the rendered window
+ * rather than pretending the whole count is on screen.
  */
 export function QueueDrawer({
   open,
   onOpenChange,
-  entries,
+  roster,
   counts,
   currentId,
   onJump,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  entries: CallerQueueEntry[]
+  roster: CallerQueueRosterItem[]
   counts: CallerQueueCounts
   currentId: string | null
-  onJump: (entry: CallerQueueEntry) => void
+  onJump: (assignmentId: string) => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const currentIndex = Math.max(
     0,
-    entries.findIndex((entry) => entry.assignmentId === currentId),
+    roster.findIndex((row) => row.assignmentId === currentId),
   )
 
   const virtualizer = useVirtualizer({
-    count: entries.length,
+    count: roster.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT + ROW_GAP,
     overscan: 8,
   })
 
   useEffect(() => {
-    if (!open || entries.length === 0) {
+    if (!open || roster.length === 0) {
       return
     }
 
     virtualizer.scrollToIndex(currentIndex, { align: "center" })
-  }, [open, currentIndex, entries.length, virtualizer])
+  }, [open, currentIndex, roster.length, virtualizer])
 
   const rendered = virtualizer.getVirtualItems()
-  const renderedCount = rendered.length > 0 ? rendered.length : Math.min(entries.length, 8)
+  const renderedCount = rendered.length > 0 ? rendered.length : Math.min(roster.length, 8)
   const stats = [
     { label: "Called", value: counts.called, tone: "text-[var(--program-primary)]" },
     { label: "Reached", value: counts.reached, tone: "text-[var(--program-primary)]" },
@@ -92,7 +119,7 @@ export function QueueDrawer({
         </div>
 
         <DialogDescription className="shrink-0 px-4 pb-2 text-[13px] leading-4 text-[var(--muted-foreground)]">
-          {campaignLabel(entries)} · showing {renderedCount} of {entries.length}
+          {campaignLabel(roster)} · showing {renderedCount} of {roster.length}
         </DialogDescription>
 
         <div className="grid shrink-0 grid-cols-4 gap-2 px-4 pt-2 pb-4">
@@ -116,17 +143,23 @@ export function QueueDrawer({
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {rendered.map((virtualRow) => {
-              const entry = entries[virtualRow.index]
-              const isCurrent = entry.assignmentId === currentId
+              const row = roster[virtualRow.index]
+              const isCurrent = row.assignmentId === currentId
+              const status = rowStatus(row)
 
               return (
                 <button
                   type="button"
-                  key={entry.assignmentId}
-                  onClick={() => onJump(entry)}
+                  key={row.assignmentId}
+                  onClick={() => onJump(row.assignmentId)}
+                  disabled={!row.actionable}
                   aria-current={isCurrent ? "true" : undefined}
-                  className={`absolute top-0 left-0 flex w-full items-center gap-4 rounded-[10px] px-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] ${
-                    isCurrent ? "bg-[#EEF1F8] dark:bg-[var(--secondary)]" : "hover:bg-[var(--secondary)]"
+                  className={`absolute top-0 left-0 flex w-full items-center gap-4 rounded-[10px] px-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] disabled:cursor-default ${
+                    isCurrent
+                      ? "bg-[#EEF1F8] dark:bg-[var(--secondary)]"
+                      : row.actionable
+                        ? "hover:bg-[var(--secondary)]"
+                        : ""
                   }`}
                   style={{
                     height: `${ROW_HEIGHT}px`,
@@ -148,11 +181,15 @@ export function QueueDrawer({
                   <span className="w-6 shrink-0 text-[12px] text-[var(--muted-foreground)]">{virtualRow.index + 1}</span>
 
                   <span
-                    className={`min-w-0 flex-1 truncate text-[14px] text-[var(--program-text)] ${
-                      isCurrent ? "font-semibold" : "font-normal"
+                    className={`min-w-0 flex-1 truncate text-[14px] ${
+                      isCurrent
+                        ? "font-semibold text-[var(--program-text)]"
+                        : row.actionable
+                          ? "font-normal text-[var(--program-text)]"
+                          : "font-normal text-[#94A3B8] dark:text-[var(--muted-foreground)]"
                     }`}
                   >
-                    {entry.contactName}
+                    {row.contactName}
                   </span>
 
                   <span
@@ -160,7 +197,7 @@ export function QueueDrawer({
                       isCurrent ? "font-semibold text-[var(--program-primary)]" : "text-[#64748B]"
                     }`}
                   >
-                    {isCurrent ? "← you" : "Pending"}
+                    {isCurrent ? "← you" : status}
                   </span>
                 </button>
               )

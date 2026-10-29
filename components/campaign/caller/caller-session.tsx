@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
-import { Check, ChevronDown, List, Megaphone, Phone } from "lucide-react"
+import { ChevronDown, List, Megaphone, Phone } from "lucide-react"
 
 import { CampaignEmptyState } from "@/components/campaign/campaign-empty-state"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
 import { formatCampaignDate } from "@/components/campaign/campaign-format"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { createBrowserId } from "@/lib/browser-id"
 import {
   dispositionGroupFor,
   isDispositionStatus,
@@ -24,6 +25,7 @@ import { SessionSummary } from "./session-summary"
 import type {
   CallerQueueEntry,
   CallerQueuePayload,
+  CallerQueueRosterItem,
   CallerSessionSummary,
   CallerSurveyQuestion,
 } from "./caller-types"
@@ -266,6 +268,7 @@ export function CallerSession({
 }) {
   const pathname = usePathname()
   const [entries, setEntries] = useState<CallerQueueEntry[]>(initialQueue.entries)
+  const [roster, setRoster] = useState<CallerQueueRosterItem[]>(initialQueue.roster)
   const [counts, setCounts] = useState(initialQueue.counts)
   const [campaigns, setCampaigns] = useState(initialQueue.campaigns)
   const [surveysByCampaign, setSurveysByCampaign] = useState(initialQueue.surveysByCampaign)
@@ -277,8 +280,6 @@ export function CallerSession({
   )
   const [paused, setPaused] = useState(false)
   const [callStarted, setCallStarted] = useState(false)
-  const [gapUntil, setGapUntil] = useState(0)
-  const [now, setNow] = useState(() => Date.now())
   const [queueOpen, setQueueOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [tabConflict, setTabConflict] = useState(false)
@@ -300,6 +301,8 @@ export function CallerSession({
   const [recalling, setRecalling] = useState(false)
 
   const tabIdRef = useRef("")
+  const callStartedAtRef = useRef(0)
+  const leftAppRef = useRef(false)
   const [lastCampaignId, setLastCampaignId] = useState<string | null>(initialCampaignId)
   const copyTimerRef = useRef<number | null>(null)
 
@@ -308,7 +311,6 @@ export function CallerSession({
   const currentCampaign = current ? campaigns.find((campaign) => campaign.id === current.campaignId) ?? null : null
   const survey = current ? surveysByCampaign[current.campaignId] ?? [] : []
   const summaryCampaignId = current?.campaignId ?? lastCampaignId ?? initialCampaignId ?? campaigns[0]?.id ?? null
-  const gapSeconds = gapUntil > 0 ? Math.max(0, Math.ceil((gapUntil - now) / 1000)) : 0
 
   useEffect(() => {
     document.body.dataset.callerSession = "ready"
@@ -316,11 +318,6 @@ export function CallerSession({
     return () => {
       delete document.body.dataset.callerSession
     }
-  }, [])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 250)
-    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -341,7 +338,7 @@ export function CallerSession({
       return
     }
 
-    const tabId = crypto.randomUUID()
+    const tabId = createBrowserId()
     tabIdRef.current = tabId
     let conflicted = false
     let channel: BroadcastChannel | null = null
@@ -557,6 +554,7 @@ export function CallerSession({
 
       const data = (await response.json()) as CallerQueuePayload
       setEntries(data.entries)
+      setRoster(data.roster)
       setCounts(data.counts)
       setCampaigns(data.campaigns)
       setSurveysByCampaign(data.surveysByCampaign)
@@ -643,12 +641,30 @@ export function CallerSession({
   }, [phase, summaryCampaignId, loadSummary])
 
   const advance = useCallback(
-    (from: CallerQueueEntry, counted: boolean, statusGroup?: string) => {
+    (
+      from: CallerQueueEntry,
+      counted: boolean,
+      statusGroup?: string,
+      outcome?: { status: "COMPLETED" | "SKIPPED"; dispositionStatus: string | null },
+    ) => {
       const index = entries.findIndex((entry) => entry.assignmentId === from.assignmentId)
       const remaining = entries.filter((entry) => entry.assignmentId !== from.assignmentId)
       const next = index >= 0 ? entries[index + 1] ?? remaining[0] ?? null : remaining[0] ?? null
 
       setEntries(remaining)
+      setRoster((previous) =>
+        previous.map((row) =>
+          row.assignmentId === from.assignmentId
+            ? {
+                ...row,
+                status: outcome?.status ?? row.status,
+                latestDispositionStatus: outcome?.dispositionStatus ?? row.latestDispositionStatus,
+                latestStatusGroup: statusGroup ?? row.latestStatusGroup,
+                actionable: false,
+              }
+            : row,
+        ),
+      )
       setCounts((previous) => ({
         ...previous,
         pending: Math.max(0, previous.pending - 1),
@@ -672,6 +688,7 @@ export function CallerSession({
       setCopyState("idle")
       setCallError(null)
       setPickerOpen(false)
+      leftAppRef.current = false
 
       if (next) {
         setCurrentId(next.assignmentId)
@@ -679,20 +696,16 @@ export function CallerSession({
 
         if (next.campaignId !== from.campaignId) {
           setNotice({ entry: next })
-          setGapUntil(0)
-        } else {
-          setGapUntil(Date.now() + next.campaignGapDuration * 1000)
         }
       } else {
         setCurrentId(null)
         setPhase("summary")
-        setGapUntil(0)
       }
     },
     [entries],
   )
 
-  function openDisposition() {
+  const openDisposition = useCallback(() => {
     if (!current) {
       return
     }
@@ -712,7 +725,62 @@ export function CallerSession({
     setFailure(null)
     setCallError(null)
     setPhase("disposition")
-  }
+  }, [current])
+
+  // The phone app takes focus for the duration of a `tel:` call, so the tab
+  // leaving and coming back is the return signal. The listeners are only
+  // attached while a call is in flight; a scheduled disposition change from
+  // anywhere else (a resume-draft tap, a reload) never passes through here.
+  useEffect(() => {
+    if (!callStarted || phase !== "card") {
+      return
+    }
+
+    if (document.visibilityState === "hidden") {
+      leftAppRef.current = true
+    }
+
+    const openIfReturned = () => {
+      if (leftAppRef.current) {
+        openDisposition()
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        leftAppRef.current = true
+        return
+      }
+
+      openIfReturned()
+    }
+
+    const onBlur = () => {
+      if (Date.now() - callStartedAtRef.current < 1_000) {
+        return
+      }
+
+      leftAppRef.current = true
+    }
+
+    const onPageHide = () => {
+      leftAppRef.current = true
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    window.addEventListener("blur", onBlur)
+    window.addEventListener("focus", openIfReturned)
+    window.addEventListener("pagehide", onPageHide)
+    window.addEventListener("pageshow", openIfReturned)
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+      window.removeEventListener("blur", onBlur)
+      window.removeEventListener("focus", openIfReturned)
+      window.removeEventListener("pagehide", onPageHide)
+      window.removeEventListener("pageshow", openIfReturned)
+    }
+  }, [callStarted, phase, openDisposition])
 
   function resumeDraft() {
     openDisposition()
@@ -723,7 +791,6 @@ export function CallerSession({
       return
     }
 
-    setGapUntil(Date.now() + notice.entry.campaignGapDuration * 1000)
     setNotice(null)
     setPaused(false)
     setCallStarted(false)
@@ -751,16 +818,7 @@ export function CallerSession({
   }
 
   async function handleCall() {
-    if (!current || tabConflict || paused || notice) {
-      return
-    }
-
-    if (callStarted) {
-      openDisposition()
-      return
-    }
-
-    if (gapSeconds > 0) {
+    if (!current || tabConflict || paused || notice || callStarted) {
       return
     }
 
@@ -772,6 +830,8 @@ export function CallerSession({
     setCallError(null)
     const copied = await copyPhone(current.phone)
     setCopyState(copied ? "copied" : "failed")
+    callStartedAtRef.current = Date.now()
+    leftAppRef.current = false
     setCallStarted(true)
 
     if (copyTimerRef.current !== null) {
@@ -830,7 +890,7 @@ export function CallerSession({
 
       removeDraft(current.assignmentId, current.attempt)
       setSessionReceipt(null)
-      advance(current, false)
+      advance(current, false, undefined, { status: "SKIPPED", dispositionStatus: null })
       void refreshMeta()
     } catch {
       setCallError("Skip failed — session paused")
@@ -864,12 +924,12 @@ export function CallerSession({
           (entry) =>
             entry.payload.assignmentId !== payload.assignmentId || entry.payload.attempt !== payload.attempt,
         )
-        queued.push({ id: crypto.randomUUID(), payload, savedAt: Date.now() })
+        queued.push({ id: createBrowserId(), payload, savedAt: Date.now() })
         writeOffline(queued)
         setReceipt({ kind: "queued", text: "Queued — will send" })
         setSessionReceipt({ kind: "queued", text: "Queued — will send" })
         setSaving(false)
-        advance(current, false, group)
+        advance(current, false, group, { status: "COMPLETED", dispositionStatus: status })
         return
       }
 
@@ -880,7 +940,10 @@ export function CallerSession({
         setSessionReceipt({ kind: "saved", text })
         removeDraft(current.assignmentId, current.attempt)
         setSaving(false)
-        advance(current, true, body?.receipt?.statusGroup ?? group)
+        advance(current, true, body?.receipt?.statusGroup ?? group, {
+          status: "COMPLETED",
+          dispositionStatus: status,
+        })
         void refreshMeta()
         return
       }
@@ -897,12 +960,12 @@ export function CallerSession({
         (entry) =>
           entry.payload.assignmentId !== payload.assignmentId || entry.payload.attempt !== payload.attempt,
       )
-      queued.push({ id: crypto.randomUUID(), payload, savedAt: Date.now() })
+      queued.push({ id: createBrowserId(), payload, savedAt: Date.now() })
       writeOffline(queued)
       setReceipt({ kind: "queued", text: "Queued — will send" })
       setSessionReceipt({ kind: "queued", text: "Queued — will send" })
       setSaving(false)
-      advance(current, false, group)
+      advance(current, false, group, { status: "COMPLETED", dispositionStatus: status })
     }
   }
 
@@ -937,7 +1000,6 @@ export function CallerSession({
         setPhase("card")
         setPaused(false)
         setCallStarted(false)
-        setGapUntil(Date.now() + first.campaignGapDuration * 1000)
         setSessionReceipt({ kind: "saved", text: "Re-queued — your unreachable contacts are back" })
       } else {
         await loadSummary(campaignId)
@@ -958,7 +1020,6 @@ export function CallerSession({
       setPhase("card")
       setPaused(false)
       setCallStarted(false)
-      setGapUntil(0)
       setSessionReceipt(null)
     } else {
       setEntries([])
@@ -972,7 +1033,6 @@ export function CallerSession({
     setQueueOpen(false)
     setCallStarted(false)
     setPaused(false)
-    setGapUntil(0)
     setCallError(null)
     setReceipt(null)
     setFailure(null)
@@ -981,6 +1041,14 @@ export function CallerSession({
     setAnswers({})
     setDraftNotice(readDraft(entry.assignmentId, entry.attempt) !== null)
     setSessionReceipt(null)
+    leftAppRef.current = false
+  }
+
+  function jumpToId(assignmentId: string) {
+    const entry = entries.find((candidate) => candidate.assignmentId === assignmentId)
+    if (entry) {
+      jumpTo(entry)
+    }
   }
 
   function selectCampaign(campaignId: string) {
@@ -1085,8 +1153,7 @@ export function CallerSession({
     )
   }
 
-  const callBlocked = paused || gapSeconds > 0 || notice !== null
-  const primaryLabel = callStarted ? "I’m back" : `Call ${firstName(current.contactName)}`
+  const callBlocked = paused || notice !== null
 
   return (
     <div className="-m-6 flex min-h-full flex-1 flex-col bg-background md:mx-auto md:my-0 md:max-w-[430px] md:border-x md:border-[#E2E8F0] dark:md:border-[var(--border)]">
@@ -1208,34 +1275,28 @@ export function CallerSession({
             ? "Paused — resume when you are ready"
             : notice
               ? "Dismiss the campaign notice to continue"
-              : gapSeconds > 0
-                ? `Next call in ${gapSeconds}s`
-                : callStarted
-                  ? "Call in progress"
-                  : "Ready to call"}
+              : callStarted
+                ? "Call in progress — come back to this tab to record the outcome"
+                : "Ready to call"}
         </p>
         <button
           type="button"
           onClick={() => void handleCall()}
-          disabled={callBlocked && !callStarted}
+          disabled={callBlocked || callStarted}
           className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[var(--program-primary)] text-[16px] font-semibold text-white transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {callStarted ? (
-            <Check className="size-4" strokeWidth={2} aria-hidden="true" />
-          ) : (
-            <Phone className="size-4" strokeWidth={1.5} aria-hidden="true" />
-          )}
-          {paused ? "Paused" : primaryLabel}
+          <Phone className="size-4" strokeWidth={1.5} aria-hidden="true" />
+          {paused ? "Paused" : callStarted ? "Call in progress" : `Call ${firstName(current.contactName)}`}
         </button>
       </div>
 
       <QueueDrawer
         open={queueOpen}
         onOpenChange={setQueueOpen}
-        entries={entries}
+        roster={roster}
         counts={counts}
         currentId={currentId}
-        onJump={jumpTo}
+        onJump={jumpToId}
       />
 
       <Dialog open={notice !== null} onOpenChange={(open) => (!open ? dismissNotice() : undefined)}>
@@ -1247,8 +1308,7 @@ export function CallerSession({
             {notice ? (
               <>
                 You are moving to <strong className="text-[var(--program-text)]">{notice.entry.campaignName}</strong> on{" "}
-                {formatCampaignDate(notice.entry.campaignDate)}. The gap is paused; continue when you are ready for the
-                next call.
+                {formatCampaignDate(notice.entry.campaignDate)}. Continue when you are ready for the next call.
               </>
             ) : null}
           </DialogDescription>
