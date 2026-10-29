@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, X } from "lucide-react"
+import { Check } from "lucide-react"
 
 import type { StaffRole } from "@hkmc/data-contracts"
 import {
@@ -156,7 +156,7 @@ function SurveyField({
  * The 13 chips are the stored model, Notes always render, and the campaign
  * survey appears only when the selected status reached a conversation. The
  * receipt is persistent on this screen: `Saving…`, `Saved HH:MM`,
- * `Queued — will send`, `Save failed — session paused`.
+ * `Queued — will send`, `Save failed — try again`.
  */
 export function DispositionScreen({
   entry,
@@ -172,7 +172,6 @@ export function DispositionScreen({
   onNotesChange,
   onAnswerChange,
   onSave,
-  onClose,
 }: {
   entry: CallerQueueEntry
   survey: CallerSurveyQuestion[]
@@ -187,7 +186,6 @@ export function DispositionScreen({
   onNotesChange: (notes: string) => void
   onAnswerChange: (questionId: string, next: DispositionAnswer) => void
   onSave: () => void
-  onClose: () => void
 }) {
   const showSurvey = status !== null && isReachedGroup(dispositionGroupFor(status))
   const assistantWrongNumber = status === "WRONG_NUMBER" && role === "Assistant"
@@ -200,15 +198,6 @@ export function DispositionScreen({
             How did it go?
           </h1>
         </div>
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Back to the call card"
-          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#F2F4F7] text-[#24324A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] dark:bg-[var(--secondary)] dark:text-[var(--foreground)]"
-        >
-          <X className="size-3" strokeWidth={1.4} aria-hidden="true" />
-        </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5">

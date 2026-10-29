@@ -92,7 +92,7 @@ test("a network gap is Queued — will send, never Save failed, and the draft st
   await page.getByRole("button", { name: "Save & continue" }).click()
 
   await expect(page.getByText("Queued — will send")).toBeVisible()
-  await expect(page.getByText("Save failed — session paused")).not.toBeVisible()
+  await expect(page.getByText("Save failed — try again")).not.toBeVisible()
   await expect(page.getByRole("heading", { name: contacts[1].name })).toBeVisible()
 
   const queued = await page.evaluate(() =>
@@ -108,10 +108,9 @@ test("a network gap is Queued — will send, never Save failed, and the draft st
   await page.unroute("**/api/dialer/caller/disposition")
 })
 
-test("a refused write pauses the session and keeps the status, notes and survey answers", async ({ page, request }) => {
+test("a refused write keeps every answer editable and offers no way past the screen", async ({ page, request }) => {
   const fixture = await campaignWithAssignments(request, "receipt-refused", 1)
   const { campaignId, assignment } = { ...fixture, assignment: fixture.assignments[0] }
-  const contact = fixture.contacts[0]
 
   await createQuestion({
     campaignId,
@@ -136,24 +135,26 @@ test("a refused write pauses the session and keeps the status, notes and survey 
   await page.getByRole("textbox", { name: "Notes" }).fill("He is interested")
 
   await page.getByRole("button", { name: "Save & continue" }).click()
-  await expect(page.getByText("Caller deactivated — session paused")).toBeVisible()
-  await expect(page.getByText("Save failed — session paused")).toBeVisible()
+  await expect(page.getByText("Caller deactivated — the call was not saved")).toBeVisible()
+  await expect(page.getByText("Save failed — try again")).toBeVisible()
   await expect(page.getByRole("textbox", { name: "Notes" })).toHaveValue("He is interested")
   await expect(page.getByRole("button", { name: "Confirmed", exact: true })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("radio", { name: "Yes" })).toHaveAttribute("aria-checked", "true")
 
   currentCode = "assignment_reassigned"
   await page.getByRole("button", { name: "Save & continue" }).click()
-  await expect(page.getByText("Assignment reassigned — session paused")).toBeVisible()
+  await expect(page.getByText("Assignment reassigned — the call was not saved")).toBeVisible()
 
   currentCode = "campaign_not_active"
   await page.getByRole("button", { name: "Save & continue" }).click()
-  await expect(page.getByText("This campaign is no longer active — session paused")).toBeVisible()
+  await expect(page.getByText("This campaign is no longer active — the call was not saved")).toBeVisible()
   await expect(page.getByRole("textbox", { name: "Notes" })).toHaveValue("He is interested")
 
-  await page.getByRole("button", { name: "Back to the call card" }).click()
-  await expect(page.getByText("Paused — answers and place kept")).toBeVisible()
-  await expect(page.getByRole("heading", { name: contact.name })).toBeVisible()
+  // The disposition screen has no exit control: the user has to answer before
+  // the session can move on, and a refused write keeps every answer editable.
+  await expect(page.getByRole("button", { name: "Back to the call card" })).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: "How did it go?" })).toBeVisible()
+  await expect(page.getByRole("textbox", { name: "Notes" })).toHaveValue("He is interested")
 
   await page.unroute("**/api/dialer/caller/disposition")
 })

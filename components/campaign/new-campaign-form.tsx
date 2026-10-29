@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { createBrowserId } from "@/lib/browser-id"
 import { cn } from "@/lib/utils"
 
 type QuestionType = "TEXT" | "DROPDOWN" | "RADIO" | "MULTI_SELECT" | "DATE"
@@ -37,7 +38,7 @@ interface CreateCampaignResponse {
 }
 
 function emptyQuestion(): DraftQuestion {
-  return { key: crypto.randomUUID(), title: "", type: "TEXT", required: true, options: [] }
+  return { key: createBrowserId(), title: "", type: "TEXT", required: true, options: [] }
 }
 
 function isChoice(type: QuestionType): boolean {

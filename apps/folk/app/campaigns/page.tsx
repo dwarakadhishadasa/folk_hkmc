@@ -67,7 +67,7 @@ export default async function CampaignsOverviewPage({
           actionLabel="New campaign"
           filters={<CampaignStatusFilter value={statusFilter === "all" ? "all" : statusFilter} />}
         />
-        <CampaignSubNav role={staff.role} hasActiveCallerProfile={staff.hasActiveCallerProfile} />
+        <CampaignSubNav role={staff.role} />
         {campaigns.length === 0 ? (
           <CampaignEmptyState
             title="No campaigns yet"

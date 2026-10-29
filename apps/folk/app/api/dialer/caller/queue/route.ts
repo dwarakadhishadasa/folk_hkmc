@@ -4,7 +4,10 @@ import { dialerErrorResponse } from "@/lib/dialer/scope"
 
 export const dynamic = "force-dynamic"
 
-/** The caller's own queue: only their PENDING assignments on ACTIVE campaigns. */
+/**
+ * The caller's own queue: their PENDING assignments on ACTIVE campaigns, plus
+ * the stable session roster those entries come from.
+ */
 export async function GET() {
   try {
     const staff = await getStaffContext()

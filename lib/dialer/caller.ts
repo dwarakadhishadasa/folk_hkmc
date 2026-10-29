@@ -145,6 +145,28 @@ export interface CallerQueueEntry {
   campaignProgress: { called: number; total: number }
 }
 
+/**
+ * One row of the caller's session list.
+ *
+ * The session list is the stable set of assignments the caller holds on the
+ * active campaigns: a completed or skipped contact stays on it so the queue
+ * reads as a call list rather than a shrinking to-do list. `actionable` marks
+ * the rows that are still in `entries` and can be jumped to.
+ */
+export interface CallerQueueRosterItem {
+  assignmentId: string
+  campaignId: string
+  campaignName: string
+  campaignDate: string
+  contactId: string
+  contactName: string
+  sortOrder: number
+  status: "PENDING" | "COMPLETED" | "SKIPPED"
+  latestDispositionStatus: string | null
+  latestStatusGroup: string | null
+  actionable: boolean
+}
+
 /** The four tiles frame 2360 draws, plus the caller's own queue size. */
 export interface CallerQueueCounts {
   called: number
@@ -167,6 +189,7 @@ export interface CallerQueueCampaign {
 export interface CallerQueuePayload {
   caller: { id: string; displayName: string }
   entries: CallerQueueEntry[]
+  roster: CallerQueueRosterItem[]
   counts: CallerQueueCounts
   campaigns: CallerQueueCampaign[]
   surveysByCampaign: Record<string, CallerSurveyQuestion[]>
@@ -633,7 +656,10 @@ function campaignProgressFor(
   }
 }
 
-function compareQueueEntries(left: CallerQueueEntry, right: CallerQueueEntry): number {
+function compareQueueOrder(
+  left: { campaignDate: string; campaignName: string; sortOrder: number; assignmentId: string },
+  right: { campaignDate: string; campaignName: string; sortOrder: number; assignmentId: string },
+): number {
   return (
     left.campaignDate.localeCompare(right.campaignDate) ||
     left.campaignName.localeCompare(right.campaignName) ||
@@ -642,13 +668,18 @@ function compareQueueEntries(left: CallerQueueEntry, right: CallerQueueEntry): n
   )
 }
 
+function compareQueueEntries(left: CallerQueueEntry, right: CallerQueueEntry): number {
+  return compareQueueOrder(left, right)
+}
+
 /**
- * The caller's own queue.
+ * The caller's own queue and session roster.
  *
  * Every read is keyed by `caller.id` from `requireDialerCaller` and
  * `staff.programId`; the payload carries no other caller's assignment. A
- * PENDING assignment at the attempt cap stops being offered, because a recall
- * that would exceed the cap is closed instead.
+ * PENDING assignment at the attempt cap stops being offered in `entries`,
+ * because a recall that would exceed the cap is closed instead, but it stays
+ * on `roster` so the queue remains a stable call list.
  */
 export async function listCallerQueue(staff: StaffContext): Promise<CallerQueuePayload> {
   const caller = await requireDialerCaller(staff)
@@ -714,6 +745,36 @@ export async function listCallerQueue(staff: StaffContext): Promise<CallerQueueP
     (assignment) => campaignsById.get(assignment.campaign_id)?.status === "ACTIVE",
   )
 
+  const actionableIds = new Set(entries.map((entry) => entry.assignmentId))
+  const roster: CallerQueueRosterItem[] = []
+
+  for (const assignment of activeAssignments) {
+    const campaign = campaignsById.get(assignment.campaign_id)
+    const contact = contactsById.get(assignment.contact_id)
+
+    if (!campaign || !contact) {
+      continue
+    }
+
+    const latest = latestLog(logsByAssignment.get(assignment.id) ?? [])
+
+    roster.push({
+      assignmentId: assignment.id,
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      campaignDate: campaign.campaign_date,
+      contactId: contact.id,
+      contactName: contact.name,
+      sortOrder: assignment.sort_order,
+      status: assignment.status as CallerQueueRosterItem["status"],
+      latestDispositionStatus: latest?.disposition_status ?? null,
+      latestStatusGroup: latest?.status_group ?? null,
+      actionable: actionableIds.has(assignment.id),
+    })
+  }
+
+  roster.sort(compareQueueOrder)
+
   let called = 0
   let reached = 0
   let noAnswer = 0
@@ -768,10 +829,55 @@ export async function listCallerQueue(staff: StaffContext): Promise<CallerQueueP
   return {
     caller: { id: caller.id, displayName: caller.displayName },
     entries,
+    roster,
     counts: { called, reached, noAnswer, pending: entries.length },
     campaigns,
     surveysByCampaign,
   }
+}
+
+/**
+ * The number of calls still actionable in the caller's queue.
+ *
+ * This is the same predicate `listCallerQueue` applies to build `entries`, with
+ * none of the contact, profile, history or survey reads the badge does not
+ * need. It exists for the phone menu's Assignments badge, which is fetched on
+ * campaign pages that never load the queue itself.
+ */
+export async function countCallerPendingCalls(staff: StaffContext): Promise<number> {
+  const caller = await requireDialerCaller(staff)
+  const assignments = await readAssignments(staff.programId, caller.id)
+  const campaignsById = await readCampaigns(
+    staff.programId,
+    assignments.map((assignment) => assignment.campaign_id),
+  )
+  const logs = await readCallLogs(
+    staff.programId,
+    assignments.map((assignment) => assignment.id),
+  )
+  const attemptsByAssignment = new Map<string, number>()
+
+  for (const log of logs) {
+    attemptsByAssignment.set(log.assignment_id, (attemptsByAssignment.get(log.assignment_id) ?? 0) + 1)
+  }
+
+  let pending = 0
+
+  for (const assignment of assignments) {
+    const campaign = campaignsById.get(assignment.campaign_id)
+
+    if (!campaign || campaign.status !== "ACTIVE" || assignment.status !== "PENDING") {
+      continue
+    }
+
+    if ((attemptsByAssignment.get(assignment.id) ?? 0) >= campaign.max_attempts) {
+      continue
+    }
+
+    pending += 1
+  }
+
+  return pending
 }
 
 /**

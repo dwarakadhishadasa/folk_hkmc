@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { isLocalSupabaseUrl } from "../../scripts/local-supabase-target.mjs"
 import { readEnvValue } from "../fixtures/auth-users"
 import { e2eProgramId, fixtureEmail, storageStatePath } from "../fixtures/roles"
+import { assignContacts, callerForRole, createCallerCampaign, seededContacts } from "./campaign-caller-helpers"
 
 /**
  * Story 1.10 — the phone Campaign menu (frame 2217).
@@ -169,7 +170,7 @@ async function openMenu(page: Page) {
 test.describe("the Campaign phone menu — an Admin", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: storageStatePath("admin") })
 
-  test("opens from the title, shows the sub-nav's destinations, and closes", async ({ page }) => {
+  test("opens from the title, shows every phone destination, and closes", async ({ page }) => {
     await page.goto("/campaigns")
 
     const dialog = await openMenu(page)
@@ -178,11 +179,11 @@ test.describe("the Campaign phone menu — an Admin", () => {
     await expect(dialog.getByText(/\d+ campaigns? · folk programme/)).toBeVisible()
 
     const nav = dialog.getByRole("navigation", { name: "Campaign" })
-    await expect(nav.getByRole("link")).toHaveCount(3)
+    await expect(nav.getByRole("link")).toHaveCount(4)
     await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page")
+    await expect(nav.getByRole("link", { name: "Assignments" })).toBeVisible()
     await expect(nav.getByRole("link", { name: "Callers" })).toBeVisible()
     await expect(nav.getByRole("link", { name: "Reports" })).toBeVisible()
-    await expect(nav.getByRole("link", { name: "Assignments" })).toHaveCount(0)
 
     await dialog.getByRole("button", { name: "Close the Campaign menu" }).click()
     await expect(page.getByRole("dialog")).toHaveCount(0)
@@ -209,8 +210,11 @@ test.describe("the Campaign phone menu — an Admin", () => {
 test.describe("the Campaign phone menu — an Admin with an active caller profile", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: storageStatePath("admin") })
 
-  test("inserts Assignments second", async ({ page }) => {
-    const restore = await provisionActiveCaller(fixtureEmail("admin"))
+  test("inserts Assignments second and badges the pending count", async ({ page, request }) => {
+    const caller = await callerForRole("admin")
+    const campaign = await createCallerCampaign(request, "menu-badge", { gapDuration: 20, maxAttempts: 3 })
+    const contacts = await seededContacts(2)
+    await assignContacts(campaign.campaignId, caller.callerId, contacts)
 
     try {
       await page.goto("/campaigns")
@@ -219,12 +223,15 @@ test.describe("the Campaign phone menu — an Admin with an active caller profil
 
       await expect(links).toHaveCount(4)
       await expect(links.nth(0)).toHaveText("Overview")
-      await expect(links.nth(1)).toHaveText("Assignments")
+      await expect(links.nth(1)).toContainText("Assignments")
       await expect(links.nth(2)).toHaveText("Callers")
       await expect(links.nth(3)).toHaveText("Reports")
       await expect(links.nth(0)).toHaveAttribute("aria-current", "page")
+
+      await expect(dialog.locator('span[class*="25D366"]')).toHaveText("2")
     } finally {
-      await restore()
+      await campaign.cleanup()
+      await caller.cleanup()
     }
   })
 })
@@ -259,10 +266,13 @@ test.describe("the Campaign phone menu — a Volunteer with an active caller pro
 test.describe("the Campaign phone menu — a desktop viewport", () => {
   test.use({ viewport: { width: 1280, height: 900 }, storageState: storageStatePath("admin") })
 
-  test("has no title chevron and keeps the sub-nav", async ({ page }) => {
+  test("has no title chevron and keeps the sub-nav without Assignments", async ({ page }) => {
     await page.goto("/campaigns")
 
     await expect(page.getByRole("button", { name: "Open the Campaign menu" })).toHaveCount(0)
-    await expect(page.getByRole("navigation", { name: "Campaign" })).toBeVisible()
+
+    const nav = page.getByRole("navigation", { name: "Campaign" })
+    await expect(nav).toBeVisible()
+    await expect(nav.getByRole("link", { name: "Assignments" })).toHaveCount(0)
   })
 })
