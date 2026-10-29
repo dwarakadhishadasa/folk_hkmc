@@ -574,6 +574,18 @@ sweepRoute({
   nonOwnerStatuses: [200],
 })
 
+// The badge count is the queue's pending tile without the queue payload. It is
+// caller-scoped like the queue, so the Preacher's own read is a 200 too.
+sweepRoute({
+  route: "/api/dialer/caller/pending-count",
+  method: "GET",
+  kind: "caller-collection",
+  owningCallerRole: "admin",
+  nonOwningCallerRole: "preacher",
+  ownerStatuses: [200],
+  nonOwnerStatuses: [200],
+})
+
 sweepRoute({
   route: "/api/dialer/caller/assignments/[assignmentId]",
   url: () => `/api/dialer/caller/assignments/${callerAssignmentId}`,

@@ -45,7 +45,7 @@ export default async function CampaignCallersPage() {
           title="Callers"
           subtitle={`${active} active · ${inactive} inactive · folk programme`}
         />
-        <CampaignSubNav role={staff.role} hasActiveCallerProfile={staff.hasActiveCallerProfile} />
+        <CampaignSubNav role={staff.role} />
 
         {callers.length === 0 ? (
           <CampaignEmptyState

@@ -837,6 +837,50 @@ export async function listCallerQueue(staff: StaffContext): Promise<CallerQueueP
 }
 
 /**
+ * The number of calls still actionable in the caller's queue.
+ *
+ * This is the same predicate `listCallerQueue` applies to build `entries`, with
+ * none of the contact, profile, history or survey reads the badge does not
+ * need. It exists for the phone menu's Assignments badge, which is fetched on
+ * campaign pages that never load the queue itself.
+ */
+export async function countCallerPendingCalls(staff: StaffContext): Promise<number> {
+  const caller = await requireDialerCaller(staff)
+  const assignments = await readAssignments(staff.programId, caller.id)
+  const campaignsById = await readCampaigns(
+    staff.programId,
+    assignments.map((assignment) => assignment.campaign_id),
+  )
+  const logs = await readCallLogs(
+    staff.programId,
+    assignments.map((assignment) => assignment.id),
+  )
+  const attemptsByAssignment = new Map<string, number>()
+
+  for (const log of logs) {
+    attemptsByAssignment.set(log.assignment_id, (attemptsByAssignment.get(log.assignment_id) ?? 0) + 1)
+  }
+
+  let pending = 0
+
+  for (const assignment of assignments) {
+    const campaign = campaignsById.get(assignment.campaign_id)
+
+    if (!campaign || campaign.status !== "ACTIVE" || assignment.status !== "PENDING") {
+      continue
+    }
+
+    if ((attemptsByAssignment.get(assignment.id) ?? 0) >= campaign.max_attempts) {
+      continue
+    }
+
+    pending += 1
+  }
+
+  return pending
+}
+
+/**
  * One card by assignment id, for a direct load or a reload after tab loss.
  * The assignment's own owner check is `assertCallerAssignmentInScope`; the
  * campaign, contact and history reads are all keyed by that result.

@@ -71,7 +71,7 @@ export default async function CampaignDetailPage({
           </Link>
 
           <CampaignPageHeader title={campaign.name} subtitle="Campaign · folk programme" />
-          <CampaignSubNav role={staff.role} hasActiveCallerProfile={staff.hasActiveCallerProfile} />
+          <CampaignSubNav role={staff.role} />
         </div>
 
         <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-card">

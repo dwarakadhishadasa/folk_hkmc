@@ -5,6 +5,8 @@ export interface CampaignNavItem {
   label: string
 }
 
+export type CampaignNavSurface = "desktop" | "mobile"
+
 /**
  * The tabs every campaign admin sees.
  *
@@ -17,23 +19,26 @@ const ADMIN_NAV_ITEMS: CampaignNavItem[] = [
   { href: "/campaigns/reports", label: "Reports" },
 ]
 
-/** The caller tab. Only an active caller profile earns it. */
+/** The caller tab. The phone menu always carries it; the desktop strip never does. */
 const ASSIGNMENTS_NAV_ITEM: CampaignNavItem = { href: "/campaigns/assignments", label: "Assignments" }
 
 /**
  * The destinations a staff member may see, in the design's order.
  *
- * The desktop sub-nav and the phone menu both read this: a role gate written
- * twice drifts, and the two surfaces are the same promise (FR45, AD-2). A
- * Volunteer never sees the admin tabs — `requireCampaignAdmin` refuses them at
- * `/campaigns` — so the strip carries the caller tab alone for them. An
- * admin, preacher or assistant earns Assignments only with an active caller
- * profile, second in the list because that is frame 2217's order.
+ * The two surfaces differ on purpose. Desktop keeps the admin strip and omits
+ * Assignments; the phone menu always carries Assignments for every staff role,
+ * because the phone is the surface a caller actually works from. A Volunteer
+ * therefore has exactly one Campaign destination on a phone and none on a
+ * desktop.
  */
-export function campaignNavItems(role: StaffRole | null, hasActiveCallerProfile: boolean): CampaignNavItem[] {
-  const items = role === null || role === "Volunteer" ? [] : [...ADMIN_NAV_ITEMS]
+export function campaignNavItems(role: StaffRole | null, surface: CampaignNavSurface): CampaignNavItem[] {
+  if (role === null) {
+    return []
+  }
 
-  if (hasActiveCallerProfile) {
+  const items = role === "Volunteer" ? [] : [...ADMIN_NAV_ITEMS]
+
+  if (surface === "mobile") {
     items.splice(1, 0, ASSIGNMENTS_NAV_ITEM)
   }
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { ChevronDown, ChevronRight, X } from "lucide-react"
@@ -18,6 +19,8 @@ import { cn } from "@/lib/utils"
 
 import { activeHrefFor, campaignNavItems } from "./campaign-nav"
 
+const ASSIGNMENTS_HREF = "/campaigns/assignments"
+
 /**
  * The phone Campaign menu — frame 2217.
  *
@@ -28,22 +31,66 @@ import { activeHrefFor, campaignNavItems } from "./campaign-nav"
  * the trigger.
  *
  * The destinations come from `campaign-nav.ts`, the same rule the sub-nav
- * reads, so a Volunteer never sees an admin tab in either place.
+ * reads with the mobile surface selected. Assignments is phone-only and always
+ * present here; its badge carries the caller's pending-call count, refreshed
+ * whenever the menu opens.
  */
 export function CampaignMenu({ subtitle }: { subtitle: string }) {
   const isMobile = useIsMobile()
   const { staff } = useAuth()
   const pathname = usePathname()
+  const [open, setOpen] = useState(false)
+  const [pendingCount, setPendingCount] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const canSeeAssignments = staff?.hasActiveCallerProfile ?? false
+
+  useEffect(() => {
+    if (!isMobile || !canSeeAssignments) {
+      return
+    }
+
+    let cancelled = false
+
+    const load = async () => {
+      try {
+        const response = await fetch("/api/dialer/caller/pending-count", { cache: "no-store" })
+        if (!response.ok) {
+          return
+        }
+
+        const data = (await response.json()) as { pending?: unknown }
+        if (!cancelled && typeof data.pending === "number") {
+          setPendingCount(data.pending)
+        }
+      } catch {
+        // A badge is not worth blocking the menu; the last count stays.
+      }
+    }
+
+    void load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isMobile, canSeeAssignments, refreshKey])
 
   if (!isMobile) {
     return null
   }
 
-  const items = campaignNavItems(staff?.role ?? null, staff?.hasActiveCallerProfile ?? false)
+  const items = campaignNavItems(staff?.role ?? null, "mobile")
   const activeHref = activeHrefFor(pathname, items)
 
   return (
-    <Dialog>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) {
+          setRefreshKey((key) => key + 1)
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <button
           type="button"
@@ -83,6 +130,7 @@ export function CampaignMenu({ subtitle }: { subtitle: string }) {
         <nav aria-label="Campaign" className="flex shrink-0 flex-col px-4 pt-2">
           {items.map((item) => {
             const isActive = item.href === activeHref
+            const showBadge = item.href === ASSIGNMENTS_HREF && pendingCount > 0
 
             return (
               <Link
@@ -104,6 +152,14 @@ export function CampaignMenu({ subtitle }: { subtitle: string }) {
                     />
                   </span>
                   <span className="flex-1" />
+                  {showBadge ? (
+                    <span
+                      aria-label={`${pendingCount} pending ${pendingCount === 1 ? "call" : "calls"}`}
+                      className="mt-[1px] inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#25D366] px-1.5 text-[11px] font-bold leading-none text-white"
+                    >
+                      {pendingCount > 99 ? "99+" : pendingCount}
+                    </span>
+                  ) : null}
                   <ChevronRight
                     className="mt-[5px] h-2 w-1 shrink-0 text-[#9195A0]"
                     strokeWidth={1.4}

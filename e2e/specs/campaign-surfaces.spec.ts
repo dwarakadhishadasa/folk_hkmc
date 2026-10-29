@@ -229,8 +229,7 @@ for (const role of CAMPAIGN_ADMIN_ROLES) {
       await expect(nav.getByRole("link", { name: "Callers" })).toBeVisible()
       await expect(nav.getByRole("link", { name: "Reports" })).toBeVisible()
 
-      // No caller profile, so no Assignments tab — the admin gate is not a
-      // caller profile.
+      // Assignments is phone-only; the desktop strip never carries it.
       await expect(nav.getByRole("link", { name: "Assignments" })).toHaveCount(0)
     })
   })
@@ -270,7 +269,7 @@ test.describe("the Campaign assignments — a staff member with no caller profil
 test.describe("the Campaign assignments — a Volunteer with an active caller profile", () => {
   test.use({ storageState: storageStatePath("volunteer") })
 
-  test("shows the Assignments tab and an actionable empty queue", async ({ page }) => {
+  test("shows the Assignments page and an actionable empty queue", async ({ page }) => {
     const restore = await provisionActiveCaller(fixtureEmail("volunteer"))
 
     try {
@@ -281,14 +280,9 @@ test.describe("the Campaign assignments — a Volunteer with an active caller pr
       await expect(page.getByText("No calls assigned yet", { exact: true })).toBeVisible()
       await expect(page.getByText(/Your next call appears here/)).toBeVisible()
 
-      const nav = page.getByRole("navigation", { name: "Campaign" })
-      await expect(nav.getByRole("link", { name: "Assignments" })).toHaveAttribute("aria-current", "page")
-
-      // A caller earns the caller tab and nothing else — the admin tabs stay
-      // closed to a Volunteer even with a profile.
-      await expect(nav.getByRole("link", { name: "Overview" })).toHaveCount(0)
-      await expect(nav.getByRole("link", { name: "Callers" })).toHaveCount(0)
-      await expect(nav.getByRole("link", { name: "Reports" })).toHaveCount(0)
+      // Assignments is phone-only now, so a desktop Volunteer has no Campaign
+      // strip at all — and no admin tabs either.
+      await expect(page.getByRole("navigation", { name: "Campaign" })).toHaveCount(0)
 
       // The admin Overview refuses a caller exactly as it refuses a Volunteer
       // with no profile.

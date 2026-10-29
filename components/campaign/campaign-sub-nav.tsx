@@ -15,20 +15,15 @@ import { activeHrefFor, campaignNavItems } from "./campaign-nav"
  * active tab is a 2px underline plus weight, never a new colour, so it stays
  * legible in both themes. It is a **desktop** control — the phone frame
  * (1752) opens the Campaign menu from the page title instead, and five
- * labels wrap onto two rows at 390px.
+ * labels wrap onto two rows at 390px. Assignments is phone-only, so this
+ * strip never carries it.
  *
- * The destinations come from `campaign-nav.ts`, the same rule the phone menu
- * reads, so the two surfaces cannot disagree about who may see what.
+ * The destinations come from `campaign-nav.ts`; the surface argument is the
+ * one place the desktop strip and the phone menu deliberately differ.
  */
-export function CampaignSubNav({
-  role,
-  hasActiveCallerProfile,
-}: {
-  role: StaffRole
-  hasActiveCallerProfile: boolean
-}) {
+export function CampaignSubNav({ role }: { role: StaffRole }) {
   const pathname = usePathname()
-  const items = campaignNavItems(role, hasActiveCallerProfile)
+  const items = campaignNavItems(role, "desktop")
 
   if (items.length === 0) {
     return null
