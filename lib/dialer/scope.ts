@@ -8,11 +8,10 @@ import {
   type StaffRole,
 } from "@/lib/authz"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { collectPagedRows, type PagingFailures } from "@/lib/supabase/paging"
 import type { Database } from "@/lib/supabase/types"
 import { isStaffRole, type ProgramId } from "@hkmc/data-contracts"
 
-const DIALER_PAGE_SIZE = 1000
-const DIALER_MAX_PAGES = 50
 const DIALER_ROSTER_CHUNK_SIZE = 200
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -82,9 +81,9 @@ export class CallerAssignmentNotFoundError extends AuthzError {
 
 type RosterScope = { kind: "program" } | { kind: "preacher"; userId: string }
 
-interface PostgrestPageResult {
-  data: unknown
-  error: { message: string } | null
+const ROSTER_PAGING_FAILURES: PagingFailures = {
+  read: () => new AuthzError(500, "dialer_roster_read_failed", "Unable to read the dialer roster."),
+  truncated: () => new AuthzError(500, "dialer_roster_truncated", "The dialer roster read was truncated."),
 }
 
 function assertAssignmentIdShape(assignmentId: string): void {
@@ -95,34 +94,6 @@ function assertAssignmentIdShape(assignmentId: string): void {
 
 function missingCampaignScopeError(): AuthzError {
   return new AuthzError(403, "campaign_scope_missing", "This staff account has no Campaign scope.")
-}
-
-/**
- * AD-16: PostgREST caps a read at 1,000 rows, so a full final page means the
- * result was truncated. Failing loudly beats returning a short roster.
- */
-async function collectPagedRows<T>(
-  fetchPage: (from: number, to: number) => Promise<PostgrestPageResult>,
-): Promise<T[]> {
-  const rows: T[] = []
-
-  for (let page = 0; page < DIALER_MAX_PAGES; page += 1) {
-    const from = page * DIALER_PAGE_SIZE
-    const { data, error } = await fetchPage(from, from + DIALER_PAGE_SIZE - 1)
-
-    if (error) {
-      throw new AuthzError(500, "dialer_roster_read_failed", "Unable to read the dialer roster.")
-    }
-
-    const pageRows = Array.isArray(data) ? (data as T[]) : []
-    rows.push(...pageRows)
-
-    if (pageRows.length < DIALER_PAGE_SIZE) {
-      return rows
-    }
-  }
-
-  throw new AuthzError(500, "dialer_roster_truncated", "The dialer roster read was truncated.")
 }
 
 function requireStaffRole(value: string): StaffRole {
@@ -149,7 +120,7 @@ async function readActiveStaffRows(programId: ProgramId, preacherId?: string): P
 
     const response = await query.order("id", { ascending: true }).range(from, to)
     return { data: response.data, error: response.error }
-  })
+  }, ROSTER_PAGING_FAILURES)
 }
 
 async function readCallerProfiles(
@@ -177,7 +148,7 @@ async function readCallerProfiles(
         .range(from, to)
 
       return { data: response.data, error: response.error }
-    })
+    }, ROSTER_PAGING_FAILURES)
 
     for (const row of rows) {
       profiles.set(row.user_id, row)

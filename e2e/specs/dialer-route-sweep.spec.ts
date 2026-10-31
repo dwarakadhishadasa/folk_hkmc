@@ -555,6 +555,16 @@ sweepRoute({
   ownerStatuses: [200],
 })
 
+// The CSV is the same `campaign_progress` payload the reports screen reads, so
+// the owner case is a genuine 200 with a body on the fixture campaign.
+sweepRoute({
+  route: "/api/dialer/admin/campaigns/[campaignId]/export",
+  url: () => `/api/dialer/admin/campaigns/${progressCampaignId}/export`,
+  method: "GET",
+  kind: "admin",
+  ownerStatuses: [200],
+})
+
 // ============================================================================
 // Caller routes. The queue is a collection: another caller is not a foreign
 // row, so their own read succeeds with their own view. The assignment-keyed
