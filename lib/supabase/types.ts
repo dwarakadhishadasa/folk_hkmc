@@ -942,6 +942,16 @@ export type Database = {
       caller_effective_location_ids: { Args: never; Returns: string[] }
       caller_program_id: { Args: never; Returns: string }
       caller_role: { Args: never; Returns: string }
+      contact_attendance_summary: {
+        Args: {
+          p_assigned_preacher_id: string | null
+          p_contact_id: string
+          p_program_id: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       record_call_disposition: {
         Args: {
           p_assignment_id: string
@@ -953,6 +963,104 @@ export type Database = {
           p_responses: Json
         }
         Returns: Json
+      }
+      session_visible: {
+        Args: {
+          p_assigned_preacher_id: string | null
+          p_program_id: string
+          p_role: string
+          p_session_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      session_attendees: {
+        Args: {
+          p_assigned_preacher_id: string | null
+          p_program_id: string
+          p_role: string
+          p_session_id: string
+          p_user_id: string
+        }
+        Returns: {
+          contact_id: string
+          first_session: string | null
+          location_names: string | null
+          name: string
+          phone: string
+          sessions_attended: number
+        }[]
+      }
+      sessions_overview: {
+        Args: {
+          p_assigned_preacher_id: string | null
+          p_program_id: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: {
+          attendance_count: number
+          attendance_url: string | null
+          closes_at: string | null
+          id: string
+          location_id: string | null
+          location_name: string | null
+          name: string
+          opens_at: string | null
+          session_date: string | null
+          status: string
+        }[]
+      }
+      sessions_overview_stats: {
+        Args: {
+          p_assigned_preacher_id: string | null
+          p_program_id: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: {
+          attendees_total: number
+          avg_attendance_current: number
+          avg_attendance_previous: number
+          repeat_attendees: number
+          sessions_count: number
+          upcoming_count: number
+        }[]
+      }
+      sessions_report: {
+        Args: {
+          p_assigned_preacher_id: string | null
+          p_from: string
+          p_program_id: string
+          p_role: string
+          p_to: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      sessions_visible: {
+        Args: {
+          p_assigned_preacher_id: string | null
+          p_program_id: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: {
+          attendance_closes_at: string | null
+          attendance_opens_at: string | null
+          attendance_url: string | null
+          created_at: string | null
+          created_by: string | null
+          duration_minutes: number | null
+          id: string
+          location_id: string | null
+          name: string
+          preacher_id: string | null
+          program_id: string
+          public_attendance_enabled: boolean | null
+          session_date: string | null
+          updated_at: string | null
+        }[]
       }
     }
     Enums: {
