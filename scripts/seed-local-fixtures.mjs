@@ -79,6 +79,9 @@ function main() {
     NEXT_PUBLIC_SUPABASE_URL: apiUrl,
     SUPABASE_URL: apiUrl,
     SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey,
+    // The attendance links this run writes must point at the local app, not
+    // the hosted deployment the preview seeder defaults to.
+    SITE_URL: process.env.SITE_URL?.trim() || "http://localhost:3000",
   }
 
   const passwordDefault = resolveFixturePasswordDefault({
