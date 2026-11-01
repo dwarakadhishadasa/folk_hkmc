@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import Link from "next/link"
 import { Copy, Share2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { tagSlot } from "@/components/grid/grid-cell-renderers"
@@ -228,12 +229,12 @@ export function LiveAttendanceDashboard({ activeSession }: { activeSession?: Das
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Start a session to generate a session-specific attendance link and QR code.
                 </p>
-                <a
+                <Link
                   href="/sessions"
                   className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-[var(--program-primary)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--program-primary-light)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   Open Sessions
-                </a>
+                </Link>
               </div>
             )}
           </div>

@@ -3,9 +3,10 @@ import {
   createSession,
   findLocationById,
   findStaffUserById,
-  listSessions,
   updateSessionAttendanceUrl,
 } from "@/lib/supabase/data"
+import { listVisibleSessions } from "@/lib/sessions/data"
+import { sessionsScope } from "@/lib/sessions/scope"
 
 export const dynamic = "force-dynamic"
 
@@ -53,11 +54,11 @@ export async function GET() {
     const staff = await getStaffContext({ refresh: true })
     requireRole(staff, ["Admin", "Preacher", "Assistant"])
 
-    const sessions = await listSessions()
-    const scoped = sessions.filter((session) => session.createdBy.includes(staff.userId))
+    const scope = await sessionsScope(staff)
+    const sessions = await listVisibleSessions(scope)
 
     return Response.json({
-      sessions: scoped.map((session) => ({
+      sessions: sessions.map((session) => ({
         id: session.id,
         name: session.name,
         sessionDate: session.sessionDate || null,

@@ -10,6 +10,8 @@ import {
   getAttendanceBySessionRecord,
   normalizeMobile,
 } from "@/lib/supabase/data"
+import { isSessionVisible } from "@/lib/sessions/data"
+import { sessionsScope } from "@/lib/sessions/scope"
 
 export const dynamic = "force-dynamic"
 
@@ -131,17 +133,8 @@ export async function GET(request: Request) {
         return Response.json({ error: "Invalid attendance session." }, { status: 404 })
       }
 
-      const isAssistantMatch =
-        staff.role === "Assistant" &&
-        Boolean(staff.assignedPreacherUserId) &&
-        session.preacherIds.includes(staff.assignedPreacherUserId || "")
-
-      const canReadSession =
-        staff.role === "Admin" ||
-        session.preacherIds.includes(staff.userId) ||
-        (staff.role !== "Assistant" &&
-          session.locationIds.some((locationId) => staff.locationIds.includes(locationId))) ||
-        isAssistantMatch
+      const scope = await sessionsScope(staff)
+      const canReadSession = await isSessionVisible(scope, sessionId)
 
       if (!canReadSession) {
         return Response.json({ error: "This session is outside your allowed scope." }, { status: 403 })
