@@ -133,7 +133,11 @@ const {
 
 const TAG = "preview-fixture-"
 const SEED_FILE = path.join(repoRoot, ".env.preview-seed.local")
-const SITE_URL = (process.env.PRODUCTION_URL?.trim() || "https://folk-hkmc-rho.vercel.app").replace(/\/+$/, "")
+const SITE_URL = (
+  process.env.SITE_URL?.trim() ||
+  process.env.PRODUCTION_URL?.trim() ||
+  "https://folk-hkmc-rho.vercel.app"
+).replace(/\/+$/, "")
 
 const ROLES = [
   { role: "Admin", routedThroughPreacher: false },

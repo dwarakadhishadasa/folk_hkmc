@@ -393,3 +393,34 @@ that selects it, what a row needs seeded, and what to record when you flip it.
    also the first run that can surface a defect in the *test's own* teardown. Rows
    1 and 4 did exactly that: the app fix worked, and a `route.continue` race in the
    `finally` then failed them for an unrelated reason.
+
+## Sessions flow — `spec-sessions-flow`
+
+The Sessions contract is `_bmad-output/specs/spec-sessions-flow/SPEC.md`. Its
+browser-observable capabilities are covered by the two `sessions-*` specs; the
+verdicts below are from the run recorded underneath, not a prediction.
+
+| # | Row | Layer | Verdict | Spec |
+|---|---|---|---|---|
+| S1 | Overview lists name, date, location, attendance total and derived status | UI | **Covered** | `sessions-overview.spec.ts` |
+| S2 | Desktop location filter and the filter-empty state | UI | **Covered** | `sessions-overview.spec.ts` |
+| S3 | `Upcoming` / `Live now` / `Completed` flip across `attendance_closes_at` without a reload | UI | **Covered** | `sessions-overview.spec.ts` |
+| S4 | A Preacher sees an assistant-created session; a foreign session is absent | UI | **Covered** | `sessions-overview.spec.ts` |
+| S5 | A created session lands on `/sessions/<id>/live` | UI | **Covered** | `sessions-overview.spec.ts` |
+| S6 | A live row, and a live detail visit, land on that session's dashboard | UI | **Covered** | `sessions-overview.spec.ts` |
+| S7 | Overview insights use the fixed 90-day window; weekly sums to a direct `count(attendance)` and by-session is the direct top four | UI + DB | **Covered** | `sessions-overview.spec.ts` |
+| S8 | Detail attendee rows, first-timer/returning stats and the contact modal | UI | **Covered** | `sessions-detail.spec.ts` |
+| S9 | Phone attendee cards, name sort and the contact modal | UI | **Covered** | `sessions-detail.spec.ts` |
+| S10 | Foreign and malformed session ids are 404 | UI | **Covered** | `sessions-detail.spec.ts` |
+
+**The recorded run.** 2026-11-01, local stack, Playwright 1.62, single worker,
+`E2E_BASE_URL=http://127.0.0.1:3001 pnpm test:e2e:sessions` — **19 passed**
+(4 setup + 15 spec) in 1.7 minutes. The port is the worktree's own dev server;
+the fixture target is loopback and the service-role URL is asserted local, as the
+fixture module requires.
+
+The fixtures are disposable sessions, contacts and one location, written with
+the service role and removed in `afterAll`; the seed's open session is never
+mutated, because the attendance contract still needs it. The report expectations
+are read back from `sessions` and `attendance`, so the seed's own rows count
+without being hard-coded.

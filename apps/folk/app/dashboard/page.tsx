@@ -1,78 +1,52 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
+
 import { Header } from "@/components/header"
-import { LiveAttendanceDashboard, type DashboardSessionContext } from "@/components/live-attendance-dashboard"
+import { LiveAttendanceDashboard } from "@/components/live-attendance-dashboard"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
-import { listLocations, listSessions, type SessionRecord } from "@/lib/supabase/data"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
+import { listSessionsOverview } from "@/lib/sessions/data"
+import { sessionsScope } from "@/lib/sessions/scope"
 
 export const dynamic = "force-dynamic"
 
-function readTime(value?: string): number | null {
-  if (!value) {
-    return null
-  }
-
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : null
-}
-
-function isActiveSession(session: SessionRecord, now: number): boolean {
-  const opensAt = readTime(session.attendanceOpensAt)
-  const closesAt = readTime(session.attendanceClosesAt)
-
-  if (!session.publicAttendanceEnabled || closesAt === null || closesAt <= now) {
-    return false
-  }
-
-  return opensAt === null || opensAt <= now
-}
-
-function sessionStartTime(session: SessionRecord): number {
-  return readTime(session.attendanceOpensAt) || readTime(session.sessionDate) || 0
-}
-
+/**
+ * `/dashboard` is the legacy entry point for the live attendance screen. Every
+ * live session now has its own URL, so this page forwards to the newest live
+ * session in the staff member's scope; with none, it keeps the screen's empty
+ * state and its link to Sessions.
+ */
 export default async function DashboardPage() {
   try {
     const staff = await getStaffContext({ refresh: true })
     requireRole(staff, ["Admin", "Preacher"])
-    let activeSession: DashboardSessionContext | undefined
 
-    try {
-      const [sessions, locations] = await Promise.all([listSessions(), listLocations()])
-      const locationById = new Map(locations.map((location) => [location.id, location.name]))
-      const scopedSessions = sessions.filter((session) => session.createdBy.includes(staff.userId))
-      const now = Date.now()
-      const currentSession = scopedSessions
-        .filter((session) => isActiveSession(session, now))
-        .sort((left, right) => sessionStartTime(right) - sessionStartTime(left))[0]
+    const scope = await sessionsScope(staff)
+    const liveSession = (await listSessionsOverview(scope)).find((row) => row.status === "Live now")
 
-      if (currentSession) {
-        activeSession = {
-          id: currentSession.id,
-          name: currentSession.name,
-          locationNames: currentSession.locationIds.map((locationId) => locationById.get(locationId) || locationId),
-          attendanceClosesAt: currentSession.attendanceClosesAt || null,
-          attendanceUrl: currentSession.attendanceUrl || null,
-        }
-      }
-    } catch (error) {
-      console.error("[dashboard] Failed to load active session context", error)
+    if (liveSession) {
+      redirect(`/sessions/${liveSession.id}/live`)
     }
 
     return (
       <StaffAuthShell staff={staff}>
-      <div className="min-h-screen bg-[#FFF9F0]">
-        <Header />
-        <main className="container mx-auto px-4 py-6">
-          <LiveAttendanceDashboard activeSession={activeSession} />
-        </main>
-      </div>
+        <div className="min-h-screen bg-[#FFF9F0]">
+          <Header />
+          <main className="container mx-auto px-4 py-6">
+            <LiveAttendanceDashboard />
+          </main>
+        </div>
       </StaffAuthShell>
     )
   } catch (error) {
     if (error instanceof AuthzError && error.status === 401) {
       redirect("/login?redirect=/dashboard")
+    }
+
+    // `redirect()` above is not an `AuthzError`; rethrowing keeps the
+    // framework's control-flow error out of the access panel.
+    if (!(error instanceof AuthzError)) {
+      throw error
     }
 
     return (
