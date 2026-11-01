@@ -8,8 +8,8 @@ import type {
   ManageContact,
   ManageContactPatch,
   ManageContactPatchKey,
+  ManageContactsPayload,
   ManageContactWriteResult,
-  ManagePortalPayload,
 } from "@/components/manage/manage-types"
 import {
   CONTACT_FIELD_IDS,
@@ -18,6 +18,10 @@ import {
   UNRESOLVED_STAFF,
   type ContactFieldId,
 } from "@/components/manage/manage-contact-fields"
+import {
+  describeContactCondition,
+  filterContactsForPhone,
+} from "@/components/manage/manage-contact-filter"
 import { ManageContactList } from "@/components/manage/manage-contact-list"
 import {
   Grid,
@@ -32,6 +36,7 @@ import {
   type GridRowLifecycle,
 } from "@/components/grid"
 import { useDeviceView } from "@/hooks/use-mobile"
+import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   ContextMenuItem,
@@ -546,9 +551,19 @@ function useReportRowCount(onRowCountChange: ((count: number) => void) | undefin
 export function ManageContactsTable({
   payload,
   onRowCountChange,
+  hideInlineCreate = false,
 }: {
-  payload: ManagePortalPayload
+  payload: ManageContactsPayload
   onRowCountChange?: (count: number) => void
+  /**
+   * Whether the toolbar's `+ Add record` is rendered.
+   *
+   * The Contacts section has one create control — `Add contact`, which opens
+   * the form — so it hides this one. The flag exists rather than the section
+   * passing no `rowLifecycle` because delete lives on the same object; dropping
+   * it to remove a create button would take the row context menu with it.
+   */
+  hideInlineCreate?: boolean
 }) {
   const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -644,15 +659,19 @@ export function ManageContactsTable({
    * `payload.locations` is already the caller's scoped set — RLS narrowed it on
    * the read path — so the options and the scope cannot disagree. `detail` is the
    * location's status: the list shows a name and a status and nothing else.
+   *
+   * `locationOptions` is the section's narrower picker set: the section resolves
+   * every program location for display but keeps the picker on the reader's own
+   * locations, which is what `/manage?mode=preacher` did.
    */
   const locationRecords = useMemo(
     () =>
-      payload.locations.map((location) => ({
+      (payload.locationOptions ?? payload.locations).map((location) => ({
         id: location.id,
         label: location.name,
         detail: location.status ?? undefined,
       })),
-    [payload.locations],
+    [payload.locationOptions, payload.locations],
   )
 
   /**
@@ -1331,6 +1350,40 @@ export function ManageContactsTable({
   )
 
   /**
+   * The phone list's rows: the same conditions the grid's row models apply,
+   * evaluated over the same contact columns.
+   *
+   * The list is not a table, so this is the one place the two shapes share a
+   * definition instead of a row model. A metric's row count is the invariant,
+   * and a list that ignored the arriving `f.*` would report the whole scope.
+   */
+  const phoneRows = useMemo(
+    () =>
+      filterContactsForPhone({
+        contacts,
+        query: typeof viewState.globalFilter === "string" ? viewState.globalFilter : "",
+        conditions: viewState.columnFilters ?? [],
+        connective: filterConnective,
+        fieldTypes,
+        resolvers: { locationNameById, staffNameById },
+      }),
+    [contacts, fieldTypes, filterConnective, locationNameById, staffNameById, viewState],
+  )
+
+  /** The chip's one-sentence-per-condition description. */
+  const phoneFilterLabels = useMemo(() => {
+    const labels = (viewState.columnFilters ?? [])
+      .map((condition) =>
+        describeContactCondition(condition.id, condition.value, fieldTypes[condition.id]),
+      )
+      .filter((label): label is string => Boolean(label))
+
+    const query = typeof viewState.globalFilter === "string" ? viewState.globalFilter.trim() : ""
+
+    return query.length > 0 ? [`Search: ${query}`, ...labels] : labels
+  }, [fieldTypes, viewState])
+
+  /**
    * The row lifecycle the grid renders against.
    *
    * `createRow` appends to this component's own mirror rather than to anything
@@ -1475,7 +1528,12 @@ export function ManageContactsTable({
    * not jump while the viewport is still being found.
    */
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col gap-3">
+    <div
+      className={cn(
+        "relative flex min-h-0 flex-1 flex-col gap-3",
+        hideInlineCreate && "[&_[data-grid-add-record]]:hidden",
+      )}
+    >
       {notice ? (
         <p
           role="status"
@@ -1541,10 +1599,13 @@ export function ManageContactsTable({
       {deviceView === "mobile" ? (
         <div className="relative flex min-h-0 flex-1 flex-col">
           <ManageContactList
-            contacts={contacts}
-            locations={payload.locations}
+            contacts={phoneRows}
+            locations={payload.locationOptions ?? payload.locations}
             resolvers={{ locationNameById, staffNameById }}
             onCommit={handleListCommit}
+            activeFilters={phoneFilterLabels}
+            onClearFilters={clearFilters}
+            emptyScope={contacts.length === 0}
           />
         </div>
       ) : null}

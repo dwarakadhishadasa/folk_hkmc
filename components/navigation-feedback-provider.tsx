@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 interface NavigationFeedbackContextValue {
   isNavigating: boolean
   pendingPath: string | null
-  startNavigation: (href: string) => void
+  startNavigation: (href: string, force?: boolean) => void
 }
 
 const NavigationFeedbackContext = createContext<NavigationFeedbackContextValue>({
@@ -46,10 +46,14 @@ export function NavigationFeedbackProvider({ children }: { children: ReactNode }
   const [pendingPath, setPendingPath] = useState<string | null>(null)
 
   const startNavigation = useCallback(
-    (href: string) => {
+    (href: string, force = false) => {
       const targetPath = getLocalPathname(href)
 
-      if (!targetPath || isSamePathOrChild(pathname, targetPath)) {
+      // A tab inside a section is a *sibling* of the current page, and the
+      // parent-path rule below treats every child of `/contacts` as already
+      // arrived at `/contacts`. `force` is for exactly that case: the caller
+      // knows the navigation is real even though the path is a child.
+      if (!targetPath || (!force && isSamePathOrChild(pathname, targetPath))) {
         return
       }
 

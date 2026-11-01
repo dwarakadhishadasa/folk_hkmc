@@ -5,7 +5,6 @@ import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 import { ManageAdminPanel } from "@/components/manage/manage-admin-panel"
 import { ManageAttendanceView } from "@/components/manage/manage-attendance-view"
-import { ManageContactsTable } from "@/components/manage/manage-contacts-table"
 import { ManageDashboard } from "@/components/manage/manage-dashboard"
 import { ManageFavoritesView } from "@/components/manage/manage-favorites-view"
 import { ManageSessionsView } from "@/components/manage/manage-sessions-view"
@@ -15,7 +14,6 @@ import { useDeviceView } from "@/hooks/use-mobile"
 
 const TAB_LABELS: Array<{ value: ManageView; label: string }> = [
   { value: "dashboard", label: "Dashboard" },
-  { value: "contacts", label: "Contacts" },
   { value: "sessions", label: "Sessions" },
   { value: "attendance", label: "Attendance" },
   { value: "favorites", label: "Favorites" },
@@ -43,7 +41,6 @@ export function ManagePortal({
 }) {
   const [view, setView] = useState<ManageView>(initialView)
   const { scope } = payload
-  const [contactCount, setContactCount] = useState(payload.contacts.length)
 
   /**
    * Whether this device is a phone.
@@ -127,7 +124,7 @@ export function ManagePortal({
             )}
           </h1>
           <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-            {contactCount.toLocaleString("en-IN")} contacts ·{" "}
+            {payload.contacts.length.toLocaleString("en-IN")} contacts ·{" "}
             {payload.locations.length.toLocaleString("en-IN")} locations
           </p>
         </div>
@@ -204,26 +201,24 @@ export function ManagePortal({
         </TabsList>
 
         {/*
-          The four non-grid tabs each scroll inside the bounded frame — they all
-          exceed the viewport and would otherwise be clipped by it. Contacts is
-          the exception: it continues the chain so the grid is the only scroll
-          container on the page, and a second one above it is what put the
-          horizontal scrollbar where the final column was clipped.
+          Three of the four tabs scroll inside the bounded frame — they exceed
+          the viewport and would otherwise be clipped by it. Attendance is the
+          exception: it is a two-canvas surface that takes the height it is
+          given, and its canvases scroll inside themselves.
+
+          The Contacts grid no longer lives here; it is the Contacts section's
+          own tab at `/contacts/grid`.
         */}
         <TabsContent value="dashboard" className="min-h-0 overflow-auto">
           <ManageDashboard payload={payload} />
-        </TabsContent>
-        <TabsContent value="contacts" className="flex min-h-0 flex-col">
-          <ManageContactsTable payload={payload} onRowCountChange={setContactCount} />
         </TabsContent>
         <TabsContent value="sessions" className="min-h-0 overflow-auto">
           <ManageSessionsView payload={payload} />
         </TabsContent>
         {/*
           The attendance tab is a record review: a roster of contacts beside the
-          focused contact's record. It is a two-canvas surface, so it takes the
-          height it is given the way the contacts tab does — the canvases scroll
-          inside themselves, and the page does not.
+          focused contact's record. It is a two-canvas surface, so the canvases
+          scroll inside themselves and the page does not.
         */}
         <TabsContent value="attendance" className="flex min-h-0 flex-col">
           <ManageAttendanceView payload={payload} />

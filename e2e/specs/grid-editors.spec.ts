@@ -67,7 +67,7 @@ import path from "node:path"
 import { expect, test, type Page } from "@playwright/test"
 
 import { bulkFixtureClient, inScopeContacts } from "../fixtures/bulk-contacts"
-import { repoRoot } from "../fixtures/roles"
+import { repoRoot, storageStatePath } from "../fixtures/roles"
 import {
   cellAt,
   cellIn,
@@ -97,6 +97,8 @@ const FAILING_REF = "REF-0250"
 
 /** The stamp the slow preview commit writes into `Notes` when it resolves. */
 const SETTLED_NOTE = "settled by the harness"
+
+test.use({ storageState: storageStatePath("preacher") })
 
 /**
  * A PATCH interception that counts requests and holds each response open.

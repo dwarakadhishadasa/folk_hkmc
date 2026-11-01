@@ -48,6 +48,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test"
 
 import { inScopeContacts } from "../fixtures/bulk-contacts"
+import { storageStatePath } from "../fixtures/roles"
 import {
   SINGLE_CONTACT_ROUTE,
   cellAt,
@@ -67,6 +68,8 @@ import {
 function cellEditor(page: Page) {
   return page.getByRole("textbox", { name: "Edit cell value" })
 }
+
+test.use({ storageState: storageStatePath("preacher") })
 
 
 

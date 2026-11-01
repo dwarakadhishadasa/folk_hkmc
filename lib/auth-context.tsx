@@ -77,7 +77,7 @@ async function completeStaffProfileSync(): Promise<StaffContext> {
 function isProtectedStaffPath(pathname: string | null): boolean {
   return Boolean(
     pathname &&
-      ["/admin", "/contact", "/dashboard", "/manage", "/sessions", "/volunteers"].some(
+      ["/admin", "/contact", "/contacts", "/dashboard", "/manage", "/sessions", "/volunteers"].some(
         (path) => pathname === path || pathname.startsWith(`${path}/`),
       ),
   )

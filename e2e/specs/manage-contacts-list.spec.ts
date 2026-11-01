@@ -42,6 +42,8 @@ import {
 } from "../fixtures/manage-grid"
 import { storageStatePath } from "../fixtures/roles"
 
+test.use({ storageState: storageStatePath("preacher") })
+
 /**
  * A phone-shaped viewport — narrower than the repository's `MOBILE_BREAKPOINT`.
  */

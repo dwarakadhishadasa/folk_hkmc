@@ -40,6 +40,7 @@
 
 import { expect, test, type Page } from "@playwright/test"
 
+import { storageStatePath } from "../fixtures/roles"
 import {
   cellAt,
   filterGlobally,
@@ -55,7 +56,7 @@ import {
 } from "../fixtures/manage-grid"
 
 /**
- * The ten generated contacts indexed 0240–0249.
+ * The generated contacts indexed 0240–0248 — nine in the Preacher's scope.
  *
  * The generator no longer writes an index marker into `name` — rows carry real
  * names and are tagged in `source` (`bulk-contacts.ts:70`) — so the old
@@ -65,16 +66,18 @@ import {
  * **`phone` is the deterministic discriminator instead.** `phoneFor` is
  * `PHONE_PREFIX[program]` plus the index zero-padded to eight digits
  * (`bulk-contact-fixtures.mjs:441`), so the contiguous prefix `810000024` covers
- * exactly indexes 0240–0249: ten rows, and ten at the generator's default
- * `--count 250`.
+ * indexes 0240–0249. Index 0249 is out of the Preacher's scope by the
+ * generator's every-tenth rule, leaving nine rows — still comfortably more than
+ * the three rows and two columns these tests address.
  *
  * Chosen over the lower band deliberately. Index 0000 has no phone at all —
  * `phoneFor` returns `""` there, because `phone TEXT NOT NULL` with
  * `UNIQUE (phone, program_id)` permits exactly one phone-less contact per
- * programme — so no phone prefix can reach the first ten. This band has no such
- * hole, which is what keeps `expectVisibleCount(page, 10)` honest.
+ * programme — so no phone prefix can reach the first ten.
  */
 const TEN_ROWS = "810000024"
+
+test.use({ storageState: storageStatePath("preacher") })
 
 const NAME_COLUMN = "name"
 const PHONE_COLUMN = "phone"
@@ -165,7 +168,7 @@ test.describe("cell range selection", () => {
     const markedPerRow = await page.locator("tr[data-grid-row]").evaluateAll((rows) =>
       rows.map((row) => row.querySelectorAll("[data-grid-cell-selected]").length),
     )
-    expect(markedPerRow, "only rows 0-2 may carry the range").toEqual([2, 2, 2, 0, 0, 0, 0, 0, 0, 0])
+    expect(markedPerRow, "only rows 0-2 may carry the range").toEqual([2, 2, 2, 0, 0, 0, 0, 0, 0])
 
     // The range reads as its own surface. Compared against an unselected cell in
     // the same column, so the control is the same cell type in the same place in

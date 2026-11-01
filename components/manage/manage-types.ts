@@ -10,11 +10,10 @@
  * components stay plain typed props.
  */
 
-export type ManageView = "dashboard" | "contacts" | "sessions" | "attendance" | "favorites"
+export type ManageView = "dashboard" | "sessions" | "attendance" | "favorites"
 
 export const MANAGE_VIEWS: readonly ManageView[] = [
   "dashboard",
-  "contacts",
   "sessions",
   "attendance",
   "favorites",
@@ -138,16 +137,38 @@ export interface ManageDashboardCharts {
   attendanceByPreacherLocation: ManageMonthlySeries
 }
 
-export interface ManagePortalPayload {
-  scope: ManageScope
+export interface ManagePortalPayload extends ManageContactsPayload {
   generatedAt: string
-  locations: ManageLocation[]
-  /** `public.users.id` -> display name, resolved server-side (picker-list exception). */
-  staffNames: Record<string, string>
-  contacts: ManageContact[]
   sessions: ManageSession[]
   attendance: ManageAttendanceRecord[]
   charts: ManageDashboardCharts
+}
+
+/**
+ * The slice of the portal payload the contacts grid needs.
+ *
+ * `ManagePortalPayload` extends it, and the Contacts section builds it directly:
+ * the section reads contacts and their reference lists, not sessions,
+ * attendance or the dashboard charts. Narrowing the grid's prop to this slice is
+ * what keeps the section from constructing empty arrays for four fields it never
+ * reads.
+ */
+export interface ManageContactsPayload {
+  scope: ManageScope
+  locations: ManageLocation[]
+  /**
+   * The locations the grid's linked picker offers, when that is narrower than
+   * the set used to resolve names.
+   *
+   * The Contacts section resolves every program location (so a contact outside
+   * the reader's manage scope is still named, and a metric link can find it)
+   * while keeping the picker on the reader's own locations — the behaviour
+   * `/manage?mode=preacher` had. Absent means the picker uses `locations`.
+   */
+  locationOptions?: ManageLocation[]
+  /** `public.users.id` -> display name, resolved server-side (picker-list exception). */
+  staffNames: Record<string, string>
+  contacts: ManageContact[]
   booksReadOptions: string[]
 }
 

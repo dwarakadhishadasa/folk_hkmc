@@ -536,8 +536,8 @@ name — density and row selection are the two deliberate exceptions, and both a
 | `size.<colId>` | Committed column width in integer px |
 
 `applyGridParams` starts from a copy of the live params and touches only grid-owned keys, which is
-what keeps `?mode=admin|preacher` byte-identical across every write. Never add a URL write that
-strips it.
+what keeps a consumer's own query parameters — the retired `?mode=admin|preacher` on `/manage` was
+the original case — byte-identical across every write. Never add a URL write that strips them.
 
 **A condition token is `<operator>:<value>`, and the operator must travel.** The token is split on
 the FIRST `:`, so a value containing `:` needs no escaping and `is:call: 9900` recovers `call: 9900`.
@@ -676,7 +676,7 @@ double-click carries `Shift`.
 - [ ] Refactored in place; the caller and the prop signature did not change.
 - [ ] **The grid fills the frame, and every ancestor between `main` and `<Grid>` carries the
       height to it** — see §10. A missing `min-h-0` on any hop is the whole failure.
-- [ ] `sort`, `q`, `f.*`, `cols`, `hide`, `size.*` round-trip; `?mode=` survives.
+- [ ] `sort`, `q`, `f.*`, `cols`, `hide`, `size.*` round-trip; a consumer's own params survive.
 - [ ] A default field set is declared as `defaultHiddenColumnIds` on
       `useGridViewState` — in the consumer, never in `components/grid/` — and
       `hide=` still means "nothing hidden" (§8).
@@ -717,21 +717,22 @@ double-click carries `Shift`.
 has no opinion about the viewport — and *cannot* have one, because the space above it is not a
 constant.
 
-The chain on `/manage?view=contacts`, from the shell inward:
+The chain on `/contacts/grid`, from the shell inward:
 
 | Hop | Carries |
 | --- | --- |
-| `apps/*/app/manage/page.tsx` shell | `flex h-dvh flex-col overflow-hidden` — the only place the viewport is named |
-| …its `main` | `flex min-h-0 flex-1 flex-col` |
-| `manage-portal.tsx` root | `flex min-h-0 flex-1 flex-col gap-4` |
-| its `Tabs` | `min-h-0 flex-1` |
-| the contacts `TabsContent` | `flex min-h-0 flex-col` — **no `overflow-auto`** |
+| `apps/*/app/contacts/grid/page.tsx` frame | `flex h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col overflow-hidden` — the only place the viewport is named |
+| …its `main` | `flex min-h-0 w-full flex-1 flex-col px-4 py-6 sm:px-6` |
+| `contacts-section-shell.tsx` root | `flex min-h-0 flex-1 flex-col` |
+| …its content slot | `flex min-h-0 flex-1 flex-col` |
+| `contacts-grid-surface.tsx` root | `flex min-h-0 flex-1 flex-col` |
 | `manage-contacts-table.tsx` root | `flex min-h-0 flex-1 flex-col gap-3` |
 | `grid.tsx` root → scroll container | `flex min-h-0 flex-1 flex-col` → `min-h-0 flex-1 overflow-auto` |
 
-The other four tabs **do** take `overflow-auto`: they exceed the viewport and would otherwise be
-clipped by the bounded shell. Contacts is the exception, because a second scroller above the grid is
-the nested scrollbar this chain exists to remove.
+The remaining `/manage` tabs take `overflow-auto`: they exceed the viewport and
+would otherwise be clipped by the bounded shell. The Contacts tab no longer lives
+there — it is the section's own page — and the section's Overview and Reports
+scroll inside the same bound rather than the page.
 
 ### Two mistakes, both of which compile and both of which ship
 

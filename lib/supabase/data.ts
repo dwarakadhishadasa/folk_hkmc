@@ -1,6 +1,7 @@
 import "server-only"
 
 import { revalidateTag, unstable_cache } from "next/cache"
+import { programDay } from "@/lib/program-day"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { resolveProgramId } from "@hkmc/program-config/server"
 import { PostgrestError } from "@supabase/supabase-js"
@@ -143,7 +144,6 @@ export interface AttendanceDashboardRecord {
   createdAt: string
 }
 
-const SUPABASE_DATE_TIME_ZONE = "Asia/Kolkata"
 const SUPABASE_DATE_TIME_OFFSET = "+05:30"
 const SUPABASE_REFERENCE_CACHE_TTL_SECONDS = 20 * 60
 const SUPABASE_LOCATIONS_CACHE_TAG = "supabase-locations"
@@ -267,15 +267,7 @@ function normalizeDisplayString(value: unknown, options: { rejectRecordIds?: boo
 }
 
 function currentProgramDate(): string {
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone: SUPABASE_DATE_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date())
-  const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value
-
-  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`
+  return programDay()
 }
 
 function toIsoString(value: string | null | undefined): string | undefined {

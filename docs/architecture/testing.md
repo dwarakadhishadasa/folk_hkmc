@@ -188,7 +188,7 @@ session, 403 for a Volunteer, and that a failed sign-in provisions nothing.
 | " | `e2e/specs/manage-contacts-filter.spec.ts` | 5 |
 | " | `e2e/specs/manage-contacts-bulk.spec.ts` | 2 |
 | " | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
-| " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 11 |
+| " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 3 — the primitive's opt-in and the two delete guarantees; the inline-create cases retired with the control |
 | `components/manage/manage-contact-list.tsx`, `manage-contact-sheet.tsx`, `manage-contact-record.tsx`, `manage-contact-field-editor.tsx`, `manage-contact-fields.ts`, `hooks/use-mobile.ts` | `e2e/specs/manage-contacts-list.spec.ts` | 11 |
 
 These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
@@ -200,6 +200,27 @@ the list → field sheet → expanded record stack described in
 [`airtable-mobile-interface.md`](../airtable-mobile-interface.md) — and the
 device detection that chooses between that list and the grid, so it is listed
 separately because it has no matrix row to claim.
+
+`/manage` no longer hosts the contacts grid: the fixture's
+`manageContactsUrl()` now resolves `/contacts/grid`, and the six specs above run
+against the Contacts section's personal scope. The grid's inline create is
+retired on that surface, so `manage-contacts-row-lifecycle.spec.ts` keeps the
+delete cases and the primitive's opt-in; the create cases are gone with the
+control.
+
+### Contacts section — Overview, grid and Reports — `pnpm test:e2e contact-`
+
+| Source | Spec | Tests |
+|---|---|---|
+| `lib/contacts/metrics.ts`, `lib/program-day.ts` | `lib/contacts/metrics.test.ts`, `lib/contacts/program-day.test.ts` (unit) | 23 |
+| `apps/*/app/contacts/page.tsx`, `components/contacts/contacts-overview.tsx`, `contacts-metric-card.tsx` | `e2e/specs/contact-overview.spec.ts` | 3 |
+| `apps/*/app/contacts/reports/page.tsx`, `components/contacts/contacts-reports.tsx`, `contacts-period-select.tsx` | `e2e/specs/contact-reports.spec.ts` | 4 |
+| `apps/*/app/contacts/grid/page.tsx`, `components/contacts/contacts-grid-surface.tsx`, `apps/*/app/manage/page.tsx` | `e2e/specs/contact-grid.spec.ts` | 3 |
+
+The two e2e specs assert the section's one invariant: every linked figure lands
+on a grid whose status readout reports the same count. The metric definitions
+themselves are unit tests, because they are pure functions over a fixture array.
+`contact-grid.spec.ts` also covers the `/manage?view=contacts` redirect.
 
 ### Attendance tab — the record review and its location filter — `pnpm test:e2e:attendance`
 

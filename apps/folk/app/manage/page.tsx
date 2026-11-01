@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { isGridParamKey } from "@/components/grid/grid-view-state"
 import { Header } from "@/components/header"
 import { ManagePortal } from "@/components/manage/manage-portal"
 import { isManageView, resolveManageMode } from "@/components/manage/manage-types"
@@ -20,13 +21,48 @@ function firstValue(value: string | string[] | undefined): string | undefined {
   return value
 }
 
+/**
+ * The grid parameters a retired `/manage?view=contacts` link carries forward.
+ *
+ * Only grid-owned keys travel: `mode` is deliberately dropped, because the
+ * section is personal-scope and has no scope switch. Keeping it would make a
+ * shared link look like it carried a choice the destination cannot honour.
+ */
+function contactsGridRedirect(params: Record<string, string | string[] | undefined>): string {
+  const next = new URLSearchParams()
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || !isGridParamKey(key)) {
+      continue
+    }
+
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      next.append(key, entry)
+    }
+  }
+
+  const query = next.toString()
+
+  return query.length > 0 ? `/contacts/grid?${query}` : "/contacts/grid"
+}
+
 export default async function ManagePage({ searchParams }: ManagePageProps) {
+  const params = await searchParams
+  const requestedView = firstValue(params.view)
+
+  /*
+   * A retired link, rewritten before any staff read. Doing it outside the
+   * `try` is load-bearing: `redirect()` throws a control-flow error that must
+   * not be caught and reported as a data-load failure.
+   */
+  if (requestedView === "contacts") {
+    redirect(contactsGridRedirect(params))
+  }
+
   try {
     const staff = await getStaffContext()
     requireRole(staff, ["Admin", "Preacher"])
 
-    const params = await searchParams
-    const requestedView = firstValue(params.view)
     const initialView = isManageView(requestedView) ? requestedView : "dashboard"
     const mode = resolveManageMode(firstValue(params.mode))
 
@@ -40,8 +76,9 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
           a viewport fraction — the offset above the grid is not a constant (the
           header height, a tab row that wraps at narrow widths, and a scope notice
           that renders only in preacher mode all move it), so the chain has to
-          carry the height down instead. Each tab is then its own scroller, and
-          Contacts is the one surface with a single one.
+          carry the height down instead. Each remaining tab is then its own
+          scroller; the contacts grid now lives in its own section at
+          `/contacts/grid`.
 
           The height is the viewport **less the fixed bottom nav** on a phone.
           The nav is `fixed`, so it floats over the page; the space it takes is

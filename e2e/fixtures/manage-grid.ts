@@ -56,22 +56,28 @@ export const SINGLE_CONTACT_ROUTE = "**/api/manage/contacts"
 export type ManageScopeMode = "admin" | "preacher"
 
 export interface ManageContactsUrlOptions {
+  /**
+   * Retired. The Contacts section is personal-scope for an Admin and a Preacher
+   * alike and has no `mode`; the parameter is kept so the specs that used it
+   * still compile, and it no longer reaches the URL.
+   */
   mode?: ManageScopeMode
   /** Extra grid params, e.g. `{ q: "..." }` to land on a filtered view. */
   params?: Record<string, string>
 }
 
 /**
- * `/manage` with the contacts tab open.
+ * `/contacts/grid`, with the grid params the spec asked for.
  *
- * `mode` is written explicitly on every navigation rather than inherited from a
- * previous one: `/manage` defaults to the dashboard tab and admin scope, so a
- * spec that omitted it would depend on whichever URL it happened to start from.
+ * The grid lives in the Contacts section now. `mode` is deliberately not
+ * written: the section reads `assigned_preacher_id = me` and offers no scope
+ * switch, so a URL carrying one would describe a choice the surface cannot
+ * honour.
  */
-export function manageContactsUrl({ mode = "admin", params = {} }: ManageContactsUrlOptions = {}): string {
-  const search = new URLSearchParams({ view: "contacts", mode, ...params })
+export function manageContactsUrl({ params = {} }: ManageContactsUrlOptions = {}): string {
+  const search = new URLSearchParams(params).toString()
 
-  return `/manage?${search.toString()}`
+  return search.length > 0 ? `/contacts/grid?${search}` : "/contacts/grid"
 }
 
 /** The grid's own frame — toolbar, status line and scroll container. */

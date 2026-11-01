@@ -65,6 +65,18 @@ export interface ManageContactListProps {
   resolvers: ContactFieldResolvers
   /** Called with the new value, for a field that can be written. */
   onCommit: (contactId: string, fieldId: ContactFieldId, value: unknown) => void
+  /**
+   * The grid conditions that narrowed the rows before the list received them.
+   *
+   * The list does not apply them — `ManageContactsTable` does, through the same
+   * evaluator the grid uses — but it has to say that a filter is on and offer
+   * the one way off. A list whose footer says `12 records` with no explanation
+   * reads as a list that has lost 260 contacts.
+   */
+  activeFilters?: readonly string[]
+  onClearFilters?: () => void
+  /** Shown when there are no contacts at all, rather than no matches. */
+  emptyScope?: boolean
 }
 
 export function ManageContactList({
@@ -72,6 +84,9 @@ export function ManageContactList({
   locations,
   resolvers,
   onCommit,
+  activeFilters = [],
+  onClearFilters,
+  emptyScope = false,
 }: ManageContactListProps) {
   const [query, setQuery] = useState("")
 
@@ -146,6 +161,31 @@ export function ManageContactList({
       </div>
 
       {/*
+        The arrival state: a metric link narrowed this list before it rendered.
+        The chip names the condition and owns the only clear control, so the
+        footer's smaller count is explained rather than mysterious.
+      */}
+      {activeFilters.length > 0 ? (
+        <div
+          data-contact-filter-chip=""
+          className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-4 py-2"
+        >
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Filtered: {activeFilters.join(" · ")}
+          </span>
+          {onClearFilters ? (
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="text-[11px] font-semibold text-[var(--program-text)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+            >
+              Clear filter
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/*
         The column header. It is *outside* the scroll area, so it stays in view
         while the rows scroll under it — and a list of contacts without its
         column names is a list of fragments.
@@ -166,7 +206,11 @@ export function ManageContactList({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {visible.length === 0 ? (
           <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">
-            No contact matches this search.
+            {emptyScope
+              ? "No contacts yet."
+              : query.trim().length > 0 || activeFilters.length > 0
+                ? "No contact matches this filter."
+                : "No contacts yet."}
           </p>
         ) : (
           visible.map((contact) => (
@@ -189,6 +233,20 @@ export function ManageContactList({
             </div>
           ))
         )}
+      </div>
+
+      {/*
+        The footer count. It is the list's own visible count — the filtered
+        count when a metric link narrowed the list — because this is the phone's
+        status readout and the section's one invariant is asserted against it.
+      */}
+      <div className="flex h-11 shrink-0 items-center border-t border-border px-4">
+        <span
+          data-contact-list-count=""
+          className="text-[12px] font-medium tabular-nums text-[var(--program-text)]"
+        >
+          {visible.length.toLocaleString("en-IN")} records
+        </span>
       </div>
 
       {/*

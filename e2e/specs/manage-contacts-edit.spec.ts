@@ -75,7 +75,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
 import { inScopeContacts, phoneSetContacts } from "../fixtures/bulk-contacts"
-import { e2eProgramId } from "../fixtures/roles"
+import { e2eProgramId, storageStatePath } from "../fixtures/roles"
 import {
   cellIn,
   filterGlobally,
@@ -88,6 +88,8 @@ import {
   SINGLE_CONTACT_ROUTE,
 } from "../fixtures/manage-grid"
 
+
+test.use({ storageState: storageStatePath("preacher") })
 
 /**
  * Rows are addressed by their generated index fragment, and each test takes its

@@ -8,11 +8,12 @@
  * | 8   | Select-all then filter     | selection is retained across filtering; the count reflects selected rows, not visible rows |
  * | 12  | Bulk over an empty selection | the readout carries the record count, no request is issued, and no bulk action exists at all |
  *
- * All four run as the Admin in admin scope, where the generated set puts 250 rows
- * in view — comfortably above row 7's "3 of 40". Row 6 and row 8 narrow with the
- * global filter rather than scrolling, because the rows are virtualized and
- * the toolbar's `visible of total in scope` readout is the only count that is not a
- * function of the viewport.
+ * All four run as the Preacher in the Contacts section's personal scope, where
+ * the generated set puts 225 rows in view — comfortably above row 7's
+ * "3 of 40". Row 6 and row 8 narrow with the global filter rather than
+ * scrolling, because the rows are virtualized and the toolbar's
+ * `visible of total in scope` readout is the only count that is not a function
+ * of the viewport.
  *
  * **What changed in row 12, and why the claim did not.** The claim was always
  * "an empty selection issues no request"; the mechanism behind it is not. The
@@ -29,8 +30,8 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test"
 
-import { bulkFixtureClient } from "../fixtures/bulk-contacts"
-import { e2eProgramId } from "../fixtures/roles"
+import { bulkFixtureClient, preacherId } from "../fixtures/bulk-contacts"
+import { e2eProgramId, storageStatePath } from "../fixtures/roles"
 import {
   expectVisibleCount,
   filterGlobally,
@@ -48,6 +49,8 @@ import {
   statusFooterScroll,
 } from "../fixtures/manage-grid"
 
+test.use({ storageState: storageStatePath("preacher") })
+
 /**
  * Row 7's own minimum, from the matrix text "3 of 40 rows selected".
  *
@@ -58,19 +61,22 @@ import {
 const MIN_ROWS_FOR_MIXED = 40
 
 /**
- * Ten generated rows, indices 0240–0249.
+ * Nine generated rows, indexes 0240–0248.
  *
  * `-000` used to match exactly ten because the index was zero-padded into the
  * *name*. It no longer is — the generator writes real names and tags rows in
  * `source` (`bulk-contacts.ts:70`) — so the old needle matched nothing.
  *
- * `phone` carries the index instead: `PHONE_PREFIX` plus eight zero-padded digits
- * (`bulk-contact-fixtures.mjs:441`), making `810000024` exactly indexes 0240–0249
- * at the default `--count 250`. The low band is unusable: index 0000 has no phone,
- * because `phoneFor` returns `""` there so that a `UNIQUE (phone, program_id)`
- * index still permits one phone-less contact.
+ * `phone` carries the index instead: `PHONE_PREFIX` plus eight zero-padded
+ * digits (`bulk-contact-fixtures.mjs:441`), making `810000024` exactly indexes
+ * 0240–0249 at the default `--count 250`. Index 0249 is out of the Preacher's
+ * scope by the generator's every-tenth rule, so the personal scope sees nine.
+ * The low band is unusable: index 0000 has no phone, because `phoneFor`
+ * returns `""` there so that a `UNIQUE (phone, program_id)` index still
+ * permits one phone-less contact.
  */
 const TEN_ROWS = "810000024"
+const FILTERED_ROWS = 9
 
 /** The two number fields the status row totals, by column id. */
 const TOTAL_ATTENDANCE_COLUMN = "totalAttendanceCount"
@@ -99,17 +105,20 @@ async function renderedIds(page: Page): Promise<string[]> {
 }
 
 /**
- * Every contact id in the program — the set the Admin-scope payload resolves,
- * and therefore the set the status row totals at rest.
+ * Every contact in the Preacher's personal scope — the set the section payload
+ * resolves, and therefore the set the status row totals at rest.
  *
- * Not `inScopeContacts`: that is the preacher-scoped subset rows 6–8 select
- * from, and summing the bar against a subset would fail on a correct bar.
+ * Not `inScopeContacts`: that is the generated subset rows 6–8 select from, and
+ * summing the bar against a subset would fail on a correct bar. The seeded
+ * contact assigned to the Preacher is in the payload too.
  */
 async function programContactIds(): Promise<string[]> {
+  const staffId = await preacherId(e2eProgramId())
   const { data, error } = await bulkFixtureClient()
     .from("contacts")
     .select("id")
     .eq("program_id", e2eProgramId())
+    .eq("assigned_preacher_id", staffId)
 
   if (error) throw new Error(`Reading program contacts failed: ${error.message}`)
 
@@ -164,7 +173,7 @@ test.describe("row selection", () => {
   test("row 6 — the header checkbox selects every row of a filtered set", async ({ page }) => {
     await openContactsGrid(page)
     await filterGlobally(page, TEN_ROWS)
-    await expectVisibleCount(page, 10)
+    await expectVisibleCount(page, FILTERED_ROWS)
 
     const { total } = await inScopeCounts(page)
 
@@ -175,16 +184,16 @@ test.describe("row selection", () => {
 
     await headerSelectAll(page).click()
 
-    await expect(statusCount(page)).toHaveText("10 selected")
+    await expect(statusCount(page)).toHaveText(`${FILTERED_ROWS} selected`)
     await expect(headerSelectAll(page)).toHaveAttribute("data-state", "checked")
 
     const rows = renderedRows(page)
-    await expect(rows, "all ten filtered rows must be rendered for this assertion to mean anything").toHaveCount(10)
+    await expect(rows, "every filtered row must be rendered for this assertion to mean anything").toHaveCount(FILTERED_ROWS)
 
     // `data-state` is what `grid-row.tsx` keys the selected surface off, so this
     // is the visual indication itself rather than a proxy for it.
     expect(await selectionStates(rows), "every filtered row must show the selected state").toEqual(
-      Array<string | null>(10).fill("selected"),
+      Array<string | null>(FILTERED_ROWS).fill("selected"),
     )
 
     // Toggling back off clears them, which is what makes the control a control
@@ -192,7 +201,7 @@ test.describe("row selection", () => {
     // count rather than reading a `0`.
     await headerSelectAll(page).click()
     await expect(statusCount(page)).toHaveText(`${total} records`)
-    expect(await selectionStates(renderedRows(page))).toEqual(Array<string | null>(10).fill(null))
+    expect(await selectionStates(renderedRows(page))).toEqual(Array<string | null>(FILTERED_ROWS).fill(null))
   })
 
   test("row 7 — a partial selection renders the header mixed and names the count", async ({ page }) => {
@@ -243,22 +252,22 @@ test.describe("row selection", () => {
     // Narrow the global filter. Selection is per-visit state, so the rows that
     // remain visible must still be selected…
     await filterGlobally(page, TEN_ROWS)
-    await expectVisibleCount(page, 10)
+    await expectVisibleCount(page, FILTERED_ROWS)
 
     const rows = renderedRows(page)
-    await expect(rows).toHaveCount(10)
-    expect(await selectionStates(rows)).toEqual(Array<string | null>(10).fill("selected"))
+    await expect(rows).toHaveCount(FILTERED_ROWS)
+    expect(await selectionStates(rows)).toEqual(Array<string | null>(FILTERED_ROWS).fill("selected"))
 
-    // …and the count must still describe the whole selection, not the ten rows
-    // that happen to be on screen. Reading it as 10 is the bug this row names.
+    // …and the count must still describe the whole selection, not the nine rows
+    // that happen to be on screen. Reading it as nine is the bug this row names.
     await expect(statusCount(page)).toHaveText(`${total} selected`)
 
-    // The header control describes the rows in view, so with all ten selected it
+    // The header control describes the rows in view, so with all nine selected it
     // is checked rather than mixed — the two counts are deliberately different.
     await expect(headerSelectAll(page)).toHaveAttribute("data-state", "checked")
     await expect(headerSelectAll(page)).toHaveAttribute(
       "aria-label",
-      /^Select all rows in view \(10 of 10 in view selected\)$/,
+      /^Select all rows in view \(9 of 9 in view selected\)$/,
     )
 
     // Filtering is URL state, so the narrowed view is shareable — and selection

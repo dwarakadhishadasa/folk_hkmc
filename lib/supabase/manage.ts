@@ -2,6 +2,7 @@ import "server-only"
 
 import { randomUUID } from "node:crypto"
 import type { PostgrestError } from "@supabase/supabase-js"
+import type { ContactsSectionPayload } from "@/components/contacts/contacts-types"
 import type {
   ManageAttendee,
   ManageAttendanceRecord,
@@ -469,6 +470,36 @@ async function loadStaffDisplayNames(
   return names
 }
 
+/**
+ * One `contacts` row, as the grid and the section consume it.
+ *
+ * Shared by `/manage` and the Contacts section so a rollup or a text coercion
+ * cannot mean one thing in the grid and another on the Overview.
+ */
+function mapManageContact(row: ContactRow, rollup?: RollupCounts): ManageContact {
+  return {
+    id: row.id,
+    name: text(row.name) ?? "Unknown",
+    phone: text(row.phone) ?? "",
+    college: text(row.college),
+    company: text(row.company),
+    rounds: text(row.rounds),
+    source: text(row.source),
+    booksRead: textArray(row.books_read),
+    notes: text(row.notes),
+    initialContact: text(row.initial_contact),
+    lastContactedOn: text(row.last_contacted_on),
+    dateOfBirth: text(row.date_of_birth),
+    photoPath: text(row.photo_path),
+    isFavorite: row.is_favorite === true,
+    locationIds: textArray(row.location_ids),
+    assignedPreacherId: row.assigned_preacher_id,
+    collectedById: row.collected_by_id,
+    totalAttendanceCount: rollup?.total ?? 0,
+    past60DayAttendanceCount: rollup?.past60 ?? 0,
+  }
+}
+
 export async function loadManagePortalData(params: {
   staff: StaffContext
   mode: ManageMode
@@ -555,31 +586,9 @@ export async function loadManagePortalData(params: {
     scopedContactRows.map((row) => [row.id, row]),
   )
 
-  const contacts: ManageContact[] = scopedContactRows.map((row) => {
-    const rollup = rollups.get(row.id)
-
-    return {
-      id: row.id,
-      name: text(row.name) ?? "Unknown",
-      phone: text(row.phone) ?? "",
-      college: text(row.college),
-      company: text(row.company),
-      rounds: text(row.rounds),
-      source: text(row.source),
-      booksRead: textArray(row.books_read),
-      notes: text(row.notes),
-      initialContact: text(row.initial_contact),
-      lastContactedOn: text(row.last_contacted_on),
-      dateOfBirth: text(row.date_of_birth),
-      photoPath: text(row.photo_path),
-      isFavorite: row.is_favorite === true,
-      locationIds: textArray(row.location_ids),
-      assignedPreacherId: row.assigned_preacher_id,
-      collectedById: row.collected_by_id,
-      totalAttendanceCount: rollup?.total ?? 0,
-      past60DayAttendanceCount: rollup?.past60 ?? 0,
-    }
-  })
+  const contacts: ManageContact[] = scopedContactRows.map((row) =>
+    mapManageContact(row, rollups.get(row.id)),
+  )
 
   const sessionById = new Map(scopedSessionRows.map((row) => [row.id, row]))
   const attendeesBySession = new Map<string, ManageAttendee[]>()
@@ -738,6 +747,109 @@ export async function loadManagePortalData(params: {
     attendance: attendanceRecords,
     charts,
     booksReadOptions,
+  }
+}
+
+/**
+ * The Contacts section's read: `P`, the reader's own contacts.
+ *
+ * `assigned_preacher_id = staff.userId`, for an Admin and a Preacher alike.
+ * This is a read rule, not a new permission boundary: the RLS-scoped client is
+ * still the authorization point, and this filter can only shrink what RLS
+ * already allowed. An unassigned contact is outside `P` by design.
+ *
+ * The location list is deliberately **not** narrowed to `staff.locationIds`:
+ * the section's header counts active programme locations, and a location row
+ * that exists in the programme but sits outside the reader's manage scope is
+ * still a real place a contact can have been met. Narrowing it here would
+ * render those rows as `Unknown location`, which means a deleted location.
+ * The grid's picker is narrowed separately through `locationOptions`, so the
+ * one behaviour `/manage?mode=preacher` had is preserved where it matters.
+ */
+export async function loadContactsSectionData(params: {
+  staff: StaffContext
+}): Promise<ContactsSectionPayload> {
+  const { staff } = params
+  const programId = staff.programId
+  const supabase = await createSupabaseServerClient()
+  const supabaseAdmin = createSupabaseAdminClient()
+
+  const [contactRows, locationRows] = await Promise.all([
+    collectPagedRows<ContactRow>(async (from, to) => {
+      const response = await supabase
+        .from("contacts")
+        .select(CONTACT_COLUMNS)
+        .eq("program_id", programId)
+        .order("id", { ascending: true })
+        .range(from, to)
+
+      return { data: response.data, error: response.error }
+    }),
+    /*
+     * Locations are reference data, read with the service role rather than the
+     * caller's RLS scope. A contact can be assigned to this reader while sitting
+     * at a location outside their manage scope, and the section still has to
+     * name it: an unresolved label would be indistinguishable from a deleted
+     * location, the Overview would call it `Unknown location`, and the metric
+     * link that counts it could not reach the row. Contacts remain the
+     * RLS-scoped read above; this is not a contacts permission change.
+     */
+    collectPagedRows<LocationRow>(async (from, to) => {
+      const response = await supabaseAdmin
+        .from("locations")
+        .select(LOCATION_COLUMNS)
+        .eq("program_id", programId)
+        .order("id", { ascending: true })
+        .range(from, to)
+
+      return { data: response.data, error: response.error }
+    }),
+  ])
+
+  const scopedContactRows = contactRows.filter(
+    (row) => row.assigned_preacher_id === staff.userId,
+  )
+
+  const referencedUserIds = scopedContactRows
+    .flatMap((row) => [row.assigned_preacher_id, row.collected_by_id])
+    .filter((userId): userId is string => Boolean(userId))
+
+  const [staffNames, rollups] = await Promise.all([
+    loadStaffDisplayNames(programId, [...referencedUserIds, staff.userId]),
+    loadRollupCounts(scopedContactRows.map((row) => row.id)),
+  ])
+
+  const contacts = scopedContactRows.map((row) =>
+    mapManageContact(row, rollups.get(row.id)),
+  )
+
+  const locations: ManageLocation[] = locationRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    status: row.status,
+  }))
+
+  const scope: ManageScope = {
+    // The section has no scope switch. `preacher` names the read it performs,
+    // and no component renders it as a choice.
+    mode: "preacher",
+    role: staff.role === "Admin" ? "Admin" : "Preacher",
+    staffUserId: staff.userId,
+    staffName: staff.name,
+    programId,
+    locationIds: [...staff.locationIds],
+  }
+
+  return {
+    scope,
+    locations,
+    locationOptions: locations.filter((location) => staff.locationIds.includes(location.id)),
+    activeLocationCount: locations.filter((location) => location.status !== "Inactive").length,
+    staffNames,
+    contacts,
+    booksReadOptions: [...new Set(contacts.flatMap((contact) => contact.booksRead))].sort((left, right) =>
+      left.localeCompare(right),
+    ),
   }
 }
 

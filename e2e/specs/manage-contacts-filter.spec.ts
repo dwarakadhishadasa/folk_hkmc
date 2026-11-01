@@ -40,7 +40,6 @@ import {
   readContactNames,
   renderedRows,
   restoreContactNames,
-  statusCount,
   toggleSort,
 } from "../fixtures/manage-grid"
 
@@ -234,24 +233,19 @@ test.describe("filtering, sorting and the empty scope", () => {
 
       await page.goto(manageContactsUrl({ mode: "preacher" }))
 
-      await expect(page.locator('tbody[data-grid-panel="empty:no-records"]')).toBeAttached()
-      await expect(page.getByText("No records")).toBeVisible()
+      // The section's own empty state supersedes the grid's `No records` panel:
+      // with no contacts at all there is no grid to render, and the reader is
+      // offered the one action that changes the state.
+      await expect(page.getByText("No contacts yet")).toBeVisible()
+      await expect(page.getByRole("link", { name: "Add contact" }).first()).toHaveAttribute(
+        "href",
+        "/contact",
+      )
       await expect(renderedRows(page), "an empty scope renders no rows").toHaveCount(0)
-
-      // "No header checkbox interaction": the control is present and disabled, so
-      // there is nothing to select and nothing to act on.
-      const headerCheckbox = headerCell(page, "select").getByRole("checkbox")
-      await expect(headerCheckbox).toBeDisabled()
-      await expect(headerCheckbox).toHaveAttribute("data-state", "unchecked")
-      await headerCheckbox.click({ force: true, timeout: 2_000 }).catch(() => undefined)
-      await expect(headerCheckbox).toBeDisabled()
-
-      // The status row agrees there is nothing to select: with no rows at all
-      // it reads the empty record count, and there is no bulk action anywhere
-      // on the page — the claim is unchanged and the mechanism is the one
-      // recorded in `manage-contacts-selection.spec.ts`.
-      await expect(statusCount(page)).toHaveText("0 records")
-      await expect(page.getByRole("button", { name: /Add selected to favorites/ })).toHaveCount(0)
+      await expect(
+        headerCell(page, "select").getByRole("checkbox"),
+        "there is no grid, so there is no header checkbox",
+      ).toHaveCount(0)
     } finally {
       const { error } = await db
         .from("contacts")

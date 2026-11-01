@@ -34,7 +34,8 @@
 import { expect, test } from "@playwright/test"
 import type { Locator, Page } from "@playwright/test"
 
-import { BULK_CONTACT_COLUMNS, bulkFixtureClient, type BulkContact } from "../fixtures/bulk-contacts"
+import { BULK_CONTACT_COLUMNS, bulkFixtureClient, preacherId, type BulkContact } from "../fixtures/bulk-contacts"
+import { storageStatePath } from "../fixtures/roles"
 import {
   expectVisibleCount,
   headerCell,
@@ -46,22 +47,25 @@ import {
 } from "../fixtures/manage-grid"
 
 /**
- * Every contact the grid shows in admin scope.
+ * Every contact in the section's personal scope — the set the grid shows.
  *
- * NOT `inScopeContacts()`, which is the Preacher's slice only: admin scope is
- * wider, so an expectation computed from it disagrees with the grid for reasons
- * that have nothing to do with the filter. Reading the whole program's rows is
- * what makes "the filter produced exactly the rows the data implies" true.
+ * `inScopeContacts()` is the generated subset only; the seeded contact assigned
+ * to the Preacher is in the payload too, so the expectation is read from the
+ * same column the server filters on.
  */
 async function scopedContacts(): Promise<BulkContact[]> {
+  const staffId = await preacherId("folk")
   const { data, error } = await bulkFixtureClient()
     .from("contacts")
     .select(BULK_CONTACT_COLUMNS)
     .eq("program_id", "folk")
+    .eq("assigned_preacher_id", staffId)
 
   if (error) throw new Error(`Reading the program's contacts failed: ${error.message}`)
   return (data ?? []) as BulkContact[]
 }
+
+test.use({ storageState: storageStatePath("preacher") })
 
 /**
  * Navigates to the grid WITHOUT requiring a non-zero row count.

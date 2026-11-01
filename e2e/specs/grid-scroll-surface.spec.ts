@@ -584,14 +584,15 @@ test.describe("the grid's scroll surface", () => {
     await openContactsGrid(page)
     await waitForRenderedRows(page)
 
-    // `shrink-0` on `TabsList`, asserted as its effect: a tab row squeezed
-    // under an operator's hands changes height between renders, which moves
-    // everything below it.
-    const tabRow = page.getByRole("tablist")
+    // The section's tab row is `shrink-0` by effect: a row squeezed under an
+    // operator's hands changes height between renders, which moves everything
+    // below it. The section nav is a link strip rather than a Radix tablist, so
+    // it is addressed by its accessible name.
+    const tabRow = page.getByRole("navigation", { name: "Contacts sections" })
 
     expect(
       await overflowsItsBox(tabRow),
-      "the tab row is wrapped at this width; it must not also be compressed to fit",
+      "the tab row must not be compressed to fit at this width",
     ).toBe(false)
 
     const container = gridScrollSurface(page)

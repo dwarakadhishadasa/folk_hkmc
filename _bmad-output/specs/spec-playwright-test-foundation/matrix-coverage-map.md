@@ -54,7 +54,7 @@ left a later author re-deriving "≥40 rows, select 3" from the specs.
 | 16 | Malformed `results` body | — | **Manual** | bulk client removed — same note as row 11 |
 | 17 | Location filter | UI | **Covered** | `manage-contacts-filter.spec.ts` |
 | 18 | Sort after edit | UI | **Covered** | `manage-contacts-filter.spec.ts` |
-| 19 | Zero rows in scope | UI | **Covered** | `manage-contacts-filter.spec.ts` |
+| 19 | Zero rows in scope | UI | **Covered** | `manage-contacts-filter.spec.ts` — the section's `No contacts yet` state (the grid's own `No records` panel is unreachable once the payload is empty) |
 
 **17 Covered, 2 Manual, out of 19.** Rows 11 and 16 sit on Manual because the
 client they covered no longer exists: the bulk button and its per-row report
@@ -104,7 +104,7 @@ Running 86 tests using 1 worker
   ✓  62 row 17 — the location column filter narrows on the joined name and combines with the global filter
   ✓  63 row 17 (error handling) — a stale column filter id renders instead of throwing
   ✓  64 row 18 — sorting by name uses the committed value, not the pre-edit value
-  ✓  65 row 19 — an empty scope renders the No records panel and no usable header checkbox
+  ✓  65 row 19 — an empty scope renders the section's No contacts yet state, with no grid
   ✓  66 row 19 (neighbouring panel) — a filter that matches nothing is a different panel
   ✓  67 row 6 — the header checkbox selects every row of a filtered set
   ✓  68 row 7 — a partial selection renders the header mixed and names the count

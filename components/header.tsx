@@ -252,7 +252,15 @@ export function Header() {
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
-        { href: "/contact", label: "Contact", icon: UserRoundPlus },
+        {
+          href: isPreacher ? "/contacts" : "/contact",
+          label: "Contact",
+          icon: UserRoundPlus,
+          // The section root reads contacts, locations, staff names and rollups;
+          // prefetching it from every staff page pays for that read before the
+          // reader asks for it. `/manage` is disabled for the same reason.
+          prefetch: false,
+        },
         ...(isAssistant
           ? [{ href: "/sessions", label: "Sessions", icon: CalendarDays }]
           : isPreacher
