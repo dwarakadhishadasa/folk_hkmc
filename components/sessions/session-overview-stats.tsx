@@ -9,18 +9,15 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import {
+  StatTileIcon,
+  STAT_TILE_CAPTION_CLASS,
+  STAT_TILE_CLASS,
+  STAT_TILE_LABEL_CLASS,
+  STAT_TILE_VALUE_CLASS,
+} from "@/components/stat-tile"
 import { formatPercent, formatSignedDelta } from "@/lib/sessions/format"
 import type { SessionsOverviewStats } from "@/lib/sessions/data"
-
-const TILE_CLASS =
-  "relative flex flex-col gap-1.5 overflow-hidden rounded-xl border border-[var(--border)] bg-gradient-to-t from-[color-mix(in_oklab,var(--primary)_6%,var(--card))] to-card p-4 md:p-5"
-const LABEL_CLASS =
-  "text-[11px] font-semibold tracking-[0.04em] text-[#64748b] uppercase md:pr-9 dark:text-[var(--muted-foreground)]"
-const VALUE_CLASS =
-  "block font-[family-name:var(--font-poppins)] text-[24px] leading-none font-bold text-[var(--program-text)] md:text-[32px]"
-const CAPTION_CLASS = "block text-[12px] text-[#64748b] dark:text-[var(--muted-foreground)]"
-const ICON_CLASS =
-  "absolute top-3 right-3 hidden size-8 items-center justify-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--card))] text-[var(--primary)] md:top-4 md:right-4 md:flex"
 
 interface Tile {
   label: string
@@ -34,20 +31,18 @@ function StatTiles({ tiles, label }: { tiles: Tile[]; label: string }) {
   return (
     <dl aria-label={label} className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
       {tiles.map((tile) => {
-        const Icon = tile.icon
-
         return (
-          <div key={tile.label} data-session-stat={tile.label} className={TILE_CLASS}>
-            <span className={ICON_CLASS} aria-hidden="true">
-              <Icon className="size-4" />
-            </span>
-            <dt className={LABEL_CLASS}>{tile.label}</dt>
+          <div key={tile.label} data-session-stat={tile.label} className={STAT_TILE_CLASS}>
+            <StatTileIcon icon={tile.icon} />
+            <dt className={STAT_TILE_LABEL_CLASS}>{tile.label}</dt>
             <dd>
-              <span className={VALUE_CLASS} data-session-stat-value={tile.value}>
+              <span className={STAT_TILE_VALUE_CLASS} data-session-stat-value={tile.value}>
                 {tile.value}
               </span>
               {tile.caption ? (
-                <span className={`mt-1.5 ${CAPTION_CLASS} ${tile.captionClassName ?? ""}`}>
+                <span
+                  className={`mt-1.5 ${STAT_TILE_CAPTION_CLASS} ${tile.captionClassName ?? ""}`}
+                >
                   {tile.caption}
                 </span>
               ) : null}

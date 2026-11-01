@@ -1,8 +1,8 @@
 import { Info } from "lucide-react"
 
+import { SectionCard } from "@/components/section-card"
 import { SessionBySessionChart } from "@/components/sessions/charts/session-by-session-chart"
 import { SessionWeeklyChart } from "@/components/sessions/charts/session-weekly-chart"
-import { SessionChartCard } from "@/components/sessions/session-chart-card"
 import type { SessionReportRow, SessionReportWeek } from "@/lib/sessions/data"
 
 /**
@@ -18,14 +18,14 @@ export function SessionBySessionCard({
   rangeLabel: string
 }) {
   return (
-    <SessionChartCard
+    <SectionCard
       title="Attendance by session"
       subtitle={`Programme-wide · top sessions over the ${rangeLabel.toLowerCase()}.`}
       badge="Top 4"
       className="h-full"
     >
       <SessionBySessionChart rows={rows} />
-    </SessionChartCard>
+    </SectionCard>
   )
 }
 
@@ -41,7 +41,7 @@ export function SessionWeeklyCard({
   rangeLabel: string
 }) {
   return (
-    <SessionChartCard
+    <SectionCard
       title="Attendance trend"
       subtitle={`Programme-wide · check-ins by week over the ${rangeLabel.toLowerCase()}.`}
       badge="Weekly"
@@ -53,6 +53,6 @@ export function SessionWeeklyCard({
         <Info className="mt-px size-3.5 shrink-0" aria-hidden="true" />
         <span>Check-ins only; a session with none counts as zero.</span>
       </p>
-    </SessionChartCard>
+    </SectionCard>
   )
 }

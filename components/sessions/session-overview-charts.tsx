@@ -1,6 +1,6 @@
+import { SectionCard } from "@/components/section-card"
 import { SessionAttendancePulse } from "@/components/sessions/charts/session-attendance-pulse"
 import { SessionBySessionCard, SessionWeeklyCard } from "@/components/sessions/session-report-cards"
-import { SessionChartCard } from "@/components/sessions/session-chart-card"
 import { formatSessionDayMonth } from "@/lib/sessions/format"
 import type { SessionOverviewRow, SessionsReport } from "@/lib/sessions/data"
 
@@ -41,14 +41,14 @@ export function SessionOverviewCharts({
 
   return (
     <div data-session-report-surface="dashboard" className="flex flex-col gap-4">
-      <SessionChartCard
+      <SectionCard
         title="Attendance pulse"
         subtitle="Check-ins across the most recent sessions in view."
         badge={`Last ${recent.length}`}
         className="min-w-0"
       >
         <SessionAttendancePulse points={recent} />
-      </SessionChartCard>
+      </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
         <SessionBySessionCard rows={report.bySession} rangeLabel={rangeLabel} />
