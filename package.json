@@ -61,6 +61,7 @@
     "test:e2e:theme": "pnpm test:e2e theme-switch",
     "test:e2e:guards": "pnpm test:e2e harness-guards suite-determinism mailpit-reader",
     "test:e2e:campaign": "pnpm test:e2e campaign-",
+    "test:e2e:sessions": "pnpm test:e2e \"sessions-(overview|detail)\"",
     "test:e2e:list": "playwright test --list",
     "test:e2e:determinism": "node scripts/verify-suite-determinism.mjs"
   },
