@@ -84,6 +84,7 @@
      program's brand colour in light and goes black in `.dark`, where the
      unvarying maroon read as a foreign surface. */
   --panel-header: var(--program-primary);
+  --section-header: #272a2e;
   --popover: #fffdf9;
   --popover-foreground: #2d0a0a;
   --primary: #2d0a0a;
@@ -261,6 +262,7 @@
   --sidebar-ring: #7da3e8;
   --field: #3b3f4b;
   --panel-header: #000000;
+  --section-header: #272a2e;
 }
 
 @theme inline {
@@ -273,6 +275,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-field: var(--field);
   --color-panel-header: var(--panel-header);
+  --color-section-header: var(--section-header);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);

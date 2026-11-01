@@ -3,11 +3,15 @@ import { describe, expect, it } from "vitest"
 import {
   buildOverviewMetrics,
   buildReportsMetrics,
+  contactYears,
+  contactsInMonthYear,
   contactsInPeriod,
   gridFilterHref,
   initialsFor,
   monthRange,
   monthsEndingAt,
+  monthYearLabel,
+  monthYearWindow,
   periodWindow,
   shiftMonth,
   type MetricContact,
@@ -462,5 +466,80 @@ describe("link encoding", () => {
     expect(initialsFor("Anand Narayanan")).toBe("AN")
     expect(initialsFor("Suresh")).toBe("SU")
     expect(initialsFor("  ")).toBe("?")
+  })
+})
+
+describe("month and year filters", () => {
+  it("states a month and a year as real inclusive boundaries", () => {
+    expect(monthYearWindow("2026", "11")).toEqual({
+      start: "2026-11-01",
+      end: "2026-11-30",
+    })
+    expect(monthYearWindow("2026", null)).toEqual({
+      start: "2026-01-01",
+      end: "2026-12-31",
+    })
+    expect(monthYearWindow(null, "11")).toBeNull()
+  })
+
+  it("lists distinct collection years newest first", () => {
+    expect(contactYears(CONTACTS)).toEqual(["2026", "2025"])
+  })
+
+  it("filters and labels a month and year", () => {
+    expect(contactsInMonthYear(CONTACTS, "2026", "11").map((entry) => entry.id)).toEqual([
+      "a",
+      "j",
+      "k",
+    ])
+    expect(contactsInMonthYear(CONTACTS, null, null)).toHaveLength(CONTACTS.length)
+    expect(monthYearLabel(null, null)).toBe("All time")
+    expect(monthYearLabel("2026", null)).toBe("2026")
+    expect(monthYearLabel("2026", "11")).toBe("November 2026")
+  })
+
+  it("carries the selected window into funnel and collector links", () => {
+    const window = monthYearWindow("2026", "11")
+    const reports = buildReportsMetrics({
+      contacts: CONTACTS,
+      locationNameById: LOCATION_NAMES,
+      staffNameById: STAFF_NAMES,
+      today: TODAY,
+      period: "all",
+      window,
+    })
+
+    expect(reports.funnel.stages.find((stage) => stage.key === "collected")?.count).toBe(3)
+    expect(reports.funnel.stages.find((stage) => stage.key === "locationResolved")?.count).toBe(3)
+    expect(reports.funnel.stages.find((stage) => stage.key === "attended")?.count).toBe(2)
+    expect(reports.funnel.stages.find((stage) => stage.key === "active60")?.count).toBe(1)
+    expect(reports.collectors.rows.map((row) => [row.name, row.count])).toEqual([
+      ["Anand Narayanan", 1],
+    ])
+
+    for (const stage of reports.funnel.stages) {
+      if (stage.href) {
+        expect(stage.href).toContain("f.initialContact=within%3A2026-11-01..2026-11-30")
+      }
+    }
+
+    for (const row of reports.collectors.rows) {
+      expect(row.href).toContain("f.initialContact=within%3A2026-11-01..2026-11-30")
+    }
+  })
+
+  it("carries the selected window into location links", () => {
+    const periodContacts = contactsInMonthYear(CONTACTS, "2026", "11")
+    const overview = buildOverviewMetrics({
+      contacts: periodContacts,
+      locationNameById: LOCATION_NAMES,
+      today: TODAY,
+      window: monthYearWindow("2026", "11"),
+    })
+    const adyar = overview.locations.rows.find((row) => row.label === "Adyar Temple")
+
+    expect(adyar?.count).toBe(2)
+    expect(adyar?.href).toContain("f.initialContact=within%3A2026-11-01..2026-11-30")
+    expect(adyar?.href).toContain("f.location=is%3AAdyar+Temple")
   })
 })

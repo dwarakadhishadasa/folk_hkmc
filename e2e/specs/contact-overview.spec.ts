@@ -16,7 +16,10 @@ import { expect, test, type Page } from "@playwright/test"
 import { storageStatePath } from "../fixtures/roles"
 import { gridRoot, inScopeCounts } from "../fixtures/manage-grid"
 
-test.use({ storageState: storageStatePath("preacher") })
+test.use({
+  storageState: storageStatePath("preacher"),
+  viewport: { width: 1440, height: 900 },
+})
 
 interface MetricLink {
   label: string
@@ -48,6 +51,10 @@ async function readOverviewLinks(page: Page): Promise<MetricLink[]> {
 
 test.describe("contacts overview", () => {
   test("every linked figure lands on a grid that reports the same visible count", async ({ page }) => {
+    // The body now carries the funnel and collector links as well; the default
+    // 60s budget is not enough for one page load per figure.
+    test.setTimeout(120_000)
+
     const links = await readOverviewLinks(page)
 
     expect(
@@ -68,14 +75,13 @@ test.describe("contacts overview", () => {
   })
 
   test("the scope line's contact count is the grid's whole-scope total", async ({ page }) => {
-    await page.goto("/contacts")
+    await page.goto("/contacts/grid")
+    await expect(gridRoot(page)).toBeVisible()
+
     const scope = await page.getByText(/^\d[\d,]* contacts · \d[\d,]* locations$/).innerText()
     const contacts = Number(scope.replace(/,/g, "").match(/^(\d+) contacts/)?.[1] ?? "-1")
 
     expect(contacts, "the scope line must name a contact count").toBeGreaterThan(0)
-
-    await page.goto("/contacts/grid")
-    await expect(gridRoot(page)).toBeVisible()
 
     await expect
       .poll(async () => (await inScopeCounts(page)).total, {

@@ -18,10 +18,12 @@ export default async function ContactsOverviewPage({ searchParams }: ContactsOve
     redirectTo: sectionRedirectPath("/contacts", params),
   })
 
+  const today = programDay()
+
   const metrics = buildOverviewMetrics({
     contacts: payload.contacts,
     locationNameById: new Map(payload.locations.map((location) => [location.id, location.name])),
-    today: programDay(),
+    today,
   })
 
   return (
@@ -31,7 +33,13 @@ export default async function ContactsOverviewPage({ searchParams }: ContactsOve
           <ContactsEmptyState />
         </div>
       ) : (
-        <ContactsOverview metrics={metrics} />
+        <ContactsOverview
+          metrics={metrics}
+          contacts={payload.contacts}
+          locations={payload.locations}
+          staffNames={payload.staffNames}
+          today={today}
+        />
       )}
     </ContactsSectionFrame>
   )

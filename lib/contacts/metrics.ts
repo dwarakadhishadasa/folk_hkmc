@@ -100,6 +100,22 @@ const MONTH_SHORT = [
   "Dec",
 ] as const
 
+/** Full month names for the Overview's Month filter. The value is the `YYYY-MM` suffix. */
+export const MONTH_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+] as const
+
 function pad(value: number): string {
   return String(value).padStart(2, "0")
 }
@@ -120,6 +136,21 @@ export function monthKeyOf(value: string | null | undefined): string | null {
   const day = normalizeDay(value)
 
   return day ? day.slice(0, 7) : null
+}
+
+/** Distinct collection years, newest first. The Month/Year filter's year list. */
+export function contactYears(contacts: readonly MetricContact[]): string[] {
+  const years = new Set<string>()
+
+  for (const contact of contacts) {
+    const day = normalizeDay(contact.initialContact)
+
+    if (day) {
+      years.add(day.slice(0, 4))
+    }
+  }
+
+  return [...years].sort((left, right) => right.localeCompare(left))
 }
 
 export function monthKeyOfToday(today: string): string {
@@ -152,6 +183,21 @@ export function monthLabel(monthKey: string): string {
   const month = Number(monthKey.slice(5, 7))
 
   return MONTH_SHORT[month - 1] ?? monthKey
+}
+
+/** `All time`, `2026`, or `November 2026`. The card's own period statement. */
+export function monthYearLabel(year: string | null, month: string | null): string {
+  if (!year) {
+    return "All time"
+  }
+
+  if (!month) {
+    return year
+  }
+
+  const option = MONTH_OPTIONS.find((entry) => entry.value === month)
+
+  return option ? `${option.label} ${year}` : year
 }
 
 /** The month keys a window ends on, oldest first, ending at `today`'s month. */
@@ -215,6 +261,36 @@ function inWindow(contact: MetricContact, window: PeriodWindow | null): boolean 
   const day = normalizeDay(contact.initialContact)
 
   return day !== null && day >= window.start && day <= window.end
+}
+
+/**
+ * The boundary a Month/Year filter means.
+ *
+ * A month is a real range, not a symbol whose meaning moves with the clock. A
+ * year without a month is the whole calendar year; neither selection is the
+ * absence of a window.
+ */
+export function monthYearWindow(year: string | null, month: string | null): PeriodWindow | null {
+  if (!year) {
+    return null
+  }
+
+  if (month) {
+    return monthRange(`${year}-${month}`)
+  }
+
+  return { start: `${year}-01-01`, end: `${year}-12-31` }
+}
+
+/** The contacts collected in a selected year, and optionally a selected month. */
+export function contactsInMonthYear(
+  contacts: readonly MetricContact[],
+  year: string | null,
+  month: string | null,
+): MetricContact[] {
+  const window = monthYearWindow(year, month)
+
+  return window ? contacts.filter((contact) => inWindow(contact, window)) : [...contacts]
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +410,8 @@ export function buildOverviewMetrics(input: {
   contacts: readonly MetricContact[]
   locationNameById: ReadonlyMap<string, string>
   today: string
+  /** The Month/Year boundary a filtered card is showing, when there is one. */
+  window?: PeriodWindow | null
 }): OverviewMetrics {
   const { contacts, locationNameById, today } = input
   const total = contacts.length
@@ -404,7 +482,16 @@ export function buildOverviewMetrics(input: {
   })
 
   const sources = buildSourceRows(contacts)
-  const locations = buildLocationRows(contacts, locationNameById)
+  const periodFilter: MetricFilter[] = input.window
+    ? [
+        {
+          columnId: "initialContact",
+          operator: "within",
+          value: `${input.window.start}..${input.window.end}`,
+        },
+      ]
+    : []
+  const locations = buildLocationRows(contacts, locationNameById, periodFilter)
 
   const engagement: OverviewEngagementRow[] = [
     {
@@ -451,7 +538,10 @@ export function buildOverviewMetrics(input: {
     ]),
     noLocation,
     noLocationPercentage: share(noLocation, total),
-    noLocationHref: gridFilterHref([{ columnId: "location", operator: "isEmpty", value: "" }]),
+    noLocationHref: gridFilterHref([
+      ...periodFilter,
+      { columnId: "location", operator: "isEmpty", value: "" },
+    ]),
     months: {
       rows: months,
       empty: months.every((row) => row.count === 0),
@@ -492,6 +582,7 @@ function buildSourceRows(contacts: readonly MetricContact[]): {
 function buildLocationRows(
   contacts: readonly MetricContact[],
   locationNameById: ReadonlyMap<string, string>,
+  periodFilter: readonly MetricFilter[] = [],
 ): { rows: OverviewLocationRow[]; more: number } {
   const total = contacts.length
   const resolved = new Map<string, number>()
@@ -523,7 +614,10 @@ function buildLocationRows(
       label,
       count,
       percentage: share(count, total),
-      href: gridFilterHref([{ columnId: "location", operator: "is", value: label }]),
+      href: gridFilterHref([
+        ...periodFilter,
+        { columnId: "location", operator: "is", value: label },
+      ]),
     }))
 
   const rows: OverviewLocationRow[] = resolvedRows.slice(0, 4)
@@ -533,7 +627,10 @@ function buildLocationRows(
     label: "No location",
     count: none,
     percentage: share(none, total),
-    href: gridFilterHref([{ columnId: "location", operator: "isEmpty", value: "" }]),
+    href: gridFilterHref([
+      ...periodFilter,
+      { columnId: "location", operator: "isEmpty", value: "" },
+    ]),
   })
 
   rows.push({
@@ -541,7 +638,10 @@ function buildLocationRows(
     label: "Unknown location",
     count: unknown,
     percentage: share(unknown, total),
-    href: gridFilterHref([{ columnId: "location", operator: "is", value: "Unknown location" }]),
+    href: gridFilterHref([
+      ...periodFilter,
+      { columnId: "location", operator: "is", value: "Unknown location" },
+    ]),
   })
 
   return { rows, more: Math.max(0, resolvedRows.length - 4) }
@@ -629,9 +729,11 @@ export function buildReportsMetrics(input: {
   staffNameById: ReadonlyMap<string, string>
   today: string
   period: MetricPeriod
+  /** A Month/Year boundary that overrides the period's own window. */
+  window?: PeriodWindow | null
 }): ReportsMetrics {
   const { contacts, locationNameById, staffNameById, today, period } = input
-  const window = periodWindow(period, today)
+  const window = input.window === undefined ? periodWindow(period, today) : input.window
   const periodContacts = contacts.filter((contact) => inWindow(contact, window))
   const collected = periodContacts.length
 

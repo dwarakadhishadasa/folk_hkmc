@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { BackButton } from "@/components/back-button"
 import { Header } from "@/components/header"
 import { ContactForm } from "@/components/contact-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
@@ -33,6 +34,11 @@ export default async function ContactPage() {
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container mx-auto max-w-2xl px-4 py-8">
+          <div className="mb-4">
+            <BackButton
+              href={staff.role === "Admin" || staff.role === "Preacher" ? "/contacts" : "/"}
+            />
+          </div>
           <ContactForm
             staffRole={staff.role}
             preachers={preachers.map((preacher) => ({
