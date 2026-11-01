@@ -105,6 +105,7 @@ pnpm dev:local     # once per machine session
 |---|---|---|
 | `pnpm test:e2e:guards` | `harness-guards` + `suite-determinism` + `mailpit-reader` | **21 s** (24 passed) |
 | `pnpm test:e2e:theme` | `theme-switch.spec.ts` | **38 s** (16 passed) |
+| `pnpm test:e2e:sessions` | The two `sessions-*.spec.ts` files | **1.7 min** (19 passed: 4 setup + 15 spec) |
 | `pnpm test:e2e:manage` | The six `manage-contacts-*.spec.ts` files | **4.5 min** (35 tests: 32 spec + 3 setup) |
 | `pnpm test:e2e:grid` | The eleven `grid-*.spec.ts` files | **28 min observed** (181 tests) — green baseline 3.2 min predates the status strip; see §6 |
 | `pnpm test:e2e` | **Full suite.** 289 specs + 3 setup. | ~5–7 min |
@@ -218,6 +219,38 @@ not depend on the locale the number is formatted in.
 blast radius of a change there is this spec — but `components/grid/**`, which
 the tab's filtering leans on for the condition encoding, widens to the grid
 specs — see §5.
+
+### Sessions — overview, insights, detail and live dashboards — `pnpm test:e2e:sessions`
+
+| Source | Spec | Tests |
+|---|---|---|
+| `apps/folk/app/sessions/**`, `components/sessions/**`, `lib/sessions/**`, `supabase/migrations/20261101000000_sessions_flow.sql` | `e2e/specs/sessions-overview.spec.ts` | 11 |
+| " | `e2e/specs/sessions-detail.spec.ts` | 4 |
+
+The overview spec owns why the three derived statuses are visible, why the
+location filter narrows the rows without moving the programme-wide figures, and
+that a page left open flips `Live now` → `Completed` through `router.refresh()`
+rather than a reload. It also asserts that the insights now on the Overview
+match a direct count of `attendance` over the fixed 90-day window: the weekly
+series sums to the total and the by-session bars are the direct top four. The
+detail spec owns the attendee rows, the contact modal on both breakpoints and
+the 404s.
+
+The Reports route is retired; its two charts live on the Overview, so the
+insight assertions are part of the overview spec rather than a separate file.
+The live dashboard is its own URL per session — `/sessions/<id>/live` — so two
+live sessions in one scope do not share a screen. A live row, and a direct
+detail visit for a live session, both land there; a session that is not live at
+`/live` redirects to the detail.
+
+The fixtures are disposable sessions, contacts and one location, written with
+the service role and removed in `afterAll`. They are not the seed: the seed's
+one open session must stay untouched for the attendance contract.
+
+`lib/supabase/data.ts` remains a shared file (see §5), so a change there still
+runs the full `pnpm test:e2e`. `apps/folk/app/attendance/route.ts` now reuses
+the sessions scope predicate, so a change to that route also runs
+`pnpm test:attendance-contract`.
 
 ### Grid primitive — keyboard, editors, range, clipboard, chrome — `pnpm test:e2e:grid`
 

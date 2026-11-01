@@ -1,0 +1,667 @@
+[
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 Why (lines 17\u201319)",
+  "trigger_condition": "The premise \"There is no list of past sessions, no attendance total per session, no way to open a session and see who attended\" is false \u2014 `/manage` already renders exactly that (`components/manage/manage-sessions-view.tsx`: sessions grouped by location, per-session `attendees`, a `sessions \u00b7 attendance records` total, for Admin and Preacher).",
+  "guard_snippet": "Rewrite the Why to \"`/sessions` is a live check-in manager with no persistent overview; `/manage` (Admin/Preacher) already lists sessions with attendees, and this spec either supersedes that tab or states how the two differ.\" Add a Constraint: \"`/manage`'s Sessions tab keeps its existing RLS-scoped read and is not modified.\"",
+  "potential_consequence": "The builder ships a second session list with a *different* scope rule (service-role, hand-rolled) beside the RLS-scoped one; the two disagree for the same staff member and neither doc says which is canonical."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 Constraints, line 52 vs data-model.md \u00b7 Scope, lines 200\u2013202",
+  "trigger_condition": "\"**Scope reuses the staff gate** \u2026 No new authorization rule\" is contradicted two sections later by \"The current `GET /api/sessions` narrows to `created_by` only; the spec widens a Preacher to their owned sessions.\"",
+  "guard_snippet": "Delete \"No new authorization rule\" and write the change once: \"`GET /api/sessions` changes from creator-only to the scoped rule in `data-model.md#scope` (a behaviour change, not a reuse).\"",
+  "potential_consequence": "The implementer cannot tell whether touching authz is permitted; one of the two statements is wrong and a reviewer has no way to pick the authoritative one."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Scope table, lines 194\u2013198",
+  "trigger_condition": "The Preacher rule omits the standalone `created_by = auth.uid()` term that `20261007120000_scope_sessions_by_preacher.sql` grants, and the Assistant rule omits `created_by = caller_assigned_preacher_id()`.",
+  "guard_snippet": "Restate exactly the policy's four disjuncts: `Preacher: created_by = me OR preacher_id = me`. `Assistant: created_by = me OR preacher_id = assignedPreacher OR created_by = assignedPreacher OR preacher_id = assignedPreacher`.",
+  "potential_consequence": "Sessions RLS makes readable disappear from `/sessions` \u2014 the precise creator-vs-preacher bug that migration exists to fix (a preacher's 107 sessions created by another account render zero)."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Scope table, Assistant row",
+  "trigger_condition": "No branch for an Assistant with no `assigned_preacher_id`, or an assigned preacher who is not `Active`; `staff.assignedPreacherUserId` is optional in `StaffContext`. The existing page and `POST /api/sessions` both handle this (empty scope / 403).",
+  "guard_snippet": "Add \"An Assistant with no assigned preacher, or whose assigned preacher is not `Active`, sees zero sessions,\" plus the test that mirrors `apps/folk/app/sessions/page.tsx`.",
+  "potential_consequence": "`preacher_id = undefined` reaches the query builder; depending on the client it errors, matches nothing, or matches everything \u2014 and it diverges from behaviour the POST path already enforces."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-1 success, line 25",
+  "trigger_condition": "\"an empty programme renders the designed empty state\" \u2014 no empty-state frame exists among the 9 frames of `sessions.figcraft`, and Constraint 54 says \"do not invent chrome\".",
+  "guard_snippet": "Either \"Empty state reuses `components/campaign/campaign-empty-state.tsx`, the one place composed chrome is allowed because the design has no empty frame,\" or delete the clause from CAP-1.",
+  "potential_consequence": "CAP-6's side-by-side check has nothing to compare against, so the builder must either invent chrome (violating the constraint) or ship a blank panel."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-1 success, line 25",
+  "trigger_condition": "\"choosing a location shows only that location's sessions\" \u2014 the mobile Overview frame has no location control (titles: `Sessions`, `New session`, `48 sessions \u00b7 folk programme`, `Overview`, `Reports`; no `All locations`).",
+  "guard_snippet": "Scope it: \"the location filter is the desktop control (`md:` and up); the mobile Overview shows no filter.\"",
+  "potential_consequence": "Mobile cannot satisfy CAP-1 and CAP-6 at the same time; whichever is dropped, the acceptance criteria become untrustworthy."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-3 success, line 33 vs design-reference.md \u00a7Mobile \u2014 Session detail, line 143",
+  "trigger_condition": "The spec says the attendee list shows \"contact name, phone and location\"; the design's cards show name, phone and *sessions attended*, and the reference says the same. There is no location on the card.",
+  "guard_snippet": "\"Attendee card: initials, name, phone, `N sessions`, chevron \u2014 no location,\" and remove `location_ids` from the attendee join in `data-model.md` step 2.",
+  "potential_consequence": "The builder adds a field the design does not have (CAP-6 fails) or omits a field the capability promises (CAP-3 fails); the data model also carries a join with no consumer."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-3 success, line 33; data-model.md line 252",
+  "trigger_condition": "\"email (from the auth user when present)\" \u2014 `public.contacts` has no email column and contacts are not auth users; `public.users.email` belongs to staff. The value is therefore always `\u2014`.",
+  "guard_snippet": "\"No contact email exists in this schema. Render `\u2014` unconditionally and add a `Deltas` line: 'Email is always empty \u2014 no source column; the design's address is sample data.'\"",
+  "potential_consequence": "The design's Email row is permanently empty while the spec implies a source exists, and a reviewer signs off on data that can never appear."
+ },
+ {
+  "lens": "adversarial",
+  "location": "design-reference.md \u00b7 Attendee contact, line 149 (inherited by SPEC.md CAP-3)",
+  "trigger_condition": "\"Attendance history: session, date, Attended/Absent\" \u2014 `attendance` records presence only; there is no per-session expectation and no absent row, so `Absent` is unreachable.",
+  "guard_snippet": "\"Attendance history lists attended sessions only; every row reads `Attended`,\" and delete `Absent` from the reference.",
+  "potential_consequence": "The builder either fabricates absence from a session list (reporting non-attendance for sessions the contact was never expected at) or ships a two-value vocabulary with one value."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Session detail query, step 3 (lines 249\u2013255)",
+  "trigger_condition": "\"sessions attended = count of attendance rows for the contact **in the programme**\" plus a programme-wide history runs on the service-role client, while `contacts` and `attendance` RLS are preacher-scoped; `lib/supabase/manage.ts` deliberately renders `SCOPED_OUT_ATTENDEE_LABEL` for exactly this case.",
+  "guard_snippet": "Scope the count and the history to sessions the caller may read, and render `SCOPED_OUT_ATTENDEE_LABEL` for contacts outside `contacts` RLS \u2014 or state plainly that `/sessions` is a service-role read that exposes every attendee of a scoped session and list the fields it exposes.",
+  "potential_consequence": "A Preacher reads the full contact record and full attendance history of another preacher's contacts \u2014 an authorization regression against a boundary the codebase already implements."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-4 success, line 37; data-model.md line 272",
+  "trigger_condition": "\"the weekly series sums to the range total\" while the trend buckets `attendance.created_at` by ISO week over a range defined by *session start*. The first and last ISO weeks are partial, so clipped buckets sum below the total and unclipped ones include out-of-range rows.",
+  "guard_snippet": "\"Bucket by ISO week clamped to the range (`greatest(created_at, range_start)`, `least(created_at, range_end)`) and assert `sum(buckets) = total_attendance` in a unit test with a session that starts on the last day of the range.\"",
+  "potential_consequence": "The acceptance criterion fails on real data at every range boundary and gets quietly dropped, leaving the trend chart untested."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-4 success, line 37; data-model.md line 274; design-reference.md line 121",
+  "trigger_condition": "The spec defines \"Needs attention\" as \"in-range sessions with zero check-ins\"; the design's card is \"Sessions that ran but did not fill\" with fill percentages (`Youth Meet 65%`, `Gita Life 55%`) \u2014 capacity data that does not exist.",
+  "guard_snippet": "Rename the card and body to match what can be computed \u2014 \"Sessions with no check-ins \u00b7 Sessions that ran with no check-ins. <name> \u00b7 <date> \u00b7 0 check-ins\" \u2014 and record the delta in `design-reference.md`.",
+  "potential_consequence": "The one required report card is not the designed card: same slot, different title, different data, different row layout, so CAP-4 and CAP-6 cannot both pass."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-4 success + CAP-6, lines 37/45; design-reference.md line 121",
+  "trigger_condition": "The card is required by CAP-4 but absent from the saved Reports (light) frame; CAP-6 demands a side-by-side match against the reference that documents its absence. `data-model.md` line 276 keeps it anyway.",
+  "guard_snippet": "\"Render `Needs attention` in both themes and add a `Deltas` entry saying light was re-added\" \u2014 or \"render it in dark only, and drop it from CAP-4's success criteria.\"",
+  "potential_consequence": "The light-mode conformance check is permanently red, so the check gets waived and stops protecting the rest of the surface."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-4 success, line 37",
+  "trigger_condition": "\"attendance-by-session and top-sessions totals equal a direct `count(attendance)` for the same sessions\" \u2014 the cards show top-4 bars (`57+42+38+26`) against a range total of `1,284` and display no total at all, so the sentence is either false or untestable.",
+  "guard_snippet": "\"`Total attendance` equals `count(attendance)` for the in-range session ids; the by-session and top-session cards show top-N bars and are explicitly not expected to sum to that total.\"",
+  "potential_consequence": "No test can be written for the sentence; a tester who takes it literally files the top-N bars as a production bug."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-5 success, line 41",
+  "trigger_condition": "\"Staff can start a live session from the overview **or reports**\" \u2014 the mobile Reports frame has no `New session` control; only mobile Overview and both desktop frames do.",
+  "guard_snippet": "\"`New session` appears on desktop Overview, desktop Reports and mobile Overview only (frames 1, 2, 6); not mobile Reports.\"",
+  "potential_consequence": "Either a control the design does not contain is added (CAP-6 fails) or CAP-5 is false on one breakpoint."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-6 success, line 45 vs design-reference.md line 139",
+  "trigger_condition": "CAP-6 requires the literal mobile title \"`Session detail \u2304`\"; the design's frame title is the session's name \u2014 \"`Weekend Camp 2026 \u2304`\".",
+  "guard_snippet": "\"Mobile session detail title is the session's own name with a chevron-down (design: `Weekend Camp 2026 \u2304`); `Session detail` is the frame name, not the page title.\"",
+  "potential_consequence": "A literal reading renders the string \"Session detail\" as the page heading, and the conformance check has two authorities that disagree."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-6 success, line 45",
+  "trigger_condition": "The sentence attaches \"with the Overview/Reports pills\" to all three mobile screens; the design's Session detail frame has a back link, name, status pill and stats, and no Overview/Reports pills.",
+  "guard_snippet": "\"Overview and Reports carry the pill group; Session detail carries a back link, the name, a status pill and no pill group.\"",
+  "potential_consequence": "Pills get added where the design has none, or the check is waived for the screen that matters most."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 Capabilities (whole section) vs design-reference.md \u00b7 \"Overview (light and dark)\" / \"Reports (light and dark)\"",
+  "trigger_condition": "No capability mentions dark mode, yet 3 of the 9 authority frames are dark and the repo has `pnpm test:e2e:theme`. CAP-6 says \"both breakpoints\", not \"both themes\".",
+  "guard_snippet": "\"**CAP-7 \u2014 Themes:** every Sessions surface renders in the existing light and dark tokens; all five dark-checkable frames match; `test:e2e:theme` gains Sessions assertions.\"",
+  "potential_consequence": "Dark frames ship unbuilt or unchecked, and the theme suite reports green because it asserts nothing about the new surface."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Status derivation, lines 206\u2013215",
+  "trigger_condition": "The terminal branch `else if session_date ... / else -> Live now` makes any session with NULL `session_date`, NULL `attendance_opens_at` and NULL `attendance_closes_at` read `Live now` forever; the same branch keeps an open-ended session live indefinitely.",
+  "guard_snippet": "\"If `closes` is NULL, derive it as `opens + coalesce(duration_minutes, 60) * interval '1 minute'`; if `opens` is still NULL, fall back to `startOfDay(session_date)`; if all three are NULL, the status is `Completed` \u2014 never `Live now`.\"",
+  "potential_consequence": "Legacy and imported rows advertise a live session with a public attendance link that `/attend` rejects, indefinitely."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 CAP-2 line 29 + data-model.md line 293; `sessions` field list, line 182",
+  "trigger_condition": "`public_attendance_enabled` is absent from both the field list and the status derivation, but it is the first gate in `lib/attendance-session.ts` \u2014 a session with it false is not live and its link 403s.",
+  "guard_snippet": "Add `public_attendance_enabled` to the `sessions` field list and to the derivation: \"`false` \u2192 never `Live now`, and no attendance link is exposed.\"",
+  "potential_consequence": "The overview shows a `Live now` chip whose \"Copy attendance link\" leads to a 403, with no way for staff to tell why."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 Constraints, line 58",
+  "trigger_condition": "\"**`session_date` is text** (`YYYY-MM-DD`)\" \u2014 `20261010000000_contacts_date_columns_to_date.sql` converted `public.sessions.session_date` to `DATE`, alongside `contacts.initial_contact`. The pseudocode then does string comparison (`session_date < today`) and the note says \"parse as a local date, not a UTC timestamp\", which only applies to text.",
+  "guard_snippet": "\"`session_date` is `DATE`; format with the programme timezone (`Asia/Kolkata`) and never `Date.parse` it. `coalesce(attendance_opens_at, startOfDay(session_date))` needs the date cast to `timestamptz` explicitly.\"",
+  "potential_consequence": "Implementer builds against a type that no longer exists; date comparisons silently run against whatever string the client library returns, and boundary tests pass in UTC but fail in IST."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Overview query, lines 223\u2013241",
+  "trigger_condition": "\"One read of the scoped sessions \u2026 with an attendance count\" cannot produce the design's four stat cards: `Attendees 1,284`, `Avg attendance 27 (+4 vs last month)`, `Repeat attendees 312 / 24% of attendees`, `Upcoming 6`. `attendance(count)` is per session; repeat attendees needs distinct contacts across sessions; \"+4 vs last month\" needs a previous period.",
+  "guard_snippet": "Add an \"Overview stats\" table defining each: Sessions = count in scope; Upcoming = count where `now < opens`; Attendees = \u03a3 session counts; Avg attendance = attendees \u00f7 sessions; Repeat attendees = distinct contacts with \u22652 attendance rows \u00f7 distinct contacts in scope. Delete the delta unless a previous-period read is specified.",
+  "potential_consequence": "The four cards \u2014 the most prominent element on the overview \u2014 are implemented to four different invented definitions, and \"Avg attendance\" and the month-over-month delta cannot be verified at all."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Status derivation, line 220\u2013221; SPEC.md \u00b7 CAP-2",
+  "trigger_condition": "\"`Upcoming` is supported for completeness; the current creation flow opens the window immediately, so new sessions are `Live now`\" \u2014 yet the desktop Sessions card says \"6 upcoming\", the mobile tile counts `Upcoming`, and two designed rows are `Upcoming`. The status will be 0 and those rows unreachable.",
+  "guard_snippet": "\"Upcoming is 0 for every session created by `POST /api/sessions` until scheduling exists; the designed `6 upcoming` and its two rows are sample data. The tile still renders, showing `0`.\"",
+  "potential_consequence": "The built overview shows `0 upcoming` and no Upcoming chips where the design shows `6` and two rows \u2014 the conformance check fails on the single most visible number, or the builder invents a scheduling path the non-goals forbid."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Session detail, line 258; design-reference.md line 142",
+  "trigger_condition": "\"Attendee ordering follows the design: attendance order, then contact name\" while the design places a `Sort` control in the `Attendees \u00b7 42` header with no options specified anywhere.",
+  "guard_snippet": "\"`Sort` toggles Attendance order (default, `attendance.created_at`) and Name (A\u2013Z); the control is hidden below 2 attendees\" \u2014 or remove the control and fix the order.",
+  "potential_consequence": "A dead control ships in the primary screen of the feature, and no test can assert list order."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Session detail, line 254",
+  "trigger_condition": "\"first contact (`contacts.created_at`)\" \u2014 `contacts.initial_contact` is a real `DATE` column (converted in `20261010000000`) that means exactly \"first contact\"; `created_at` is the row-creation timestamp and is wrong whenever the record was backfilled.",
+  "guard_snippet": "\"`first contact` = `contacts.initial_contact`; fall back to `contacts.created_at` only when it is null, and render `\u2014` when both are missing.\"",
+  "potential_consequence": "Every imported contact shows the migration date rather than the date they were first contacted \u2014 a silently wrong fact on the screen whose whole purpose is contact history."
+ },
+ {
+  "lens": "adversarial",
+  "location": "data-model.md \u00b7 Edge cases, lines 288\u2013292",
+  "trigger_condition": "\"A deleted contact cannot orphan attendance\" is true, but `sessions.preacher_id` and `sessions.created_by` are both `ON DELETE SET NULL` (`20261006000000`), so deleting a staff user nulls both and the session drops out of every Preacher/Assistant scope.",
+  "guard_snippet": "Add: \"When `created_by` and `preacher_id` are both NULL (staff user deleted), only Admin sees the session,\" plus a test that nulls both columns.",
+  "potential_consequence": "Handing over or removing a staff account silently erases their session history from the preacher who took over \u2014 the list just gets shorter, with no error."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 Open Questions, line 82",
+  "trigger_condition": "The question offers \"Add an expected-attendees field\" while Constraint 49 says \"No schema change\" and Non-goal 63 says \"Capacity \u2026 or per-session expected headcount\" are out of scope. Two of the three answers are unbuildable under the spec's own constraints.",
+  "guard_snippet": "Delete the option and make the answer explicit: \"`Needs attention` means zero check-ins until a capacity column exists; adding one is out of scope for this spec.\"",
+  "potential_consequence": "Whoever answers the open question picks a path the constraints forbid, and the contradiction lands on the implementer as a scope change mid-build."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 Open Questions, line 81",
+  "trigger_condition": "\"The saved design no longer contains a desktop `Session detail` frame. Restore it\u2026\" \u2014 no saved revision ever contained one (both `sessions.figcraft` and `sessions-saved-0842.figcraft` are 9 frames across 2 pages), yet `sessions-design-set-summary.md` still says 10 frames and lists a desktop Session detail, and `preview/sessions-desktop/Sessions \u2014 Session detail (light).png` still exists.",
+  "guard_snippet": "Close the question: \"No desktop Session detail frame exists in any saved revision. Delete the stale preview PNG and correct `sessions-design-set-summary.md` (10 frames, desktop detail) to 9 frames.\"",
+  "potential_consequence": "The builder spends time restoring a frame that was never in the file, or the question stays open and blocks the entire desktop table plus the `Open \u203a` affordance indefinitely."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 Open Questions, line 83",
+  "trigger_condition": "\"Should `New session` open the existing form as a dialog from the overview, or keep the current inline form?\" \u2014 the design has no dialog frame, and Constraint 54 says \"do not invent chrome\".",
+  "guard_snippet": "Resolve it: \"Inline on `/sessions`, because the authority contains no modal frame and new chrome is forbidden; the header action scrolls to and focuses the form.\"",
+  "potential_consequence": "A modal is built from nothing, reviewed against no frame, and CAP-6's side-by-side check cannot cover it."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 general (absent section)",
+  "trigger_condition": "The spec has no verification section: no spec file names, no `test:e2e:sessions` script (none exists in `package.json`), no rows in `matrix-coverage-map.md`, and it touches `lib/supabase/data.ts`, which `docs/architecture/testing.md` line 282 sends to the full `pnpm test:e2e`.",
+  "guard_snippet": "Add `## Verification` naming `e2e/specs/sessions-overview.spec.ts`, `sessions-reports.spec.ts`, `sessions-mobile-detail.spec.ts`, a `test:e2e:sessions` script, the matrix rows claimed, and \"full `pnpm test:e2e` before PR because `lib/supabase/data.ts` is shared.\"",
+  "potential_consequence": "Nothing verifies the new surface; CI stays green because CI does not run e2e, and the empty-state/status/report bugs above reach production unmeasured."
+ },
+ {
+  "lens": "adversarial",
+  "location": "SPEC.md \u00b7 frontmatter, line 13 (`companions` note) with the set as a whole",
+  "trigger_condition": "The documents are declared \"the complete, **preservation-validated** contract\", yet they contradict each other on the authorization rule (SPEC 52 vs data-model 200), the mobile detail title (CAP-6 vs reference 139), `Needs attention` (CAP-4 vs reference 121), `Absent` (reference 149 vs schema), `session_date`'s type (SPEC 58 vs migration), and the desktop detail frame (SPEC 81 vs the 9-frame file and the 10-frame summary).",
+  "guard_snippet": "Add a one-line precedence rule per field (\"design frames win on layout; `data-model.md` wins on types and queries; SPEC wins on behaviour\") and delete or fix each listed contradiction before the contract is called preserved.",
+  "potential_consequence": "Every contradiction becomes an implementer coin-flip resolved differently in code, tests, and review, and the \"preservation-validated\" claim stops being a gate."
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:207 (SPEC.md:58)",
+  "trigger_condition": "session_date fallback parsed as a 'local date' for a DATE column",
+  "guard_snippet": "opens = attendance_opens_at ?? parseDateOnlyInProgramTz(session_date); // never new Date(\"YYYY-MM-DD\")",
+  "potential_consequence": "Server (UTC) and browser (IST) derive different statuses; hydration flip"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:209-215",
+  "trigger_condition": "attendance_opens_at, attendance_closes_at and session_date all NULL",
+  "guard_snippet": "if (!opens && !closes) return \"Unknown\"; // not \"Live now\"",
+  "potential_consequence": "Undated legacy session reads Live now forever, sorts first, drops from reports"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:208",
+  "trigger_condition": "attendance_closes_at NULL and duration_minutes NULL together",
+  "guard_snippet": "closes = s.duration_minutes == null ? null : opens + s.duration_minutes * 60000",
+  "potential_consequence": "NaN/zero closes makes Completed fire at opens or never"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:229-235",
+  "trigger_condition": "ORDER BY coalesces timestamptz attendance_opens_at with session_date, which SPEC.md calls text",
+  "guard_snippet": "order by coalesce(attendance_opens_at, session_date::timestamptz) desc nulls last",
+  "potential_consequence": "Following the spec's text premise makes COALESCE unplannable; DATE casts at UTC midnight"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:262-263",
+  "trigger_condition": "Range predicate calls JS startOfDay inside SQL and never fixes the range end",
+  "guard_snippet": "where coalesce(attendance_opens_at, session_date::timestamptz) >= :from and coalesce(attendance_opens_at, session_date::timestamptz) < :to",
+  "potential_consequence": "Sessions at the midnight boundary land in one report and not another"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:266-274",
+  "trigger_condition": "Attendance row whose created_at is NULL (backfill maps unparseable times to null)",
+  "guard_snippet": "bucket = date_trunc('week', coalesce(a.created_at, s.session_date::timestamptz))",
+  "potential_consequence": "Weekly bars omit rows that Total attendance counts"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:272",
+  "trigger_condition": "Check-in between 00:00 and 05:30 IST on a Monday",
+  "guard_snippet": "date_trunc('week', a.created_at at time zone 'Asia/Kolkata')",
+  "potential_consequence": "IT Monday-early check-ins land in the previous ISO week and bar"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:270",
+  "trigger_condition": "Range contains sessions but zero distinct contacts attended",
+  "guard_snippet": "repeatRate = contactsInRange === 0 ? 0 : repeatContacts / contactsInRange",
+  "potential_consequence": "Repeat rate renders NaN% on the card"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:271",
+  "trigger_condition": "Every in-range session has zero attendance, or none are in range",
+  "guard_snippet": "const scale = Math.max(1, ...counts.map(c => c.count))",
+  "potential_consequence": "Bar width becomes 0/0 and the card renders broken"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "SPEC.md:37 (CAP-4)",
+  "trigger_condition": "More than four in-range sessions feed the report cards",
+  "guard_snippet": "assert sum(attendance by session) === rangeTotal; top-4 display must not stand in for the total",
+  "potential_consequence": "The stated acceptance invariant cannot pass on a real programme"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:198",
+  "trigger_condition": "Assistant with assigned_preacher_id NULL reads the overview",
+  "guard_snippet": "if (staff.role === \"Assistant\" && !staff.assignedPreacherUserId) return []",
+  "potential_consequence": "Filter errors or drops, yielding a 500 or whole-programme rows"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:198",
+  "trigger_condition": "Assistant reassigned to another preacher after creating sessions",
+  "guard_snippet": "or preacher_id = assigned_preacher_id or created_by = staff.userId",
+  "potential_consequence": "Assistant loses every session they created"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:197",
+  "trigger_condition": "Migrated session with preacher_id NULL and created_by NULL",
+  "guard_snippet": "surface rows where preacher_id is null and created_by is null for backfill; do not leave them Admin-only silently",
+  "potential_consequence": "Preacher and Assistant never see sessions they own"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "SPEC.md:52",
+  "trigger_condition": "Any read path uses the user-scoped client instead of service role",
+  "guard_snippet": "create policy ... or (role in ('Preacher','Assistant') and preacher_id = auth.uid())",
+  "potential_consequence": "Widened Preacher scope returns zero rows under existing RLS"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "SPEC.md:52",
+  "trigger_condition": "Preacher opens a location session owned by another preacher",
+  "guard_snippet": "detail scope = preacher_id = caller or location_id in caller.locationIds or assigned-preacher match",
+  "potential_consequence": "Live dashboard readable at /attendance but session detail 404s"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:204-221",
+  "trigger_condition": "Session inside its window with public_attendance_enabled false",
+  "guard_snippet": "status = attendanceEnabled && inWindow ? \"Live now\" : deriveFromWindow()",
+  "potential_consequence": "Row reads Live now and exposes a link that returns 403"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:208",
+  "trigger_condition": "public_attendance_enabled true and attendance_closes_at NULL",
+  "guard_snippet": "eligibility closes = attendance_closes_at ?? opens + duration_minutes",
+  "potential_consequence": "Status reads Completed while /attend keeps accepting check-ins"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:218-219",
+  "trigger_condition": "Overview has several Live or Upcoming rows and reuses the dashboard timer",
+  "guard_snippet": "arm one timer at the earliest per-row boundary and re-arm after each fire",
+  "potential_consequence": "Only one row flips; the rest stay stale until reload"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:245",
+  "trigger_condition": "Detail URL id is not a UUID, e.g. /sessions/abc",
+  "guard_snippet": "if (!UUID_RE.test(id)) notFound()",
+  "potential_consequence": "Postgres 22P02 surfaces as a 500 instead of the promised 404"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:249-255",
+  "trigger_condition": "Attendee has attendance in sessions outside the viewer's scope",
+  "guard_snippet": "count and list attendance only where session_id in (scopedSessionIds)",
+  "potential_consequence": "Count and history expose other preachers' session names and dates"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:249",
+  "trigger_condition": "Session detail renders an attendee list of hundreds",
+  "guard_snippet": "select contact_id, count(*) from attendance where contact_id in (...) group by 1",
+  "potential_consequence": "Per-attendee rollup queries make the detail O(n) round-trips"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:253",
+  "trigger_condition": "Contact record requested for the mobile contact screen",
+  "guard_snippet": "email = contact.email ?? \"\u2014\"; // contacts has no email column and no auth link",
+  "potential_consequence": "Every contact renders an em dash where the design shows an email"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:254",
+  "trigger_condition": "Contact created by backfill with created_at NULL",
+  "guard_snippet": "firstContact = contacts.initial_contact ?? contacts.created_at ?? \"\u2014\"",
+  "potential_consequence": "Design's 'Contact \u00b7 since \u2026' renders blank or the Airtable record date"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "design-reference.md:141",
+  "trigger_condition": "Mobile session detail renders Invited, First-timers and Returning",
+  "guard_snippet": "firstTimer = min(session_date across contact's attendance) === this session; Invited has no source",
+  "potential_consequence": "Invited has no data; the other two tiles have no definition"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "design-reference.md:149",
+  "trigger_condition": "Attendance history row for a session the contact did not attend",
+  "guard_snippet": "history = attended sessions only; remove the Absent state or add absence data",
+  "potential_consequence": "Absent can never render; the design's history control is dead"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:274",
+  "trigger_condition": "In-range session still Upcoming or Live with zero check-ins",
+  "guard_snippet": "needsAttention = inRange && closes < now && attendanceCount === 0",
+  "potential_consequence": "Running sessions are flagged as needing attention; Sessions run counts them"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:237-241",
+  "trigger_condition": "Session with location_id NULL or pointing at a deleted location",
+  "guard_snippet": "left join locations l on l.id = s.location_id; render l.name ?? \"\u2014\" and keep the row under All locations",
+  "potential_consequence": "Row disappears under every location filter and shows a blank location"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:241",
+  "trigger_condition": "Selected location filter matches no sessions",
+  "guard_snippet": "distinguish scope-empty from filter-empty in the empty state copy",
+  "potential_consequence": "Programme-empty copy appears for a filter that has rows elsewhere"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:240",
+  "trigger_condition": "Virtualised table footer reports 'the visible count'",
+  "guard_snippet": "footer shows filteredCount, not the number of mounted rows",
+  "potential_consequence": "The footer number changes while the user scrolls"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:271-273",
+  "trigger_condition": "Attendance counts tie across the top-4 and top-3 cards",
+  "guard_snippet": "order by count desc, coalesce(attendance_opens_at, session_date) desc, id",
+  "potential_consequence": "Cards reshuffle between two identical reads"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "SPEC.md:41 (CAP-5)",
+  "trigger_condition": "Admin whose location_ids is a subset opens New session",
+  "guard_snippet": "filter the form's location options to ids the POST will accept, or widen the Admin check",
+  "potential_consequence": "Picker offers locations that the POST rejects with 403"
+ },
+ {
+  "lens": "edge-case-hunter",
+  "location": "data-model.md:293-294",
+  "trigger_condition": "Live session whose attendance_url is NULL (legacy row or failed second write)",
+  "guard_snippet": "attendanceUrl ?? `${siteUrl}/attend?session=${session.id}`",
+  "potential_consequence": "Live row exposes no link; CAP-5's 'link is available' fails"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "design-reference \u00a7Desktop Overview card 4 \"Repeat attendees\" vs \u00a7Mobile Overview tile 4 \"Upcoming\" vs \u00a7Mobile Session detail stats \"Invited, Attended, First-timers, Returning\" (~20 words of tile names across 3 passages)",
+  "revised_text": "QUESTION + add one `Figures` table (or one-line cross-reference per tile) mapping every stat card, tile and detail stat to its definition. Desktop and mobile must not disagree on which metric occupies slot 4",
+  "changes": "The Reports figures get an 8-row definitions table in `data-model.md`; the Overview's four cards/tiles and the detail screen's four stats get none. Seven of eight overview figures are undefined, the fourth differs by breakpoint, and `Invited` has no source at all \u2014 it also contradicts \u00a7Constraints \"no status, capacity or invite column\". This is the only hole that stops a builder starting the overview screen. ~+15 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "Desktop-detail decision, stated four times: \u00a7Constraints bullet 8 (~24 w), \u00a7Non-goals bullet 5 (~11 w), \u00a7Assumptions bullet 4 (~12 w), design-reference \u00a7Deltas bullet 1 (~18 w)",
+  "revised_text": "MERGE to two: keep \u00a7Open Questions #1 as the decision record and \u00a7Non-goals bullet 5 as the scope line. CONDENSE the Constraints bullet to \"The desktop table's `Open \u203a` is inert until open question 1 is resolved.\" (~10 w). CUT \u00a7Assumptions bullet 4",
+  "changes": "One unresolved fact told in four registers \u2014 constraint, non-goal, assumption, design history \u2014 so a reader cannot tell which statement governs when the question is answered. Two lines carry the same build instruction. Saves ~36 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "CAP-6 success \u2014 mobile screens show \"`Sessions \u2304`, `Reports \u2304` and `Session detail \u2304`\" (~14 w)",
+  "revised_text": "QUESTION: design-reference \u00a7 Session detail titles that screen \"`Weekend Camp 2026 \u2304`\" \u2014 the session's name, not a literal label. Reword CAP-6 to \"session-name chevron title\" or state the literal",
+  "changes": "The acceptance test and the authority it names disagree, so the side-by-side conformance check CAP-6 requires cannot pass whichever string the builder ships. Wording only; the requirement is untouched. 0 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "\u00a7Open Questions \u2014 last section, after \u00a7Non-goals, \u00a7Success signal and \u00a7Assumptions (~74 w)",
+  "revised_text": "MOVE to directly after \u00a7Constraints. Order the three by what they block: desktop detail (blocks CAP-6 conformance) \u2192 capacity (blocks the design's `42 of 60`) \u2192 dialog-or-inline (cosmetic)",
+  "changes": "The three unresolved decisions are what a reader must settle first, and they are filed last \u2014 while \u00a7Assumptions above them already answers questions 1 and 2, so a linear reader meets the answers before the questions. Cheap fix, largest ordering gain. 0 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "\u00a7Constraints \u2014 10 flat bullets, 202 w, mixing hard rules, definitions and implementation contracts",
+  "revised_text": "Restructure into two labelled groups (or a two-column table): **Rules** (No schema change \u00b7 Scope \u00b7 Read path \u00b7 Reports computed on read) and **Fixed behaviour** (Attendance total \u00b7 Creation \u00b7 Design authority \u00b7 Mobile read-only \u00b7 Desktop drill-down \u00b7 `session_date` text)",
+  "changes": "Longest block in the folder and the most skimmed. Three different kinds of statement carry identical weight, so the four things a builder must never break are visually indistinguishable from settled detail. For human readers this is the pacing problem: 200 words of unbroken bold-lead bullets with no table, callout or grouping in the whole SPEC. ~0 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "design-reference \u00a7Deltas from the first render \u2014 all four bullets (59 w)",
+  "revised_text": "CUT the section. Its content already exists at the point of use: the light/dark Needs-attention note is inline in \u00a7Desktop Reports item 6, \"No action buttons\" is inline in \u00a7Attendee contact, and the removed desktop frame is \u00a7Open Questions #1",
+  "changes": "A change log inside a contract. Every delta is already recorded where the builder checks it, so the section is pure restatement \u2014 and keeping it is what makes the frame inventories read as revision history instead of target state. Saves 59 words. Alternative if this file doubles as the design's change record: keep \u00a7Deltas and instead strip the inline \"(removed in the saved revision)\" / \"(only in the dark frame \u2014 \u2026)\" annotations (saves 17)"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "data-model \u00a7Scope closing paragraph \u2014 \"The current `GET /api/sessions` narrows to `created_by` only; \u2026 Reads still use the service-role client after the staff assertion.\" (27 w)",
+  "revised_text": "CONDENSE to \"Today `/api/sessions` narrows to `created_by`; the spec widens a Preacher to their owned sessions.\" (~15 w)",
+  "changes": "The rest repeats the SPEC's scope bullet and its read-path bullet in a second wording. The predicate table above it is the section's real contribution; the prose adds a third version of one rule. Saves ~15 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "SPEC preamble, second sentence \u2014 \"Source documents listed in frontmatter are for traceability \u2014 consult them only if you need narrative rationale or prose color this contract intentionally omits.\" (46 w callout total)",
+  "revised_text": "CONDENSE the callout into a file map: \"`SPEC.md` is the contract; `design-reference.md` is the visual authority; `data-model.md` is the query contract. Read \u00a7 Open Questions first.\" (~30 w)",
+  "changes": "Points the reader at `sources: []` \u2014 an empty list \u2014 and never says how the three files relate, which is the one thing a folder-level contract owes its reader. Same space, useful content. Saves ~16 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "design-reference \u00a7Mobile \u2014 coverage ends at \u00a7Overview (dark); no dark \u00a7Reports or \u00a7Attendee contact, and nothing states whether that is a decision",
+  "revised_text": "QUESTION: add one line under \u00a7Mobile \u2014 \"Dark frames rendered for Overview only\" \u2014 or note it as a design gap",
+  "changes": "This file is the authority for CAP-6 (\"matches Campaign on both breakpoints\") and claims 9 frames, which arithmetically allows only one dark mobile screen. A builder checking dark conformance cannot tell a deliberate omission from a missing frame. ~+10 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "design-reference \u00a7Mobile \u2014 \u00a7Overview (dark) (7 w), filed last, after \u00a7Attendee contact",
+  "revised_text": "MOVE under \u00a7Mobile \u00a7Overview and retitle \"Overview (light and dark)\", matching \u00a7Desktop",
+  "changes": "A dark variant of screen 1 is filed after screen 4, and desktop folds light and dark into one section while mobile splits them out. Same-document schema should be identical; the Reference model scores this as a schema violation. 0 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "data-model \u00a7Session detail query, step 4 \u2014 \"Contact record for the side panel / mobile screen\u2026\" (~40 w of the step)",
+  "revised_text": "CONDENSE: name the mobile screen only, or mark the side panel \"deferred with desktop detail (\u00a7 Open Questions #1)\"",
+  "changes": "\"Side panel\" is a desktop surface \u00a7Non-goals explicitly puts out of scope, so the step specifies a read path for a screen that does not exist. One of the two nouns has to go. 0 words"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "\u00a7Success signal (60 w); \u00a7Why diagnosis (87 w); \u00a7Capabilities intent/success schema (386 w); data-model \u00a7Edge cases (113 w)",
+  "revised_text": "PRESERVE as written",
+  "changes": "\u00a7Success signal restates CAP-1\u2026CAP-4 outcomes and reads cuttable \u2014 but at folder altitude it is the definition of done a human reviewer needs before opening three files, and the human-reader rules treat summaries as reinforcement. \u00a7Why is the only passage explaining why the module changes at all. The intent/success pair is the schema that makes capabilities citable. \u00a7Edge cases is genuinely MECE and earns its 113 words. Keep all four"
+ },
+ {
+  "lens": "structure",
+  "pass": "structure",
+  "original_text": "Minor, rolled up: \"No scheduling.\" in \u00a7Constraints duplicates \u00a7Non-goals bullet 1; \u00a7Constraints \"No aggregate table, materialized view, cron or stored status\" already subsumes data-model.md's \"No aggregate table or cached rollup\" and \"Never persist the result\"; CAP-5's success criterion restates \u00a7Constraints \"Creation keeps today's behaviour\" timing; `sessions.figcraft` appears bare in \u00a7Constraints and as a full path in the companion; CAP-1\u2026CAP-6 carry no inbound reference from any constraint or query section",
+  "revised_text": "CONDENSE each: drop the duplicate scheduling clause; let SPEC's no-aggregate line be the single statement of the rule; shrink the creation constraint to endpoint + public-attendance; use the full asset path once; either cite the CAP ids from data-model's query sections or stop numbering",
+  "changes": "Six small duplicate-or-dangling items; any one is trivial, together \u224824 words and several small stumbles. N further minor fixes; ask to expand."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC CAP-4: \"attendance by session, weekly check-ins, top sessions and sessions with no check-ins\" and \"the attention card lists only in-range sessions with zero check-ins\"; Assumptions defines the attention card as \"sessions with zero check-ins\"; data-model: \"Needs attention \u2014 in-range sessions with zero attendance\"",
+  "revised_text": "Name each card once, as the design does: \"attendance by session, Attendance trend (weekly check-ins), Top sessions, Needs attention (sessions with no check-ins)\", then reuse those names: \"the `Needs attention` card lists only in-range sessions with zero check-ins\"; Assumptions identifies the same card; data-model keeps `Needs attention`",
+  "changes": "One card answers to four names (weekly check-ins, attendance trend, attention card, Needs attention) and one condition to three (no check-ins, zero check-ins, zero attendance). A builder reconciling SPEC, design and data model cannot tell how many figures exist. Keeps the four-item list and its terse colon form."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC Success signal: \"A session left open across its `attendance_closes_at` flips to `Completed` without a manual write.\"",
+  "revised_text": "\"A page left open across a session's `attendance_closes_at` shows that session as `Completed` without a manual write.\"",
+  "changes": "\"A session left open\" also describes an attendance window left open \u2014 which is exactly what the creation flow does. `data-model.md` means the browser page (\"an open page flips `Live now` \u2192 `Completed`\"). Only the subject is wrong; the behaviour stated is unchanged."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC Constraints: \"**Scope reuses the staff gate.** Admin sees the programme; Preacher sees sessions where they are the owning preacher; Assistant sees their assigned preacher's.\" and \"after the staff assertion\"; data-model Scope: \"the spec widens a Preacher to their owned sessions\"",
+  "revised_text": "\"**Scope reuses the existing staff authorization check.** Admin sees the programme; a Preacher sees the sessions where they are the named preacher; an Assistant sees their assigned preacher's sessions.\" / \"after that check\" / \"the spec widens a Preacher's scope to the sessions they own\"",
+  "changes": "\"Gate\", \"assertion\" and `getStaffContext()` name one step three ways, and \"gate\" is a metaphor the document never introduces. \"Owning preacher\" and \"owned sessions\" are coined here and defined nowhere. \"Their assigned preacher's\" ends on a possessive with no noun; \"widens a Preacher\" widens a person rather than a scope. No authorization rule changes."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC CAP-5: \"its attendance link is available\"; Constraints: \"and enables public attendance\"",
+  "revised_text": "\"its public attendance link (`/attend?session=<id>`) is available\"; \"and enables the public attendance link\"",
+  "changes": "Both terms arrive before anything defines them; the contract names the route only on the last line of `data-model.md`. Naming it at first use keeps SPEC.md readable alone \u2014 the same route the contract already fixes, not a new one."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC CAP-5: \"submitting it creates a session with attendance open now and closing at now + duration\"",
+  "revised_text": "\"submitting it creates a session whose attendance opens at that moment and closes at `now + duration_minutes`\"",
+  "changes": "\"With attendance open now\" parses as the current state \u2014 attendance is open now \u2014 rather than the opening event the Constraints describe. \"now + duration\" is also a third notation alongside `duration_minutes` and \"name, location, duration\"."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC CAP-6: \"a side-by-side check against `design-reference.md` matches layout, type, spacing and tokens.\"",
+  "revised_text": "\"a side-by-side comparison with `design-reference.md` shows matching layout, type, spacing and tokens.\"",
+  "changes": "The subject of \"matches\" is \"a check\", and a check is not what matches the design. Same requirement, same words otherwise."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC Why: \"The design set gives Sessions\u2026\"; Open Questions: \"The saved design no longer contains\u2026\"; Constraints: \"**Design authority** is `sessions.figcraft`\"; design-reference: \"Authority: \u2026\" and \"the light frame dropped it in the saved revision\"",
+  "revised_text": "Introduce it once \u2014 \"the saved design (`sessions.figcraft`)\" \u2014 then \"the saved design\" throughout; keep \"Authority:\" in the companion as a heading-level pointer",
+  "changes": "Five names for one artifact: design set, the design, the saved design, the saved revision, design authority. A reader cannot tell whether the design set and the saved revision are the same thing, or which one is normative when they disagree."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "data-model: \"Missing email renders `\u2014`; the design's `priya.raman@gmail.com` is sample data.\"; design-reference frames: \"48 sessions \u00b7 folk programme\", \"Weekend Camp 2026\", \"42 of 60\", \"Sep 2025\"",
+  "revised_text": "Keep \"Missing email renders `\u2014`\" and add one line under the `design-reference.md` title: \"All names, figures and dates in these frames are sample data.\"",
+  "changes": "Exactly one frame value is marked as sample data; the rest read as requirements. Stating it once where the frames live covers every value and drops the one-off caveat."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC CAP-1: \"an empty programme renders the designed empty state\"; CAP-3: \"selecting one shows the designed record with phone, email\u2026\"",
+  "revised_text": "\"renders the empty state specified in `design-reference.md`\"; \"shows the record specified in `design-reference.md`\"",
+  "changes": "\"Designed\" is the only pointer to a companion file, and the body never names `design-reference.md` until CAP-6. A reader holding SPEC.md alone cannot find either definition."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC Open Questions: \"The saved design no longer contains a desktop `Session detail` frame. Restore it, or is desktop limited to Overview and Reports?\"; \"\u2026there is no capacity or invite data. Add an expected-attendees field, or show totals only?\"; \"or keep the current inline form on `/sessions`?\"",
+  "revised_text": "\"Should the desktop `Session detail` frame be restored, or is desktop limited to Overview and Reports?\"; \"Should an expected-attendees field be added, or should the report show totals only?\"; \"\u2026or should `/sessions` keep the current inline form?\"",
+  "changes": "Each pairs an imperative with an interrogative, so it is unclear whether the reader is told to act or asked to decide. The third also shifts subject from `New session` to an unnamed keeper of the form. Apply wherever the section lands; \"under-filled sessions\" is also a state the design never shows \u2014 consider \"sessions below the shown capacity\"."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC Why: \"Sessions is where the programme records who actually came, but today `/sessions` is a live check-in manager: staff start a session, watch the attendance dashboard, and the record then leaves their view.\"",
+  "revised_text": "Consider: \"The Sessions module is where the programme records who actually came, but today `/sessions` is only a live check-in screen: staff start a session, watch the attendance dashboard, and then the record leaves their view.\"",
+  "changes": "\"Manager\" reads as a staff role in a document that names three roles two sections later. \"Sessions\" arrives as a bare plural before the module name is established. The third item in a list of staff actions is an outcome, not an action. The \"record leaves their view\" image is worth keeping."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "data-model Edge cases: \"Attendance links stay the existing `/attend?session=<id>` route; the overview exposes the link for a Live session only.\"",
+  "revised_text": "\"Attendance links use the existing `/attend?session=<id>` route; the overview exposes the link only while the session reads `Live now`.\"",
+  "changes": "\"A Live session\" reads as a fourth status beside `Upcoming`, `Live now` and `Completed`; the token is the one that exists. \"Stay\" describes the document, not the link."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC CAP-3: \"an attendee's full contact record\"; Constraints: \"the attendee record joins `contacts`\"; data-model: \"Contact record for\u2026\" (the panel clause goes with the structure pass); Edge cases: \"the contact panel always resolves\"",
+  "revised_text": "\"contact record\" in all four places; Edge cases: \"the contact record is always found\"",
+  "changes": "One surface, four names. \"Resolves\" is jargon for \"is found\". The record joins `contacts`, so \"contact record\" is the accurate term \u2014 \"attendee record\" implies a second entity."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC CAP-1: \"attendee total\"; Constraints: \"**Attendance total** is the count of `attendance` rows for the session\"; Success signal: \"the correct headcount\"; design-reference: \"attendee total\"",
+  "revised_text": "\"attendance total\" in the prose; keep `Attendees` only where it quotes a card or column label",
+  "changes": "One figure, three names. The Constraints already define it as \"Attendance total\", so the other two can go without touching the definition."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC CAP-3: \"first contact, sessions attended and last attended\"; data-model: \"first contact (`contacts.created_at`)\"",
+  "revised_text": "\"first contact date (`contacts.created_at`)\"",
+  "changes": "\"First contact\" reads as a person or an event; the parenthetical shows it is a date, and its neighbours (`sessions attended`, `last attended`) are counts."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "design-reference: \"The saved design removed `Open`, `Draft` and `Scheduled`; there is no manual status.\"",
+  "revised_text": "\"The saved design removed the `Open`, `Draft` and `Scheduled` statuses; there is no manual status.\"",
+  "changes": "`Open` is also the row action `Open \u203a` six lines above and the verb in \"attendance opens at \u2026\". Naming the three as statuses costs two words and removes the collision."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC Non-goals: \"Per-session CSV export; call, disposition or Campaign integration.\"",
+  "revised_text": "\"Per-session CSV export; call logging, disposition or Campaign integration.\"",
+  "changes": "\"Call\" is also a removed contact button, so the item can read as reinstating that button rather than excluding telephony features; \"disposition\" confirms the telephony sense, so only the noun is missing."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "design-reference: \"primary `+ New session`\" (Overview 2, Reports 2) vs \"`+ New session` primary button right\"; \"Navy bar, logo left, moon/logout right\"; \"The builder is `build_sessions_designs.py`\" vs \"Campaign builder tokens\"",
+  "revised_text": "\"primary button `+ New session`\" in all three; \"moon and logout icons right\"; \"The design builder is `build_sessions_designs.py`\" or leave the script bare, and \"Campaign design-builder tokens\"",
+  "changes": "Three micro-fixes in one file: \"primary\" alone can be read as priority or placement, and the mobile section already supplies the noun; \"moon/logout\" leaves open whether that is one control or two; \"builder\" names the Python script and a token set two rows apart, so the second use reads as the script's output."
+ },
+ {
+  "lens": "prose",
+  "pass": "prose",
+  "original_text": "SPEC \"## Open Questions\"; \"The reports totals match a direct count of `attendance`\u2026\"; data-model \"(virtualised table)\"; SPEC CAP-5 \"without leaving the sessions flow\" vs Why \"without leaving the module\"",
+  "revised_text": "\"## Open questions\"; \"The report totals match\u2026\"; \"(virtualized table)\"; \"without leaving the module\"",
+  "changes": "Four small fixes: the only title-case heading among sentence-case siblings; \"reports totals\" reads as a missing possessive for a single figure; the corpus mixes -ise and -ize (\"materialized view\" in Constraints, \"virtualised\" here) and Microsoft style asks for -ize; \"flow\" and \"module\" name the same container, and \"flow\" also names the whole document."
+ }
+]
