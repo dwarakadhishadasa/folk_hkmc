@@ -1,6 +1,7 @@
 import "server-only"
 
 import { AuthzError, type StaffContext } from "@/lib/authz"
+import { completeExpiredCampaigns } from "@/lib/dialer/expiry"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { collectPagedRows, type PagingFailures } from "@/lib/supabase/paging"
@@ -78,12 +79,17 @@ function assertCampaignIdShape(campaignId: string): void {
 
 async function readCampaignRow(staff: StaffContext, campaignId: string): Promise<CampaignRow> {
   const supabaseAdmin = createSupabaseAdminClient()
-  const { data, error } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("dialer_campaigns")
     .select(CAMPAIGN_COLUMNS)
     .eq("id", campaignId)
     .eq("program_id", staff.programId)
-    .maybeSingle()
+
+  if (staff.role === "Admin") {
+    query = query.eq("created_by", staff.userId)
+  }
+
+  const { data, error } = await query.maybeSingle()
 
   if (error) {
     throw new AuthzError(500, "campaign_read_failed", "Unable to read the campaign.")
@@ -188,19 +194,31 @@ function requireMaxAttempts(value: unknown): number {
 }
 
 /**
- * Campaign rows are program-level in AD-3, so every admin role reads the same
- * list; the per-campaign counts belong to the reporting story, not here.
+ * Campaign rows are program-level for a Preacher and an Assistant in AD-3, so
+ * they read the campaigns an Admin assigned them work in. An Admin's own
+ * `/campaigns` surface is creator-only: the Admin works the campaigns they
+ * started, and another staff member's campaign is not theirs to manage.
  */
 export async function listCampaigns(staff: StaffContext): Promise<CampaignRow[]> {
   requireCampaignAdmin(staff)
 
   const supabaseAdmin = createSupabaseAdminClient()
 
+  // Closes campaigns whose end date has arrived before the list is read, so a
+  // project without pg_cron still shows the status the date implies.
+  await completeExpiredCampaigns(supabaseAdmin)
+
   return collectPagedRows<CampaignRow>(async (from, to) => {
-    const response = await supabaseAdmin
+    let query = supabaseAdmin
       .from("dialer_campaigns")
       .select(CAMPAIGN_COLUMNS)
       .eq("program_id", staff.programId)
+
+    if (staff.role === "Admin") {
+      query = query.eq("created_by", staff.userId)
+    }
+
+    const response = await query
       .order("campaign_date", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: true })
@@ -277,13 +295,17 @@ export async function updateCampaign(
   const campaignDate = requireCampaignDate(input.campaignDate)
 
   const supabaseAdmin = createSupabaseAdminClient()
-  const { data, error } = await supabaseAdmin
+  let update = supabaseAdmin
     .from("dialer_campaigns")
     .update({ name, description, campaign_date: campaignDate })
     .eq("id", campaignId)
     .eq("program_id", staff.programId)
-    .select(CAMPAIGN_COLUMNS)
-    .maybeSingle()
+
+  if (staff.role === "Admin") {
+    update = update.eq("created_by", staff.userId)
+  }
+
+  const { data, error } = await update.select(CAMPAIGN_COLUMNS).maybeSingle()
 
   if (error) {
     throw new AuthzError(500, "campaign_write_failed", "Unable to save the campaign.")
@@ -311,11 +333,15 @@ export async function transitionCampaign(
   const transition = CAMPAIGN_TRANSITIONS[action]
 
   const supabaseAdmin = createSupabaseAdminClient()
-  const update = supabaseAdmin
+  let update = supabaseAdmin
     .from("dialer_campaigns")
     .update({ status: transition.to })
     .eq("id", campaignId)
     .eq("program_id", staff.programId)
+
+  if (staff.role === "Admin") {
+    update = update.eq("created_by", staff.userId)
+  }
 
   // The status predicate is the race guard: a row that moved since the caller
   // read it matches nothing, so a lost race never applies a second transition.

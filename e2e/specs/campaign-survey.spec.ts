@@ -128,6 +128,16 @@ function surveySection(page: Page) {
 }
 
 /**
+ * The survey lives on the assign-contacts screen's right panel now. The panel
+ * opens on the caller split; this slides the survey in and waits for it.
+ */
+async function gotoSurvey(page: Page, campaignId: string): Promise<void> {
+  await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+  await page.getByRole("button", { name: "Call-outcome survey" }).click()
+  await expect(surveySection(page)).toBeVisible()
+}
+
+/**
  * Only the question rows: the option chips are `listitem`s too, so a role query
  * would count them. The `<ol>` is the builder's own element.
  */
@@ -157,7 +167,7 @@ test.describe("the campaign survey — a new campaign", () => {
     const campaignId = await createDisposableCampaign(page.request, "Survey Empty")
 
     try {
-      await page.goto(`/campaigns/${campaignId}`)
+      await gotoSurvey(page, campaignId)
 
       const survey = surveySection(page)
       await expect(survey).toBeVisible()
@@ -190,7 +200,7 @@ test.describe("the survey builder — an Admin adding questions", () => {
     const campaignId = await createDisposableCampaign(page.request, "Survey Radio")
 
     try {
-      await page.goto(`/campaigns/${campaignId}`)
+      await gotoSurvey(page, campaignId)
       const survey = surveySection(page)
 
       await survey.getByRole("button", { name: "Add question" }).click()
@@ -224,7 +234,7 @@ test.describe("the survey builder — an Admin adding questions", () => {
     const campaignId = await createDisposableCampaign(page.request, "Survey No Options")
 
     try {
-      await page.goto(`/campaigns/${campaignId}`)
+      await gotoSurvey(page, campaignId)
       const survey = surveySection(page)
 
       await survey.getByRole("button", { name: "Add question" }).click()
@@ -251,7 +261,7 @@ test.describe("the survey builder — an Admin adding questions", () => {
 
     try {
       await createQuestionViaApi(page, campaignId, RADIO_BODY)
-      await page.goto(`/campaigns/${campaignId}`)
+      await gotoSurvey(page, campaignId)
       const survey = surveySection(page)
 
       await survey.getByRole("button", { name: "Add question" }).click()
@@ -292,7 +302,7 @@ test.describe("the survey builder — an Admin editing and ordering", () => {
         options: [],
       })
 
-      await page.goto(`/campaigns/${campaignId}`)
+      await gotoSurvey(page, campaignId)
 
       await questionRow(page, "Notes").getByRole("button", { name: "Edit" }).click()
       await surveySection(page).getByLabel("Question title").fill("Call notes")
@@ -323,7 +333,7 @@ test.describe("the survey builder — an Admin editing and ordering", () => {
         options: [],
       })
 
-      await page.goto(`/campaigns/${campaignId}`)
+      await gotoSurvey(page, campaignId)
 
       await questionRow(page, "Notes").getByRole("button", { name: "Move Notes up" }).click()
 
@@ -332,6 +342,8 @@ test.describe("the survey builder — an Admin editing and ordering", () => {
       await expect(questionRows(page).nth(0).getByText("1", { exact: true })).toBeVisible()
 
       await page.reload()
+      await page.getByRole("button", { name: "Call-outcome survey" }).click()
+      await expect(surveySection(page)).toBeVisible()
 
       await expect(questionRows(page).nth(0)).toContainText("Notes")
       await expect(questionRows(page).nth(1)).toContainText("How did it go?")
@@ -345,44 +357,11 @@ test.describe("the survey builder — an Admin editing and ordering", () => {
 })
 
 // ---------------------------------------------------------------------------
-// Retire and delete
+// Delete
 // ---------------------------------------------------------------------------
 
-test.describe("the survey builder — retire and delete", () => {
+test.describe("the survey builder — delete", () => {
   test.use({ storageState: storageStatePath("admin") })
-
-  test("retires a question and leaves it read-only", async ({ page }) => {
-    const campaignId = await createDisposableCampaign(page.request, "Survey Retire")
-
-    try {
-      await createQuestionViaApi(page, campaignId, RADIO_BODY)
-      await page.goto(`/campaigns/${campaignId}`)
-
-      const row = questionRow(page, "How did it go?")
-      await row.getByRole("button", { name: "Retire" }).click()
-
-      const dialog = page.getByRole("alertdialog")
-      await expect(dialog).toBeVisible()
-      await dialog.getByRole("button", { name: "Retire question" }).click()
-
-      await expect(row.getByText("Retired", { exact: true })).toBeVisible()
-      await expect(row.getByRole("button", { name: "Edit" })).toHaveCount(0)
-      await expect(row.getByRole("button", { name: "Retire" })).toHaveCount(0)
-      await expect(row.getByRole("button", { name: "Delete" })).toHaveCount(0)
-      await expect(row.getByRole("button", { name: "Move How did it go? up" })).toHaveCount(0)
-      await expect(row.getByText("Required", { exact: true })).toHaveCount(0)
-
-      // Retired is history: the question and its options are still rendered.
-      await expect(row.getByRole("list", { name: "How did it go? options" }).getByRole("listitem")).toHaveText([
-        "Yes",
-        "No",
-      ])
-
-      await expect.poll(async () => (await listQuestions(page, campaignId))?.[0]?.retiredAt ?? null).not.toBeNull()
-    } finally {
-      await removeCampaignAndSurvey(campaignId)
-    }
-  })
 
   test("deletes a question with no responses", async ({ page }) => {
     const campaignId = await createDisposableCampaign(page.request, "Survey Delete")
@@ -395,13 +374,13 @@ test.describe("the survey builder — retire and delete", () => {
         options: [],
       })
 
-      await page.goto(`/campaigns/${campaignId}`)
+      await gotoSurvey(page, campaignId)
 
       await questionRow(page, "Notes").getByRole("button", { name: "Delete" }).click()
 
       const dialog = page.getByRole("alertdialog")
       await expect(dialog).toBeVisible()
-      await expect(dialog).toContainText("This question has no responses")
+      await expect(dialog).toContainText("This question has no recorded answers")
       await dialog.getByRole("button", { name: "Delete question" }).click()
 
       await expect(surveySection(page).getByText("No questions yet", { exact: true })).toBeVisible()
@@ -433,7 +412,7 @@ test.describe("the campaign detail — a Volunteer", () => {
     try {
       campaignId = await createDisposableCampaign(adminApi, "Volunteer Refusal")
 
-      await page.goto(`/campaigns/${campaignId}`)
+      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
 
       await expect(page).toHaveURL(/\/auth\/error\?code=staff-authorization-failed/)
       await expect(page.getByRole("region", { name: "Call-outcome survey" })).toHaveCount(0)

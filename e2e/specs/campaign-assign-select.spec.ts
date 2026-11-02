@@ -163,14 +163,6 @@ async function readContactPage(
   return (await response.json()) as AssignableContactPage
 }
 
-async function transitionViaApi(page: Page, campaignId: string, action: "start" | "complete"): Promise<void> {
-  const response = await page.request.post(`/api/dialer/admin/campaigns/${campaignId}/transition`, {
-    data: { action },
-  })
-
-  expect(response.status(), `the campaign could not ${action}: ${await response.text()}`).toBe(200)
-}
-
 /** The grid's own scroll surface, so the contact rows never collide with another table. */
 function contactGrid(page: Page) {
   return page.getByRole("group", { name: "Contacts in scope" })
@@ -225,12 +217,20 @@ test.describe("the assign-contacts surface — an Admin", () => {
 
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
 
-      await expect(page.getByRole("heading", { name: "Assign contacts", level: 1 })).toBeVisible()
+      await expect(page.getByLabel("Campaign name")).toBeVisible()
 
-      // The five columns the frame draws, in its order. A grid header's
-      // accessible name also carries its menu and resize controls, so the
-      // label is matched on the cell's text.
-      for (const label of ["Name", "Phone", "Location", "Assigned To", "Notes"]) {
+      // The frame columns plus Initial Contact and Collected By, in display
+      // order. A grid header's accessible name also carries its menu and resize
+      // controls, so the label is matched on the cell's text.
+      for (const label of [
+        "Name",
+        "Phone",
+        "Initial Contact",
+        "Location",
+        "Assigned To",
+        "Collected By",
+        "Notes",
+      ]) {
         await expect(page.getByRole("columnheader").filter({ hasText: label })).toBeVisible()
       }
 
@@ -421,41 +421,6 @@ test.describe("the assign-contacts surface — an Admin", () => {
 })
 
 // ---------------------------------------------------------------------------
-// The campaign detail's entry point
-// ---------------------------------------------------------------------------
-
-test.describe("the campaign detail — an Admin", () => {
-  test.use({ storageState: storageStatePath("admin") })
-
-  test("offers Assign contacts only while the campaign can take assignments", async ({ page }) => {
-    const campaignId = await createDisposableCampaign(page.request, "assign select entry")
-
-    try {
-      await page.goto(`/campaigns/${campaignId}`)
-
-      const link = page.getByRole("link", { name: "Assign contacts", exact: true })
-      await expect(link).toHaveAttribute("href", `/campaigns/${campaignId}/assign-contacts`)
-
-      await link.click()
-      await expect(page).toHaveURL(new RegExp(`/campaigns/${campaignId}/assign-contacts$`))
-      await expect(page.getByRole("heading", { name: "Assign contacts", level: 1 })).toBeVisible()
-
-      await transitionViaApi(page, campaignId, "start")
-      await page.goto(`/campaigns/${campaignId}`)
-      await expect(page.getByText("ACTIVE", { exact: true })).toBeVisible()
-      await expect(page.getByRole("link", { name: "Assign contacts", exact: true })).toHaveCount(1)
-
-      await transitionViaApi(page, campaignId, "complete")
-      await page.reload()
-      await expect(page.getByText("COMPLETED", { exact: true })).toBeVisible()
-      await expect(page.getByRole("link", { name: "Assign contacts", exact: true })).toHaveCount(0)
-    } finally {
-      await deleteDisposableCampaign(campaignId)
-    }
-  })
-})
-
-// ---------------------------------------------------------------------------
 // The desktop-only contract
 // ---------------------------------------------------------------------------
 
@@ -490,7 +455,7 @@ test.describe("the assign-contacts page — a Volunteer", () => {
     await page.goto(`/campaigns/${ABSENT_CAMPAIGN_ID}/assign-contacts`)
 
     await expect(page).toHaveURL(/\/auth\/error\?code=staff-authorization-failed/)
-    await expect(page.getByRole("heading", { name: "Assign contacts", level: 1 })).toHaveCount(0)
+    await expect(page.getByLabel("Campaign name")).toHaveCount(0)
     await expect(page.getByRole("heading", { name: "Open this on a desktop", level: 2 })).toHaveCount(0)
     await expect(page.getByRole("table")).toHaveCount(0)
   })

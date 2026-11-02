@@ -7,9 +7,12 @@ import { CampaignOverviewStats } from "@/components/campaign/campaign-overview-s
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { CampaignStatusFilter } from "@/components/campaign/campaign-status-filter"
 import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
+import { NewCampaignPopover } from "@/components/campaign/new-campaign-popover"
+import { SectionCard } from "@/components/section-card"
 import { AuthzError } from "@/lib/authz"
 import { listCampaignsWithProgress } from "@/lib/dialer/progress"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
+import { programDay } from "@/lib/program-day"
 
 import { getCampaignStaff } from "./staff"
 
@@ -31,10 +34,11 @@ function readStatusFilter(value: string | string[] | undefined): StatusFilter | 
  * The Campaign Overview: AD-2's admin gate, then each visible campaign with its
  * scoped `campaign_progress` summary.
  *
- * Campaign rows are program-level (AD-3), so every admin role reads the same
- * list; a Preacher's rows are not filtered, only their counts are narrowed, and
- * a campaign holding none of their contacts reads a true zero rather than
- * disappearing. The tiles and the table are both summed from the same summaries,
+ * Campaign rows are program-level for a Preacher and an Assistant (AD-3), so
+ * they read the campaigns an Admin assigned them work in; a Preacher's rows are
+ * not filtered, only their counts are narrowed, and a campaign holding none of
+ * their contacts reads a true zero rather than disappearing. An Admin reads only
+ * the campaigns they created. The tiles and the table are both summed from the same summaries,
  * so no number here is computed a second time.
  *
  * Zero campaigns renders the empty state **instead of** the tiles: a screen of
@@ -57,23 +61,24 @@ export default async function CampaignsOverviewPage({
       statusFilter === "all" ? campaigns : campaigns.filter((entry) => entry.campaign.status === statusFilter)
     const draft = visible.filter((entry) => entry.campaign.status === "DRAFT").length
     const cancelled = visible.filter((entry) => entry.campaign.status === "CANCELLED").length
+    const today = programDay()
 
     return (
       <>
-        <CampaignPageHeader
-          title="Overview"
-          subtitle={`${campaigns.length} ${campaigns.length === 1 ? "campaign" : "campaigns"} · folk programme`}
-          actionHref="/campaigns/new"
-          actionLabel="New campaign"
-          filters={<CampaignStatusFilter value={statusFilter === "all" ? "all" : statusFilter} />}
-        />
-        <CampaignSubNav role={staff.role} />
+        <div className="flex flex-col gap-3">
+          <CampaignPageHeader
+            title="Overview"
+            subtitle={`${campaigns.length} ${campaigns.length === 1 ? "campaign" : "campaigns"} · folk programme`}
+            action={<NewCampaignPopover label="New campaign" today={today} />}
+            filters={<CampaignStatusFilter value={statusFilter === "all" ? "all" : statusFilter} />}
+          />
+          <CampaignSubNav role={staff.role} />
+        </div>
         {campaigns.length === 0 ? (
           <CampaignEmptyState
             title="No campaigns yet"
             description="Create a campaign to start reaching contacts in this programme."
-            actionHref="/campaigns/new"
-            actionLabel="Create campaign"
+            action={<NewCampaignPopover label="Create campaign" today={today} />}
           />
         ) : visible.length === 0 ? (
           <CampaignEmptyState
@@ -96,8 +101,13 @@ export default async function CampaignsOverviewPage({
               Queued dispositions are not counted until their replay lands.
             </p>
 
-            <CampaignList entries={visible} />
-            <CampaignOverviewCards entries={visible} />
+            <SectionCard
+              title="Campaigns"
+              subtitle={`${pluralise(visible.length, "campaign")} in this view`}
+            >
+              <CampaignList entries={visible} />
+              <CampaignOverviewCards entries={visible} />
+            </SectionCard>
 
             <p className="text-xs text-[var(--muted-foreground)]">
               {pluralise(visible.length, "campaign")} · {draft} draft · {cancelled} cancelled

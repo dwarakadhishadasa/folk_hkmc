@@ -2,6 +2,7 @@ import "server-only"
 
 import { AuthzError, type StaffContext } from "@/lib/authz"
 import type { CampaignStatus } from "@/lib/dialer/campaigns"
+import { completeExpiredCampaigns } from "@/lib/dialer/expiry"
 import {
   isDispositionStatus,
   isReachedGroup,
@@ -313,6 +314,10 @@ async function readCampaigns(
   const campaigns = new Map<string, CampaignRow>()
   const uniqueIds = [...new Set(campaignIds.filter(Boolean))]
   const supabaseAdmin = createSupabaseAdminClient()
+
+  // A campaign past its end date must stop being callable, whether or not the
+  // midnight sweep ran, so every caller read closes expired campaigns first.
+  await completeExpiredCampaigns(supabaseAdmin)
 
   for (const chunk of chunksOf(uniqueIds, READ_CHUNK_SIZE)) {
     const rows = await collectPagedRows<CampaignRow>(async (from, to) => {

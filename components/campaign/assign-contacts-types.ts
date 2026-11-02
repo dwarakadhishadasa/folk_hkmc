@@ -33,6 +33,8 @@ export interface AssignableContactView {
   contactId: string
   name: string
   phone: string
+  initialContact: string | null
+  collectedByName: string | null
   locationIds: string[]
   assignedPreacherUserId?: string
   notes: string | null
