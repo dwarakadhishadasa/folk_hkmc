@@ -6,6 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CalendarDays,
+  LayoutDashboard,
   LogIn,
   LogOut,
   Megaphone,
@@ -252,6 +253,18 @@ export function Header() {
 
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
+        ...(isPreacher || isAssistant
+          ? [
+              {
+                href: "/dashboard",
+                label: "Dashboard",
+                icon: LayoutDashboard,
+                // The dashboard is a full programme read; prefetching it from
+                // every staff page pays for it before the reader asks for it.
+                prefetch: false,
+              },
+            ]
+          : []),
         {
           href: isPreacher ? "/contacts" : "/contact",
           label: "Contact",
@@ -267,10 +280,10 @@ export function Header() {
             ? [
                 { href: "/sessions", label: "Sessions", icon: CalendarDays },
                 { href: isAdmin ? "/admin/invite" : "/volunteers", label: "Invite", icon: Send },
-                { href: "/manage", label: "Manage", icon: Settings2, prefetch: false },
               ]
             : []),
         ...(campaignHref ? [{ href: campaignHref, label: "Campaign", icon: Megaphone }] : []),
+        ...(isPreacher ? [{ href: "/manage", label: "Manage", icon: Settings2, prefetch: false }] : []),
       ]
     : []
 

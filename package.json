@@ -40,6 +40,7 @@
     "configure:hosted-project": "node scripts/configure-hosted-project.mjs",
     "test:hosted-project": "node scripts/configure-hosted-project.mjs --dry-run",
     "test:attendance-contract": "node scripts/verify-attendance-contract.mjs",
+    "test:dashboard-contract": "node scripts/verify-dashboard-metrics.mjs",
     "test:offline-queue": "node scripts/verify-pwa-offline-queue.mjs",
     "seed:preview-fixtures": "node scripts/seed-preview-fixtures.mjs",
     "seed:local": "node scripts/seed-local-fixtures.mjs",
@@ -62,6 +63,7 @@
     "test:e2e:guards": "pnpm test:e2e harness-guards suite-determinism mailpit-reader",
     "test:e2e:campaign": "pnpm test:e2e campaign-",
     "test:e2e:sessions": "pnpm test:e2e \"sessions-(overview|detail)\"",
+    "test:e2e:dashboard": "pnpm test:e2e dashboard-",
     "test:e2e:list": "playwright test --list",
     "test:e2e:determinism": "node scripts/verify-suite-determinism.mjs"
   },

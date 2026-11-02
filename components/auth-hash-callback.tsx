@@ -12,17 +12,42 @@ type StaffSyncResult =
   | { status: "unauthorized" }
 
 function landingPathForRole(role?: StaffContext["role"]): string {
-  if (role === "Volunteer" || role === "Assistant") {
+  if (role === "Volunteer") {
     return "/contact"
+  }
+
+  if (role === "Admin" || role === "Preacher" || role === "Assistant") {
+    return "/dashboard"
   }
 
   return "/"
 }
 
+/**
+ * The Assistant allowlist: the dashboard, a session and the contact form are
+ * the three surfaces their work needs. This is a UX redirect guard, not
+ * authorization — every page keeps its own `requireRole`.
+ */
+function assistantPathAllowed(value: string): boolean {
+  const path = value.split("?")[0] ?? value
+  return (
+    path === "/dashboard" ||
+    path.startsWith("/dashboard/") ||
+    path === "/sessions" ||
+    path.startsWith("/sessions/") ||
+    path === "/contact" ||
+    path.startsWith("/contact/")
+  )
+}
+
 function safeLandingPath(value: string | null, role: StaffContext["role"]): string {
   if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
-    if ((role === "Volunteer" || role === "Assistant") && value !== "/contact") {
+    if (role === "Volunteer" && value !== "/contact") {
       return "/contact"
+    }
+
+    if (role === "Assistant" && !assistantPathAllowed(value)) {
+      return "/dashboard"
     }
 
     return value

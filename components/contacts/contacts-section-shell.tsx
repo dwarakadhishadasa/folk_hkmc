@@ -13,6 +13,8 @@ import {
   ContactsCountProvider,
 } from "@/components/contacts/contacts-count-context"
 import { useNavigationFeedback } from "@/components/navigation-feedback-provider"
+import { SECTION_SUBTITLE_CLASS, SECTION_TITLE_CLASS } from "@/components/section-page-header"
+import { cn } from "@/lib/utils"
 
 /**
  * The section's chrome: title, scope line, and the two navigation shapes.
@@ -86,9 +88,7 @@ export function ContactsSectionShell({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-1">
-                <h1 className="truncate font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)]">
-                  {title}
-                </h1>
+                <h1 className={cn(SECTION_TITLE_CLASS, "truncate")}>{title}</h1>
                 <button
                   type="button"
                   onClick={() => setMenuOpen(true)}
@@ -101,9 +101,7 @@ export function ContactsSectionShell({
                 </button>
                 {phoneAction ? <span className="ml-auto md:hidden">{phoneAction}</span> : null}
               </div>
-              <p className="mt-1 text-[13px] text-[var(--muted-foreground)] md:text-xs">
-                {scopeLine}
-              </p>
+              <p className={SECTION_SUBTITLE_CLASS}>{scopeLine}</p>
             </div>
 
             {headerAction ? (
@@ -150,10 +148,8 @@ export function ContactsSectionShell({
         >
           <div className="flex items-start justify-between gap-4 px-5 pb-4 pt-6">
             <div className="min-w-0">
-              <p className="font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight text-[var(--program-text)]">
-                Contacts
-              </p>
-              <p className="mt-1 text-[13px] text-[var(--muted-foreground)]">{scopeLine}</p>
+              <p className={SECTION_TITLE_CLASS}>Contacts</p>
+              <p className={SECTION_SUBTITLE_CLASS}>{scopeLine}</p>
             </div>
             <button
               ref={closeRef}
