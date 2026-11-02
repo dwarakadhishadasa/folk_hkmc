@@ -39,13 +39,14 @@ const STAFF_ROLE: Record<E2ERole, string> = {
 
 /**
  * Mirrors `landingPathForRole` in `apps/folk/app/login/login-page-client.tsx`:
- * Admin and Preacher land on `/`, Volunteer and Assistant on `/contact`.
+ * Admin, Preacher and Assistant land on `/dashboard`; a Volunteer lands on
+ * `/contact` because the dashboard has no Volunteer view.
  */
 const LANDING_PATH: Record<E2ERole, string> = {
-  admin: "/",
-  preacher: "/",
+  admin: "/dashboard",
+  preacher: "/dashboard",
   volunteer: "/contact",
-  assistant: "/contact",
+  assistant: "/dashboard",
 }
 
 /** Program whose fixtures are exercised; the folk app is `PROGRAM_ID=folk`. */
