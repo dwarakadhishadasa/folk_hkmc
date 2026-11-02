@@ -73,6 +73,7 @@ Mailpit up, everything marked *no* runs anywhere.
 | `pnpm test:program-readiness` | Program-scoped signin wiring in both apps | no |
 | `pnpm test:airtable-removal` | Airtable is gone: deletions, env/import grep, wire contracts | no — **currently failing, see §6** |
 | `pnpm test:attendance-contract` | 21 attendance-eligibility contract rows | **yes** |
+| `pnpm test:dashboard-contract` | 28 dashboard metric, scope and campaign-link invariants against direct SQL | **yes** |
 | `pnpm test:offline-queue` | 19 PWA offline-queue rows | **yes** |
 | `pnpm build:apps` | Both apps build | no |
 | `pnpm quality:ci` | `guardrails && typecheck:workspace && test:unit && build:apps && lint` | no |
@@ -106,6 +107,7 @@ pnpm dev:local     # once per machine session
 | `pnpm test:e2e:guards` | `harness-guards` + `suite-determinism` + `mailpit-reader` | **21 s** (24 passed) |
 | `pnpm test:e2e:theme` | `theme-switch.spec.ts` | **38 s** (16 passed) |
 | `pnpm test:e2e:sessions` | The two `sessions-*.spec.ts` files | **1.7 min** (19 passed: 4 setup + 15 spec) |
+| `pnpm test:e2e:dashboard` | `dashboard-` files (the Gita Life file skips without its own stack) | **2.2 min** (23 passed, 1 skipped) |
 | `pnpm test:e2e:manage` | The six `manage-contacts-*.spec.ts` files | **4.5 min** (35 tests: 32 spec + 3 setup) |
 | `pnpm test:e2e:grid` | The eleven `grid-*.spec.ts` files | **28 min observed** (181 tests) — green baseline 3.2 min predates the status strip; see §6 |
 | `pnpm test:e2e` | **Full suite.** 289 specs + 3 setup. | ~5–7 min |
@@ -159,6 +161,7 @@ use, each including the 3 setup tests that every run pays for:
 | `manage-contacts` | `test:e2e:manage` | 48 in 10 files |
 | `record-review-` | `test:e2e:attendance` | 9 in 4 files |
 | `theme-switch` | `test:e2e:theme` | 16 in 4 files |
+| `dashboard-` | `test:e2e:dashboard` | 24 in 5 files (1 skipped without `E2E_GITA_LIFE_URL`) |
 | `harness-guards suite-determinism mailpit-reader` | `test:e2e:guards` | 24 in 6 files |
 
 Multiple positional filters are **OR**-ed, which is how `test:e2e:guards`
@@ -272,6 +275,34 @@ one open session must stay untouched for the attendance contract.
 runs the full `pnpm test:e2e`. `apps/folk/app/attendance/route.ts` now reuses
 the sessions scope predicate, so a change to that route also runs
 `pnpm test:attendance-contract`.
+
+### Programme dashboard — `/dashboard`, focus and the session link — `pnpm test:e2e:dashboard`
+
+| Source | Spec | Tests |
+|---|---|---|
+| `apps/*/app/dashboard/**`, `components/dashboard/**`, `lib/dashboard/**`, `supabase/migrations/20261102010000_dashboard_rpcs.sql` | `e2e/specs/dashboard-overview.spec.ts` | 3 |
+| " | `e2e/specs/dashboard-scope.spec.ts` | 4 |
+| " | `e2e/specs/dashboard-period.spec.ts` | 4 |
+| " | `e2e/specs/dashboard-candidates.spec.ts` | 4 |
+| `components/sessions/new-session-popover.tsx`, `apps/folk/app/api/sessions/route.ts`, `lib/supabase/data.ts` | `e2e/specs/dashboard-campaign-link.spec.ts` | 4 |
+| `packages/program-config/src/server.ts` (`modules.dialer`) | `e2e/specs/dashboard-no-dialer.spec.ts` | 1, skipped unless `E2E_GITA_LIFE_URL` and `E2E_GITA_LIFE_STORAGE_STATE` are set |
+
+The layout is one server render: `dashboard_overview` is the only page read,
+and `components/dashboard/*` never counts a row or derives a figure beyond the
+display percentages the spec permits. `dashboard-candidates.spec.ts` owns the
+50-per-page drill-down and its 404. `dashboard-campaign-link.spec.ts` drives the
+real `+ New session` popover and reads `sessions.campaign_id` back through the
+service role; a foreign or cancelled campaign must be a named 400.
+
+The contract gate is the non-browser half:
+`pnpm test:dashboard-contract` creates a disposable campaign slice and compares
+the overview and candidates payloads with direct SQL, including the
+`campaign_progress` reconciliation and the unlinked-campaign `attended: null`
+rule. Run it with `--program gita-life` to assert the `p_has_dialer = false`
+path without starting the second app.
+
+`components/header.tsx` and the four login landing-path files are shared, so a
+change there still escalates to the full `pnpm test:e2e`.
 
 ### Grid primitive — keyboard, editors, range, clipboard, chrome — `pnpm test:e2e:grid`
 
