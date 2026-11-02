@@ -6,9 +6,11 @@ import { SessionAttendees } from "@/components/sessions/session-attendees"
 import { SessionDetailStats } from "@/components/sessions/session-detail-stats"
 import { SessionStatusPill } from "@/components/sessions/session-status-pill"
 import { AuthzError, requireRole } from "@/lib/authz"
+import { getCampaign } from "@/lib/dialer/campaigns"
 import { getSessionAttendees, isSessionId, listSessionsOverview } from "@/lib/sessions/data"
 import { formatSessionDate, formatSessionTime, programDateOf } from "@/lib/sessions/format"
 import { sessionsScope } from "@/lib/sessions/scope"
+import { findSessionById } from "@/lib/supabase/data"
 
 import { getSessionsStaff } from "../staff"
 
@@ -55,6 +57,23 @@ export default async function SessionDetailPage({
     const query = await searchParams
     const sortByName = (Array.isArray(query.sort) ? query.sort[0] : query.sort) === "name"
 
+    const record = await findSessionById(session.id)
+    let linkedCampaign: { id: string; name: string } | null = null
+
+    if (record?.campaignId) {
+      try {
+        const campaign = await getCampaign(staff, record.campaignId)
+        linkedCampaign = { id: campaign.id, name: campaign.name }
+      } catch (error) {
+        // A campaign outside this reader's campaign scope, or one that has
+        // since disappeared, reads as "no link" here; the session itself is
+        // already scoped, so this must not become a 403 for the whole page.
+        if (!(error instanceof AuthzError) || (error.status !== 403 && error.status !== 404)) {
+          throw error
+        }
+      }
+    }
+
     const attendees = await getSessionAttendees(scope, session.id)
     const sorted = sortByName
       ? [...attendees].sort((left, right) => left.name.localeCompare(right.name))
@@ -92,6 +111,17 @@ export default async function SessionDetailPage({
             </p>
             <p className="mt-1 text-xs text-[var(--muted-foreground)] md:hidden">{meta}</p>
             <p className="text-xs text-[var(--muted-foreground)] md:hidden">{session.locationName ?? "—"}</p>
+            {linkedCampaign ? (
+              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                Invited by{" "}
+                <Link
+                  href={`/campaigns/${linkedCampaign.id}/assign-contacts`}
+                  className="font-medium text-[var(--program-primary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                >
+                  {linkedCampaign.name}
+                </Link>
+              </p>
+            ) : null}
           </div>
         </div>
 

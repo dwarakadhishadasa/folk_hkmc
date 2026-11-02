@@ -6,7 +6,7 @@ import { sessionHref } from "@/lib/sessions/links"
 import type { SessionOverviewRow } from "@/lib/sessions/data"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
-const HEAD_CLASS = "h-11 px-4 text-[11px] font-semibold text-[#64748b] dark:text-[var(--muted-foreground)]"
+const HEAD_CLASS = "h-11 px-4 text-[13px] font-semibold text-[var(--program-text)]"
 
 /**
  * Frame 32's session table, one row per visible session, newest first.
@@ -66,10 +66,10 @@ export function SessionOverviewTable({ rows }: { rows: SessionOverviewRow[] }) {
               <TableCell className="px-4 py-3 text-right">
                 <Link
                   href={sessionHref(row)}
-                  aria-label={`${row.status === "Live now" ? "Open live" : "Open"} ${row.name}`}
+                  aria-label={`Open ${row.name}`}
                   className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--muted-foreground)] transition-colors hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
                 >
-                  {row.status === "Live now" ? "Open live" : "Open"} <span aria-hidden="true">›</span>
+                  Open <span aria-hidden="true">›</span>
                 </Link>
               </TableCell>
             </TableRow>

@@ -1,8 +1,9 @@
 "use client"
 
 import { useRef, useState } from "react"
+import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, Pencil, Plus, Trash2, X } from "lucide-react"
 
 import {
   SURVEY_QUESTION_TYPES,
@@ -289,26 +290,32 @@ function SurveyQuestionEditor({ campaignId, question, onClose, onSaved }: Survey
 
 interface ConfirmingAction {
   question: SurveyQuestionView
-  action: "retire" | "delete"
 }
 
 /**
- * Frame 279's survey panel, with UX-DR13's retire-not-delete states filled in.
+ * Frame 279's survey panel.
  *
- * The design shows one RADIO card with the 13 disposition chips as options. That
- * is the frame's known defect: the disposition is the only status, so this
- * builder never seeds or offers a `Status?` question. A question's controls are
- * driven by its recorded response count — zero answers may be deleted, one or
- * more may only be retired, and a retired question is read-only history.
+ * A question with no recorded answers can be deleted. One with answers stays in
+ * the campaign's history and its delete control is absent. Questions retired by
+ * earlier data still render read-only, with their answers preserved.
  */
 export function CampaignSurveyBuilder({
   campaignId,
   status,
   questions,
+  footer,
+  onBack,
+  embedded = false,
 }: {
   campaignId: string
   status: string
   questions: SurveyQuestionView[]
+  /** Pinned below the scrolling question list, inside the survey's card. */
+  footer?: ReactNode
+  /** Renders the circular back control beside the heading. */
+  onBack?: () => void
+  /** The parent supplies the card frame; the builder only fills it. */
+  embedded?: boolean
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState<{ questionId: string | null } | null>(null)
@@ -367,22 +374,16 @@ export function CampaignSurveyBuilder({
     setIsConfirming(true)
     setActionError(null)
 
-    const { question, action } = confirming
+    const { question } = confirming
 
     try {
-      const response = await fetch(
-        action === "delete"
-          ? `/api/dialer/admin/campaigns/${campaignId}/questions/${question.id}`
-          : `/api/dialer/admin/campaigns/${campaignId}/questions/${question.id}/retire`,
-        { method: action === "delete" ? "DELETE" : "POST" },
-      )
+      const response = await fetch(`/api/dialer/admin/campaigns/${campaignId}/questions/${question.id}`, {
+        method: "DELETE",
+      })
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null
-        setActionError(
-          payload?.error ??
-            (action === "delete" ? "The question could not be deleted." : "The question could not be retired."),
-        )
+        setActionError(payload?.error ?? "The question could not be deleted.")
         setConfirming(null)
         setIsConfirming(false)
         return
@@ -392,11 +393,7 @@ export function CampaignSurveyBuilder({
       setIsConfirming(false)
       router.refresh()
     } catch {
-      setActionError(
-        action === "delete"
-          ? "Unable to reach the server. The question was not deleted."
-          : "Unable to reach the server. The question was not retired.",
-      )
+      setActionError("Unable to reach the server. The question was not deleted.")
       setConfirming(null)
       setIsConfirming(false)
     }
@@ -405,21 +402,40 @@ export function CampaignSurveyBuilder({
   return (
     <section
       aria-labelledby="campaign-survey-heading"
-      className="overflow-hidden rounded-xl border border-[var(--border)] bg-card"
+      className={
+        embedded
+          ? "flex h-full min-h-0 flex-col overflow-hidden"
+          : "flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card"
+      }
     >
       <div className="border-b border-[var(--border)] px-4 py-3">
-        <h2
-          id="campaign-survey-heading"
-          className="font-[family-name:var(--font-poppins)] text-[15px] font-semibold text-[var(--program-text)]"
-        >
-          Call-outcome survey
-        </h2>
-        <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-          Every caller records these answers, for this campaign only.
-        </p>
+        <div className="flex items-start gap-3">
+          {onBack ? (
+            <button
+              type="button"
+              aria-label="Back to assigning"
+              onClick={onBack}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-card text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+            >
+              <ArrowLeft className="size-[18px]" aria-hidden="true" />
+            </button>
+          ) : null}
+
+          <div className="min-w-0 flex-1">
+            <h2
+              id="campaign-survey-heading"
+              className="font-[family-name:var(--font-poppins)] text-[15px] font-semibold text-[var(--program-text)]"
+            >
+              Call-outcome survey
+            </h2>
+            <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+              Every caller records these answers, for this campaign only.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-3 p-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
         {readOnly ? (
           <p className="text-xs text-[var(--muted-foreground)]">
             This campaign is closed, so its survey is read-only here.
@@ -444,112 +460,106 @@ export function CampaignSurveyBuilder({
               return (
                 <li
                   key={question.id}
-                  className="rounded-lg border border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_35%,var(--card))] p-3"
+                  className="rounded-xl border border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_28%,var(--card))] p-3"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex min-w-0 flex-1 items-start gap-2">
-                      {isRetired ? null : (
-                        <span className="mt-0.5 w-4 shrink-0 text-right text-[12px] font-semibold text-[var(--muted-foreground)]">
-                          {liveIndex + 1}
-                        </span>
-                      )}
+                  <div className="flex items-start gap-2">
+                    {isRetired ? null : (
+                      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] text-[11px] font-bold tabular-nums text-[var(--muted-foreground)]">
+                        {liveIndex + 1}
+                      </span>
+                    )}
 
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-semibold text-[var(--program-text)]">
-                          {question.questionTitle}
-                        </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-[13px] font-semibold leading-snug text-[var(--program-text)]">
+                        {question.questionTitle}
+                      </p>
 
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span className={cn(PILL_CLASS, TYPE_PILL_CLASS)}>{question.questionType}</span>
-                          {isRetired ? (
-                            <span className={cn(PILL_CLASS, RETIRED_PILL_CLASS)}>Retired</span>
-                          ) : (
-                            <span
-                              className={cn(
-                                PILL_CLASS,
-                                question.isRequired ? REQUIRED_PILL_CLASS : OPTIONAL_PILL_CLASS,
-                              )}
-                            >
-                              {question.isRequired ? "Required" : "Optional"}
-                            </span>
-                          )}
-                        </div>
-
-                        {isChoiceQuestionType(question.questionType) && question.options.length > 0 ? (
-                          <ul aria-label={`${question.questionTitle} options`} className="mt-2 flex flex-wrap gap-1.5">
-                            {question.options.map((option) => (
-                              <li key={option.id} className={CHIP_CLASS}>
-                                {option.label}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-
-                        {!isRetired && question.responseCount > 0 ? (
-                          <p className="mt-1.5 text-xs text-[var(--muted-foreground)]">
-                            {question.responseCount} recorded{" "}
-                            {question.responseCount === 1 ? "answer" : "answers"}. Retiring keeps them.
-                          </p>
-                        ) : null}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className={cn(PILL_CLASS, TYPE_PILL_CLASS)}>{question.questionType}</span>
+                        {isRetired ? (
+                          <span className={cn(PILL_CLASS, RETIRED_PILL_CLASS)}>Retired</span>
+                        ) : (
+                          <span
+                            className={cn(
+                              PILL_CLASS,
+                              question.isRequired ? REQUIRED_PILL_CLASS : OPTIONAL_PILL_CLASS,
+                            )}
+                          >
+                            {question.isRequired ? "Required" : "Optional"}
+                          </span>
+                        )}
                       </div>
+
+                      {isChoiceQuestionType(question.questionType) && question.options.length > 0 ? (
+                        <ul aria-label={`${question.questionTitle} options`} className="mt-2 flex flex-wrap gap-1.5">
+                          {question.options.map((option) => (
+                            <li key={option.id} className={CHIP_CLASS}>
+                              {option.label}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+
+                      {!isRetired && question.responseCount > 0 ? (
+                        <p className="mt-1.5 text-xs text-[var(--muted-foreground)]">
+                          {question.responseCount} recorded{" "}
+                          {question.responseCount === 1 ? "answer" : "answers"}. It stays in the campaign&apos;s
+                          history.
+                        </p>
+                      ) : null}
                     </div>
 
                     {readOnly || isRetired || isEditing ? null : (
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex shrink-0 items-center gap-0.5">
                         <Button
                           type="button"
                           size="icon-sm"
                           variant="ghost"
                           aria-label={`Move ${question.questionTitle} up`}
+                          title="Move up"
                           disabled={isReordering || liveIndex <= 0}
                           onClick={() => void moveQuestion(question, -1)}
                         >
-                          <ArrowUp aria-hidden="true" />
+                          <ArrowUp className="size-4" aria-hidden="true" />
                         </Button>
                         <Button
                           type="button"
                           size="icon-sm"
                           variant="ghost"
                           aria-label={`Move ${question.questionTitle} down`}
+                          title="Move down"
                           disabled={isReordering || liveIndex === liveQuestions.length - 1}
                           onClick={() => void moveQuestion(question, 1)}
                         >
-                          <ArrowDown aria-hidden="true" />
+                          <ArrowDown className="size-4" aria-hidden="true" />
                         </Button>
                         <Button
                           type="button"
-                          size="sm"
-                          variant="outline"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`Edit ${question.questionTitle}`}
+                          title="Edit"
                           onClick={() => {
                             setActionError(null)
                             setEditing({ questionId: question.id })
                           }}
                         >
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setActionError(null)
-                            setConfirming({ question, action: "retire" })
-                          }}
-                        >
-                          Retire
+                          <Pencil className="size-4" aria-hidden="true" />
                         </Button>
                         {question.responseCount > 0 ? null : (
                           <Button
                             type="button"
-                            size="sm"
+                            size="icon-sm"
                             variant="ghost"
-                            className="text-[var(--destructive)]"
+                            aria-label={`Delete ${question.questionTitle}`}
+                            title="Delete"
+                            className="text-[var(--destructive)] hover:text-[var(--destructive)]"
                             onClick={() => {
                               setActionError(null)
-                              setConfirming({ question, action: "delete" })
+                              setConfirming({ question })
                             }}
                           >
-                            Delete
+                            <Trash2 className="size-4" aria-hidden="true" />
                           </Button>
                         )}
                       </div>
@@ -603,6 +613,10 @@ export function CampaignSurveyBuilder({
         )}
       </div>
 
+      {footer ? (
+        <div className="shrink-0 border-t border-[var(--border)] p-3">{footer}</div>
+      ) : null}
+
       <AlertDialog
         open={confirming !== null}
         onOpenChange={(open) => {
@@ -613,29 +627,17 @@ export function CampaignSurveyBuilder({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base">
-              {confirming?.action === "delete" ? "Delete this question?" : "Retire this question?"}
-            </AlertDialogTitle>
+            <AlertDialogTitle className="text-base">Delete this question?</AlertDialogTitle>
             <AlertDialogDescription className="text-[13px]">
-              {confirming?.action === "delete"
-                ? "This question has no responses, so deleting it loses nothing. This cannot be undone."
-                : confirming && confirming.question.responseCount > 0
-                  ? `This question has ${confirming.question.responseCount} recorded ${
-                      confirming.question.responseCount === 1 ? "answer" : "answers"
-                    }; retiring keeps them and stops the question appearing in new call outcomes.`
-                  : "The question stops appearing in new call outcomes and stays in the campaign's history."}
+              This question has no recorded answers, so deleting it loses nothing. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="text-[13px]" disabled={isConfirming}>
-              {confirming?.action === "delete" ? "Keep question" : "Not now"}
+              Keep question
             </AlertDialogCancel>
             <AlertDialogAction
-              className={cn(
-                "text-[13px]",
-                confirming?.action === "delete" &&
-                  "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-              )}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-[13px]"
               disabled={isConfirming}
               onClick={(event) => {
                 // The write resolves after this handler returns; closing on the
@@ -644,11 +646,7 @@ export function CampaignSurveyBuilder({
                 void applyConfirmation()
               }}
             >
-              {isConfirming
-                ? "Working…"
-                : confirming?.action === "delete"
-                  ? "Delete question"
-                  : "Retire question"}
+              {isConfirming ? "Working…" : "Delete question"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

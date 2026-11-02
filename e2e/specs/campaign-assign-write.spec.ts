@@ -490,7 +490,7 @@ test.describe("the assignment write — an Admin", () => {
 test.describe("the assign-contacts screen — an Admin", () => {
   test.use({ storageState: storageStatePath("admin"), viewport: { width: 1440, height: 1000 } })
 
-  test("assigns a selection, starts the campaign and lands on the list", async ({ page }) => {
+  test("assigns a selection, reviews the survey and starts the campaign", async ({ page }) => {
     const campaignId = await createDisposableCampaign(page.request, "assign write screen")
     const callersBefore = await readCallerUserIds()
 
@@ -500,7 +500,7 @@ test.describe("the assign-contacts screen — an Admin", () => {
       const [caller] = await readCallers(page.request)
 
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
-      await expect(page.getByRole("heading", { name: "Assign contacts", level: 1 })).toBeVisible()
+      await expect(page.getByLabel("Campaign name")).toBeVisible()
 
       for (const target of targets) {
         await showContact(page, target.phone)
@@ -509,6 +509,11 @@ test.describe("the assign-contacts screen — an Admin", () => {
 
       await expect(page.getByText(selectedLine(2, page1.total), { exact: true })).toBeVisible()
 
+      // The campaign cannot be started from the assign view: Start campaign is
+      // inside the call-outcome survey, which is not in view yet.
+      await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toHaveCount(0)
+      await expect(page.getByRole("region", { name: "Call-outcome survey" })).toHaveCount(0)
+
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
       await page.getByRole("menuitem", { name: caller.name, exact: true }).click()
 
@@ -516,10 +521,16 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await expect(assign).toBeEnabled()
       await assign.click()
 
-      // Frame 324's prototype sends the assign action back to the campaigns
-      // list, and the campaign is ACTIVE by the time the page gets there.
-      await expect(page).toHaveURL(/\/campaigns$/)
-      await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toBeVisible()
+      // Pressing Assign ends the selection immediately; the write and the
+      // conflict dialog carry their own snapshot of the rows.
+      await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
+
+      // Assigning keeps the reader on the screen and slides the call-outcome
+      // survey into view; starting is a separate, review-gated action.
+      // The grid keeps its search in `?q=`, so the path is the assertion.
+      await expect(page).toHaveURL((url) => url.pathname.endsWith("/assign-contacts"))
+      await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
+      await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toBeVisible()
 
       const landed = await precheck(
         page.request,
@@ -533,9 +544,22 @@ test.describe("the assign-contacts screen — an Admin", () => {
         targets.map((target) => target.contactId).sort(),
       )
 
-      const campaign = await page.request.get(`/api/dialer/admin/campaigns/${campaignId}`)
-      expect(campaign.status(), await campaign.text()).toBe(200)
-      expect(((await campaign.json()) as { campaign: { status: string } }).campaign.status).toBe("ACTIVE")
+      const beforeStart = await page.request.get(`/api/dialer/admin/campaigns/${campaignId}`)
+      expect(beforeStart.status(), await beforeStart.text()).toBe(200)
+      expect(((await beforeStart.json()) as { campaign: { status: string } }).campaign.status).toBe("DRAFT")
+
+      await page.getByRole("button", { name: "Start campaign", exact: true }).click()
+
+      await expect
+        .poll(async () => {
+          const campaign = await page.request.get(`/api/dialer/admin/campaigns/${campaignId}`)
+          if (!campaign.ok()) {
+            return null
+          }
+
+          return ((await campaign.json()) as { campaign: { status: string } }).campaign.status
+        })
+        .toBe("ACTIVE")
     } finally {
       await deleteAssignments(campaignId)
       await deletePromotedCallers(callersBefore)
@@ -564,6 +588,18 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
       await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
 
+      // The panel's existing split names the caller holding the seeded contact.
+      const alreadyAssigned = page.getByRole("region", { name: "Already assigned" })
+      await expect(alreadyAssigned).toBeVisible()
+      await expect(alreadyAssigned).toContainText(owner.name)
+
+      const paneBox = await page.getByRole("complementary", { name: "Assignment" }).boundingBox()
+      const splitBox = await alreadyAssigned.boundingBox()
+      expect(paneBox && splitBox, "the split must sit inside the assign pane").toBeTruthy()
+      if (paneBox && splitBox) {
+        expect(splitBox.height).toBeLessThanOrEqual(paneBox.height * 0.3 + 1)
+      }
+
       for (const target of [conflicted, unassigned]) {
         await showContact(page, target.phone)
         await contactRow(page, target.phone).getByRole("checkbox").click()
@@ -572,18 +608,25 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
       await page.getByRole("menuitem", { name: replacement.name, exact: true }).click()
 
-      // Frame 324 states the decision instead of asking for it: a selected
-      // contact already assigned here will be skipped, and the button counts
-      // only what will be written.
+      // The warning names the conflict; the decision is still the reader's.
       await expect(
-        page.getByText("1 selected contact is already assigned and will be skipped.", { exact: true }),
+        page.getByText("1 selected contact is already assigned in this campaign.", { exact: true }),
       ).toBeVisible()
 
-      const assign = page.getByRole("button", { name: "Assign 1 contact", exact: true })
+      const assign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
       await expect(assign).toBeEnabled()
       await assign.click()
 
-      await expect(page).toHaveURL(/\/campaigns$/)
+      const decision = page.getByRole("alertdialog")
+      await expect(decision).toBeVisible()
+      await expect(decision).toContainText("1 of 2 contacts is already assigned")
+      await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
+      await decision.getByRole("button", { name: "Skip 1 and assign 1", exact: true }).click()
+
+      // The grid keeps its search in `?q=`, so the path is the assertion.
+      await expect(page).toHaveURL((url) => url.pathname.endsWith("/assign-contacts"))
+      await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
+      await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toBeVisible()
 
       const rows = await readAssignments(campaignId)
       const byContact = new Map(rows.map((row) => [row.contact_id, row]))
@@ -594,8 +637,125 @@ test.describe("the assign-contacts screen — an Admin", () => {
       )
       expect(byContact.get(unassigned.contactId)?.dialer_callers?.user_id).toBe(replacement.userId)
 
-      const campaign = await page.request.get(`/api/dialer/admin/campaigns/${campaignId}`)
-      expect(((await campaign.json()) as { campaign: { status: string } }).campaign.status).toBe("ACTIVE")
+      await page.getByRole("button", { name: "Start campaign", exact: true }).click()
+
+      await expect
+        .poll(async () => {
+          const campaign = await page.request.get(`/api/dialer/admin/campaigns/${campaignId}`)
+          if (!campaign.ok()) {
+            return null
+          }
+
+          return ((await campaign.json()) as { campaign: { status: string } }).campaign.status
+        })
+        .toBe("ACTIVE")
+    } finally {
+      await deleteAssignments(campaignId)
+      await deletePromotedCallers(callersBefore)
+      await deleteDisposableCampaign(campaignId)
+    }
+  })
+
+  test("reassigns the already-assigned contact when Reassign is chosen", async ({ page }) => {
+    const campaignId = await createDisposableCampaign(page.request, "assign write reassign")
+    const callersBefore = await readCallerUserIds()
+
+    try {
+      const [conflicted, unassigned] = await contactsFor(page.request, campaignId, 2)
+      const [owner, replacement] = await readCallers(page.request)
+
+      const seeded = await writeAssignments(page.request, campaignId, {
+        contactIds: [conflicted.contactId],
+        callers: [{ userId: owner.userId, weight: 1 }],
+        mode: "move",
+      })
+      expect(seeded.status, seeded.text).toBe(201)
+
+      const page1 = await readContactPage(page.request, campaignId)
+
+      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+      await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
+
+      for (const target of [conflicted, unassigned]) {
+        await showContact(page, target.phone)
+        await contactRow(page, target.phone).getByRole("checkbox").click()
+      }
+
+      await page.getByRole("button", { name: "Add caller", exact: true }).click()
+      await page.getByRole("menuitem", { name: replacement.name, exact: true }).click()
+
+      const assign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
+      await expect(assign).toBeEnabled()
+      await assign.click()
+
+      const decision = page.getByRole("alertdialog")
+      await expect(decision).toBeVisible()
+      await decision.getByRole("button", { name: "Reassign all", exact: true }).click()
+
+      await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
+
+      const rows = await readAssignments(campaignId)
+      const byContact = new Map(rows.map((row) => [row.contact_id, row]))
+
+      expect(rows, "a move updates the row, never inserts a second one").toHaveLength(2)
+      expect(
+        byContact.get(conflicted.contactId)?.dialer_callers?.user_id,
+        "the conflict was reassigned",
+      ).toBe(replacement.userId)
+      expect(byContact.get(unassigned.contactId)?.dialer_callers?.user_id).toBe(replacement.userId)
+    } finally {
+      await deleteAssignments(campaignId)
+      await deletePromotedCallers(callersBefore)
+      await deleteDisposableCampaign(campaignId)
+    }
+  })
+
+  test("reassigns a whole selection when every contact is already assigned", async ({ page }) => {
+    const campaignId = await createDisposableCampaign(page.request, "assign write all conflicts")
+    const callersBefore = await readCallerUserIds()
+
+    try {
+      const [first, second] = await contactsFor(page.request, campaignId, 2)
+      const [owner, replacement] = await readCallers(page.request)
+
+      const seeded = await writeAssignments(page.request, campaignId, {
+        contactIds: [first.contactId, second.contactId],
+        callers: [{ userId: owner.userId, weight: 1 }],
+        mode: "move",
+      })
+      expect(seeded.status, seeded.text).toBe(201)
+
+      const page1 = await readContactPage(page.request, campaignId)
+
+      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+      await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
+
+      for (const target of [first, second]) {
+        await showContact(page, target.phone)
+        await contactRow(page, target.phone).getByRole("checkbox").click()
+      }
+
+      await page.getByRole("button", { name: "Add caller", exact: true }).click()
+      await page.getByRole("menuitem", { name: replacement.name, exact: true }).click()
+
+      // The dead end this replaces answered 409 nothing_to_assign. The label
+      // now offers the only action that can succeed, and the dialog has no
+      // skip button when there is nothing left to skip.
+      const reassign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
+      await expect(reassign).toBeEnabled()
+      await reassign.click()
+
+      const decision = page.getByRole("alertdialog")
+      await expect(decision).toBeVisible()
+      await expect(decision).toContainText("All 2 contacts are already assigned")
+      await expect(decision.getByRole("button", { name: /Skip \d+ and assign/ })).toHaveCount(0)
+      await decision.getByRole("button", { name: "Reassign all", exact: true }).click()
+
+      await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
+
+      const rows = await readAssignments(campaignId)
+      expect(rows, "two moves update two rows, never four").toHaveLength(2)
+      expect(rows.every((row) => row.dialer_callers?.user_id === replacement.userId)).toBe(true)
     } finally {
       await deleteAssignments(campaignId)
       await deletePromotedCallers(callersBefore)
@@ -736,10 +896,12 @@ test.describe("the assignment refusals — an Admin", () => {
   test("refuses an inactive caller and never reactivates it", async ({ page }) => {
     const campaignId = await createDisposableCampaign(page.request, "assign write inactive")
     const callersBefore = await readCallerUserIds()
+    let restoreCallerId: string | null = null
 
     try {
       const [assigned, unassigned] = await contactsFor(page.request, campaignId, 2)
       const [caller] = await readCallers(page.request)
+      restoreCallerId = caller.userId
 
       const seeded = await writeAssignments(page.request, campaignId, {
         contactIds: [assigned.contactId],
@@ -780,6 +942,14 @@ test.describe("the assignment refusals — an Admin", () => {
       expect(await readAssignments(campaignId), "the refused contact was not written").toHaveLength(1)
     } finally {
       await deleteAssignments(campaignId)
+      if (restoreCallerId) {
+        await runLocalSql(
+          `UPDATE public.dialer_callers SET is_active = true WHERE user_id = '${requireUuid(
+            restoreCallerId,
+            "caller user id",
+          )}'`,
+        )
+      }
       await deletePromotedCallers(callersBefore)
       await deleteDisposableCampaign(campaignId)
     }

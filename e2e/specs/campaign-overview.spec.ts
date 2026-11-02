@@ -505,10 +505,12 @@ test.describe("the campaign overview — an Admin with no campaigns", () => {
     await page.goto("/campaigns")
 
     await expect(page.getByText("No campaigns yet", { exact: true })).toBeVisible()
-    await expect(page.getByRole("link", { name: "Create campaign" })).toHaveAttribute(
-      "href",
-      "/campaigns/new",
-    )
+    await expect(page.getByRole("link", { name: "Create campaign" })).toHaveCount(0)
+    const createCampaign = page.getByRole("button", { name: "Create campaign" })
+    await expect(createCampaign).toBeVisible()
+    await createCampaign.click()
+    await expect(page.getByRole("dialog").getByLabel("Campaign name")).toBeVisible()
+    await expect(page.getByRole("dialog").getByRole("button", { name: /End date/ })).toBeVisible()
     await expect(
       page.getByRole("region", { name: "Campaign totals" }),
       "an action, not five zeroes",
@@ -668,7 +670,7 @@ test.describe("the campaign overview — a phone", () => {
       await expect(card).toHaveCount(1)
       await expect(card.getByRole("link", { name: fixture.campaignName })).toHaveAttribute(
         "href",
-        `/campaigns/${fixture.campaignId}`,
+        `/campaigns/${fixture.campaignId}/assign-contacts`,
       )
       expect(
         (await card.locator("dd").allInnerTexts()).map((value) => value.trim()),

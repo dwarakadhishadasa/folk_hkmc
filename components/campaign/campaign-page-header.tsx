@@ -3,57 +3,49 @@
 import type { ReactNode } from "react"
 import Link from "next/link"
 
+import { SectionPageHeader } from "@/components/section-page-header"
 import { Button } from "@/components/ui/button"
 
 import { CampaignMenu } from "./campaign-menu"
 
 /**
- * The title row every campaign page opens with: the page's own name, the
- * scope line beneath it, and the page's primary action on the right.
+ * The title row every campaign page opens with.
  *
- * The title is Poppins 22px and the scope line is Inter 12px in the muted ink,
- * which is the pairing the Campaign frame (32) and the manage portal both
- * use — one optical unit, the action aligned to its baseline rather than to a
- * label of its own.
- *
- * On a phone the title carries the 18px chevron frame 1752 draws; it opens the
- * Campaign menu (frame 2217) with this page's own scope line as its subtitle.
+ * The shape lives in `SectionPageHeader`, so Campaigns, Sessions and the
+ * Dashboard share one typography and one alignment. On a phone the title
+ * carries the Campaign menu (frame 2217) with this page's own scope line as its
+ * subtitle.
  */
 export function CampaignPageHeader({
   title,
   subtitle,
   actionHref,
   actionLabel,
+  action,
   filters,
 }: {
   title: string
   subtitle: string
   actionHref?: string
   actionLabel?: string
+  /** A control instead of a link, e.g. the New campaign popover. Takes precedence. */
+  action?: ReactNode
   filters?: ReactNode
 }) {
   return (
-    <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <div className="flex items-center gap-1">
-          <h1 className="font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)]">
-            {title}
-          </h1>
-          <CampaignMenu subtitle={subtitle} />
-        </div>
-        <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{subtitle}</p>
-      </div>
-
-      {filters || (actionHref && actionLabel) ? (
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          {filters}
-          {actionHref && actionLabel ? (
-            <Button asChild size="lg" className="h-10 rounded-lg px-4">
-              <Link href={actionHref}>{actionLabel}</Link>
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+    <SectionPageHeader
+      title={title}
+      subtitle={subtitle}
+      menu={<CampaignMenu subtitle={subtitle} />}
+      filters={filters}
+      action={
+        action ??
+        (actionHref && actionLabel ? (
+          <Button asChild size="lg" className="h-10 rounded-lg px-4">
+            <Link href={actionHref}>{actionLabel}</Link>
+          </Button>
+        ) : undefined)
+      }
+    />
   )
 }

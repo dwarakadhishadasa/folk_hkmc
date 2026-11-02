@@ -1,4 +1,5 @@
-import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
+import { AuthzError, authzErrorResponse, getStaffContext, requireRole, type StaffContext } from "@/lib/authz"
+import { getCampaign } from "@/lib/dialer/campaigns"
 import {
   createSession,
   findLocationById,
@@ -7,14 +8,18 @@ import {
 } from "@/lib/supabase/data"
 import { listVisibleSessions } from "@/lib/sessions/data"
 import { sessionsScope } from "@/lib/sessions/scope"
+import { programDay } from "@/lib/program-day"
 
 export const dynamic = "force-dynamic"
 
 interface SessionPayload {
   name?: string
   locationId?: string
+  campaignId?: string | null
   durationMinutes?: string | number
 }
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const DEFAULT_SESSION_DURATION_MINUTES = 15
 const MIN_SESSION_DURATION_MINUTES = 1
@@ -47,6 +52,70 @@ function parseDurationMinutes(value: unknown): { durationMinutes?: number; error
   }
 
   return { durationMinutes }
+}
+
+/**
+ * The optional Campaign link. Absent, null and empty all mean `No campaign`.
+ * A provided id must exist in this programme, be readable through the caller's
+ * campaign scope, and not be CANCELLED; anything else is a named 4xx rather
+ * than a foreign-key 500 from the insert.
+ */
+async function parseCampaignId(
+  staff: StaffContext,
+  value: unknown,
+): Promise<{ campaignId: string | null; response?: Response }> {
+  if (value === undefined || value === null || value === "") {
+    return { campaignId: null }
+  }
+
+  if (typeof value !== "string") {
+    return {
+      campaignId: null,
+      response: Response.json({ error: "Selected campaign is invalid.", code: "invalid_campaign" }, { status: 400 }),
+    }
+  }
+
+  const campaignId = value.trim()
+  if (!campaignId) {
+    return { campaignId: null }
+  }
+
+  if (!UUID_PATTERN.test(campaignId)) {
+    return {
+      campaignId: null,
+      response: Response.json({ error: "Selected campaign does not exist.", code: "campaign_not_found" }, { status: 400 }),
+    }
+  }
+
+  let campaign
+  try {
+    campaign = await getCampaign(staff, campaignId)
+  } catch (error) {
+    if (error instanceof AuthzError) {
+      // A create body's campaign is input, not a resource the caller asked to
+      // read: a foreign or missing id is a named 400, never a 500 and never a
+      // 404 that would suggest the session was the missing thing.
+      const status = error.status === 404 ? 400 : error.status
+      return {
+        campaignId: null,
+        response: Response.json({ error: error.message, code: error.code }, { status }),
+      }
+    }
+
+    throw error
+  }
+
+  if (campaign.status === "CANCELLED") {
+    return {
+      campaignId: null,
+      response: Response.json(
+        { error: "A cancelled campaign cannot invite people to a session.", code: "campaign_cancelled" },
+        { status: 400 },
+      ),
+    }
+  }
+
+  return { campaignId: campaign.id }
 }
 
 export async function GET() {
@@ -98,6 +167,11 @@ export async function POST(request: Request) {
       return Response.json({ error: "Selected location does not exist." }, { status: 400 })
     }
 
+    const campaign = await parseCampaignId(staff, payload.campaignId)
+    if (campaign.response) {
+      return campaign.response
+    }
+
     let owningPreacherId = staff.userId
     let owningPreacherLocationIds: string[] = staff.locationIds
 
@@ -127,9 +201,10 @@ export async function POST(request: Request) {
     const closesAt = new Date(startsAt.getTime() + duration.durationMinutes * MINUTE_MS)
     const session = await createSession({
       name,
-      sessionDate: startsAt.toISOString().slice(0, 10),
+      sessionDate: programDay(startsAt),
       locationId,
       preacherUserId: owningPreacherId,
+      campaignId: campaign.campaignId,
       durationMinutes: duration.durationMinutes,
       publicAttendanceEnabled: true,
       attendanceOpensAt: startsAt.toISOString(),

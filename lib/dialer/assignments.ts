@@ -21,9 +21,10 @@ const ASSIGNMENT_CHUNK_SIZE = 200
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const CONTACT_COLUMNS = "id,name,phone,location_ids,assigned_preacher_id,notes"
+const CONTACT_COLUMNS = "id,name,phone,initial_contact,collected_by_id,location_ids,assigned_preacher_id,notes"
 const CONTACT_PROFILE_COLUMNS = "contact_id,centre,level,gender,language"
 const ASSIGNMENT_COLUMNS = "contact_id,caller_id,status,contacts(name),dialer_callers(display_name)"
+const STAFF_NAME_COLUMNS = "id,name,email"
 
 const CONTACT_FACET_KEYS = ["centre", "level", "gender", "language"] as const
 
@@ -34,8 +35,17 @@ export type ContactFacets = Record<ContactFacetKey, string[]>
 
 type ContactRow = Pick<
   Database["public"]["Tables"]["contacts"]["Row"],
-  "id" | "name" | "phone" | "location_ids" | "assigned_preacher_id" | "notes"
+  | "id"
+  | "name"
+  | "phone"
+  | "initial_contact"
+  | "collected_by_id"
+  | "location_ids"
+  | "assigned_preacher_id"
+  | "notes"
 >
+
+type StaffNameRow = Pick<Database["public"]["Tables"]["users"]["Row"], "id" | "name" | "email">
 
 type ContactProfileRow = Pick<
   Database["public"]["Tables"]["dialer_contact_profiles"]["Row"],
@@ -55,6 +65,10 @@ export interface AssignableContact {
   contactId: string
   name: string
   phone: string
+  /** `contacts.initial_contact` as `YYYY-MM-DD`; `null` when unset. */
+  initialContact: string | null
+  /** Resolved `contacts.collected_by_id`; `null` when nobody is recorded. */
+  collectedByName: string | null
   locationIds: string[]
   /** Absent when `contacts.assigned_preacher_id` is null. */
   assignedPreacherUserId?: string
@@ -172,6 +186,11 @@ const ASSIGNMENT_READ_FAILURES: PagingFailures = {
   truncated: () => new AuthzError(500, "assignment_read_truncated", "The campaign assignment read was truncated."),
 }
 
+const STAFF_NAME_READ_FAILURES: PagingFailures = {
+  read: () => new AuthzError(500, "staff_name_read_failed", "Unable to read the staff names for these contacts."),
+  truncated: () => new AuthzError(500, "staff_name_read_truncated", "The staff name read was truncated."),
+}
+
 /**
  * A stored facet is trimmed once, here, so an option and its filter compare
  * equal even when the profile row was written with padding. A padded-empty
@@ -232,6 +251,7 @@ function toAssignableContact(
   row: ContactRow,
   profile: AssignableContactProfile,
   assignment: AssignmentConflictRow | undefined,
+  collectedByName: string | null,
 ): AssignableContact {
   const callerName = assignment?.dialer_callers?.display_name.trim()
 
@@ -239,6 +259,8 @@ function toAssignableContact(
     contactId: row.id,
     name: row.name,
     phone: row.phone,
+    initialContact: row.initial_contact ?? null,
+    collectedByName,
     locationIds: row.location_ids ?? [],
     ...(row.assigned_preacher_id ? { assignedPreacherUserId: row.assigned_preacher_id } : {}),
     notes: row.notes ?? null,
@@ -309,6 +331,41 @@ async function readScopedContacts(
   }, CONTACT_READ_FAILURES)
 }
 
+async function readStaffNames(
+  programId: StaffContext["programId"],
+  userIds: Array<string | null>,
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>()
+  const uniqueIds = [...new Set(userIds.filter((id): id is string => Boolean(id)))]
+
+  if (uniqueIds.length === 0) {
+    return names
+  }
+
+  const supabaseAdmin = createSupabaseAdminClient()
+
+  for (let offset = 0; offset < uniqueIds.length; offset += ASSIGNMENT_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(offset, offset + ASSIGNMENT_CHUNK_SIZE)
+    const rows = await collectPagedRows<StaffNameRow>(async (from, to) => {
+      const response = await supabaseAdmin
+        .from("users")
+        .select(STAFF_NAME_COLUMNS)
+        .eq("program_id", programId)
+        .in("id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to)
+
+      return { data: response.data, error: response.error }
+    }, STAFF_NAME_READ_FAILURES)
+
+    for (const row of rows) {
+      names.set(row.id, row.name?.trim() || row.email)
+    }
+  }
+
+  return names
+}
+
 async function readContactProfiles(
   programId: StaffContext["programId"],
   contactIds: string[],
@@ -360,16 +417,25 @@ async function readAssignableEntries(
   const contacts = await readScopedContacts(staff, scope)
   const contactIds = contacts.map((contact) => contact.id)
 
-  const [profileRows, assignmentRows] = await Promise.all([
+  const [profileRows, assignmentRows, staffNames] = await Promise.all([
     readContactProfiles(staff.programId, contactIds),
     readAssignmentConflicts(staff.programId, campaignId, contactIds),
+    readStaffNames(
+      staff.programId,
+      contacts.map((contact) => contact.collected_by_id),
+    ),
   ])
 
-  return contacts.map((contact) => ({
-    contact,
-    profile: toContactProfile(profileRows.get(contact.id)),
-    assignment: assignmentRows.get(contact.id),
-  }))
+  return contacts.map((contact) => {
+    const collectedById = contact.collected_by_id
+
+    return {
+      contact,
+      profile: toContactProfile(profileRows.get(contact.id)),
+      assignment: assignmentRows.get(contact.id),
+      collectedByName: collectedById ? staffNames.get(collectedById) ?? "Unknown staff" : null,
+    }
+  })
 }
 
 /**
@@ -422,7 +488,9 @@ export async function listAssignableContacts(
   const start = (page - 1) * pageSize
   const rows = filtered
     .slice(start, start + pageSize)
-    .map(({ contact, profile, assignment }) => toAssignableContact(contact, profile, assignment))
+    .map(({ contact, profile, assignment, collectedByName }) =>
+      toAssignableContact(contact, profile, assignment, collectedByName),
+    )
 
   return {
     rows,
@@ -454,7 +522,9 @@ export async function listAllAssignableContacts(
 
   return entries
     .sort((left, right) => compareContacts(left.contact, right.contact))
-    .map(({ contact, profile, assignment }) => toAssignableContact(contact, profile, assignment))
+    .map(({ contact, profile, assignment, collectedByName }) =>
+      toAssignableContact(contact, profile, assignment, collectedByName),
+    )
 }
 
 /** AD-3's assignable caller set for the picker; no second derivation. */

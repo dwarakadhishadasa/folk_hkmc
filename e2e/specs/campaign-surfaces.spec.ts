@@ -220,9 +220,11 @@ for (const role of CAMPAIGN_ADMIN_ROLES) {
       await expect(page).toHaveURL(/\/campaigns$/)
       await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toBeVisible()
 
-      const newCampaign = page.getByRole("link", { name: "New campaign" })
+      const newCampaign = page.getByRole("button", { name: "New campaign" })
       await expect(newCampaign).toBeVisible()
-      await expect(newCampaign).toHaveAttribute("href", "/campaigns/new")
+      await newCampaign.click()
+      await expect(page.getByRole("dialog").getByLabel("Campaign name")).toBeVisible()
+      await page.keyboard.press("Escape")
 
       const nav = page.getByRole("navigation", { name: "Campaign" })
       await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page")
@@ -247,7 +249,7 @@ test.describe("the Campaign overview — a Volunteer with no caller profile", ()
 
     await expect(page).toHaveURL(/\/auth\/error\?code=staff-authorization-failed/)
     await expect(page.getByRole("heading", { name: "Overview", level: 1 })).toHaveCount(0)
-    await expect(page.getByRole("link", { name: "Create campaign" })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Create campaign" })).toHaveCount(0)
   })
 })
 
@@ -288,7 +290,7 @@ test.describe("the Campaign assignments — a Volunteer with an active caller pr
       // with no profile.
       await page.goto("/campaigns")
       await expect(page).toHaveURL(/\/auth\/error\?code=staff-authorization-failed/)
-      await expect(page.getByRole("link", { name: "Create campaign" })).toHaveCount(0)
+      await expect(page.getByRole("button", { name: "Create campaign" })).toHaveCount(0)
     } finally {
       await restore()
     }

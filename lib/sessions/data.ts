@@ -54,6 +54,13 @@ export interface SessionsReport {
   top: SessionReportRow[]
 }
 
+/** One row of the Sessions Overview's Top 5 attendees card. */
+export interface SessionTopAttendee {
+  contactId: string
+  name: string
+  attendanceCount: number
+}
+
 export interface SessionAttendee {
   contactId: string
   name: string
@@ -243,6 +250,43 @@ export async function getSessionsReport(
   }
 }
 
+/**
+ * The five contacts with the most check-ins in the reporting window, read from
+ * the same scope and window as `sessions_report`.
+ */
+export async function getSessionsTopAttendees(
+  scope: SessionsScope,
+  from: string,
+  to: string,
+): Promise<SessionTopAttendee[]> {
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin.rpc("sessions_top_attendees", {
+    ...rpcArgs(scope),
+    p_from: from,
+    p_to: to,
+  })
+
+  if (error) {
+    throw readFailure("top attendees", error)
+  }
+
+  return readArray(data).flatMap((value): SessionTopAttendee[] => {
+    if (!value || typeof value !== "object") {
+      return []
+    }
+
+    const row = value as Record<string, unknown>
+    const contactId = readString(row.contact_id)
+    const name = readString(row.name)
+
+    if (!contactId || !name) {
+      return []
+    }
+
+    return [{ contactId, name, attendanceCount: readNumber(row.attendance_count) }]
+  })
+}
+
 /** The one predicate the live dashboard's attendance poll shares with the list. */
 export async function isSessionVisible(scope: SessionsScope, sessionId: string): Promise<boolean> {
   if (!isSessionId(sessionId)) {
@@ -346,9 +390,10 @@ export async function getContactAttendanceSummary(
 }
 
 /**
- * The bare `SessionRecord` shape `/api/sessions` has always returned, now read
- * through the scoped function rather than a creator-only filter. `/dashboard`
- * and `/gita-life` keep the unscoped `listSessions()` they had.
+ * The bare `SessionRecord` shape `/api/sessions` has always returned, read
+ * through the scoped function. An Admin's scope is creator-only; a Preacher and
+ * an Assistant keep the creator/preacher/assistant predicate. `/dashboard` and
+ * `/gita-life` keep the unscoped `listSessions()` they had.
  */
 export async function listVisibleSessions(scope: SessionsScope): Promise<SessionRecord[]> {
   const supabaseAdmin = createSupabaseAdminClient()
@@ -373,6 +418,7 @@ export async function listVisibleSessions(scope: SessionsScope): Promise<Session
     attendanceClosesAt: readString(row.attendance_closes_at) ?? undefined,
     durationMinutes: typeof row.duration_minutes === "number" ? row.duration_minutes : undefined,
     attendanceUrl: readString(row.attendance_url) ?? undefined,
+    campaignId: readString(row.campaign_id) ?? undefined,
     createdBy: row.created_by ? [row.created_by] : [],
   }))
 }

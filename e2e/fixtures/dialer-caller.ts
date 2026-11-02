@@ -146,7 +146,16 @@ export async function ensureActiveCaller(email: string): Promise<CallerFixture> 
       }
     }
 
-    return { callerId: row.id, userId, cleanup: async () => undefined }
+    // The profile was already active. A roster spec may deactivate it before
+    // this fixture's cleanup runs, so cleanup restores the state it found
+    // rather than assuming the row was left alone.
+    return {
+      callerId: row.id,
+      userId,
+      cleanup: async () => {
+        await client.from("dialer_callers").update({ is_active: true }).eq("id", row.id)
+      },
+    }
   }
 
   const displayName = email.split("@")[0] ?? email

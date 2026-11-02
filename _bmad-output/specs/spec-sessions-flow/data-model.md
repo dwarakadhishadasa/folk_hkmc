@@ -14,21 +14,24 @@ No table or column changes. Read-only functions are added and called with
 
 ## Scope
 
-Aligned with the `sessions` RLS policy
-(`20261007120000_scope_sessions_by_preacher.sql`):
+The app-level scope is `sessions_visible`. The `sessions` RLS policy is unchanged;
+it remains the authenticated read for `/manage`, which this contract does not narrow.
 
 | Role | Sessions visible |
 |---|---|
-| Admin | `program_id = p_program_id` |
+| Admin | `program_id = p_program_id` and `created_by = p_user_id` |
 | Preacher | `program_id` and (`created_by = p_user_id` or `preacher_id = p_user_id` or `created_by in (select id from users where assigned_preacher_id = p_user_id and status = 'Active')`) |
 | Assistant | `program_id` and (`created_by = p_user_id` or `preacher_id = p_user_id` or `created_by = p_assigned_preacher_id` or `preacher_id = p_assigned_preacher_id`) |
 
+- An Admin's `/sessions` is personal: the Admin works the sessions they started,
+  and a session another staff member created is not in that list.
 - A Preacher's assigned-preacher id is null, so the assistant-created subquery is
   what adds the sessions their assigned assistants created.
 - An Assistant with no active assigned preacher passes null, leaving their own
   creations.
-- This widens today's `GET /api/sessions` (`created_by` only). It is a deliberate
-  behaviour change, not a reuse.
+- The Preacher and Assistant scope widens today's `GET /api/sessions` (`created_by`
+  only). It is a deliberate behaviour change, not a reuse. The Admin stays
+  creator-only.
 
 ## Functions
 
@@ -40,7 +43,7 @@ client after the staff assertion.
 
 ```sql
 returns setof sessions
--- Admin: program.
+-- Admin: created_by = p_user_id.
 -- Preacher: created_by = p_user_id OR preacher_id = p_user_id
 --           OR created_by IN (active staff assigned to p_user_id).
 -- Assistant: created_by = p_user_id OR preacher_id = p_user_id

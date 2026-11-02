@@ -1,12 +1,14 @@
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
 import { notFound, redirect } from "next/navigation"
 
 import { AssignContactsDesktopGate } from "@/components/campaign/assign-contacts-desktop-gate"
+import { CampaignAssignHeader } from "@/components/campaign/campaign-assign-header"
+import { CampaignCompletedReport } from "@/components/campaign/campaign-completed-report"
 import { AuthzError } from "@/lib/authz"
 import { listAllAssignableContacts, listAssignableCallers } from "@/lib/dialer/assignments"
 import { getCampaign } from "@/lib/dialer/campaigns"
+import { getCampaignProgress } from "@/lib/dialer/progress"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
+import { listCampaignQuestions } from "@/lib/dialer/surveys"
 import { listLocations } from "@/lib/supabase/data"
 
 import { getCampaignStaff } from "../../staff"
@@ -14,13 +16,18 @@ import { getCampaignStaff } from "../../staff"
 export const dynamic = "force-dynamic"
 
 /**
- * Frame 324's assign-contacts surface.
+ * Frame 324's assign-contacts surface, now also the campaign's property sheet
+ * and its survey home.
  *
  * The page is the AD-2 gate and the reads the client cannot do itself: the
  * campaign (which turns a missing, malformed or other-program id into one 404),
- * AD-3's assignable caller set, the programme's location lexicon, and the whole
- * scoped contact set — the grid sorts, filters and selects across all of it, so
- * a page would make its toolbar and its footer describe different populations.
+ * AD-3's assignable caller set, the programme's location lexicon, the whole
+ * scoped contact set — the grid sorts, filters and selects across all of it — and
+ * the survey questions the right panel switches to after a successful assign.
+ *
+ * A COMPLETED campaign takes no assignments, so it is not shown the grid at all:
+ * it is a finished campaign, and the page reads as its report. That is also the
+ * only place a closed campaign is opened from, since the list's action is Open.
  */
 export default async function AssignContactsPage({
   params,
@@ -33,32 +40,49 @@ export default async function AssignContactsPage({
     const staff = await getCampaignStaff()
     requireCampaignAdmin(staff)
     const campaign = await getCampaign(staff, campaignId)
-    const [contacts, callers, locations] = await Promise.all([
+
+    if (campaign.status === "COMPLETED") {
+      const progress = await getCampaignProgress(staff, campaign.id)
+
+      return (
+        <>
+          <CampaignAssignHeader
+            campaign={{
+              id: campaign.id,
+              name: campaign.name,
+              description: campaign.description,
+              campaignDate: campaign.campaign_date,
+            }}
+          />
+
+          <CampaignCompletedReport summary={progress.summary} callers={progress.callers} />
+        </>
+      )
+    }
+
+    const [contacts, callers, locations, questions] = await Promise.all([
       listAllAssignableContacts(staff, campaign.id),
       listAssignableCallers(staff),
       listLocations(),
+      listCampaignQuestions(staff, campaign.id, { includeRetired: true }),
     ])
 
     return (
       <>
-        <div className="flex h-[50px] items-center gap-4">
-          <Link
-            href={`/campaigns/${campaign.id}/edit`}
-            aria-label="Back to campaign"
-            className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-card text-[var(--program-text)] transition-colors hover:bg-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
-          >
-            <ArrowLeft className="size-[18px]" aria-hidden="true" />
-          </Link>
-
-          <h1 className="font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)]">
-            Assign contacts
-          </h1>
-        </div>
+        <CampaignAssignHeader
+          campaign={{
+            id: campaign.id,
+            name: campaign.name,
+            description: campaign.description,
+            campaignDate: campaign.campaign_date,
+          }}
+        />
 
         <AssignContactsDesktopGate
           campaignId={campaign.id}
           campaignStatus={campaign.status}
           contacts={contacts}
+          questions={questions}
           callers={callers.map((caller) => ({
             userId: caller.userId,
             name: caller.name,

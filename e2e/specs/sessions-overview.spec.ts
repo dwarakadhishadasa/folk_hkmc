@@ -49,6 +49,7 @@ async function directInsightCounts(
   client: SupabaseClient,
   fromDate: string,
   toDateInclusive: string,
+  createdBy: string,
 ): Promise<{ total: number; top: number[] }> {
   const fromTs = new Date(`${fromDate}T00:00:00+05:30`).getTime()
   const toTs = new Date(`${addDays(toDateInclusive, 1)}T00:00:00+05:30`).getTime()
@@ -58,6 +59,7 @@ async function directInsightCounts(
     .from("sessions")
     .select("id,attendance_opens_at,session_date")
     .eq("program_id", programId)
+    .eq("created_by", createdBy)
 
   if (sessions.error) {
     throw new Error(`reading sessions for insight expectations: ${sessions.error.message}`)
@@ -194,7 +196,7 @@ test.describe("sessions overview", () => {
 
     await page
       .locator(`[data-session-row="${names.live}"]`)
-      .getByRole("link", { name: `Open live ${names.live}` })
+      .getByRole("link", { name: `Open ${names.live}` })
       .click()
 
     await expect(page).toHaveURL(new RegExp(`/sessions/${liveId}/live$`))
@@ -242,7 +244,7 @@ test.describe("sessions overview", () => {
   test("moves the 90-day insight charts onto the overview and matches attendance", async ({ page }) => {
     const client = sessionsFixtureClient()
     const today = programDateToday()
-    const expected = await directInsightCounts(client, addDays(today, -89), today)
+    const expected = await directInsightCounts(client, addDays(today, -89), today, admin.id)
 
     await page.goto("/sessions")
 
@@ -385,7 +387,7 @@ test.describe("sessions scope for a preacher", () => {
 
     await page
       .locator(`[data-session-row="${assistantCreated.name}"]`)
-      .getByRole("link", { name: `Open live ${assistantCreated.name}` })
+      .getByRole("link", { name: `Open ${assistantCreated.name}` })
       .click()
 
     await expect(page).toHaveURL(new RegExp(`/sessions/${assistantCreated.id}/live$`))

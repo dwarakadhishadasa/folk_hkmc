@@ -54,9 +54,9 @@ test("Admin lands on its landing path with a live staff session", async ({ page 
   await page.goto(landing)
   await expect.poll(() => new URL(page.url()).pathname, "the Admin landing pathname must be exact").toBe(landing)
 
-  // `/` is also the public marketing page, so the URL alone proves nothing —
-  // landing on `/` with `staff: null` is a failure, not a pass. `/api/auth/me`
-  // is the part that tells the two apart.
+  // `/dashboard` renders for a visitor only as the sign-in redirect, so the URL
+  // alone is not the proof. `/api/auth/me` is the part that tells a live staff
+  // session apart from an unresolved one.
   const me = await page.request.get("/api/auth/me")
   expect(me.status()).toBe(200)
 

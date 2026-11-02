@@ -128,6 +128,7 @@ export interface SessionRecord {
   attendanceClosesAt?: string
   durationMinutes?: number
   attendanceUrl?: string
+  campaignId?: string
   createdBy: string[]
 }
 
@@ -206,6 +207,7 @@ type SessionsRow = {
   session_date: string | null
   preacher_id: string | null
   location_id: string | null
+  campaign_id: string | null
   public_attendance_enabled: boolean | null
   attendance_opens_at: string | null
   attendance_closes_at: string | null
@@ -685,6 +687,7 @@ function mapSession(row: SessionsRow): SessionRecord {
     attendanceClosesAt: toIsoString(row.attendance_closes_at),
     durationMinutes: typeof row.duration_minutes === "number" ? row.duration_minutes : undefined,
     attendanceUrl: normalizeString(row.attendance_url),
+    campaignId: normalizeString(row.campaign_id),
     createdBy: row.created_by ? [row.created_by] : [],
   }
 }
@@ -694,7 +697,7 @@ export async function findSessionById(recordId: string): Promise<SessionRecord |
   const { data, error } = await supabaseAdmin
     .from("sessions")
     .select(
-      "id,program_id,name,session_date,preacher_id,location_id,public_attendance_enabled,attendance_opens_at,attendance_closes_at,duration_minutes,attendance_url,created_by",
+      "id,program_id,name,session_date,preacher_id,location_id,campaign_id,public_attendance_enabled,attendance_opens_at,attendance_closes_at,duration_minutes,attendance_url,created_by",
     )
     .eq("program_id", programScopedFilter())
     .eq("id", recordId)
@@ -715,7 +718,7 @@ export async function listSessions(): Promise<SessionRecord[]> {
   const { data, error } = await supabaseAdmin
     .from("sessions")
     .select(
-      "id,program_id,name,session_date,preacher_id,location_id,public_attendance_enabled,attendance_opens_at,attendance_closes_at,duration_minutes,attendance_url,created_by",
+      "id,program_id,name,session_date,preacher_id,location_id,campaign_id,public_attendance_enabled,attendance_opens_at,attendance_closes_at,duration_minutes,attendance_url,created_by",
     )
     .eq("program_id", programScopedFilter())
 
@@ -862,6 +865,7 @@ export async function createSession(data: {
   sessionDate: string
   preacherUserId: string
   locationId: string
+  campaignId?: string | null
   durationMinutes?: number
   publicAttendanceEnabled: boolean
   attendanceOpensAt?: string
@@ -876,6 +880,10 @@ export async function createSession(data: {
     location_id: data.locationId,
     public_attendance_enabled: data.publicAttendanceEnabled,
     created_by: data.createdBy,
+  }
+
+  if (data.campaignId) {
+    insertPayload.campaign_id = data.campaignId
   }
 
   if (typeof data.durationMinutes === "number") {
@@ -893,7 +901,7 @@ export async function createSession(data: {
     .from("sessions")
     .insert(insertPayload)
     .select(
-      "id,program_id,name,session_date,preacher_id,location_id,public_attendance_enabled,attendance_opens_at,attendance_closes_at,duration_minutes,attendance_url,created_by",
+      "id,program_id,name,session_date,preacher_id,location_id,campaign_id,public_attendance_enabled,attendance_opens_at,attendance_closes_at,duration_minutes,attendance_url,created_by",
     )
     .single()
 
@@ -915,7 +923,7 @@ export async function updateSessionAttendanceUrl(
     .eq("program_id", programScopedFilter())
     .eq("id", sessionId)
     .select(
-      "id,program_id,name,session_date,preacher_id,location_id,public_attendance_enabled,attendance_opens_at,attendance_closes_at,duration_minutes,attendance_url,created_by",
+      "id,program_id,name,session_date,preacher_id,location_id,campaign_id,public_attendance_enabled,attendance_opens_at,attendance_closes_at,duration_minutes,attendance_url,created_by",
     )
     .single()
 

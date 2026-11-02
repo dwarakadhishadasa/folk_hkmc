@@ -11,20 +11,54 @@ import { SessionOverviewStats } from "@/components/sessions/session-overview-sta
 import { SessionOverviewTable } from "@/components/sessions/session-overview-table"
 import { SessionPageHeader } from "@/components/sessions/session-page-header"
 import { SessionsAutoRefresh } from "@/components/sessions/session-auto-refresh"
-import { AuthzError, requireRole } from "@/lib/authz"
+import { AuthzError, requireRole, type StaffContext } from "@/lib/authz"
+import { listCampaigns } from "@/lib/dialer/campaigns"
 import {
   getSessionsOverviewStats,
   getSessionsReport,
+  getSessionsTopAttendees,
   listSessionsOverview,
 } from "@/lib/sessions/data"
 import { pluralise, reportRangeDates, reportRangeLabel } from "@/lib/sessions/format"
 import { sessionsLocations, sessionsScope } from "@/lib/sessions/scope"
+import { getServerProgramProfile } from "@hkmc/program-config/server"
 
 import { getSessionsStaff } from "./staff"
 
 export const dynamic = "force-dynamic"
 
 const INSIGHT_RANGE = "90" as const
+
+/**
+ * The Campaign dropdown's options. The list is the reader's own scope-aware
+ * campaign list, not a new trust boundary, and a programme without the Campaign
+ * module offers nothing. An Assistant with no active assigned preacher has no
+ * campaign scope; `/sessions` must still render, so that one refusal is `[]`.
+ */
+async function campaignOptions(staff: StaffContext) {
+  if (!getServerProgramProfile(staff.programId).modules.dialer) {
+    return []
+  }
+
+  try {
+    const campaigns = await listCampaigns(staff)
+
+    return campaigns
+      .filter((campaign) => campaign.status !== "CANCELLED")
+      .map((campaign) => ({
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        campaignDate: campaign.campaign_date,
+      }))
+  } catch (error) {
+    if (error instanceof AuthzError && error.code === "campaign_scope_missing") {
+      return []
+    }
+
+    throw error
+  }
+}
 
 function readLocationParam(value: string | string[] | undefined): string {
   const raw = Array.isArray(value) ? value[0] : value
@@ -61,11 +95,13 @@ export default async function SessionsOverviewPage({
     const scope = await sessionsScope(staff)
     const range = reportRangeDates(INSIGHT_RANGE)
     const rangeLabel = reportRangeLabel(INSIGHT_RANGE)
-    const [rows, stats, locationOptions, report] = await Promise.all([
+    const [rows, stats, locationOptions, report, topAttendees, campaigns] = await Promise.all([
       listSessionsOverview(scope),
       getSessionsOverviewStats(scope),
       sessionsLocations(scope),
       getSessionsReport(scope, range.from, range.to),
+      getSessionsTopAttendees(scope, range.from, range.to),
+      campaignOptions(staff),
     ])
     const locations = locationOptions.filter
 
@@ -85,14 +121,14 @@ export default async function SessionsOverviewPage({
               </div>
             ) : null
           }
-          action={<NewSessionPopover locations={locationOptions.create} />}
+          action={<NewSessionPopover locations={locationOptions.create} campaigns={campaigns} />}
         />
 
         {stats.sessionsCount === 0 ? (
           <CampaignEmptyState
             title="No sessions yet"
             description="A session opens an attendance window for one location. Start the first one and it appears here as Live now."
-            action={<NewSessionPopover locations={locationOptions.create} />}
+            action={<NewSessionPopover locations={locationOptions.create} campaigns={campaigns} />}
           />
         ) : visible.length === 0 ? (
           <CampaignEmptyState
@@ -122,7 +158,12 @@ export default async function SessionsOverviewPage({
               </p>
             </div>
 
-            <SessionOverviewCharts rows={visible} report={report} rangeLabel={rangeLabel} />
+            <SessionOverviewCharts
+              rows={visible}
+              report={report}
+              topAttendees={topAttendees}
+              rangeLabel={rangeLabel}
+            />
             <SessionsAutoRefresh boundaries={boundaries} />
           </>
         )}

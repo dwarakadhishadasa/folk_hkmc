@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { CampaignOverviewEntry } from "@/lib/dialer/progress"
 
 const HEAD_CLASS =
-  "h-11 px-2 text-[11px] font-semibold text-[#64748b] dark:text-[var(--muted-foreground)] sm:px-4"
+  "h-11 px-2 text-[13px] font-semibold text-[var(--program-text)] sm:px-4"
 
 /**
  * Frame 32's campaign table, on the `campaign_progress` summary each row was
@@ -29,6 +29,9 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
             <TableHead className={HEAD_CLASS}>Reached</TableHead>
             <TableHead className={HEAD_CLASS}>Confirmed</TableHead>
             <TableHead className={HEAD_CLASS}>Never attempted</TableHead>
+            <TableHead className={HEAD_CLASS}>
+              <span className="sr-only">Open</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -36,7 +39,7 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
             <TableRow key={campaign.id} className="h-12 border-b border-[var(--border)]">
               <TableCell className="px-2 py-3 sm:px-4">
                 <Link
-                  href={`/campaigns/${campaign.id}/edit`}
+                  href={`/campaigns/${campaign.id}/assign-contacts`}
                   className="text-[14px] font-medium text-[var(--program-text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
                 >
                   {campaign.name}
@@ -59,6 +62,15 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
               </TableCell>
               <TableCell className="px-2 py-3 text-[14px] text-[var(--program-text)] tabular-nums sm:px-4">
                 {summary.neverAttempted}
+              </TableCell>
+              <TableCell className="px-2 py-3 text-right sm:px-4">
+                <Link
+                  href={`/campaigns/${campaign.id}/assign-contacts`}
+                  aria-label={`Open ${campaign.name}`}
+                  className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--muted-foreground)] transition-colors hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+                >
+                  Open <span aria-hidden="true">›</span>
+                </Link>
               </TableCell>
             </TableRow>
           ))}

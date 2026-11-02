@@ -785,6 +785,7 @@ export type Database = {
           attendance_closes_at: string | null
           attendance_opens_at: string | null
           attendance_url: string | null
+          campaign_id: string | null
           created_at: string | null
           created_by: string | null
           duration_minutes: number | null
@@ -801,6 +802,7 @@ export type Database = {
           attendance_closes_at?: string | null
           attendance_opens_at?: string | null
           attendance_url?: string | null
+          campaign_id?: string | null
           created_at?: string | null
           created_by?: string | null
           duration_minutes?: number | null
@@ -817,6 +819,7 @@ export type Database = {
           attendance_closes_at?: string | null
           attendance_opens_at?: string | null
           attendance_url?: string | null
+          campaign_id?: string | null
           created_at?: string | null
           created_by?: string | null
           duration_minutes?: number | null
@@ -830,6 +833,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sessions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "dialer_campaigns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sessions_created_by_fkey"
             columns: ["created_by"]
@@ -925,11 +935,42 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_expired_campaigns: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       campaign_progress: {
         Args: {
           p_campaign_id: string
           p_program_scope: boolean
           p_scope_preacher_id: string | null
+        }
+        Returns: Json
+      }
+      dashboard_candidates: {
+        Args: {
+          p_has_dialer: boolean
+          p_limit?: number
+          p_offset?: number
+          p_program_id: string
+          p_program_scope: boolean
+          p_scope_preacher_id: string | null
+          p_segment: string
+          p_today: string
+        }
+        Returns: Json
+      }
+      dashboard_overview: {
+        Args: {
+          p_end: string
+          p_has_dialer: boolean
+          p_prev_end: string | null
+          p_prev_start: string | null
+          p_program_id: string
+          p_program_scope: boolean
+          p_scope_preacher_id: string | null
+          p_start: string | null
+          p_today: string
         }
         Returns: Json
       }
@@ -1038,6 +1079,17 @@ export type Database = {
         }
         Returns: Json
       }
+      sessions_top_attendees: {
+        Args: {
+          p_assigned_preacher_id: string | null
+          p_from: string
+          p_program_id: string
+          p_role: string
+          p_to: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       sessions_visible: {
         Args: {
           p_assigned_preacher_id: string | null
@@ -1049,6 +1101,7 @@ export type Database = {
           attendance_closes_at: string | null
           attendance_opens_at: string | null
           attendance_url: string | null
+          campaign_id: string | null
           created_at: string | null
           created_by: string | null
           duration_minutes: number | null

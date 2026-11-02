@@ -1,17 +1,21 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createColumnHelper } from "@tanstack/react-table"
 import type { RowSelectionState, Table } from "@tanstack/react-table"
-import { Minus, Plus, TriangleAlert, X } from "lucide-react"
+import { Minus, Pencil, Plus, TriangleAlert, X } from "lucide-react"
 
+import { AssignContactsAssignedBar } from "@/components/campaign/assign-contacts-assigned-bar"
 import {
   type AssignableCallerView,
   type AssignableContactView,
+  type AssignmentConflictView,
   type AssignmentSplitEntryView,
   type LocationOption,
 } from "@/components/campaign/assign-contacts-types"
+import { CampaignSurveyBuilder } from "@/components/campaign/campaign-survey-builder"
+import type { SurveyQuestionView } from "@/components/campaign/campaign-survey-types"
 import {
   Grid,
   GRID_DEFAULT_DENSITY,
@@ -20,6 +24,15 @@ import {
   type GridDensity,
   type GridFieldType,
 } from "@/components/grid"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -33,8 +46,10 @@ import { Input } from "@/components/ui/input"
 const SELECT_COLUMN_ID = "select"
 const NAME_COLUMN_ID = "name"
 const PHONE_COLUMN_ID = "phone"
+const INITIAL_CONTACT_COLUMN_ID = "initialContact"
 const LOCATION_COLUMN_ID = "location"
 const ASSIGNED_TO_COLUMN_ID = "assignedTo"
+const COLLECTED_BY_COLUMN_ID = "collectedBy"
 const NOTES_COLUMN_ID = "notes"
 const CENTRE_COLUMN_ID = "centre"
 const LEVEL_COLUMN_ID = "level"
@@ -54,8 +69,10 @@ const COLUMN_IDS = [
   SELECT_COLUMN_ID,
   NAME_COLUMN_ID,
   PHONE_COLUMN_ID,
+  INITIAL_CONTACT_COLUMN_ID,
   LOCATION_COLUMN_ID,
   ASSIGNED_TO_COLUMN_ID,
+  COLLECTED_BY_COLUMN_ID,
   NOTES_COLUMN_ID,
   CENTRE_COLUMN_ID,
   LEVEL_COLUMN_ID,
@@ -73,8 +90,10 @@ const DEFAULT_HIDDEN_COLUMNS: readonly string[] = [
 const FIELD_TYPES: Record<string, GridFieldType> = {
   [NAME_COLUMN_ID]: "text",
   [PHONE_COLUMN_ID]: "text",
+  [INITIAL_CONTACT_COLUMN_ID]: "date",
   [LOCATION_COLUMN_ID]: "linked",
   [ASSIGNED_TO_COLUMN_ID]: "text",
+  [COLLECTED_BY_COLUMN_ID]: "text",
   [NOTES_COLUMN_ID]: "longtext",
   [CENTRE_COLUMN_ID]: "text",
   [LEVEL_COLUMN_ID]: "text",
@@ -87,6 +106,8 @@ const PREVIEW_DEBOUNCE_MS = 250
 const PRECHECK_DEBOUNCE_MS = 300
 const MIN_WEIGHT = 1
 const MAX_WEIGHT = 10
+const PRIMARY_BUTTON_CLASS =
+  "h-11 w-full rounded-lg bg-[var(--program-primary)] text-primary-foreground shadow-sm hover:bg-[var(--program-primary)]/90 focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
 
 interface PickerEntry {
   userId: string
@@ -104,6 +125,16 @@ interface PreviewState {
 interface PrecheckState {
   key: string
   conflictCount: number
+  conflicts: AssignmentConflictView[]
+}
+
+/** The selection captured when Assign is pressed, before the rows are cleared. */
+interface PendingAssignment {
+  contactIds: string[]
+  selectedCount: number
+  conflictCount: number
+  assignableCount: number
+  conflicts: AssignmentConflictView[]
 }
 
 /** The server's named refusal, never a generic failure. */
@@ -207,12 +238,14 @@ export function AssignContactsSelect({
   contacts,
   callers,
   locations,
+  questions,
 }: {
   campaignId: string
   campaignStatus: string
   contacts: AssignableContactView[]
   callers: AssignableCallerView[]
   locations: LocationOption[]
+  questions: SurveyQuestionView[]
 }) {
   const router = useRouter()
   const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
@@ -227,6 +260,34 @@ export function AssignContactsSelect({
   const [isPrechecking, setIsPrechecking] = useState(false)
   const [writeError, setWriteError] = useState<string | null>(null)
   const [isWriting, setIsWriting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const [isStarting, setIsStarting] = useState(false)
+  const [assignDecisionOpen, setAssignDecisionOpen] = useState(false)
+  const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null)
+  /** The right panel: the caller split until an assign succeeds, then the survey. */
+  const [panel, setPanel] = useState<"assign" | "survey">("assign")
+  const surfaceRef = useRef<HTMLDivElement | null>(null)
+  const [surfaceHeight, setSurfaceHeight] = useState<number | null>(null)
+
+  // The campaign shell lets its pages grow; the assign surface is the one page
+  // that should end at the viewport instead of scrolling the whole document.
+  // Measuring the space above it is the only offset that survives the responsive
+  // header and the editable campaign title.
+  useEffect(() => {
+    const measure = () => {
+      const element = surfaceRef.current
+      if (!element) {
+        return
+      }
+
+      const top = element.getBoundingClientRect().top
+      setSurfaceHeight(Math.max(420, Math.floor(window.innerHeight - top - 24)))
+    }
+
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [])
 
   const locationNames = useMemo(
     () => new Map(locations.map((location) => [location.id, location.name])),
@@ -258,6 +319,10 @@ export function AssignContactsSelect({
   // A pre-check answers for one exact selection; anything else on screen is
   // stale and is treated as if it had never been asked.
   const conflictCount = precheck !== null && precheck.key === selectionKey ? precheck.conflictCount : 0
+  const conflicts = useMemo(
+    () => (precheck !== null && precheck.key === selectionKey ? precheck.conflicts : []),
+    [precheck, selectionKey],
+  )
   const assignableCount = Math.max(selectedCount - conflictCount, 0)
 
   const weightsKey = picker.map((entry) => `${entry.userId}:${entry.weight}`).join("|")
@@ -289,7 +354,7 @@ export function AssignContactsSelect({
             signal: controller.signal,
           })
           const payload = (await response.json().catch(() => null)) as
-            | { conflicts?: unknown[]; error?: string; code?: string }
+            | { conflicts?: AssignmentConflictView[]; error?: string; code?: string }
             | null
 
           if (controller.signal.aborted) {
@@ -304,7 +369,7 @@ export function AssignContactsSelect({
             return
           }
 
-          setPrecheck({ key: selectionKey, conflictCount: payload.conflicts.length })
+          setPrecheck({ key: selectionKey, conflictCount: payload.conflicts.length, conflicts: payload.conflicts })
         } catch {
           if (controller.signal.aborted) {
             return
@@ -486,6 +551,13 @@ export function AssignContactsSelect({
         meta: { grid: { fieldType: "text" } },
       }),
 
+      helper.accessor((row) => row.initialContact ?? "", {
+        id: INITIAL_CONTACT_COLUMN_ID,
+        header: "Initial Contact",
+        size: 140,
+        meta: { grid: { fieldType: "date" } },
+      }),
+
       helper.accessor((row) => locationLabel(row), {
         id: LOCATION_COLUMN_ID,
         header: "Location",
@@ -501,7 +573,23 @@ export function AssignContactsSelect({
           const value = getValue()
 
           return value.length > 0 ? (
-            <span className="truncate text-[var(--program-primary)]">{value}</span>
+            <span className="truncate text-[var(--program-text)]">{value}</span>
+          ) : (
+            <span className="text-[var(--muted-foreground)]">—</span>
+          )
+        },
+        meta: { grid: { fieldType: "text" } },
+      }),
+
+      helper.accessor((row) => row.collectedByName ?? "", {
+        id: COLLECTED_BY_COLUMN_ID,
+        header: "Collected By",
+        size: 170,
+        cell: ({ getValue }) => {
+          const value = getValue()
+
+          return value.length > 0 ? (
+            <span className="truncate text-[var(--program-text)]">{value}</span>
           ) : (
             <span className="text-[var(--muted-foreground)]">—</span>
           )
@@ -548,8 +636,10 @@ export function AssignContactsSelect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setVisibleSelection, locationNames])
 
-  const submit = async () => {
-    if (selectedCount === 0 || picker.length === 0 || !allWeightsValid || isWriting) {
+  const submit = async (mode: "skip" | "move", pending: PendingAssignment | null = null) => {
+    const contactIds = pending?.contactIds ?? selectedIds
+
+    if (contactIds.length === 0 || picker.length === 0 || !allWeightsValid || isWriting) {
       return
     }
 
@@ -566,12 +656,10 @@ export function AssignContactsSelect({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contactIds: selectedIds,
+          contactIds,
           callers: callersPayload,
-          // The frame states what happens to a contact already assigned here:
-          // it is skipped. That is the whole decision, so the click needs no
-          // second dialog.
-          mode: "skip",
+          // The dialog asks for the decision only when a conflict exists.
+          mode,
         }),
       })
       const payload = (await response.json().catch(() => null)) as
@@ -584,54 +672,61 @@ export function AssignContactsSelect({
         return
       }
 
-      if (campaignStatus === "DRAFT") {
-        const transitionResponse = await fetch(`/api/dialer/admin/campaigns/${campaignId}/transition`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "start" }),
-        })
-        const transitionPayload = (await transitionResponse.json().catch(() => null)) as
-          | { error?: string; code?: string }
-          | null
-
-        if (!transitionResponse.ok) {
-          // The contacts are assigned; only the start failed. Saying so is the
-          // difference between "nothing happened" and "try Start again".
-          setWriteError(
-            `Assigned ${contactCountLabel(payload.written)}, but the campaign could not be started: ` +
-              errorMessage(transitionPayload),
-          )
-          setIsWriting(false)
-          router.refresh()
-          return
-        }
-      }
-
-      router.push("/campaigns")
+      setIsWriting(false)
+      setPanel("survey")
+      router.refresh()
     } catch {
       setWriteError("Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.")
       setIsWriting(false)
     }
   }
 
-  const primaryLabel = (() => {
-    if (selectedCount === 0) {
-      return "Select contacts to assign"
+  const startCampaign = async () => {
+    if (campaignStatus !== "DRAFT" || isStarting) {
+      return
     }
 
-    if (assignableCount === 0 && !isPrechecking) {
-      return "Every selected contact is already assigned"
+    setStartError(null)
+    setIsStarting(true)
+
+    try {
+      const response = await fetch(`/api/dialer/admin/campaigns/${campaignId}/transition`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start" }),
+      })
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; code?: string }
+        | null
+
+      if (!response.ok) {
+        setStartError(errorMessage(payload))
+        setIsStarting(false)
+        return
+      }
+
+      setIsStarting(false)
+      router.refresh()
+    } catch {
+      setStartError("Unable to reach the server. The campaign was not started.")
+      setIsStarting(false)
+    }
+  }
+
+  const primaryLabel = (() => {
+    if (isWriting) {
+      return "Assigning…"
+    }
+
+    if (selectedCount === 0) {
+      return "Select contacts to assign"
     }
 
     if (picker.length === 0) {
       return "Add a caller to assign"
     }
 
-    if (isWriting) {
-      return "Assigning…"
-    }
-
-    return `Assign ${contactCountLabel(assignableCount)}`
+    return `Assign ${contactCountLabel(selectedCount)}`
   })()
 
   const primaryDisabled =
@@ -640,12 +735,116 @@ export function AssignContactsSelect({
     !allWeightsValid ||
     isWriting ||
     isPrechecking ||
-    assignableCount === 0
+    (assignableCount === 0 && conflictCount === 0)
+
+  const chosenCallerLabel =
+    picker.length === 1
+      ? picker[0]?.name ?? "the chosen caller"
+      : picker.length > 1
+        ? "the chosen callers"
+        : "the chosen caller"
+
+  const decision = pendingAssignment
+  const decisionConflictCount = decision?.conflictCount ?? conflictCount
+  const decisionSelectedCount = decision?.selectedCount ?? selectedCount
+  const decisionAssignableCount = decision?.assignableCount ?? assignableCount
+  const decisionConflicts = decision?.conflicts ?? conflicts
+
+  const conflictGroups = useMemo(() => {
+    const groups = new Map<string, AssignmentConflictView[]>()
+
+    for (const conflict of decisionConflicts) {
+      const caller = conflict.callerName || "another caller"
+      const rows = groups.get(caller)
+
+      if (rows) {
+        rows.push(conflict)
+      } else {
+        groups.set(caller, [conflict])
+      }
+    }
+
+    return [...groups.entries()]
+  }, [decisionConflicts])
+
+  const handleAssignClick = () => {
+    if (
+      selectedCount === 0 ||
+      picker.length === 0 ||
+      !allWeightsValid ||
+      isPrechecking ||
+      isWriting
+    ) {
+      return
+    }
+
+    const pending: PendingAssignment = {
+      contactIds: selectedIds,
+      selectedCount,
+      conflictCount,
+      assignableCount,
+      conflicts,
+    }
+
+    // The click itself ends the selection; the write carries its own copy so a
+    // dialog opened for a conflict still has the rows it is naming.
+    setRowSelection({})
+    setPrecheck(null)
+    setPreview(null)
+    setWriteError(null)
+
+    if (pending.conflictCount > 0) {
+      setPendingAssignment(pending)
+      setAssignDecisionOpen(true)
+      return
+    }
+
+    void submit("skip", pending)
+  }
+
+  const surveyFooter = (
+    <div className="flex flex-col gap-2">
+      {campaignStatus === "DRAFT" ? (
+        <Button
+          type="button"
+          className={PRIMARY_BUTTON_CLASS}
+          disabled={isStarting}
+          onClick={() => {
+            void startCampaign()
+          }}
+        >
+          {isStarting ? "Starting…" : "Start campaign"}
+        </Button>
+      ) : campaignStatus === "ACTIVE" ? (
+        <Button
+          type="button"
+          className={PRIMARY_BUTTON_CLASS}
+          disabled={primaryDisabled}
+          onClick={handleAssignClick}
+        >
+          {isWriting ? "Updating…" : "Update campaign"}
+        </Button>
+      ) : (
+        <p role="status" className="text-center text-[12px] font-medium text-[var(--muted-foreground)]">
+          Campaign {campaignStatus.toLowerCase()}
+        </p>
+      )}
+      {startError ? (
+        <p role="alert" className="text-[12px] text-[var(--destructive)]">
+          {startError}
+        </p>
+      ) : null}
+    </div>
+  )
 
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_408px]">
-      <section aria-label="Contacts in scope" className="min-w-0">
-        <div className="flex h-[520px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card">
+    <div
+      ref={surfaceRef}
+      className="grid min-h-0 items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_408px]"
+      style={{ height: surfaceHeight ?? undefined }}
+    >
+      <section aria-label="Contacts in scope" className="min-h-0 min-w-0">
+        <div className="flex h-[520px] min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card lg:h-full">
           <Grid<AssignableContactView>
             rows={contacts}
             columns={columns}
@@ -682,18 +881,45 @@ export function AssignContactsSelect({
         </div>
       </section>
 
-      <section
-        aria-labelledby="assign-contacts-callers-heading"
-        className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-card p-5"
-      >
-        <div className="flex flex-col gap-4">
-          <h2
-            id="assign-contacts-callers-heading"
-            className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
-          >
-            Assign to
-          </h2>
+      <aside aria-label="Assignment" className="flex h-full min-h-0 min-w-0">
+        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card">
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <div
+              className="flex h-full w-full transition-transform duration-200 ease-out"
+              style={{ transform: panel === "survey" ? "translateX(-100%)" : "translateX(0)" }}
+            >
+              <div
+                aria-label="Assign contacts"
+                aria-hidden={panel !== "assign"}
+                inert={panel !== "assign"}
+                className="flex h-full w-full shrink-0 flex-col"
+              >
+                <div className="flex items-start justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+                  <h2
+                    id="assign-contacts-callers-heading"
+                    className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
+                  >
+                    Assign to
+                  </h2>
 
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 px-2 text-[12px] font-medium text-[var(--muted-foreground)] hover:text-[var(--program-text)]"
+                    aria-label="Call-outcome survey"
+                    onClick={() => setPanel("survey")}
+                  >
+                    <Pencil className="size-3.5" aria-hidden="true" />
+                    Survey
+                  </Button>
+                </div>
+
+                <section
+                  aria-labelledby="assign-contacts-callers-heading"
+                  className="min-h-0 flex-1 overflow-y-auto p-4"
+                >
+                  <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <p className="text-[14px] font-medium text-[var(--program-text)]">Callers</p>
             <p className="text-[12px] text-[var(--muted-foreground)]">
@@ -806,7 +1032,7 @@ export function AssignContactsSelect({
                 <button
                   type="button"
                   disabled={availableCallers.length === 0}
-                  className="flex items-center gap-1.5 text-[14px] font-medium text-[var(--program-primary)] disabled:opacity-50"
+                  className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--muted-foreground)] transition-colors hover:text-[var(--program-text)] disabled:opacity-50"
                 >
                   <Plus className="size-3.5" aria-hidden="true" />
                   Add caller
@@ -851,8 +1077,8 @@ export function AssignContactsSelect({
           <p className="flex items-start gap-2 text-[13px] text-[var(--grid-warning-ink)]">
             <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
             <span>
-              {conflictCount} selected {conflictCount === 1 ? "contact is" : "contacts are"} already assigned and
-              will be skipped.
+              {conflictCount} selected {conflictCount === 1 ? "contact is" : "contacts are"} already assigned in
+              this campaign.
             </span>
           </p>
         ) : null}
@@ -867,18 +1093,138 @@ export function AssignContactsSelect({
         ) : null}
 
         {isPreviewing ? <p className="sr-only">Previewing the split</p> : null}
+                </section>
 
-        <Button
-          type="button"
-          className="h-11 w-full rounded-lg"
-          disabled={primaryDisabled}
-          onClick={() => {
-            void submit()
-          }}
-        >
-          {primaryLabel}
-        </Button>
-      </section>
+                <AssignContactsAssignedBar contacts={contacts} />
+
+                <div className="border-t border-[var(--border)] p-3">
+                  <Button
+                    type="button"
+                    className={PRIMARY_BUTTON_CLASS}
+                    disabled={primaryDisabled}
+                    onClick={handleAssignClick}
+                  >
+                    {primaryLabel}
+                  </Button>
+                </div>
+              </div>
+
+              <div
+                aria-label="Call-outcome survey"
+                aria-hidden={panel !== "survey"}
+                inert={panel !== "survey"}
+                className="flex h-full w-full shrink-0 flex-col"
+              >
+                <CampaignSurveyBuilder
+                  campaignId={campaignId}
+                  status={campaignStatus}
+                  questions={questions}
+                  footer={surveyFooter}
+                  onBack={() => setPanel("assign")}
+                  embedded
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <AlertDialog
+        open={assignDecisionOpen}
+        onOpenChange={(open) => {
+          setAssignDecisionOpen(open)
+          if (!open) {
+            setPendingAssignment(null)
+          }
+        }}
+      >
+        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-x-hidden overflow-y-auto sm:w-fit sm:min-w-[30rem] sm:max-w-[min(42rem,calc(100vw-2rem))]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">
+              {decisionAssignableCount > 0
+                ? `${decisionConflictCount} of ${decisionSelectedCount} ${
+                    decisionSelectedCount === 1 ? "contact" : "contacts"
+                  } ${decisionConflictCount === 1 ? "is" : "are"} already assigned`
+                : decisionSelectedCount === 1
+                  ? "This contact is already assigned"
+                  : `All ${decisionSelectedCount} contacts are already assigned`}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px]">
+              {decisionAssignableCount > 0
+                ? `Skip ${decisionConflictCount === 1 ? "it" : "them"} and assign the ${decisionAssignableCount} remaining ${
+                    decisionAssignableCount === 1 ? "contact" : "contacts"
+                  }, or reassign ${decisionConflictCount === 1 ? "it" : "them"} to ${chosenCallerLabel}.`
+                : `Reassign ${decisionConflictCount === 1 ? "it" : "them"} to ${chosenCallerLabel}.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {conflictGroups.length > 0 ? (
+            <div
+              role="group"
+              aria-label="Contacts already assigned"
+              className="max-h-56 space-y-3 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--muted)]/30 p-3"
+            >
+              {conflictGroups.map(([callerName, rows]) => (
+                <div key={callerName}>
+                  <p className="text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">
+                    Currently assigned to {callerName}
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {rows.map((row) => (
+                      <li
+                        key={row.contactId}
+                        className="break-words text-[13px] leading-5 text-[var(--program-text)]"
+                      >
+                        {row.contactName}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              {decisionAssignableCount > 0 ? (
+                <Button
+                  type="button"
+                  className="bg-[var(--program-primary)] text-primary-foreground hover:bg-[var(--program-primary)]/90 h-auto min-h-9 w-full max-w-full py-2 text-[13px] whitespace-normal sm:w-auto"
+                  disabled={isWriting}
+                  onClick={() => {
+                    setAssignDecisionOpen(false)
+                    void submit("skip", pendingAssignment)
+                  }}
+                >
+                  Skip {decisionConflictCount} and assign {decisionAssignableCount}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant={decisionAssignableCount > 0 ? "outline" : "default"}
+                className={
+                  decisionAssignableCount > 0
+                    ? "h-auto min-h-9 w-full max-w-full py-2 text-[13px] whitespace-normal sm:w-auto"
+                    : "bg-[var(--program-primary)] text-primary-foreground hover:bg-[var(--program-primary)]/90 h-auto min-h-9 w-full max-w-full py-2 text-[13px] whitespace-normal sm:w-auto"
+                }
+                disabled={isWriting}
+                onClick={() => {
+                  setAssignDecisionOpen(false)
+                  void submit("move", pendingAssignment)
+                }}
+              >
+                Reassign all
+              </Button>
+            </div>
+            <AlertDialogCancel
+              disabled={isWriting}
+              className="border-transparent bg-transparent text-[13px] text-[var(--muted-foreground)] shadow-none hover:bg-[var(--muted)] hover:text-[var(--program-text)] w-full sm:ml-auto sm:w-auto"
+            >
+              Cancel
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
