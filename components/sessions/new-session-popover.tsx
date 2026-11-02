@@ -25,23 +25,44 @@ const LABEL_CLASS = "block text-[12px] font-semibold text-foreground"
  */
 export function NewSessionPopover({
   locations,
+  campaigns = [],
   className,
 }: {
   locations: Array<{ id: string; name: string }>
+  campaigns?: Array<{ id: string; name: string; status: string; campaignDate: string }>
   className?: string
 }) {
   const router = useRouter()
   const fieldId = useId()
   const nameId = `${fieldId}-name`
   const locationId = `${fieldId}-location`
+  const campaignId = `${fieldId}-campaign`
   const durationId = `${fieldId}-duration`
   const defaultLocationId = locations[0]?.id ?? ""
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [location, setLocation] = useState(defaultLocationId)
+  const [campaign, setCampaign] = useState("")
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_SESSION_DURATION_MINUTES)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState("")
+
+  // ACTIVE first, then the most recent campaign date, then name. The dropdown
+  // is optional: `No campaign` is the default and sends no link.
+  const campaignOptions = [...campaigns].sort((left, right) => {
+    const leftActive = left.status === "ACTIVE" ? 0 : 1
+    const rightActive = right.status === "ACTIVE" ? 0 : 1
+
+    if (leftActive !== rightActive) {
+      return leftActive - rightActive
+    }
+
+    if (left.campaignDate !== right.campaignDate) {
+      return right.campaignDate.localeCompare(left.campaignDate)
+    }
+
+    return left.name.localeCompare(right.name)
+  })
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
@@ -49,6 +70,9 @@ export function NewSessionPopover({
       setMessage("")
       if (!locations.some((entry) => entry.id === location)) {
         setLocation(defaultLocationId)
+      }
+      if (!campaignOptions.some((entry) => entry.id === campaign)) {
+        setCampaign("")
       }
     }
   }
@@ -62,7 +86,7 @@ export function NewSessionPopover({
       const response = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, locationId: location, durationMinutes }),
+        body: JSON.stringify({ name, locationId: location, campaignId: campaign || null, durationMinutes }),
       })
       const data = (await response.json()) as { error?: string; session?: { id?: string } }
 
@@ -120,6 +144,7 @@ export function NewSessionPopover({
               </label>
               <input
                 id={nameId}
+                data-session-name
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 required
@@ -135,6 +160,7 @@ export function NewSessionPopover({
               </label>
               <select
                 id={locationId}
+                data-session-location
                 value={location}
                 onChange={(event) => setLocation(event.target.value)}
                 required
@@ -147,6 +173,31 @@ export function NewSessionPopover({
                 ))}
               </select>
             </div>
+
+            {campaigns.length > 0 ? (
+              <div className="space-y-1">
+                <label htmlFor={campaignId} className={LABEL_CLASS}>
+                  Campaign
+                </label>
+                <select
+                  id={campaignId}
+                  data-session-campaign
+                  value={campaign}
+                  onChange={(event) => setCampaign(event.target.value)}
+                  className={FIELD_CLASS}
+                >
+                  <option value="">No campaign</option>
+                  {campaignOptions.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name} · {entry.campaignDate} · {entry.status}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] leading-4 text-[var(--muted-foreground)]">
+                  Links this session to the campaign that invited people to it.
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-1">
               <label htmlFor={durationId} className={LABEL_CLASS}>

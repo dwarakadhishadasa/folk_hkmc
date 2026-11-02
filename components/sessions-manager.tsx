@@ -4,6 +4,7 @@ import type { FormEvent } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { LiveAttendanceDashboard, type DashboardSessionContext } from "@/components/live-attendance-dashboard"
 import { gsap, useGSAP } from "@/lib/gsap"
+import { isSessionLive, nextSessionBoundary, parseSessionTime } from "@/lib/sessions/live"
 
 interface LocationOption {
   id: string
@@ -30,38 +31,8 @@ interface SessionForm {
 const DEFAULT_SESSION_DURATION_MINUTES = "15"
 const MAX_SESSION_DURATION_MINUTES = 24 * 60
 
-function readTime(value: string | null): number | null {
-  if (!value) {
-    return null
-  }
-
-  const time = Date.parse(value)
-  return Number.isFinite(time) ? time : null
-}
-
-function isActiveSession(session: SessionSummary, now: number): boolean {
-  const opensAt = readTime(session.attendanceOpensAt)
-  const closesAt = readTime(session.attendanceClosesAt)
-
-  if (!session.publicAttendanceEnabled || closesAt === null || closesAt <= now) {
-    return false
-  }
-
-  return opensAt === null || opensAt <= now
-}
-
 function sessionStartTime(session: SessionSummary): number {
-  return readTime(session.attendanceOpensAt) || readTime(session.sessionDate) || 0
-}
-
-function nextSessionBoundary(sessions: SessionSummary[], now: number): number | null {
-  const futureBoundaries = sessions.flatMap((session) =>
-    [readTime(session.attendanceOpensAt), readTime(session.attendanceClosesAt)].filter(
-      (time): time is number => time !== null && time > now,
-    ),
-  )
-
-  return futureBoundaries.length > 0 ? Math.min(...futureBoundaries) : null
+  return parseSessionTime(session.attendanceOpensAt) || parseSessionTime(session.sessionDate) || 0
 }
 
 const MAX_TIMEOUT_DELAY_MS = 2_147_483_647
@@ -178,7 +149,7 @@ export function SessionsManager({ locations }: { locations: LocationOption[] }) 
 
   const activeSession = useMemo(() => {
     return sessions
-      .filter((session) => isActiveSession(session, now))
+      .filter((session) => isSessionLive(session, now))
       .sort((left, right) => sessionStartTime(right) - sessionStartTime(left))[0]
   }, [sessions, now])
 

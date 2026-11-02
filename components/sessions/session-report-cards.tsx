@@ -42,7 +42,7 @@ export function SessionWeeklyCard({
 }) {
   return (
     <SectionCard
-      title="Attendance trend"
+      title="Weekly trend"
       subtitle={`Programme-wide · check-ins by week over the ${rangeLabel.toLowerCase()}.`}
       badge="Weekly"
       className="h-full"
