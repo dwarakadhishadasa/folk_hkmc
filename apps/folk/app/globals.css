@@ -44,6 +44,20 @@
   --program-accent-dark: color-mix(in oklab, var(--accent) 86%, black);
   --program-ivory: var(--ivory);
   --program-text: var(--charcoal);
+  /* Phone bottom navigation. The bar is app chrome, not a card: in light it is
+   * the white bar it has always been. Every colour it paints with lives here so
+   * `.dark` can restyle the one surface from one switch — including the
+   * safe-area fill below the bar, in the `max-width: 767px` block. */
+  --mobile-nav-bg: rgb(255 255 255 / 0.95);
+  --mobile-nav-border: rgb(0 0 0 / 0.1);
+  --mobile-nav-text: color-mix(in oklab, var(--program-text) 70%, transparent);
+  --mobile-nav-hover-bg: rgb(0 0 0 / 0.05);
+  --mobile-nav-hover-text: var(--program-primary);
+  --mobile-nav-active-bg: var(--program-primary);
+  --mobile-nav-active-text: #ffffff;
+  --mobile-nav-pending-bg: #fff3df;
+  --mobile-nav-pending-text: var(--program-primary);
+  --mobile-nav-accent: var(--program-accent);
 
   --background: #ffffff;
   --foreground: #24324a;
@@ -153,6 +167,22 @@
    * stayed the light theme's `#24324a` under `.dark`, which is navy ink on a
    * near-black card. Every heading and label that reads it was ~1.2:1. */
   --program-text: #e9eaeb;
+  /* Phone bottom navigation, dark only. The bar was authored as a white
+   * surface with `--program-text` labels, so once `.dark` made that token
+   * near-white the destinations were near-white ink on white and disappeared.
+   * It takes the app bar's near-black chrome instead, and the desktop pill's
+   * active and pending states, so the same five links read the same in both
+   * placements. */
+  --mobile-nav-bg: rgb(6 6 6 / 0.95);
+  --mobile-nav-border: #34363b;
+  --mobile-nav-text: #91959c;
+  --mobile-nav-hover-bg: #292a30;
+  --mobile-nav-hover-text: #ffffff;
+  --mobile-nav-active-bg: #292a30;
+  --mobile-nav-active-text: #ffffff;
+  --mobile-nav-pending-bg: #292a30;
+  --mobile-nav-pending-text: #ffffff;
+  --mobile-nav-accent: #048a0e;
   --card: #272a2e;
   --card-foreground: #e9eaeb;
   --popover: #2e3136;
@@ -356,7 +386,10 @@
     inset-inline: 0;
     top: 100%;
     height: 100vh;
-    background: rgb(255 255 255 / 0.95);
+    /* The fill under the bar belongs to the bar's surface, not to the page:
+     * a literal white here left a white strip below a dark nav when the bar
+     * lifted during scroll. */
+    background: var(--mobile-nav-bg);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     pointer-events: none;

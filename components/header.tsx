@@ -175,16 +175,16 @@ function MobileNavItem({
       pending={pending}
       className={cn(
         "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold leading-none transition-[background-color,box-shadow,color,transform] duration-150",
-        "text-[var(--program-text)]/70 hover:bg-black/5 hover:text-[var(--program-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]",
+        "text-[var(--mobile-nav-text)] hover:bg-[var(--mobile-nav-hover-bg)] hover:text-[var(--mobile-nav-hover-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mobile-nav-accent)]",
         active &&
           !navigationPending &&
-          "bg-[var(--program-primary)] text-white shadow-md shadow-black/15 hover:bg-[var(--program-primary)] hover:text-white",
+          "bg-[var(--mobile-nav-active-bg)] text-[var(--mobile-nav-active-text)] shadow-md shadow-black/15 hover:bg-[var(--mobile-nav-active-bg)] hover:text-[var(--mobile-nav-active-text)]",
         pending &&
-          "bg-[#FFF3DF] text-[var(--program-primary)] shadow-sm ring-1 ring-[var(--program-accent)] hover:bg-[#FFF3DF]",
+          "bg-[var(--mobile-nav-pending-bg)] text-[var(--mobile-nav-pending-text)] shadow-sm ring-1 ring-[var(--mobile-nav-accent)] hover:bg-[var(--mobile-nav-pending-bg)]",
       )}
     >
       {pending ? (
-        <Spinner className="h-5 w-5 shrink-0 text-[var(--program-accent)]" aria-hidden="true" />
+        <Spinner className="h-5 w-5 shrink-0 text-[var(--mobile-nav-accent)]" aria-hidden="true" />
       ) : (
         <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
       )}
@@ -385,7 +385,7 @@ export function Header() {
         {navItems.length > 0 && (
           <nav
             data-mobile-app-nav
-            className="fixed inset-x-0 bottom-0 z-50 border-t border-black/10 bg-white/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_rgba(45,10,10,0.12)] backdrop-blur md:hidden"
+            className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--mobile-nav-border)] bg-[var(--mobile-nav-bg)] px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_rgba(45,10,10,0.12)] backdrop-blur md:hidden"
           >
             <div className="mx-auto flex max-w-md items-center gap-1">
               {navItems.map((item) => {

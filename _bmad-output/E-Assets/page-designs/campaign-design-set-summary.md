@@ -16,7 +16,7 @@ invented for this feature. The design set reuses:
 | Element | Source in the repo |
 |---|---|
 | Navy app bar, centred `h-10` rounded-full nav pills, active pill white-on-navy | `components/header.tsx` |
-| Phone bottom nav, always white even in dark | `components/header.tsx` `data-mobile-app-nav` |
+| Phone bottom nav, white in light and the app bar's near-black chrome in dark | `components/header.tsx` `data-mobile-app-nav` |
 | Tab strip (the Campaigns / Callers / Reports row) | the tab strip in `components/manage/manage-portal.tsx` |
 | Grid toolbar — search, Filter, Sort, "N hidden fields", "Default rows" (Add record omitted on Assign) | `components/manage/manage-contacts-table.tsx` |
 | Grid table — hairline header, ruled rows, chips, footer count | `components/grid/` |
