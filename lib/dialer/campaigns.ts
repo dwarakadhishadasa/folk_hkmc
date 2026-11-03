@@ -2,7 +2,7 @@ import "server-only"
 
 import { AuthzError, type StaffContext } from "@/lib/authz"
 import { completeExpiredCampaigns } from "@/lib/dialer/expiry"
-import { requireCampaignAdmin } from "@/lib/dialer/scope"
+import { requireCampaignAdmin, requireCampaignScopeOwner } from "@/lib/dialer/scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { collectPagedRows, type PagingFailures } from "@/lib/supabase/paging"
 import type { Database } from "@/lib/supabase/types"
@@ -78,6 +78,7 @@ function assertCampaignIdShape(campaignId: string): void {
 }
 
 async function readCampaignRow(staff: StaffContext, campaignId: string): Promise<CampaignRow> {
+  requireCampaignScopeOwner(staff)
   const supabaseAdmin = createSupabaseAdminClient()
   let query = supabaseAdmin
     .from("dialer_campaigns")
@@ -201,6 +202,7 @@ function requireMaxAttempts(value: unknown): number {
  */
 export async function listCampaigns(staff: StaffContext): Promise<CampaignRow[]> {
   requireCampaignAdmin(staff)
+  requireCampaignScopeOwner(staff)
 
   const supabaseAdmin = createSupabaseAdminClient()
 
@@ -236,6 +238,7 @@ export async function getCampaign(staff: StaffContext, campaignId: string): Prom
 
 export async function createCampaign(staff: StaffContext, input: CreateCampaignInput): Promise<CampaignRow> {
   requireCampaignAdmin(staff)
+  requireCampaignScopeOwner(staff)
 
   const name = requireCampaignName(input.name)
   const description = optionalCampaignDescription(input.description)
@@ -288,6 +291,7 @@ export async function updateCampaign(
   input: UpdateCampaignInput,
 ): Promise<CampaignRow> {
   requireCampaignAdmin(staff)
+  requireCampaignScopeOwner(staff)
   assertCampaignIdShape(campaignId)
 
   const name = requireCampaignName(input.name)
@@ -324,6 +328,7 @@ export async function transitionCampaign(
   action: CampaignTransitionAction,
 ): Promise<CampaignRow> {
   requireCampaignAdmin(staff)
+  requireCampaignScopeOwner(staff)
   assertCampaignIdShape(campaignId)
 
   if (!isCampaignTransitionAction(action)) {

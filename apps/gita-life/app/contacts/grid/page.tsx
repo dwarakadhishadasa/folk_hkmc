@@ -27,7 +27,7 @@ export default async function ContactsGridPage({ searchParams }: ContactsGridPag
     >
       {payload.contacts.length === 0 ? (
         <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-          <ContactsEmptyState />
+          <ContactsEmptyState unassigned={payload.scope.patchOwnerId === null} />
         </div>
       ) : (
         <ContactsGridSurface payload={payload} />

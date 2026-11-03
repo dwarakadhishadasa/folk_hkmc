@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, type StaffContext } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 
 import { getCampaignStaff } from "./staff"
 
@@ -37,7 +38,7 @@ export default async function CampaignsLayout({ children }: { children: ReactNod
   }
 
   return (
-    <StaffAuthShell staff={staff}>
+    <StaffAuthShell staff={toClientStaff(staff)}>
       {/*
         The height is the viewport **less the fixed bottom nav** on a phone.
         The nav is `fixed`, so it floats over the page; the body's padding

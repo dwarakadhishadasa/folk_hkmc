@@ -3,7 +3,8 @@ import { Header } from "@/components/header"
 import { InviteUserForm } from "@/components/invite-user-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
-import { listCachedActivePreachers, listLocations } from "@/lib/supabase/data"
+import { toClientStaff } from "@/lib/staff-dto"
+import { listCachedAssignablePreachers, listLocations } from "@/lib/supabase/data"
 
 export const dynamic = "force-dynamic"
 
@@ -11,16 +12,20 @@ export default async function AdminInvitePage() {
   try {
     const staff = await getStaffContext()
     requireRole(staff, ["Admin"])
-    const [preachers, locations] = await Promise.all([listCachedActivePreachers(), listLocations()])
+    const [preachers, locations] = await Promise.all([listCachedAssignablePreachers(), listLocations()])
 
     return (
-      <StaffAuthShell staff={staff}>
+      <StaffAuthShell staff={toClientStaff(staff)}>
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container mx-auto max-w-xl px-4 py-8">
           <InviteUserForm
             mode="admin"
-            preachers={preachers.map((preacher) => ({ id: preacher.id, name: preacher.name }))}
+            preachers={preachers.map((preacher) => ({
+                id: preacher.id,
+                name: preacher.name,
+                role: preacher.role,
+              }))}
             locations={locations.map((location) => ({
               id: location.id,
               name: location.name,

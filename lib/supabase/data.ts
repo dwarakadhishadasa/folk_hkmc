@@ -149,6 +149,7 @@ const SUPABASE_DATE_TIME_OFFSET = "+05:30"
 const SUPABASE_REFERENCE_CACHE_TTL_SECONDS = 20 * 60
 const SUPABASE_LOCATIONS_CACHE_TAG = "supabase-locations"
 const SUPABASE_ACTIVE_PREACHERS_CACHE_TAG = "supabase-active-preachers"
+const SUPABASE_ASSIGNABLE_PREACHERS_CACHE_TAG = "supabase-assignable-preachers"
 
 export class SupabaseDataConfigError extends Error {
   constructor(message: string) {
@@ -395,13 +396,48 @@ export const listCachedActivePreachers = unstable_cache(
   },
 )
 
+/**
+ * The invite picker's list: every Active Admin or Preacher in the programme.
+ *
+ * Separate from `listActivePreachers()` so the Admin's `/contact` picker stays
+ * Preacher-only and the invite picker can name an Admin as the assigned
+ * Preacher. The cache tag is separate for the same reason: widening one picker
+ * must not widen the other through a shared cached list.
+ */
+export async function listAssignablePreachers(): Promise<StaffUser[]> {
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id,program_id,email,name,role,status,location_ids,invited_by,assigned_preacher_id")
+    .eq("program_id", programScopedFilter())
+    .in("role", ["Admin", "Preacher"])
+    .eq("status", "Active")
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? [])
+    .map((row) => mapStaffUser(row as UsersRow))
+    .filter((user): user is StaffUser => Boolean(user))
+}
+
+export const listCachedAssignablePreachers = unstable_cache(
+  async () => listAssignablePreachers(),
+  [SUPABASE_ASSIGNABLE_PREACHERS_CACHE_TAG],
+  {
+    revalidate: SUPABASE_REFERENCE_CACHE_TTL_SECONDS,
+    tags: [SUPABASE_ASSIGNABLE_PREACHERS_CACHE_TAG],
+  },
+)
+
 export async function upsertStaffUser(data: {
   email: string
   name: string
   role: StaffRole
   status?: StaffStatus
   invitedByUserId: string
-  assignedPreacherUserId?: string
+  assignedPreacherUserId?: string | null
   locationIds?: string[]
   supabaseUserId?: string
 }): Promise<StaffUser> {
@@ -417,7 +453,9 @@ export async function upsertStaffUser(data: {
       status,
       invited_by: data.invitedByUserId,
     }
-    if (data.assignedPreacherUserId) {
+    // `undefined` means "leave the binding alone"; `null` is the explicit clear
+    // a role change to Admin or Preacher requires.
+    if (data.assignedPreacherUserId !== undefined) {
       updatePayload.assigned_preacher_id = data.assignedPreacherUserId
     }
     if (data.locationIds?.length) {
@@ -484,7 +522,7 @@ export async function upsertStaffUser(data: {
     invited_by: data.invitedByUserId,
     location_ids: Array.isArray(data.locationIds) ? data.locationIds : [],
   }
-  if (data.assignedPreacherUserId) {
+  if (data.assignedPreacherUserId !== undefined) {
     insertPayload.assigned_preacher_id = data.assignedPreacherUserId
   }
 
@@ -502,6 +540,13 @@ export async function upsertStaffUser(data: {
   if (!mapped) {
     throw new SupabaseDataRequestError("Supabase Users row is missing required staff fields", 422)
   }
+
+  // A new Admin or Preacher joins both picker lists, so the invite form can
+  // name them before the reference cache's own TTL expires.
+  if (data.role === "Admin" || data.role === "Preacher") {
+    revalidateSupabaseReferenceCache("active-preachers")
+  }
+
   return mapped
 }
 
@@ -646,7 +691,7 @@ export async function createContact(data: {
   } else if (data.location) {
     insertPayload.location_ids = [data.location]
   }
-  if (data.assignedPreacherUserId) {
+  if (data.assignedPreacherUserId !== undefined) {
     insertPayload.assigned_preacher_id = data.assignedPreacherUserId
   }
   const collectorId = data.collectedByUserId || data.assignedPreacherUserId
@@ -857,6 +902,7 @@ export function revalidateSupabaseReferenceCache(
 
   if (scope === "active-preachers" || scope === "all") {
     revalidateTag(SUPABASE_ACTIVE_PREACHERS_CACHE_TAG, "max")
+    revalidateTag(SUPABASE_ASSIGNABLE_PREACHERS_CACHE_TAG, "max")
   }
 }
 

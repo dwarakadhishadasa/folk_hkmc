@@ -2,8 +2,9 @@ import { redirect } from "next/navigation"
 import { Header } from "@/components/header"
 import { SessionsManager } from "@/components/sessions-manager"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
-import { findStaffUserById, listLocations } from "@/lib/supabase/data"
+import { listLocations } from "@/lib/supabase/data"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 
 export const dynamic = "force-dynamic"
 
@@ -13,27 +14,16 @@ export default async function SessionsPage() {
     requireRole(staff, ["Admin", "Preacher", "Assistant"])
     const allLocations = await listLocations()
 
-    let scopedLocationIds: string[] | null = staff.locationIds
-    if (staff.role === "Assistant") {
-      if (!staff.assignedPreacherUserId) {
-        scopedLocationIds = []
-      } else {
-        const assignedPreacher = await findStaffUserById(staff.assignedPreacherUserId)
-        if (!assignedPreacher || assignedPreacher.role !== "Preacher" || assignedPreacher.status !== "Active") {
-          scopedLocationIds = []
-        } else {
-          scopedLocationIds = assignedPreacher.locationIds
-        }
-      }
-    }
+    const scopedLocationIds =
+      staff.role === "Admin" ? null : (staff.patchOwner?.locationIds ?? [])
 
     const locations =
-      staff.role === "Admin"
+      scopedLocationIds === null
         ? allLocations
-        : allLocations.filter((location) => scopedLocationIds?.includes(location.id))
+        : allLocations.filter((location) => scopedLocationIds.includes(location.id))
 
     return (
-      <StaffAuthShell staff={staff}>
+      <StaffAuthShell staff={toClientStaff(staff)}>
         <div className="min-h-screen bg-background">
           <Header />
           <main className="container mx-auto px-4 py-6 sm:py-8">

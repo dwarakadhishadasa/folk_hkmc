@@ -10,6 +10,8 @@ import {
   getAttendanceBySessionRecord,
   normalizeMobile,
 } from "@/lib/supabase/data"
+import { isSessionVisible, listVisibleSessions } from "@/lib/sessions/data"
+import { sessionsScope } from "@/lib/sessions/scope"
 
 export const dynamic = "force-dynamic"
 
@@ -123,6 +125,7 @@ export async function GET(request: Request) {
     const knownAttendanceIds = parseKnownAttendanceIds(searchParams.get("knownAttendanceIds"))
     const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
     let dashboardRecords: Awaited<ReturnType<typeof getAttendanceByDate>>
+    const scope = await sessionsScope(staff)
 
     if (sessionId) {
       const session = await findSessionById(sessionId)
@@ -131,25 +134,18 @@ export async function GET(request: Request) {
         return Response.json({ error: "Invalid attendance session." }, { status: 404 })
       }
 
-      const isAssistantMatch =
-        staff.role === "Assistant" &&
-        Boolean(staff.assignedPreacherUserId) &&
-        session.preacherIds.includes(staff.assignedPreacherUserId || "")
-
-      const canReadSession =
-        staff.role === "Admin" ||
-        session.preacherIds.includes(staff.userId) ||
-        (staff.role !== "Assistant" &&
-          session.locationIds.some((locationId) => staff.locationIds.includes(locationId))) ||
-        isAssistantMatch
-
-      if (!canReadSession) {
+      if (staff.role !== "Admin" && !(await isSessionVisible(scope, sessionId))) {
         return Response.json({ error: "This session is outside your allowed scope." }, { status: 403 })
       }
 
       dashboardRecords = await getAttendanceBySessionRecord(session, { knownAttendanceIds })
-    } else {
+    } else if (staff.role === "Admin") {
       dashboardRecords = await getAttendanceByDate(date)
+    } else {
+      const visibleSessionIds = new Set((await listVisibleSessions(scope)).map((session) => session.id))
+      dashboardRecords = (await getAttendanceByDate(date)).filter((record) =>
+        (record.fields.Session ?? []).some((id) => visibleSessionIds.has(id)),
+      )
     }
 
     const attendanceList = await getAttendanceDashboardRecords(dashboardRecords || [], date, {

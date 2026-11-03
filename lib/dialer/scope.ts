@@ -7,6 +7,8 @@ import {
   type StaffContext,
   type StaffRole,
 } from "@/lib/authz"
+import { campaignScopeKind } from "@/lib/patch-scope"
+import { CAMPAIGN_ADMIN_ROLES } from "@/lib/staff-roles"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { collectPagedRows, type PagingFailures } from "@/lib/supabase/paging"
 import type { Database } from "@/lib/supabase/types"
@@ -123,6 +125,27 @@ async function readActiveStaffRows(programId: ProgramId, preacherId?: string): P
   }, ROSTER_PAGING_FAILURES)
 }
 
+/** The owner row itself, which `assigned_preacher_id = owner` deliberately excludes. */
+async function readActiveStaffRowById(
+  programId: ProgramId,
+  userId: string,
+): Promise<StaffRosterRow | null> {
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id,name,email,role")
+    .eq("program_id", programId)
+    .eq("status", "Active")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AuthzError(500, "dialer_roster_read_failed", "Unable to read the dialer roster.")
+  }
+
+  return (data as StaffRosterRow | null) ?? null
+}
+
 async function readCallerProfiles(
   programId: ProgramId,
   userIds: string[],
@@ -159,9 +182,9 @@ async function readCallerProfiles(
 }
 
 /**
- * AD-3's assignable caller set. The requester is added when the preacher
- * filter excluded their own row, and a deactivated caller profile removes
- * that person from every scope — assignment never reactivates them.
+ * AD-3's assignable caller set. The owner and the requester are added when the
+ * preacher filter excluded their rows, and a deactivated caller profile
+ * removes that person from every scope — assignment never reactivates them.
  */
 async function loadAssignableCallers(staff: StaffContext, scope: RosterScope): Promise<AssignableCaller[]> {
   const staffRows = await readActiveStaffRows(
@@ -175,6 +198,21 @@ async function loadAssignableCallers(staff: StaffContext, scope: RosterScope): P
     email: row.email,
     role: requireStaffRole(row.role),
   }))
+
+  // AD-3's assignable set is the active staff assigned to the owner, plus the
+  // actor and the owner. The owner is not in the assigned-to set, so an
+  // Assistant's supervisor has to be added explicitly.
+  if (scope.kind === "preacher") {
+    const ownerRow = await readActiveStaffRowById(staff.programId, scope.userId)
+    if (ownerRow && !entries.some((entry) => entry.userId === ownerRow.id)) {
+      entries.push({
+        userId: ownerRow.id,
+        name: ownerRow.name?.trim() || ownerRow.email,
+        email: ownerRow.email,
+        role: requireStaffRole(ownerRow.role),
+      })
+    }
+  }
 
   if (!entries.some((entry) => entry.userId === staff.userId)) {
     entries.push({
@@ -214,7 +252,18 @@ async function loadAssignableCallers(staff: StaffContext, scope: RosterScope): P
 
 /** AD-2: the admin surface's only role guard, and nothing else. */
 export function requireCampaignAdmin(staff: StaffContext): void {
-  requireRole(staff, ["Admin", "Preacher", "Assistant"])
+  requireRole(staff, CAMPAIGN_ADMIN_ROLES)
+}
+
+/**
+ * A Campaign surface refuses an Assistant with no patch owner. The role gate
+ * alone would let a null-patch Assistant reach the admin surface; AD-4 says
+ * that surface is an autodialer 403.
+ */
+export function requireCampaignScopeOwner(staff: StaffContext): void {
+  if (staff.role !== "Admin" && !staff.patchOwner) {
+    throw missingCampaignScopeError()
+  }
 }
 
 /** AD-2: any staff role holding an active caller profile. */
@@ -250,48 +299,32 @@ export async function requireDialerCaller(staff: StaffContext): Promise<DialerCa
 
 /**
  * AD-3: the one helper every Campaign count, list, leaderboard and export
- * scopes through. A Preacher or Assistant without a scope id is refused, not
- * widened to the program.
+ * scopes through. A Preacher or Assistant without a patch owner is refused,
+ * not widened to the program.
  */
 export async function campaignScope(staff: StaffContext): Promise<CampaignScope> {
-  switch (staff.role) {
-    case "Admin": {
-      return {
-        kind: "program",
-        programId: staff.programId,
-        assignableCallers: await loadAssignableCallers(staff, { kind: "program" }),
-      }
+  const kind = campaignScopeKind(staff.role, staff.patchOwner?.userId ?? null)
+
+  if (!kind) {
+    throw missingCampaignScopeError()
+  }
+
+  if (kind.kind === "program") {
+    return {
+      kind: "program",
+      programId: staff.programId,
+      assignableCallers: await loadAssignableCallers(staff, { kind: "program" }),
     }
+  }
 
-    case "Preacher": {
-      if (!staff.userId) {
-        throw missingCampaignScopeError()
-      }
-
-      return {
-        kind: "preacher",
-        userId: staff.userId,
-        programId: staff.programId,
-        assignableCallers: await loadAssignableCallers(staff, { kind: "preacher", userId: staff.userId }),
-      }
-    }
-
-    case "Assistant": {
-      const preacherUserId = staff.assignedPreacherUserId?.trim()
-      if (!preacherUserId) {
-        throw missingCampaignScopeError()
-      }
-
-      return {
-        kind: "preacher",
-        userId: preacherUserId,
-        programId: staff.programId,
-        assignableCallers: await loadAssignableCallers(staff, { kind: "preacher", userId: preacherUserId }),
-      }
-    }
-
-    default:
-      throw new AuthzError(403, "forbidden", "You do not have access to this staff action.")
+  return {
+    kind: "preacher",
+    userId: kind.userId,
+    programId: staff.programId,
+    assignableCallers: await loadAssignableCallers(staff, {
+      kind: "preacher",
+      userId: kind.userId,
+    }),
   }
 }
 

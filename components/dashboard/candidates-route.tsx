@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation"
 import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 import { loadDashboardCandidates } from "@/lib/dashboard/candidates"
 import { formatCount, formatDay } from "@/lib/dashboard/format"
 import { resolveDashboardScope, requireDashboardRole } from "@/lib/dashboard/scope"
@@ -87,7 +88,7 @@ export async function DashboardCandidatesRoute({
     }
 
     return (
-      <StaffAuthShell staff={staff}>
+      <StaffAuthShell staff={toClientStaff(staff)}>
         <div className="flex min-h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
           <Header />
           <main className="flex w-full flex-1 flex-col gap-5 px-4 py-6 sm:px-6">

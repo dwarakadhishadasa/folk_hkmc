@@ -30,7 +30,7 @@ export default async function ContactsOverviewPage({ searchParams }: ContactsOve
     <ContactsSectionFrame staff={staff} title="Overview" payload={payload}>
       {payload.contacts.length === 0 ? (
         <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-          <ContactsEmptyState />
+          <ContactsEmptyState unassigned={payload.scope.patchOwnerId === null} />
         </div>
       ) : (
         <ContactsOverview

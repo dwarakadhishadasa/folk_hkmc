@@ -58,12 +58,12 @@ function shouldIgnoreNavigationClick(event: MouseEvent<HTMLAnchorElement>) {
 function campaignHrefFor({
   dialerEnabled,
   canUseCampaignAdmin,
-  isVolunteer,
+  canUseCallerQueue,
   hasActiveCallerProfile,
 }: {
   dialerEnabled: boolean
   canUseCampaignAdmin: boolean
-  isVolunteer: boolean
+  canUseCallerQueue: boolean
   hasActiveCallerProfile: boolean
 }): string | null {
   if (!dialerEnabled) {
@@ -74,7 +74,7 @@ function campaignHrefFor({
     return "/campaigns"
   }
 
-  return isVolunteer && hasActiveCallerProfile ? "/campaigns/assignments" : null
+  return canUseCallerQueue && hasActiveCallerProfile ? "/campaigns/assignments" : null
 }
 
 function NavAnchor({
@@ -246,14 +246,20 @@ export function Header() {
 
   const campaignHref = campaignHrefFor({
     dialerEnabled: currentProgramProfile.modules.dialer,
-    canUseCampaignAdmin: isPreacher || isAssistant,
-    isVolunteer,
+    canUseCampaignAdmin: staff?.canUseCampaignAdmin ?? false,
+    canUseCallerQueue: staff?.canUseCallerQueue ?? false,
     hasActiveCallerProfile: staff?.hasActiveCallerProfile ?? false,
   })
 
+  const canReadContacts = staff?.canReadContacts ?? false
+  const canManage = staff?.canManage ?? false
+  const canInviteVolunteers = staff?.canInviteVolunteers ?? false
+  const isStaffMember = isPreacher || isAssistant
+  const contactHref = canReadContacts ? "/contacts" : isVolunteer ? "/contact" : null
+
   const navItems: HeaderNavItem[] = isLoggedIn
     ? [
-        ...(isPreacher || isAssistant
+        ...(isStaffMember
           ? [
               {
                 href: "/dashboard",
@@ -265,25 +271,30 @@ export function Header() {
               },
             ]
           : []),
-        {
-          href: isPreacher ? "/contacts" : "/contact",
-          label: "Contact",
-          icon: UserRoundPlus,
-          // The section root reads contacts, locations, staff names and rollups;
-          // prefetching it from every staff page pays for that read before the
-          // reader asks for it. `/manage` is disabled for the same reason.
-          prefetch: false,
-        },
-        ...(isAssistant
+        ...(contactHref
+          ? [
+              {
+                href: contactHref,
+                label: "Contact",
+                icon: UserRoundPlus,
+                // The section root reads contacts, locations, staff names and
+                // rollups; prefetching it from every staff page pays for that
+                // read before the reader asks for it. `/manage` is disabled for
+                // the same reason.
+                prefetch: false,
+              },
+            ]
+          : []),
+        ...(isStaffMember
           ? [{ href: "/sessions", label: "Sessions", icon: CalendarDays }]
-          : isPreacher
-            ? [
-                { href: "/sessions", label: "Sessions", icon: CalendarDays },
-                { href: isAdmin ? "/admin/invite" : "/volunteers", label: "Invite", icon: Send },
-              ]
+          : []),
+        ...(isAdmin
+          ? [{ href: "/admin/invite", label: "Invite", icon: Send }]
+          : canInviteVolunteers
+            ? [{ href: "/volunteers", label: "Invite", icon: Send }]
             : []),
         ...(campaignHref ? [{ href: campaignHref, label: "Campaign", icon: Megaphone }] : []),
-        ...(isPreacher ? [{ href: "/manage", label: "Manage", icon: Settings2, prefetch: false }] : []),
+        ...(canManage ? [{ href: "/manage", label: "Manage", icon: Settings2, prefetch: false }] : []),
       ]
     : []
 

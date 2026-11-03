@@ -23,12 +23,21 @@ export type ManageMode = "admin" | "preacher"
 
 export interface ManageScope {
   mode: ManageMode
+  /**
+   * A view descriptor, not the actor's identity. An Assistant's `/manage`
+   * payload is always `mode:"preacher"`, `role:"Preacher"`, even when the
+   * assigned Preacher is an Admin.
+   */
   role: "Admin" | "Preacher"
   /** `public.users.id` of the signed-in staff member. */
-  staffUserId: string
-  staffName: string
+  actorUserId: string
+  actorName: string
+  /** The patch owner; `null` for an Assistant with no eligible assignment. */
+  patchOwnerId: string | null
+  patchOwnerName: string | null
+  hasPatchScope: boolean
   programId: string
-  /** Location ids the signed-in staff member may filter by (`users.location_ids`). */
+  /** Location ids the patch owner may filter by. */
   locationIds: string[]
 }
 

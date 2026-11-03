@@ -1,5 +1,10 @@
 import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
-import { findStaffUserByEmail, findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/supabase/data"
+import {
+  supervisorRequirementForRole,
+  supervisorSatisfiesRequirement,
+} from "@/lib/invite-supervisor"
+import { VOLUNTEER_INVITE_ROLES } from "@/lib/staff-roles"
+import { findStaffUserByEmail, type StaffRole, upsertStaffUser } from "@/lib/supabase/data"
 import { writeInviteLog } from "@/lib/invite-log"
 import { sendStaffInviteEmail } from "@/lib/supabase/invite"
 
@@ -11,7 +16,6 @@ interface InvitePayload {
   name?: string
   email?: string
   role?: string
-  assignedPreacherUserId?: string
 }
 
 function normalizeInviteRole(value: string | undefined): InvitableRole | null {
@@ -29,7 +33,7 @@ function normalizeInviteRole(value: string | undefined): InvitableRole | null {
 export async function POST(request: Request) {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, VOLUNTEER_INVITE_ROLES)
 
     const payload = (await request.json()) as InvitePayload
     const email = payload.email?.trim().toLowerCase()
@@ -44,19 +48,18 @@ export async function POST(request: Request) {
       return Response.json({ error: "This invite surface can only invite Volunteers or Assistants." }, { status: 403 })
     }
 
-    const assignedPreacherId =
-      staff.role === "Preacher" ? staff.userId : payload.assignedPreacherUserId?.trim()
+    // `/volunteers` is the Preacher's self-only surface. The binding is always
+    // the signed-in Preacher, never a payload choice. The same eligibility helper
+    // as the Admin invite path decides whether the destination role may use it.
+    const assignedPreacherId = staff.userId
+    const eligible = supervisorSatisfiesRequirement(
+      supervisorRequirementForRole(inviteRole),
+      { programId: staff.programId, role: staff.role, status: staff.status },
+      staff.programId,
+    )
 
-    if (!assignedPreacherId) {
-      return Response.json(
-        { error: "Assigned Preacher is required for Volunteer invites." },
-        { status: 400 },
-      )
-    }
-
-    const preacher = await findStaffUserById(assignedPreacherId)
-    if (!preacher || preacher.role !== "Preacher" || preacher.status !== "Active") {
-      return Response.json({ error: "Assigned Preacher must be an active Preacher." }, { status: 400 })
+    if (!eligible) {
+      return Response.json({ error: "The assigned Preacher must be active." }, { status: 400 })
     }
 
     const existing = await findStaffUserByEmail(email)

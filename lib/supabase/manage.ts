@@ -23,6 +23,12 @@ import type {
   ManageStatusQuoPoint,
 } from "@/components/manage/manage-types"
 import { AuthzError, writeAuditEvent, type StaffContext } from "@/lib/authz"
+import {
+  contactInPatch,
+  contactWriteAttribution,
+  locationInPatch,
+  sessionInPatch,
+} from "@/lib/patch-scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
@@ -30,9 +36,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
  * Data layer for the `/manage` portal.
  *
  * Reads go through `createSupabaseServerClient()` so the scoped RLS policies in
- * `20261006010000_scoped_rls_policies.sql` — not an app-side filter — decide
- * which rows a Preacher may see. The Admin admin/preacher toggle is layered on
- * top of that scope as an app-layer narrowing only.
+ * `20261006010000_scoped_rls_policies.sql` and `20261103000000_admin_supervised_assistants.sql`
+ * — not an app-side filter — decide which rows the caller's patch may see. The
+ * Admin admin/preacher toggle is layered on top of that scope as an app-layer
+ * narrowing only.
  *
  * Writes go through the service role after an explicit scope check, because
  * `rls-policy-matrix.md` grants no authenticated INSERT/UPDATE policies.
@@ -470,6 +477,25 @@ async function loadStaffDisplayNames(
   return names
 }
 
+/** Active staff assigned to a Preacher, for the assistant-created sessions term. */
+async function loadActiveAssistantIds(programId: string, ownerId: string): Promise<string[]> {
+  const supabaseAdmin = createSupabaseAdminClient()
+  const rows = await collectPagedRows<{ id: string }>(async (from, to) => {
+    const response = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .eq("program_id", programId)
+      .eq("assigned_preacher_id", ownerId)
+      .eq("status", "Active")
+      .order("id", { ascending: true })
+      .range(from, to)
+
+    return { data: response.data, error: response.error }
+  })
+
+  return rows.map((row) => row.id)
+}
+
 /**
  * One `contacts` row, as the grid and the section consume it.
  *
@@ -504,9 +530,14 @@ export async function loadManagePortalData(params: {
   staff: StaffContext
   mode: ManageMode
 }): Promise<ManagePortalPayload> {
-  const { staff, mode } = params
+  const { staff } = params
   const programId = staff.programId
   const supabase = await createSupabaseServerClient()
+  const owner = staff.patchOwner
+  const mode: ManageMode = staff.role === "Admin" ? params.mode : "preacher"
+  const narrowToOwner = mode === "preacher"
+  const ownerId = narrowToOwner ? (owner?.userId ?? null) : null
+  const ownerLocationIds = narrowToOwner ? (owner?.locationIds ?? []) : staff.locationIds
 
   const [contactRows, sessionRows, attendanceRows, locationRows] = await Promise.all([
     collectPagedRows<ContactRow>(async (from, to) => {
@@ -551,23 +582,33 @@ export async function loadManagePortalData(params: {
     }),
   ])
 
+  const assistantIds =
+    narrowToOwner && staff.role === "Preacher" && ownerId
+      ? await loadActiveAssistantIds(programId, ownerId)
+      : []
+
   // App-layer narrowing on top of the RLS scope. It can only shrink the set.
-  const narrowToPreacher = mode === "preacher"
-  const scopedContactRows = narrowToPreacher
-    ? contactRows.filter((row) => row.assigned_preacher_id === staff.userId)
+  const scopedContactRows = narrowToOwner
+    ? ownerId
+      ? contactRows.filter((row) => contactInPatch(row.assigned_preacher_id, ownerId))
+      : []
     : contactRows
-  const scopedSessionRows = narrowToPreacher
-    ? sessionRows.filter(
-        (row) => row.preacher_id === staff.userId || row.created_by === staff.userId,
+  const scopedSessionRows = narrowToOwner
+    ? sessionRows.filter((row) =>
+        sessionInPatch(
+          { preacherId: row.preacher_id, createdById: row.created_by },
+          { actorId: staff.userId, actorRole: staff.role, ownerId },
+          assistantIds,
+        ),
       )
     : sessionRows
-  const scopedLocationRows = narrowToPreacher
-    ? locationRows.filter((row) => staff.locationIds.includes(row.id))
+  const scopedLocationRows = narrowToOwner
+    ? locationRows.filter((row) => locationInPatch(row.id, ownerLocationIds))
     : locationRows
 
   const locationNameById = new Map(scopedLocationRows.map((row) => [row.id, row.name]))
   const scopedSessionIds = new Set(scopedSessionRows.map((row) => row.id))
-  const scopedAttendanceRows = narrowToPreacher
+  const scopedAttendanceRows = narrowToOwner
     ? attendanceRows.filter((row) => scopedSessionIds.has(row.session_id))
     : attendanceRows
 
@@ -731,10 +772,13 @@ export async function loadManagePortalData(params: {
   const scope: ManageScope = {
     mode,
     role: staff.role === "Admin" ? "Admin" : "Preacher",
-    staffUserId: staff.userId,
-    staffName: staff.name,
+    actorUserId: staff.userId,
+    actorName: staff.name,
+    patchOwnerId: narrowToOwner ? ownerId : null,
+    patchOwnerName: narrowToOwner ? (owner?.name ?? null) : null,
+    hasPatchScope: owner !== null,
     programId,
-    locationIds: [...staff.locationIds],
+    locationIds: narrowToOwner ? [...ownerLocationIds] : [...staff.locationIds],
   }
 
   return {
@@ -751,20 +795,22 @@ export async function loadManagePortalData(params: {
 }
 
 /**
- * The Contacts section's read: `P`, the reader's own contacts.
+ * The Contacts section's read: `P`, the patch owner's contacts.
  *
- * `assigned_preacher_id = staff.userId`, for an Admin and a Preacher alike.
+ * `assigned_preacher_id = patchOwner.userId`, for an Admin, a Preacher and an
+ * Assistant alike. An Assistant's owner is the assigned Admin or Preacher.
  * This is a read rule, not a new permission boundary: the RLS-scoped client is
  * still the authorization point, and this filter can only shrink what RLS
  * already allowed. An unassigned contact is outside `P` by design.
  *
- * The location list is deliberately **not** narrowed to `staff.locationIds`:
- * the section's header counts active programme locations, and a location row
- * that exists in the programme but sits outside the reader's manage scope is
- * still a real place a contact can have been met. Narrowing it here would
- * render those rows as `Unknown location`, which means a deleted location.
- * The grid's picker is narrowed separately through `locationOptions`, so the
- * one behaviour `/manage?mode=preacher` had is preserved where it matters.
+ * The location list is deliberately **not** narrowed to the owner's
+ * `locationIds`: the section's header counts active programme locations, and a
+ * location row that exists in the programme but sits outside the reader's
+ * manage scope is still a real place a contact can have been met. Narrowing it
+ * here would render those rows as `Unknown location`, which means a deleted
+ * location. The grid's picker is narrowed separately through
+ * `locationOptions`, so the one behaviour `/manage?mode=preacher` had is
+ * preserved where it matters.
  */
 export async function loadContactsSectionData(params: {
   staff: StaffContext
@@ -773,6 +819,8 @@ export async function loadContactsSectionData(params: {
   const programId = staff.programId
   const supabase = await createSupabaseServerClient()
   const supabaseAdmin = createSupabaseAdminClient()
+  const owner = staff.patchOwner
+  const ownerId = owner?.userId ?? null
 
   const [contactRows, locationRows] = await Promise.all([
     collectPagedRows<ContactRow>(async (from, to) => {
@@ -806,16 +854,18 @@ export async function loadContactsSectionData(params: {
     }),
   ])
 
-  const scopedContactRows = contactRows.filter(
-    (row) => row.assigned_preacher_id === staff.userId,
-  )
+  const scopedContactRows = ownerId
+    ? contactRows.filter((row) => contactInPatch(row.assigned_preacher_id, ownerId))
+    : []
 
-  const referencedUserIds = scopedContactRows
-    .flatMap((row) => [row.assigned_preacher_id, row.collected_by_id])
-    .filter((userId): userId is string => Boolean(userId))
+  const referencedUserIds = [
+    ...scopedContactRows.flatMap((row) => [row.assigned_preacher_id, row.collected_by_id]),
+    staff.userId,
+    ...(ownerId ? [ownerId] : []),
+  ].filter((userId): userId is string => Boolean(userId))
 
   const [staffNames, rollups] = await Promise.all([
-    loadStaffDisplayNames(programId, [...referencedUserIds, staff.userId]),
+    loadStaffDisplayNames(programId, referencedUserIds),
     loadRollupCounts(scopedContactRows.map((row) => row.id)),
   ])
 
@@ -834,16 +884,21 @@ export async function loadContactsSectionData(params: {
     // and no component renders it as a choice.
     mode: "preacher",
     role: staff.role === "Admin" ? "Admin" : "Preacher",
-    staffUserId: staff.userId,
-    staffName: staff.name,
+    actorUserId: staff.userId,
+    actorName: staff.name,
+    patchOwnerId: ownerId,
+    patchOwnerName: owner?.name ?? null,
+    hasPatchScope: owner !== null,
     programId,
-    locationIds: [...staff.locationIds],
+    locationIds: owner?.locationIds ?? [],
   }
 
   return {
     scope,
     locations,
-    locationOptions: locations.filter((location) => staff.locationIds.includes(location.id)),
+    locationOptions: owner
+      ? locations.filter((location) => locationInPatch(location.id, owner.locationIds))
+      : [],
     activeLocationCount: locations.filter((location) => location.status !== "Inactive").length,
     staffNames,
     contacts,
@@ -1200,6 +1255,19 @@ export async function createManageContact(params: {
   patch: ManageContactPatch
 }): Promise<ManageContactWriteResult> {
   const { staff, patch } = params
+  const attribution = contactWriteAttribution({
+    actorId: staff.userId,
+    ownerId: staff.patchOwner?.userId ?? null,
+  })
+
+  if (!attribution) {
+    throw new AuthzError(
+      403,
+      "no_patch_scope",
+      "No active Preacher is assigned to your account.",
+    )
+  }
+
   const { payload, writtenKeys } = await buildContactWritePayload(staff, patch)
 
   const supabaseAdmin = createSupabaseAdminClient()
@@ -1208,8 +1276,8 @@ export async function createManageContact(params: {
     .insert({
       ...payload,
       program_id: staff.programId,
-      assigned_preacher_id: staff.userId,
-      collected_by_id: staff.supabaseUserId,
+      assigned_preacher_id: attribution.assignedPreacherId,
+      collected_by_id: attribution.collectedById,
     })
     .select(CONTACT_COLUMNS)
     .single()

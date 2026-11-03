@@ -3,17 +3,19 @@ import "server-only"
 import { redirect } from "next/navigation"
 
 import type { ContactsSectionPayload } from "@/components/contacts/contacts-types"
-import { AuthzError, getStaffContext, type StaffContext } from "@/lib/authz"
+import { AuthzError, getStaffContext, isRoleAllowed, type StaffContext } from "@/lib/authz"
+import { OPERATIONAL_ROLES } from "@/lib/staff-roles"
 import { loadContactsSectionData } from "@/lib/supabase/manage"
 
 /**
  * The read every `/contacts*` page performs before it renders.
  *
  * The role refusal is a redirect to the form rather than the generic auth
- * error: `Volunteer` and `Assistant` keep the form-only path, and landing them
- * on an error page for a section they were never given would be a punishment
- * for following a link. An unauthenticated request still goes to `/login` with
- * the path it asked for.
+ * error: a `Volunteer` keeps the form-only path, and landing them on an error
+ * page for a section they were never given would be a punishment for following
+ * a link. An Assistant opens the section on their patch; an Assistant without
+ * a patch still opens it and sees the section's empty explanation. An
+ * unauthenticated request still goes to `/login` with the path it asked for.
  *
  * `redirect()` throws a control-flow error, so each one is called outside a
  * `try` that could swallow it. A redirect logged as a data-load failure reads
@@ -39,7 +41,7 @@ export async function loadContactsSectionPage(params: {
     throw error
   }
 
-  if (staff.role !== "Admin" && staff.role !== "Preacher") {
+  if (!isRoleAllowed(staff.role, OPERATIONAL_ROLES)) {
     redirect("/contact")
   }
 

@@ -2,8 +2,9 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import type { StaffRole, StaffStatus, StaffUser } from "@/lib/supabase/data"
+import type { StaffRole } from "@/lib/supabase/data"
 import type { Database } from "@/lib/supabase/types"
+import { resolvePatchOwner, type PatchOwner, type PatchOwnerRow } from "@/lib/staff-patch"
 import { isProgramId, isStaffRole, type ProgramId } from "@hkmc/data-contracts"
 import { resolveProgramId } from "@hkmc/program-config/server"
 
@@ -27,9 +28,18 @@ export interface StaffContext {
   locationIds: string[]
   /**
    * `public.users.assigned_preacher_id` (UUID) when the staff member is
-   * routed through a Preacher, otherwise `undefined`.
+   * routed through a Preacher, otherwise `undefined`. This is the raw FK; the
+   * resolved patch owner is `patchOwner`.
    */
   assignedPreacherUserId?: string
+  /**
+   * The personal patch this staff member reads. Admin and Preacher resolve to
+   * themselves; an Assistant resolves to the assigned Active Admin or Preacher;
+   * a Volunteer or an ineligible Assistant resolves to `null`.
+   *
+   * Server-only: `toClientStaff()` strips it before any RSC or route payload.
+   */
+  patchOwner: PatchOwner | null
   /**
    * Whether this staff user holds an active `dialer_callers` profile. The
    * Campaign header item and its Assignments sub-nav resolve from this; it is
@@ -51,11 +61,11 @@ export class AuthzError extends Error {
   }
 }
 
-export function isRoleAllowed(role: StaffRole, allowedRoles: StaffRole[]): boolean {
+export function isRoleAllowed(role: StaffRole, allowedRoles: readonly StaffRole[]): boolean {
   return allowedRoles.includes(role)
 }
 
-export function requireRole(context: StaffContext, allowedRoles: StaffRole[]): void {
+export function requireRole(context: StaffContext, allowedRoles: readonly StaffRole[]): void {
   if (!isRoleAllowed(context.role, allowedRoles)) {
     throw new AuthzError(403, "forbidden", "You do not have access to this staff action.")
   }
@@ -102,7 +112,11 @@ export async function writeAuditEvent(data: {
   }
 }
 
-function mapUsersRowToStaffContext(row: UsersRow, hasActiveCallerProfile: boolean): StaffContext {
+function mapUsersRowToStaffContext(
+  row: UsersRow,
+  hasActiveCallerProfile: boolean,
+  patchOwner: PatchOwner | null,
+): StaffContext {
   if (!isProgramId(row.program_id)) {
     throw new AuthzError(403, "unsupported_program", "This program is not supported.")
   }
@@ -134,6 +148,7 @@ function mapUsersRowToStaffContext(row: UsersRow, hasActiveCallerProfile: boolea
     status: row.status as StaffMembershipStatusValue,
     locationIds: Array.isArray(row.location_ids) ? row.location_ids.filter(Boolean) : [],
     assignedPreacherUserId: row.assigned_preacher_id || undefined,
+    patchOwner,
     hasActiveCallerProfile,
     lastSyncedAt: new Date().toISOString(),
   }
@@ -174,7 +189,53 @@ async function loadStaffContextForUser(params: {
     throw new AuthzError(500, "staff_caller_profile_read_failed", "Unable to read the staff caller profile.")
   }
 
-  return mapUsersRowToStaffContext(userResult.data as UsersRow, Boolean(callerResult.data))
+  const callerRow = userResult.data as UsersRow
+  const assignedRow = await loadAssignedSupervisorRow(callerRow, params.programId)
+
+  return mapUsersRowToStaffContext(
+    callerRow,
+    Boolean(callerResult.data),
+    resolvePatchOwner(toPatchOwnerRow(callerRow), assignedRow ? toPatchOwnerRow(assignedRow) : null),
+  )
+}
+
+function toPatchOwnerRow(row: UsersRow): PatchOwnerRow {
+  return {
+    id: row.id,
+    programId: row.program_id,
+    name: row.name?.trim() || row.email,
+    role: row.role,
+    status: row.status,
+    locationIds: Array.isArray(row.location_ids) ? row.location_ids.filter(Boolean) : [],
+  }
+}
+
+/**
+ * The assigned row is read with the admin client because `public.users` RLS
+ * lets a non-Admin read only their own row. Only an Assistant can have an
+ * owner that is not itself, so no other role pays for the read.
+ */
+async function loadAssignedSupervisorRow(
+  callerRow: UsersRow,
+  programId: ProgramId,
+): Promise<UsersRow | null> {
+  if (callerRow.role !== "Assistant" || !callerRow.assigned_preacher_id) {
+    return null
+  }
+
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id,program_id,email,name,role,status,location_ids,assigned_preacher_id")
+    .eq("id", callerRow.assigned_preacher_id)
+    .eq("program_id", programId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AuthzError(500, "staff_supervisor_read_failed", "Unable to read the assigned Preacher.")
+  }
+
+  return (data as UsersRow | null) ?? null
 }
 
 export async function syncStaffProfileByEmail(params: {

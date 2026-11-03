@@ -1,64 +1,20 @@
 "use client"
 
 import { useEffect } from "react"
-import type { StaffContext } from "@/lib/authz"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
+import { safeStaffRedirectPath } from "@/lib/staff-routes"
+import type { ClientStaff } from "@/lib/staff-dto"
 
 const STAFF_SYNC_RETRY_DELAYS_MS = [0, 150, 400]
 
 type StaffSyncResult =
-  | { status: "authenticated"; staff: StaffContext }
+  | { status: "authenticated"; staff: ClientStaff }
   | { status: "unauthenticated" }
   | { status: "unauthorized" }
 
-function landingPathForRole(role?: StaffContext["role"]): string {
-  if (role === "Volunteer") {
-    return "/contact"
-  }
-
-  if (role === "Admin" || role === "Preacher" || role === "Assistant") {
-    return "/dashboard"
-  }
-
-  return "/"
-}
-
-/**
- * The Assistant allowlist: the dashboard, a session and the contact form are
- * the three surfaces their work needs. This is a UX redirect guard, not
- * authorization — every page keeps its own `requireRole`.
- */
-function assistantPathAllowed(value: string): boolean {
-  const path = value.split("?")[0] ?? value
-  return (
-    path === "/dashboard" ||
-    path.startsWith("/dashboard/") ||
-    path === "/sessions" ||
-    path.startsWith("/sessions/") ||
-    path === "/contact" ||
-    path.startsWith("/contact/")
-  )
-}
-
-function safeLandingPath(value: string | null, role: StaffContext["role"]): string {
-  if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
-    if (role === "Volunteer" && value !== "/contact") {
-      return "/contact"
-    }
-
-    if (role === "Assistant" && !assistantPathAllowed(value)) {
-      return "/dashboard"
-    }
-
-    return value
-  }
-
-  return landingPathForRole(role)
-}
-
-function currentLandingPath(role: StaffContext["role"]): string {
+function currentLandingPath(role: ClientStaff["role"]): string {
   const params = new URLSearchParams(window.location.search)
-  return safeLandingPath(params.get("next") || params.get("redirect"), role)
+  return safeStaffRedirectPath(params.get("next") || params.get("redirect"), role)
 }
 
 function authErrorPath(code: string, message?: string): string {
@@ -88,7 +44,7 @@ async function completeImplicitStaffSignIn(): Promise<StaffSyncResult> {
     })
 
     if (response.ok) {
-      const data = (await response.json()) as { staff?: StaffContext }
+      const data = (await response.json()) as { staff?: ClientStaff }
       return data.staff ? { status: "authenticated", staff: data.staff } : { status: "unauthorized" }
     }
 

@@ -166,8 +166,11 @@ export function ManagePortal({
 
       {scope.mode === "preacher" ? (
         <p className="shrink-0 rounded-lg border border-[var(--border)] bg-card px-4 py-3 text-sm text-[var(--muted-foreground)]">
-          Showing only rows scoped to your own staff account. Switch to the program-wide scope to see every
-          preacher.
+          {scope.patchOwnerId === null
+            ? "No active Preacher is assigned to your account, so this page is empty. Ask an Admin to assign you to a preacher."
+            : scope.patchOwnerId !== scope.actorUserId
+              ? `Showing only rows scoped to ${scope.patchOwnerName ?? "the Preacher you assist"}, the Preacher you assist.`
+              : "Showing only rows scoped to your own staff account. Switch to the program-wide scope to see every preacher."}
         </p>
       ) : null}
 

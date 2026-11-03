@@ -6,6 +6,7 @@ import type { ContactsSectionPayload } from "@/components/contacts/contacts-type
 import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import type { StaffContext } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 
 /**
  * The section frame every `/contacts*` page shares.
@@ -33,7 +34,7 @@ export function ContactsSectionFrame({
   const summary = summarizeContactsSection(payload)
 
   return (
-    <StaffAuthShell staff={staff}>
+    <StaffAuthShell staff={toClientStaff(staff)}>
       <div className="flex h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col overflow-hidden bg-background">
         <Header />
         <main className="flex min-h-0 w-full flex-1 flex-col px-4 py-6 sm:px-6">

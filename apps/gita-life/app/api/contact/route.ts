@@ -57,11 +57,19 @@ async function resolveAssignedPreacher(
   payload: ContactPayload,
   staff: Awaited<ReturnType<typeof getStaffContext>>,
 ): Promise<{ preacher?: ResolvedPreacher; error?: string }> {
-  if (staff.role === "Volunteer" || staff.role === "Assistant") {
+  if (staff.role === "Volunteer") {
     if (!staff.assignedPreacherUserId) {
-      return { error: `${staff.role} contact routing is not configured. Ask an Admin to assign your Preacher.` }
+      return { error: "Volunteer contact routing is not configured. Ask an Admin to assign your Preacher." }
     }
     return activePreacherResult(await findStaffUserById(staff.assignedPreacherUserId))
+  }
+
+  if (staff.role === "Assistant") {
+    const owner = staff.patchOwner
+    if (!owner) {
+      return { error: "Assistant contact routing is not configured. Ask an Admin to assign your Preacher." }
+    }
+    return { preacher: { id: owner.userId } }
   }
 
   if (staff.role === "Preacher") {

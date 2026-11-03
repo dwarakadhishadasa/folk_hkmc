@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, type StaffContext } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 
 import { getSessionsStaff } from "./staff"
 
@@ -29,7 +30,7 @@ export default async function SessionsLayout({ children }: { children: ReactNode
   }
 
   return (
-    <StaffAuthShell staff={staff}>
+    <StaffAuthShell staff={toClientStaff(staff)}>
       <div className="flex min-h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
         <Header />
         <main className="flex w-full flex-1 flex-col gap-5 p-6">{children}</main>

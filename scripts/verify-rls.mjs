@@ -46,6 +46,7 @@ const POSTGRES_URL = process.env.POSTGRES_URL_NON_POOLING?.trim()
 
 const PROGRAMS = ["folk", "gita-life"]
 const ROLES = ["admin", "preacher", "volunteer", "assistant"]
+const EXTRA_ROLES = ["assistant_admin", "assistant_wrong_role", "assistant_cross_program"]
 const FIXTURE_PASSWORD = `Rls-Fixture-${crypto.randomUUID()}!`
 const EMAIL = (role, program) => `rls-fixture-${role}-${program}@example.com`
 const TAG = "RLS-FIXTURE"
@@ -75,11 +76,26 @@ function buildFixtureIds() {
   const fx = {}
   for (const program of PROGRAMS) {
     fx[program] = {
-      users: Object.fromEntries(ROLES.map((r) => [r, crypto.randomUUID()])),
+      users: Object.fromEntries(
+        [...ROLES, ...EXTRA_ROLES].map((r) => [r, crypto.randomUUID()]),
+      ),
       locations: { loc1: crypto.randomUUID(), loc2: crypto.randomUUID() },
       contacts: { c_in: crypto.randomUUID(), c_out: crypto.randomUUID() },
-      sessions: { s1: crypto.randomUUID(), s2: crypto.randomUUID(), s3: crypto.randomUUID(), s4: crypto.randomUUID() },
-      attendance: { a1: crypto.randomUUID(), a2: crypto.randomUUID(), a3: crypto.randomUUID(), a4: crypto.randomUUID() },
+      sessions: {
+        s1: crypto.randomUUID(),
+        s2: crypto.randomUUID(),
+        s3: crypto.randomUUID(),
+        s4: crypto.randomUUID(),
+        s5: crypto.randomUUID(),
+        s6: crypto.randomUUID(),
+      },
+      attendance: {
+        a1: crypto.randomUUID(),
+        a2: crypto.randomUUID(),
+        a3: crypto.randomUUID(),
+        a4: crypto.randomUUID(),
+        a6: crypto.randomUUID(),
+      },
     }
   }
   return fx
@@ -131,8 +147,9 @@ async function assertReadMatrix(fx, get) {
     check(`${tag} Preacher sessions: created_by them OR preacher_id = them`,
       !r.error && eqSet(r.ids, new Set([f.sessions.s1, f.sessions.s2])), r.error?.message ?? fmt(r.ids))
     r = await get("preacher", "attendance", program)
-    check(`${tag} Preacher attendance: sessions where preacher_id = them (incl. created by others)`,
-      !r.error && eqSet(r.ids, new Set([f.attendance.a1, f.attendance.a2])), r.error?.message ?? fmt(r.ids))
+    check(`${tag} Preacher attendance: preached, created, or created by their active staff`,
+      !r.error && eqSet(r.ids, new Set([f.attendance.a1, f.attendance.a2, f.attendance.a4])),
+      r.error?.message ?? fmt(r.ids))
     r = await get("preacher", "locations", program)
     check(`${tag} Preacher locations: only own location_ids`,
       !r.error && eqSet(r.ids, new Set([f.locations.loc1])), r.error?.message ?? fmt(r.ids))
@@ -150,14 +167,52 @@ async function assertReadMatrix(fx, get) {
     check(`${tag} Assistant sessions: own + assigned preacher's created or led`,
       !r.error && eqSet(r.ids, new Set([f.sessions.s1, f.sessions.s2, f.sessions.s4])), r.error?.message ?? fmt(r.ids))
     r = await get("assistant", "attendance", program)
-    check(`${tag} Assistant attendance: assigned preacher's sessions`,
-      !r.error && eqSet(r.ids, new Set([f.attendance.a1, f.attendance.a2])), r.error?.message ?? fmt(r.ids))
+    check(`${tag} Assistant attendance: assigned preacher's sessions plus own-created`,
+      !r.error && eqSet(r.ids, new Set([f.attendance.a1, f.attendance.a2, f.attendance.a4])),
+      r.error?.message ?? fmt(r.ids))
     r = await get("assistant", "locations", program)
     check(`${tag} Assistant locations: assigned preacher's location_ids`,
       !r.error && eqSet(r.ids, new Set([f.locations.loc1])), r.error?.message ?? fmt(r.ids))
     r = await get("assistant", "users", program)
     check(`${tag} Assistant users: own row only`,
       !r.error && eqSet(r.ids, new Set([f.users.assistant])), r.error?.message ?? fmt(r.ids))
+
+    // --- Assistant of an Admin ---------------------------------------------
+    r = await get("assistant_admin", "contacts", program)
+    check(`${tag} Admin-supervised Assistant contacts: the Admin's contacts`,
+      !r.error && eqSet(r.ids, new Set([f.contacts.c_out])), r.error?.message ?? fmt(r.ids))
+    r = await get("assistant_admin", "sessions", program)
+    check(`${tag} Admin-supervised Assistant sessions: the Admin's patch plus own creations`,
+      !r.error &&
+        eqSet(
+          r.ids,
+          new Set([f.sessions.s2, f.sessions.s3, f.sessions.s4, f.sessions.s5, f.sessions.s6]),
+        ),
+      r.error?.message ?? fmt(r.ids))
+    r = await get("assistant_admin", "attendance", program)
+    check(`${tag} Admin-supervised Assistant attendance: through the Admin's patch`,
+      !r.error &&
+        eqSet(r.ids, new Set([f.attendance.a2, f.attendance.a3, f.attendance.a4, f.attendance.a6])),
+      r.error?.message ?? fmt(r.ids))
+    r = await get("assistant_admin", "locations", program)
+    check(`${tag} Admin-supervised Assistant locations: the Admin's location_ids`,
+      !r.error && eqSet(r.ids, new Set([f.locations.loc1, f.locations.loc2])),
+      r.error?.message ?? fmt(r.ids))
+    r = await get("assistant_admin", "users", program)
+    check(`${tag} Admin-supervised Assistant users: own row only`,
+      !r.error && eqSet(r.ids, new Set([f.users.assistant_admin])), r.error?.message ?? fmt(r.ids))
+
+    // --- Ineligible and cross-programme assignments ------------------------
+    for (const role of ["assistant_wrong_role", "assistant_cross_program"]) {
+      for (const table of ["contacts", "sessions", "attendance", "locations"]) {
+        r = await get(role, table, program)
+        check(`${tag} ${role} ${table}: zero rows`,
+          !r.error && r.ids.size === 0, r.error?.message ?? fmt(r.ids))
+      }
+      r = await get(role, "users", program)
+      check(`${tag} ${role} users: own row only`,
+        !r.error && eqSet(r.ids, new Set([f.users[role]])), r.error?.message ?? fmt(r.ids))
+    }
 
     // --- Volunteer ---------------------------------------------------------
     for (const table of ["contacts", "sessions", "attendance"]) {
@@ -201,8 +256,8 @@ async function assertStatusCollapse(fx, get, setStatus) {
         !r.error && r.ids.size === 0, r.error?.message ?? fmt(r.ids))
     }
     r = await get("assistant", "sessions", program)
-    check(`${tag} Assistant sessions with Inactive preacher: only own-created`,
-      !r.error && eqSet(r.ids, new Set([f.sessions.s4])), r.error?.message ?? fmt(r.ids))
+    check(`${tag} Assistant sessions with Inactive preacher: zero rows`,
+      !r.error && r.ids.size === 0, r.error?.message ?? fmt(r.ids))
     await setStatus(f.users.preacher, "Active")
   }
 }
@@ -272,8 +327,37 @@ async function httpSeed(admin, fx) {
       if (error) throw new Error(`createUser ${email} failed: ${error.message}`)
       f.users[role] = data.user.id
       const row = { id: data.user.id, program_id: program, email, name: `${TAG} ${role} ${program}`, role: role[0].toUpperCase() + role.slice(1), status: "Active" }
+      if (role === "admin") row.location_ids = [f.locations.loc1, f.locations.loc2]
       if (role === "preacher") row.location_ids = [f.locations.loc1]
       if (role === "volunteer" || role === "assistant") row.assigned_preacher_id = f.users.preacher
+      const { error: uErr } = await admin.from("users").insert(row)
+      if (uErr) throw new Error(`seed users ${program}/${role}: ${uErr.message}`)
+    }
+
+    const extraAssignments = {
+      assistant_admin: f.users.admin,
+      assistant_wrong_role: f.users.volunteer,
+      assistant_cross_program: null,
+    }
+    for (const role of EXTRA_ROLES) {
+      const email = EMAIL(role, program)
+      const { data, error } = await admin.auth.admin.createUser({
+        id: f.users[role],
+        email,
+        password: FIXTURE_PASSWORD,
+        email_confirm: true,
+      })
+      if (error) throw new Error(`createUser ${email} failed: ${error.message}`)
+      f.users[role] = data.user.id
+      const row = {
+        id: data.user.id,
+        program_id: program,
+        email,
+        name: `${TAG} ${role} ${program}`,
+        role: "Assistant",
+        status: "Active",
+        assigned_preacher_id: extraAssignments[role],
+      }
       const { error: uErr } = await admin.from("users").insert(row)
       if (uErr) throw new Error(`seed users ${program}/${role}: ${uErr.message}`)
     }
@@ -293,6 +377,9 @@ async function httpSeed(admin, fx) {
       ["s2", f.users.admin, f.users.preacher],
       ["s3", f.users.admin, f.users.admin],
       ["s4", f.users.assistant, f.users.admin],
+      // Legacy shape: the Assistant is preacher_id but not created_by.
+      ["s5", f.users.admin, f.users.assistant],
+      ["s6", f.users.assistant_admin, f.users.admin],
     ]
     for (const [key, created_by, preacher_id] of sessionDefs) {
       const { error } = await admin.from("sessions").insert({
@@ -302,14 +389,31 @@ async function httpSeed(admin, fx) {
       if (error) throw new Error(`seed sessions ${program}/${key}: ${error.message}`)
     }
 
-    for (const [key, sessionKey] of [["a1", "s1"], ["a2", "s2"], ["a3", "s3"], ["a4", "s4"]]) {
+    for (const [key, sessionKey, contactKey] of [
+      ["a1", "s1", "c_in"],
+      ["a2", "s2", "c_in"],
+      ["a3", "s3", "c_in"],
+      ["a4", "s4", "c_in"],
+      ["a6", "s6", "c_out"],
+    ]) {
       const { error } = await admin.from("attendance").insert({
-        id: f.attendance[key], program_id: program, contact_id: f.contacts.c_in,
+        id: f.attendance[key], program_id: program, contact_id: f.contacts[contactKey],
         session_id: f.sessions[sessionKey], phone: `rls-fixture-att-${program}-${key}`,
         name: `${TAG} Attendee ${program} ${key}`,
       })
       if (error) throw new Error(`seed attendance ${program}/${key}: ${error.message}`)
     }
+  }
+
+  // Cross-programme assignment: point each programme's fixture Assistant at the
+  // other programme's Admin, now that both staff sets exist.
+  const [pA, pB] = PROGRAMS
+  for (const [program, other] of [[pA, pB], [pB, pA]]) {
+    const { error } = await admin
+      .from("users")
+      .update({ assigned_preacher_id: fx[other].users.admin })
+      .eq("id", fx[program].users.assistant_cross_program)
+    if (error) throw new Error(`cross-programme assignment ${program}: ${error.message}`)
   }
 }
 
@@ -317,7 +421,7 @@ async function httpVerify(admin, fx) {
   const clients = {}
   for (const program of PROGRAMS) {
     clients[program] = {}
-    for (const role of ROLES) {
+    for (const role of [...ROLES, ...EXTRA_ROLES]) {
       const client = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
       const { error } = await client.auth.signInWithPassword({ email: EMAIL(role, program), password: FIXTURE_PASSWORD })
       if (error) throw new Error(`signIn ${EMAIL(role, program)} failed: ${error.message}`)
@@ -388,7 +492,7 @@ async function httpVerify(admin, fx) {
     !orphanReadErr && orphanRows.length === 0, orphanReadErr?.message ?? `got ${orphanRows?.length}`)
   await admin.auth.admin.deleteUser(orphan.user.id)
 
-  for (const program of PROGRAMS) for (const role of ROLES) await clients[program][role].auth.signOut()
+  for (const program of PROGRAMS) for (const role of [...ROLES, ...EXTRA_ROLES]) await clients[program][role].auth.signOut()
 }
 
 // ===========================================================================
@@ -448,10 +552,29 @@ function sqlSeedScript(fx) {
       stmts.push(`INSERT INTO auth.users (id, instance_id, aud, role, email, email_confirmed_at, created_at, updated_at)
         VALUES ('${f.users[role]}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '${email}', now(), now(), now());`)
       const roleName = role[0].toUpperCase() + role.slice(1)
-      const loc = role === "preacher" ? `ARRAY['${f.locations.loc1}']::uuid[]` : `'{}'::uuid[]`
+      const loc =
+        role === "admin"
+          ? `ARRAY['${f.locations.loc1}', '${f.locations.loc2}']::uuid[]`
+          : role === "preacher"
+            ? `ARRAY['${f.locations.loc1}']::uuid[]`
+            : `'{}'::uuid[]`
       const ap = role === "volunteer" || role === "assistant" ? `'${f.users.preacher}'` : "NULL"
       stmts.push(`INSERT INTO public.users (id, program_id, email, name, role, status, location_ids, assigned_preacher_id)
         VALUES ('${f.users[role]}', '${program}', '${email}', '${TAG} ${role} ${program}', '${roleName}', 'Active', ${loc}, ${ap});`)
+    }
+
+    const extraAssignments = {
+      assistant_admin: f.users.admin,
+      assistant_wrong_role: f.users.volunteer,
+      assistant_cross_program: null,
+    }
+    for (const role of EXTRA_ROLES) {
+      const email = EMAIL(role, program)
+      stmts.push(`INSERT INTO auth.users (id, instance_id, aud, role, email, email_confirmed_at, created_at, updated_at)
+        VALUES ('${f.users[role]}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '${email}', now(), now(), now());`)
+      const assigned = extraAssignments[role] ? `'${extraAssignments[role]}'` : "NULL"
+      stmts.push(`INSERT INTO public.users (id, program_id, email, name, role, status, location_ids, assigned_preacher_id)
+        VALUES ('${f.users[role]}', '${program}', '${email}', '${TAG} ${role} ${program}', 'Assistant', 'Active', '{}'::uuid[], ${assigned});`)
     }
     for (const [key, assignee] of [["c_in", f.users.preacher], ["c_out", f.users.admin]]) {
       stmts.push(`INSERT INTO public.contacts (id, program_id, name, phone, assigned_preacher_id)
@@ -462,16 +585,31 @@ function sqlSeedScript(fx) {
       ["s2", f.users.admin, f.users.preacher],
       ["s3", f.users.admin, f.users.admin],
       ["s4", f.users.assistant, f.users.admin],
+      // Legacy shape: the Assistant is preacher_id but not created_by.
+      ["s5", f.users.admin, f.users.assistant],
+      ["s6", f.users.assistant_admin, f.users.admin],
     ]
     for (const [key, created_by, preacher_id] of sessionDefs) {
       stmts.push(`INSERT INTO public.sessions (id, program_id, name, session_date, created_by, preacher_id, location_id)
         VALUES ('${f.sessions[key]}', '${program}', '${TAG}-${program}-${key}', '2026-10-06', '${created_by}', '${preacher_id}', '${f.locations.loc1}');`)
     }
-    for (const [key, sessionKey] of [["a1", "s1"], ["a2", "s2"], ["a3", "s3"], ["a4", "s4"]]) {
+    for (const [key, sessionKey, contactKey] of [
+      ["a1", "s1", "c_in"],
+      ["a2", "s2", "c_in"],
+      ["a3", "s3", "c_in"],
+      ["a4", "s4", "c_in"],
+      ["a6", "s6", "c_out"],
+    ]) {
       stmts.push(`INSERT INTO public.attendance (id, program_id, contact_id, session_id, phone, name)
-        VALUES ('${f.attendance[key]}', '${program}', '${f.contacts.c_in}', '${f.sessions[sessionKey]}', 'rls-fixture-att-${program}-${key}', '${TAG} Attendee ${program} ${key}');`)
+        VALUES ('${f.attendance[key]}', '${program}', '${f.contacts[contactKey]}', '${f.sessions[sessionKey]}', 'rls-fixture-att-${program}-${key}', '${TAG} Attendee ${program} ${key}');`)
     }
   }
+
+  const [pA, pB] = PROGRAMS
+  for (const [program, other] of [[pA, pB], [pB, pA]]) {
+    stmts.push(`UPDATE public.users SET assigned_preacher_id = '${fx[other].users.admin}' WHERE id = '${fx[program].users.assistant_cross_program}';`)
+  }
+
   return stmts.join("\n")
 }
 
@@ -498,7 +636,7 @@ function sqlVerify(fx) {
       if (!r.ok) throw new Error(`probes failed: ${r.err.trim()}`)
       const map = new Map()
       for (const line of r.out.split("\n")) {
-        const m = line.match(/^((?:folk|gita-life)\|(?:admin|preacher|volunteer|assistant)\|[a-z]+(?:\|[a-z-]+)?)\|(\[.*\])$/)
+        const m = line.match(/^((?:folk|gita-life)\|[a-z_]+\|[a-z]+(?:\|[a-z-]+)?)\|(\[.*\])$/)
         if (!m) continue
         map.set(m[1], new Set(JSON.parse(m[2])))
       }
@@ -515,7 +653,7 @@ function sqlVerify(fx) {
 
   const allBlocks = []
   for (const program of PROGRAMS) {
-    for (const role of ROLES) {
+    for (const role of [...ROLES, ...EXTRA_ROLES]) {
       for (const table of TABLES) allBlocks.push(probeBlock(role, table, program))
     }
   }
@@ -552,7 +690,6 @@ async function sqlRunAssertions(fx, maps) {
 
   for (const program of PROGRAMS) {
     const tag = `[${program}]`
-    const f = fx[program]
     for (const table of TABLES) {
       const ids = collapseMap.get([program, "volunteer", table, "suspended"].join("|"))
       check(`${tag} Suspended volunteer ${table}: zero rows`,
@@ -567,8 +704,8 @@ async function sqlRunAssertions(fx, maps) {
         ids !== undefined && ids.size === 0, ids ? fmt(ids) : "probe missing")
     }
     const asstSess = collapseMap.get([program, "assistant", "sessions", "inactive-preacher"].join("|"))
-    check(`${tag} Assistant sessions with Inactive preacher: only own-created`,
-      asstSess !== undefined && eqSet(asstSess, new Set([f.sessions.s4])),
+    check(`${tag} Assistant sessions with Inactive preacher: zero rows`,
+      asstSess !== undefined && asstSess.size === 0,
       asstSess ? fmt(asstSess) : "probe missing")
   }
 }

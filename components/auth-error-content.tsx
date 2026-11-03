@@ -4,22 +4,11 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { landingPathForRole } from "@/lib/staff-routes"
 
 interface AuthErrorContentProps {
   code?: string
   message: string
-}
-
-function landingPathForRole(role: ReturnType<typeof useAuth>["role"]): string {
-  if (role === "Volunteer") {
-    return "/contact"
-  }
-
-  if (role === "Admin" || role === "Preacher" || role === "Assistant") {
-    return "/dashboard"
-  }
-
-  return "/"
 }
 
 function hasHashSessionTokens(): boolean {

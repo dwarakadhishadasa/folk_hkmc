@@ -251,7 +251,7 @@ let draftSequence = 0
  * row, focus it, and key the operator's keystrokes to it before the server has
  * ever heard of it.
  */
-function createDraftContact(staffUserId: string): ManageContact {
+function createDraftContact(assignedPreacherId: string, collectedById: string): ManageContact {
   draftSequence += 1
 
   return {
@@ -270,12 +270,10 @@ function createDraftContact(staffUserId: string): ManageContact {
     photoPath: null,
     isFavorite: false,
     locationIds: [],
-    // The server writes both columns from the caller:
-    // `assigned_preacher_id = staff.userId`, `collected_by_id = staff.supabaseUserId`.
-    // `userId` and `supabaseUserId` are the same `public.users.id`, so the draft
-    // shows what the create is about to store rather than a blank owner.
-    assignedPreacherId: staffUserId,
-    collectedById: staffUserId,
+    // The create stamps ownership and attribution separately: the contact
+    // belongs to the patch owner and records the actor as its collector.
+    assignedPreacherId,
+    collectedById,
     totalAttendanceCount: 0,
     past60DayAttendanceCount: 0,
   }
@@ -635,22 +633,31 @@ export function ManageContactsTable({
   )
 
   /**
-   * `collectedById` -> display name, with the signed-in staff member always
+   * `collectedById` -> display name, with the actor and the patch owner always
    * present.
    *
    * `payload.staffNames` only covers ids the *loaded rows* reference, and a new
    * program can have no contact that references its first operator. The draft
-   * row is prefilled with `scope.staffUserId`, so without this the cell would
-   * render the unresolved marker for the person looking at it. The scope entry
-   * is written last so the signed-in user's own name always wins.
+   * row carries both the owner and the collector, so without this the cell
+   * would render the unresolved marker for the person looking at it. The scope
+   * entries are written last so they always win.
    */
   const staffNameById = useMemo(
     () =>
       new Map([
         ...Object.entries(payload.staffNames),
-        [payload.scope.staffUserId, payload.scope.staffName] as const,
+        ...(payload.scope.patchOwnerId
+          ? [[payload.scope.patchOwnerId, payload.scope.patchOwnerName ?? payload.scope.patchOwnerId] as const]
+          : []),
+        [payload.scope.actorUserId, payload.scope.actorName] as const,
       ]),
-    [payload.scope.staffName, payload.scope.staffUserId, payload.staffNames],
+    [
+      payload.scope.actorName,
+      payload.scope.actorUserId,
+      payload.scope.patchOwnerId,
+      payload.scope.patchOwnerName,
+      payload.staffNames,
+    ],
   )
 
   /**
@@ -1399,12 +1406,12 @@ export function ManageContactsTable({
   const rowLifecycle = useMemo<GridRowLifecycle<ManageContact>>(
     () => ({
       createRow: () => {
-        // Prefilled with the signed-in staff member: `createManageContact`
-        // writes both `assigned_preacher_id = staff.userId` and
-        // `collected_by_id = staff.supabaseUserId`, so the blank row carries the
-        // owner and the collector the server is about to store instead of
-        // values that only appear after a reload.
-        const row = createDraftContact(payload.scope.staffUserId)
+        // Prefilled from the scope: the owner and the collector the server is
+        // about to store, instead of values that only appear after a reload.
+        const row = createDraftContact(
+          payload.scope.patchOwnerId ?? payload.scope.actorUserId,
+          payload.scope.actorUserId,
+        )
 
         setContacts((current) => ({ ...current, rows: [...current.rows, row] }))
 
@@ -1423,9 +1430,15 @@ export function ManageContactsTable({
       // Disabled rather than absent while a draft is open: one blank row at a
       // time, because two would race for the same missing required fields and
       // the operator would have no way to tell which one the create failed on.
-      canCreate: !contacts.some((contact) => isDraftRowId(contact.id)),
+      canCreate:
+        Boolean(payload.scope.patchOwnerId) && !contacts.some((contact) => isDraftRowId(contact.id)),
     }),
-    [contacts, deleteContact, payload.scope.staffUserId],
+    [
+      contacts,
+      deleteContact,
+      payload.scope.actorUserId,
+      payload.scope.patchOwnerId,
+    ],
   )
 
   const handleRowRemoved = useCallback((rowId: string) => {

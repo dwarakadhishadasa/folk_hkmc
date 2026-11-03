@@ -117,7 +117,18 @@ function rpcArgs(scope: SessionsScope) {
     p_program_id: scope.programId,
     p_user_id: scope.userId,
     p_role: scope.role,
-    p_assigned_preacher_id: scope.assignedPreacherId,
+    p_assigned_preacher_id: scope.ownerId,
+  }
+}
+
+/** The full actor/owner vector for the one function that takes it. */
+function visibleArgs(scope: SessionsScope) {
+  return {
+    p_program_id: scope.programId,
+    p_actor_id: scope.userId,
+    p_actor_role: scope.role,
+    p_owner_id: scope.ownerId,
+    p_owner_location_ids: scope.locationIds,
   }
 }
 
@@ -397,7 +408,7 @@ export async function getContactAttendanceSummary(
  */
 export async function listVisibleSessions(scope: SessionsScope): Promise<SessionRecord[]> {
   const supabaseAdmin = createSupabaseAdminClient()
-  const { data, error } = await supabaseAdmin.rpc("sessions_visible", rpcArgs(scope))
+  const { data, error } = await supabaseAdmin.rpc("sessions_visible", visibleArgs(scope))
 
   if (error) {
     throw readFailure("visible sessions", error)

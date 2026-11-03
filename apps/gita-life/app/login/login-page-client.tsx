@@ -8,55 +8,11 @@ import { AlertTriangle, KeyRound, UserPlus } from "lucide-react"
 import { Header } from "@/components/header"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/auth-context"
+import { safeStaffRedirectPath } from "@/lib/staff-routes"
 
 let lastAuthCallbackHandoff = ""
 const MIN_EMAIL_OTP_LENGTH = 6
 const MAX_EMAIL_OTP_LENGTH = 10
-
-function landingPathForRole(role: string | null | undefined): string {
-  if (role === "Volunteer") {
-    return "/contact"
-  }
-
-  if (role === "Admin" || role === "Preacher" || role === "Assistant") {
-    return "/dashboard"
-  }
-
-  return "/"
-}
-
-/**
- * The Assistant allowlist: the dashboard, a session and the contact form are
- * the three surfaces their work needs. This is a UX redirect guard, not
- * authorization — every page keeps its own `requireRole`.
- */
-function assistantPathAllowed(value: string): boolean {
-  const path = value.split("?")[0] ?? value
-  return (
-    path === "/dashboard" ||
-    path.startsWith("/dashboard/") ||
-    path === "/sessions" ||
-    path.startsWith("/sessions/") ||
-    path === "/contact" ||
-    path.startsWith("/contact/")
-  )
-}
-
-function safeRedirectPath(value: string | null, role: string | null | undefined): string {
-  if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
-    if (role === "Volunteer" && value !== "/contact") {
-      return "/contact"
-    }
-
-    if (role === "Assistant" && !assistantPathAllowed(value)) {
-      return "/dashboard"
-    }
-
-    return value
-  }
-
-  return landingPathForRole(role)
-}
 
 export function LoginPageClient() {
   const [email, setEmail] = useState("")
@@ -69,7 +25,7 @@ export function LoginPageClient() {
   const searchParams = useSearchParams()
 
   const requestedRedirectUrl = searchParams.get("redirect")
-  const redirectUrl = safeRedirectPath(requestedRedirectUrl, role)
+  const redirectUrl = safeStaffRedirectPath(requestedRedirectUrl, role)
   const didJustSignOut = searchParams.get("signedOut") === "1"
   const authCallbackCode = searchParams.get("code")
   const authCallbackTokenHash = searchParams.get("token_hash")
@@ -151,7 +107,7 @@ export function LoginPageClient() {
 
     try {
       const staff = await verifyLoginCode(email, verificationCode)
-      window.location.replace(safeRedirectPath(requestedRedirectUrl, staff.role))
+      window.location.replace(safeStaffRedirectPath(requestedRedirectUrl, staff.role))
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to verify the sign-in code.")
     } finally {

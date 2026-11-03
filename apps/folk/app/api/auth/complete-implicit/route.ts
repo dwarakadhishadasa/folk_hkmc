@@ -1,4 +1,5 @@
 import { AuthzError, authzErrorResponse, syncStaffProfileByEmail } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -21,7 +22,7 @@ export async function POST() {
     }
 
     const staff = await syncStaffProfileByEmail({ supabaseUserId: user.id, email })
-    return Response.json({ staff })
+    return Response.json({ staff: toClientStaff(staff) })
   } catch (error) {
     return authzErrorResponse(error)
   }

@@ -3,7 +3,6 @@ import "server-only"
 import { resolveManageMode } from "@/components/manage/manage-types"
 import { AuthzError, requireRole, type StaffContext } from "@/lib/authz"
 import type { DashboardScope } from "@/lib/dashboard/types"
-import { findStaffUserById } from "@/lib/supabase/data"
 import { getServerProgramProfile } from "@hkmc/program-config/server"
 
 /**
@@ -12,9 +11,9 @@ import { getServerProgramProfile } from "@hkmc/program-config/server"
  * An Admin may narrow to their own rows with `?mode=preacher`; anything else
  * is the programme. A Preacher and an Assistant have a fixed scope and the
  * parameter is ignored, so it can never widen them. An Assistant resolves
- * through an Active Preacher in the same programme; a missing, inactive or
- * non-Preacher assignment is an empty scope with an explanation, not a
- * refusal and not the programme.
+ * through `patchOwner`: an Active Admin or Preacher in the same programme. A
+ * missing or ineligible assignment is an empty scope with an explanation, not
+ * a refusal and not the programme.
  */
 export async function resolveDashboardScope(
   staff: StaffContext,
@@ -56,13 +55,8 @@ export async function resolveDashboardScope(
     }
   }
 
-  const assignedId = staff.assignedPreacherUserId?.trim()
-  if (!assignedId) {
-    return unassignedAssistant(staff, hasDialer)
-  }
-
-  const preacher = await findStaffUserById(assignedId)
-  if (!preacher || preacher.role !== "Preacher" || preacher.status !== "Active") {
+  const owner = staff.patchOwner
+  if (!owner) {
     return unassignedAssistant(staff, hasDialer)
   }
 
@@ -72,9 +66,9 @@ export async function resolveDashboardScope(
     userId: staff.userId,
     mode: "preacher",
     programScope: false,
-    scopePreacherId: preacher.id,
+    scopePreacherId: owner.userId,
     displayName: staff.name,
-    assistantPreacherName: preacher.name,
+    assistantPreacherName: owner.name,
     assistantUnassigned: false,
     hasDialer,
   }

@@ -2,10 +2,11 @@ import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
 import {
   createSession,
   findLocationById,
-  findStaffUserById,
-  listSessions,
   updateSessionAttendanceUrl,
 } from "@/lib/supabase/data"
+import { listVisibleSessions } from "@/lib/sessions/data"
+import { sessionsScope } from "@/lib/sessions/scope"
+import { OPERATIONAL_ROLES } from "@/lib/staff-roles"
 
 export const dynamic = "force-dynamic"
 
@@ -51,10 +52,10 @@ function parseDurationMinutes(value: unknown): { durationMinutes?: number; error
 export async function GET() {
   try {
     const staff = await getStaffContext({ refresh: true })
-    requireRole(staff, ["Admin", "Preacher", "Assistant"])
+    requireRole(staff, OPERATIONAL_ROLES)
 
-    const sessions = await listSessions()
-    const scoped = sessions.filter((session) => session.createdBy.includes(staff.userId))
+    const scope = await sessionsScope(staff)
+    const scoped = await listVisibleSessions(scope)
 
     return Response.json({
       sessions: scoped.map((session) => ({
@@ -77,7 +78,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const staff = await getStaffContext({ refresh: true })
-    requireRole(staff, ["Admin", "Preacher", "Assistant"])
+    requireRole(staff, OPERATIONAL_ROLES)
 
     const payload = (await request.json()) as SessionPayload
     const name = payload.name?.trim()
@@ -97,27 +98,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "Selected location does not exist." }, { status: 400 })
     }
 
-    let owningPreacherId = staff.userId
-    let owningPreacherLocationIds: string[] = staff.locationIds
-
-    if (staff.role === "Assistant") {
-      if (!staff.assignedPreacherUserId) {
-        return Response.json(
-          { error: "Assistant sessions require an assigned Preacher." },
-          { status: 400 },
-        )
-      }
-
-      const assignedPreacher = await findStaffUserById(staff.assignedPreacherUserId)
-      if (!assignedPreacher || assignedPreacher.role !== "Preacher" || assignedPreacher.status !== "Active") {
-        return Response.json({ error: "Assigned Preacher is not an active Preacher." }, { status: 403 })
-      }
-
-      owningPreacherId = assignedPreacher.id
-      owningPreacherLocationIds = assignedPreacher.locationIds
+    const owner = staff.patchOwner
+    if (!owner) {
+      return Response.json(
+        { error: "No active Preacher is assigned to your account." },
+        { status: 403 },
+      )
     }
 
-    if (!owningPreacherLocationIds.includes(locationId)) {
+    if (!owner.locationIds.includes(locationId)) {
       return Response.json({ error: "This location is outside your allowed scope." }, { status: 403 })
     }
 
@@ -128,7 +117,7 @@ export async function POST(request: Request) {
       name,
       sessionDate: startsAt.toISOString().slice(0, 10),
       locationId,
-      preacherUserId: owningPreacherId,
+      preacherUserId: owner.userId,
       durationMinutes: duration.durationMinutes,
       publicAttendanceEnabled: true,
       attendanceOpensAt: startsAt.toISOString(),

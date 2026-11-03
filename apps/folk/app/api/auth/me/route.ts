@@ -1,4 +1,5 @@
 import { AuthzError, authzErrorResponse, getStaffContext } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -13,7 +14,7 @@ const headers = {
 export async function GET() {
   try {
     const staff = await getStaffContext()
-    return Response.json({ staff }, { headers })
+    return Response.json({ staff: toClientStaff(staff) }, { headers })
   } catch (error) {
     if (error instanceof AuthzError && error.status === 401) {
       return Response.json({ staff: null }, { headers })

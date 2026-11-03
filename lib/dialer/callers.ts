@@ -179,10 +179,10 @@ async function readUsersByIds(
 }
 
 /**
- * The preacher-scoped roster: staff assigned to that preacher plus the
- * requester. For an Assistant the requester is the Assistant, not the
- * preacher — AD-3's assignable set is the preacher's assignees plus the
- * Assistant themselves.
+ * The preacher-scoped roster: staff assigned to that preacher plus the owner
+ * and the requester. For an Assistant the owner is the assigned Admin or
+ * Preacher and the requester is the Assistant — AD-3's assignable set is the
+ * owner's assignees plus the owner and the actor.
  */
 async function readScopedUsers(
   programId: StaffContext["programId"],
@@ -202,16 +202,20 @@ async function readScopedUsers(
     return { data: response.data, error: response.error }
   }, STAFF_READ_FAILURES)
 
-  if (rows.some((row) => row.id === requesterUserId)) {
+  const missingIds = [preacherUserId, requesterUserId].filter(
+    (userId, index, all) => !rows.some((row) => row.id === userId) && all.indexOf(userId) === index,
+  )
+
+  if (missingIds.length === 0) {
     return rows
   }
 
-  const requester = await readUserRow(programId, requesterUserId)
-  if (!requester) {
+  const additions = await Promise.all(missingIds.map((userId) => readUserRow(programId, userId)))
+  if (additions.some((row) => row === null)) {
     throw new AuthzError(500, "caller_roster_read_failed", "Unable to read the requesting staff user.")
   }
 
-  return [...rows, requester]
+  return [...rows, ...additions.filter((row): row is StaffRosterRow => row !== null)]
 }
 
 async function readProgramCallerProfiles(
@@ -417,7 +421,11 @@ function isStaffInRosterScope(
     return true
   }
 
-  return row.id === staff.userId || row.assigned_preacher_id === scope.userId
+  return (
+    row.id === staff.userId ||
+    row.id === scope.userId ||
+    row.assigned_preacher_id === scope.userId
+  )
 }
 
 /**

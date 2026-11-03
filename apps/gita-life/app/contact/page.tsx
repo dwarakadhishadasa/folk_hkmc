@@ -4,6 +4,7 @@ import { Header } from "@/components/header"
 import { ContactForm } from "@/components/contact-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 import { listCachedActivePreachers } from "@/lib/supabase/data"
 
 export const dynamic = "force-dynamic"
@@ -14,13 +15,19 @@ export default async function ContactPage() {
     const preachers = staff.role === "Admin" ? await listCachedActivePreachers() : []
 
     return (
-      <StaffAuthShell staff={staff}>
+      <StaffAuthShell staff={toClientStaff(staff)}>
         <div className="min-h-screen bg-background">
           <Header />
           <main className="container mx-auto max-w-2xl px-4 py-6 sm:py-8">
             <div className="mb-4">
               <BackButton
-                href={staff.role === "Admin" || staff.role === "Preacher" ? "/contacts" : "/"}
+                href={
+                staff.role === "Admin" ||
+                staff.role === "Preacher" ||
+                (staff.role === "Assistant" && staff.patchOwner !== null)
+                  ? "/contacts"
+                  : "/"
+              }
               />
             </div>
             <ContactForm

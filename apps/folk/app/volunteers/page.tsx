@@ -3,16 +3,18 @@ import { Header } from "@/components/header"
 import { InviteUserForm } from "@/components/invite-user-form"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
+import { VOLUNTEER_INVITE_ROLES } from "@/lib/staff-roles"
+import { toClientStaff } from "@/lib/staff-dto"
 
 export const dynamic = "force-dynamic"
 
 export default async function VolunteersPage() {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, VOLUNTEER_INVITE_ROLES)
 
     return (
-      <StaffAuthShell staff={staff}>
+      <StaffAuthShell staff={toClientStaff(staff)}>
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container mx-auto max-w-xl px-4 py-8">

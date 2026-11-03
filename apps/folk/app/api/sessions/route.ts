@@ -3,11 +3,11 @@ import { getCampaign } from "@/lib/dialer/campaigns"
 import {
   createSession,
   findLocationById,
-  findStaffUserById,
   updateSessionAttendanceUrl,
 } from "@/lib/supabase/data"
 import { listVisibleSessions } from "@/lib/sessions/data"
 import { sessionsScope } from "@/lib/sessions/scope"
+import { OPERATIONAL_ROLES } from "@/lib/staff-roles"
 import { programDay } from "@/lib/program-day"
 
 export const dynamic = "force-dynamic"
@@ -121,7 +121,7 @@ async function parseCampaignId(
 export async function GET() {
   try {
     const staff = await getStaffContext({ refresh: true })
-    requireRole(staff, ["Admin", "Preacher", "Assistant"])
+    requireRole(staff, OPERATIONAL_ROLES)
 
     const scope = await sessionsScope(staff)
     const sessions = await listVisibleSessions(scope)
@@ -147,7 +147,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const staff = await getStaffContext({ refresh: true })
-    requireRole(staff, ["Admin", "Preacher", "Assistant"])
+    requireRole(staff, OPERATIONAL_ROLES)
 
     const payload = (await request.json()) as SessionPayload
     const name = payload.name?.trim()
@@ -172,27 +172,15 @@ export async function POST(request: Request) {
       return campaign.response
     }
 
-    let owningPreacherId = staff.userId
-    let owningPreacherLocationIds: string[] = staff.locationIds
-
-    if (staff.role === "Assistant") {
-      if (!staff.assignedPreacherUserId) {
-        return Response.json(
-          { error: "Assistant sessions require an assigned Preacher." },
-          { status: 400 },
-        )
-      }
-
-      const assignedPreacher = await findStaffUserById(staff.assignedPreacherUserId)
-      if (!assignedPreacher || assignedPreacher.role !== "Preacher" || assignedPreacher.status !== "Active") {
-        return Response.json({ error: "Assigned Preacher is not an active Preacher." }, { status: 403 })
-      }
-
-      owningPreacherId = assignedPreacher.id
-      owningPreacherLocationIds = assignedPreacher.locationIds
+    const owner = staff.patchOwner
+    if (!owner) {
+      return Response.json(
+        { error: "No active Preacher is assigned to your account." },
+        { status: 403 },
+      )
     }
 
-    if (!owningPreacherLocationIds.includes(locationId)) {
+    if (!owner.locationIds.includes(locationId)) {
       return Response.json({ error: "This location is outside your allowed scope." }, { status: 403 })
     }
 
@@ -203,7 +191,7 @@ export async function POST(request: Request) {
       name,
       sessionDate: programDay(startsAt),
       locationId,
-      preacherUserId: owningPreacherId,
+      preacherUserId: owner.userId,
       campaignId: campaign.campaignId,
       durationMinutes: duration.durationMinutes,
       publicAttendanceEnabled: true,

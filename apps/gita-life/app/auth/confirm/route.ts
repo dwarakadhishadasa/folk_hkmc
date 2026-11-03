@@ -1,24 +1,10 @@
 import { redirect } from "next/navigation"
 import type { EmailOtpType } from "@supabase/supabase-js"
 import { syncStaffProfileByEmail } from "@/lib/authz"
+import { safeStaffRedirectPath } from "@/lib/staff-routes"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
-
-function safeNextPath(value: string | null, role: string): string {
-  if (value?.startsWith("/") && !value.startsWith("//") && !value.startsWith("/auth")) {
-    if ((role === "Volunteer" || role === "Assistant") && value !== "/contact") {
-      return "/contact"
-    }
-    return value
-  }
-
-  if (role === "Volunteer" || role === "Assistant") {
-    return "/contact"
-  }
-
-  return "/"
-}
 
 function isSupportedEmailOtpType(value: string | null): value is EmailOtpType {
   return value === "invite" || value === "magiclink" || value === "email"
@@ -61,7 +47,7 @@ export async function GET(request: Request) {
       redirect("/auth/error?code=staff-authorization-failed")
     }
 
-    redirect(safeNextPath(next, staff.role))
+    redirect(safeStaffRedirectPath(next, staff.role))
   }
 
   if (!code && !hasSupportedTokenHash && !callbackError) {
@@ -95,5 +81,5 @@ export async function GET(request: Request) {
     redirect("/auth/error?code=staff-authorization-failed")
   }
 
-  redirect(safeNextPath(next, staff.role))
+  redirect(safeStaffRedirectPath(next, staff.role))
 }

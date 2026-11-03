@@ -57,7 +57,7 @@ export function InviteUserForm({
   locations = [],
 }: {
   mode: "volunteer" | "admin"
-  preachers?: Array<{ id: string; name: string }>
+  preachers?: Array<{ id: string; name: string; role?: StaffRole }>
   locations?: LocationOption[]
 }) {
   const [form, setForm] = useState<InviteFormState>(emptyInviteForm)
@@ -70,6 +70,12 @@ export function InviteUserForm({
   const role = form.role
   const isPreacherScoped = isPreacherScopedRole(role)
   const selectedLocationCount = form.locationIds.length
+  // A Volunteer's binding is form routing through a Preacher, so its picker
+  // stays Preacher-only. An Assistant may be bound to an Admin or a Preacher.
+  const assignablePreachers =
+    role === "Volunteer"
+      ? preachers.filter((preacher) => !preacher.role || preacher.role === "Preacher")
+      : preachers
 
   const setLocationSelected = (locationId: string, selected: boolean) => {
     setForm((current) => ({
@@ -81,14 +87,19 @@ export function InviteUserForm({
   const handleRoleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const nextRole = event.target.value as StaffRole
 
-    setForm((current) => ({
-      ...current,
-      role: nextRole,
-      assignedPreacherUserId: isPreacherScopedRole(nextRole)
-        ? current.assignedPreacherUserId
-        : "",
-      locationIds: isPreacherScopedRole(nextRole) ? [] : current.locationIds,
-    }))
+    setForm((current) => {
+      const selected = preachers.find((preacher) => preacher.id === current.assignedPreacherUserId)
+      const keepsBinding =
+        isPreacherScopedRole(nextRole) &&
+        !(nextRole === "Volunteer" && selected?.role === "Admin")
+
+      return {
+        ...current,
+        role: nextRole,
+        assignedPreacherUserId: keepsBinding ? current.assignedPreacherUserId : "",
+        locationIds: isPreacherScopedRole(nextRole) ? [] : current.locationIds,
+      }
+    })
   }
 
   const handleAddLocation = async () => {
@@ -272,9 +283,9 @@ export function InviteUserForm({
               className={fieldClass}
             >
               <option value="">Select Preacher</option>
-              {preachers.map((preacher) => (
+              {assignablePreachers.map((preacher) => (
                 <option key={preacher.id} value={preacher.id}>
-                  {preacher.name}
+                  {preacher.role ? `${preacher.name} — ${preacher.role}` : preacher.name}
                 </option>
               ))}
             </select>

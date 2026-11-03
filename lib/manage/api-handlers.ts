@@ -3,6 +3,7 @@ import "server-only"
 import { isValid, parseISO } from "date-fns"
 
 import { AuthzError, authzErrorResponse, getStaffContext, requireRole, type StaffContext } from "@/lib/authz"
+import { MANAGE_CONTACT_WRITE_ROLES } from "@/lib/staff-roles"
 import {
   MANAGE_CONTACT_PATCH_KEYS,
   type ManageContactBulkResult,
@@ -250,7 +251,7 @@ function parseContactPatch(payload: unknown): ManageContactPatch {
 export async function handleManageContactUpdate(request: Request): Promise<Response> {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, MANAGE_CONTACT_WRITE_ROLES)
 
     let payload: unknown
     try {
@@ -284,12 +285,12 @@ export async function handleManageContactUpdate(request: Request): Promise<Respo
  * of rules, and not a client-side pre-check that would have to be kept in step.
  *
  * The authorization decision is the update route's, verbatim: `getStaffContext()`
- * then `requireRole(staff, ["Admin", "Preacher"])`. Nothing new.
+ * then `requireRole(staff, MANAGE_CONTACT_WRITE_ROLES)`. Nothing new.
  */
 export async function handleManageContactCreate(request: Request): Promise<Response> {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, MANAGE_CONTACT_WRITE_ROLES)
 
     let payload: unknown
     try {
@@ -325,7 +326,7 @@ export async function handleManageContactCreate(request: Request): Promise<Respo
 export async function handleManageContactDelete(request: Request): Promise<Response> {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, MANAGE_CONTACT_WRITE_ROLES)
 
     let payload: unknown
     try {
@@ -415,7 +416,7 @@ async function applyContactBulkItem(
 export async function handleManageContactBulkUpdate(request: Request): Promise<Response> {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, MANAGE_CONTACT_WRITE_ROLES)
 
     let payload: unknown
     try {
@@ -457,7 +458,7 @@ export async function handleManageContactBulkUpdate(request: Request): Promise<R
 export async function handleManageContactPhotoUpload(request: Request): Promise<Response> {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, MANAGE_CONTACT_WRITE_ROLES)
 
     let form: FormData
     try {
@@ -510,7 +511,7 @@ export async function handleManageContactPhotoUpload(request: Request): Promise<
 export async function handleManageContactPhotoUrl(request: Request): Promise<Response> {
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, MANAGE_CONTACT_WRITE_ROLES)
 
     const contactId = normalizeContactId(new URL(request.url).searchParams.get("contactId"))
     if (!contactId) {

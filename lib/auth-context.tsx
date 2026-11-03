@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { usePathname } from "next/navigation"
-import type { StaffContext, StaffRole } from "@/lib/authz"
+import type { StaffRole } from "@/lib/authz"
+import type { ClientStaff } from "@/lib/staff-dto"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
 export type UserRole = StaffRole
@@ -11,9 +12,9 @@ interface AuthContextType {
   isLoggedIn: boolean
   username: string | null
   role: UserRole | null
-  staff: StaffContext | null
+  staff: ClientStaff | null
   login: (email: string) => Promise<boolean>
-  verifyLoginCode: (email: string, token: string) => Promise<StaffContext>
+  verifyLoginCode: (email: string, token: string) => Promise<ClientStaff>
   logout: () => void
   refresh: () => Promise<void>
   isAdmin: boolean
@@ -35,7 +36,7 @@ interface AuthSigninResponse {
   }
 }
 
-async function loadStaff(): Promise<StaffContext | null> {
+async function loadStaff(): Promise<ClientStaff | null> {
   const response = await fetch("/api/auth/me", {
     cache: "no-store",
     headers: { Accept: "application/json" },
@@ -45,11 +46,11 @@ async function loadStaff(): Promise<StaffContext | null> {
     return null
   }
 
-  const data = (await response.json()) as { staff?: StaffContext }
+  const data = (await response.json()) as { staff?: ClientStaff }
   return data.staff || null
 }
 
-async function completeStaffProfileSync(): Promise<StaffContext> {
+async function completeStaffProfileSync(): Promise<ClientStaff> {
   for (const delay of STAFF_SYNC_RETRY_DELAYS_MS) {
     if (delay > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, delay))
@@ -61,7 +62,7 @@ async function completeStaffProfileSync(): Promise<StaffContext> {
       headers: { Accept: "application/json" },
     })
 
-    const data = (await response.json().catch(() => ({}))) as { staff?: StaffContext; error?: string }
+    const data = (await response.json().catch(() => ({}))) as { staff?: ClientStaff; error?: string }
     if (response.ok && data.staff) {
       return data.staff
     }
@@ -83,11 +84,11 @@ function isProtectedStaffPath(pathname: string | null): boolean {
   )
 }
 
-export function AuthProvider({ children, initialStaff }: { children: ReactNode; initialStaff?: StaffContext | null }) {
+export function AuthProvider({ children, initialStaff }: { children: ReactNode; initialStaff?: ClientStaff | null }) {
   const pathname = usePathname()
   const hasInitialStaff = Boolean(initialStaff)
   const [isHydrated, setIsHydrated] = useState(hasInitialStaff)
-  const [staff, setStaff] = useState<StaffContext | null>(initialStaff || null)
+  const [staff, setStaff] = useState<ClientStaff | null>(initialStaff || null)
 
   const refresh = useCallback(async () => {
     try {
@@ -145,7 +146,7 @@ export function AuthProvider({ children, initialStaff }: { children: ReactNode; 
     return true
   }, [])
 
-  const verifyLoginCode = useCallback(async (email: string, token: string): Promise<StaffContext> => {
+  const verifyLoginCode = useCallback(async (email: string, token: string): Promise<ClientStaff> => {
     const normalizedEmail = email.trim().toLowerCase()
     const normalizedToken = token.replace(/\D/g, "")
     if (!normalizedEmail || normalizedToken.length < MIN_EMAIL_OTP_LENGTH) {

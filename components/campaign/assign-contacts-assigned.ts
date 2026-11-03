@@ -1,5 +1,13 @@
 import type { AssignableContactView } from "@/components/campaign/assign-contacts-types"
 
+/**
+ * A draft campaign has assignments prepared but no calls yet, so its split is
+ * a plan; once the campaign is live the same rows are work already handed out.
+ */
+export function assignedBarHeading(campaignStatus: string): string {
+  return campaignStatus === "DRAFT" ? "Planned assignments" : "Already assigned"
+}
+
 export interface AssignedCallerRow {
   callerName: string
   count: number

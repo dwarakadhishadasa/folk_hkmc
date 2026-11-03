@@ -5,6 +5,7 @@ import { DashboardPage } from "@/components/dashboard/dashboard-page"
 import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
+import { toClientStaff } from "@/lib/staff-dto"
 import { loadDashboardLiveSessions, type DashboardLiveSession } from "@/lib/dashboard/live"
 import { loadDashboardOverview } from "@/lib/dashboard/overview"
 import { parseDashboardPeriod, resolveDashboardWindow } from "@/lib/dashboard/period"
@@ -57,7 +58,7 @@ export async function DashboardRoute({ searchParams }: { searchParams: Dashboard
     }
 
     return (
-      <StaffAuthShell staff={staff}>
+      <StaffAuthShell staff={toClientStaff(staff)}>
         <DashboardShell>
           <DashboardPage
             scope={scope}

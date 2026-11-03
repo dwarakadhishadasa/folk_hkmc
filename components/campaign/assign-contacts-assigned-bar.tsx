@@ -1,6 +1,9 @@
 import { useMemo } from "react"
 
-import { assignedCallerRows } from "@/components/campaign/assign-contacts-assigned"
+import {
+  assignedBarHeading,
+  assignedCallerRows,
+} from "@/components/campaign/assign-contacts-assigned"
 import type { AssignableContactView } from "@/components/campaign/assign-contacts-types"
 
 const CALLER_PALETTE = [
@@ -19,8 +22,10 @@ const CALLER_PALETTE = [
  * set, so the muted track left behind is the unassigned remainder.
  */
 export function AssignContactsAssignedBar({
+  campaignStatus,
   contacts,
 }: {
+  campaignStatus: string
   contacts: readonly AssignableContactView[]
 }) {
   const { rows, assignedCount, total } = useMemo(() => assignedCallerRows(contacts), [contacts])
@@ -40,7 +45,7 @@ export function AssignContactsAssignedBar({
             id="assign-contacts-assigned-heading"
             className="text-[13px] font-semibold text-[var(--program-text)]"
           >
-            Already assigned
+            {assignedBarHeading(campaignStatus)}
           </h3>
           <p className="text-[11px] tabular-nums text-[var(--muted-foreground)]">
             {assignedCount.toLocaleString("en-IN")} of {total.toLocaleString("en-IN")}{" "}

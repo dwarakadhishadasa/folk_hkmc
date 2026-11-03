@@ -1095,7 +1095,7 @@ export function AssignContactsSelect({
         {isPreviewing ? <p className="sr-only">Previewing the split</p> : null}
                 </section>
 
-                <AssignContactsAssignedBar contacts={contacts} />
+                <AssignContactsAssignedBar campaignStatus={campaignStatus} contacts={contacts} />
 
                 <div className="border-t border-[var(--border)] p-3">
                   <Button

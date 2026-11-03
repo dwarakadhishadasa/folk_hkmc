@@ -1,4 +1,9 @@
 import { authzErrorResponse, getStaffContext, requireRole } from "@/lib/authz"
+import {
+  supervisorErrorForRequirement,
+  supervisorRequirementForRole,
+  supervisorSatisfiesRequirement,
+} from "@/lib/invite-supervisor"
 import { findLocationById, findStaffUserById, type StaffRole, upsertStaffUser } from "@/lib/supabase/data"
 import { writeInviteLog } from "@/lib/invite-log"
 import { sendStaffInviteEmail } from "@/lib/supabase/invite"
@@ -38,7 +43,10 @@ export async function POST(request: Request) {
       return Response.json({ error: "Name, email, and a valid role are required." }, { status: 400 })
     }
 
-    if (role === "Volunteer" || role === "Assistant") {
+    const supervisorRequirement = supervisorRequirementForRole(role)
+    let assignedPreacherUserId: string | null = null
+
+    if (supervisorRequirement !== "none") {
       const preacherId = payload.assignedPreacherUserId?.trim()
       if (!preacherId) {
         return Response.json(
@@ -48,9 +56,22 @@ export async function POST(request: Request) {
       }
 
       const preacher = await findStaffUserById(preacherId)
-      if (!preacher || preacher.role !== "Preacher" || preacher.status !== "Active") {
-        return Response.json({ error: "Assigned Preacher must be an active Preacher." }, { status: 400 })
+      const eligible = supervisorSatisfiesRequirement(
+        supervisorRequirement,
+        preacher
+          ? { programId: staff.programId, role: preacher.role, status: preacher.status }
+          : null,
+        staff.programId,
+      )
+
+      if (!preacher || !eligible) {
+        return Response.json(
+          { error: supervisorErrorForRequirement(supervisorRequirement) },
+          { status: 400 },
+        )
       }
+
+      assignedPreacherUserId = preacher.id
     }
 
     if (locationIds.length > 0) {
@@ -65,8 +86,9 @@ export async function POST(request: Request) {
       name,
       role,
       invitedByUserId: staff.userId,
-      assignedPreacherUserId:
-        role === "Volunteer" || role === "Assistant" ? payload.assignedPreacherUserId : undefined,
+      // `null` is the explicit clear; omitting the field would leave a promoted
+      // staff member pointing at their old Preacher.
+      assignedPreacherUserId,
       locationIds,
     })
 

@@ -5,6 +5,8 @@ import { ManagePortal } from "@/components/manage/manage-portal"
 import { isManageView, resolveManageMode } from "@/components/manage/manage-types"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
+import { OPERATIONAL_ROLES } from "@/lib/staff-roles"
+import { toClientStaff } from "@/lib/staff-dto"
 import { loadManagePortalData } from "@/lib/supabase/manage"
 
 export const dynamic = "force-dynamic"
@@ -61,15 +63,15 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
 
   try {
     const staff = await getStaffContext()
-    requireRole(staff, ["Admin", "Preacher"])
+    requireRole(staff, OPERATIONAL_ROLES)
 
     const initialView = isManageView(requestedView) ? requestedView : "dashboard"
-    const mode = resolveManageMode(firstValue(params.mode))
+    const mode = staff.role === "Admin" ? resolveManageMode(firstValue(params.mode)) : "preacher"
 
     const payload = await loadManagePortalData({ staff, mode })
 
     return (
-      <StaffAuthShell staff={staff}>
+      <StaffAuthShell staff={toClientStaff(staff)}>
         {/*
           `overflow-hidden`, and `main` a bounded flex column: this is
           where the height the grid fills is established. Nothing below may assert
