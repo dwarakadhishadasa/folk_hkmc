@@ -20,10 +20,30 @@ const DEFAULT_STAFF: StaffContext = {
   role: "Admin",
   status: "Active",
   locationIds: [],
+  patchOwner: {
+    userId: "00000000-0000-4000-8000-000000000102",
+    role: "Admin",
+    name: "Test Staff",
+    locationIds: [],
+  },
   hasActiveCallerProfile: false,
   lastSyncedAt: "2026-01-01T00:00:00.000Z",
 }
 
 export function staffContext(overrides: Partial<StaffContext> = {}): StaffContext {
-  return { ...DEFAULT_STAFF, ...overrides }
+  const merged = { ...DEFAULT_STAFF, ...overrides }
+
+  if (overrides.patchOwner === undefined) {
+    merged.patchOwner =
+      merged.role === "Admin" || merged.role === "Preacher"
+        ? {
+            userId: merged.userId,
+            role: merged.role,
+            name: merged.name,
+            locationIds: merged.locationIds,
+          }
+        : null
+  }
+
+  return merged
 }

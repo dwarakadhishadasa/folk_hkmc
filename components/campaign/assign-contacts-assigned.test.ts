@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest"
 
-import { assignedCallerRows } from "./assign-contacts-assigned"
+import { assignedBarHeading, assignedCallerRows } from "./assign-contacts-assigned"
+
+describe("assignedBarHeading", () => {
+  it("calls a draft campaign's split a plan", () => {
+    expect(assignedBarHeading("DRAFT")).toBe("Planned assignments")
+  })
+
+  it("keeps the assigned wording once the campaign is live or closed", () => {
+    expect(assignedBarHeading("ACTIVE")).toBe("Already assigned")
+    expect(assignedBarHeading("COMPLETED")).toBe("Already assigned")
+    expect(assignedBarHeading("CANCELLED")).toBe("Already assigned")
+  })
+})
 
 describe("assignedCallerRows", () => {
   it("groups the assigned contacts by caller, ranked and shared against the whole scope", () => {

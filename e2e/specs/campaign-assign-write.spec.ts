@@ -588,13 +588,13 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await page.goto(`/campaigns/${campaignId}/assign-contacts`)
       await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
 
-      // The panel's existing split names the caller holding the seeded contact.
-      const alreadyAssigned = page.getByRole("region", { name: "Already assigned" })
-      await expect(alreadyAssigned).toBeVisible()
-      await expect(alreadyAssigned).toContainText(owner.name)
+      // The draft campaign's planned split names the caller holding the seeded contact.
+      const plannedAssignments = page.getByRole("region", { name: "Planned assignments" })
+      await expect(plannedAssignments).toBeVisible()
+      await expect(plannedAssignments).toContainText(owner.name)
 
       const paneBox = await page.getByRole("complementary", { name: "Assignment" }).boundingBox()
-      const splitBox = await alreadyAssigned.boundingBox()
+      const splitBox = await plannedAssignments.boundingBox()
       expect(paneBox && splitBox, "the split must sit inside the assign pane").toBeTruthy()
       if (paneBox && splitBox) {
         expect(splitBox.height).toBeLessThanOrEqual(paneBox.height * 0.3 + 1)
