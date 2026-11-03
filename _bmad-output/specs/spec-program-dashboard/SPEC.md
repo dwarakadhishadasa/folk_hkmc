@@ -61,7 +61,7 @@ The dashboard turns the same rows into one scope-consistent answer: how many peo
 
 ## Constraints
 
-- Scope is resolved once, server-side, from `getStaffContext()`. `?mode=` only narrows an Admin; a Preacher and an Assistant have a fixed scope. An Assistant resolves through `assignedPreacherUserId`; a missing, inactive or non-Preacher assignment is an empty scope with an explanation, never a refusal and never a widening.
+- Scope is resolved once, server-side, from `getStaffContext()`. `?mode=` only narrows an Admin; a Preacher and an Assistant have a fixed scope. An Assistant resolves through `patchOwner` (the assigned Active Admin or Preacher); a missing, inactive, cross-programme or wrong-role assignment is an empty scope with an explanation, never a refusal and never a widening. Amended by `SPEC-admin-assistants`.
 - Every query and function filters `program_id`. No aggregate, link, export or assertion crosses programs.
 - One definition per number. `dashboard_overview` and `dashboard_candidates` compute the figures; the server loader parses them; no component recounts, re-derives or patches a figure. Percentage and formatting are display-only.
 - Scope predicates match the existing contracts: contacts by `assigned_preacher_id`; sessions by `preacher_id` or `created_by`; attendance through its session; call logs through the assignment's contact's `assigned_preacher_id`, not through the caller. This is what makes an Assistant's calls count inside their preacher's patch.

@@ -127,7 +127,7 @@ Source types: `UserFields`, `StaffUser`. Table `public.users` — **the staff so
 | `role` | text | `CHECK IN ('Admin', 'Preacher', 'Volunteer', 'Assistant')` |
 | `status` | text | `CHECK IN ('Active', 'Inactive', 'Suspended', 'Revoked')`; defaults to `Active` |
 | `location_ids` | uuid[] | Location scope; no join table |
-| `assigned_preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL`; Volunteer/Assistant routing |
+| `assigned_preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL`; the assigned Preacher (Active Admin or Preacher) whose personal patch a Volunteer or Assistant is routed through |
 | `invited_by` | uuid | UUID of the inviting staff row |
 | `created_at` | timestamptz | Default `now()` |
 | `updated_at` | timestamptz | Default `now()` |
@@ -222,9 +222,9 @@ All are `STABLE`, `SECURITY DEFINER`, pinned to `search_path = public, pg_temp`,
 | --- | --- | --- |
 | `public.caller_role()` | text | Caller's role, `NULL` when the caller has no `Active` `users` row |
 | `public.caller_program_id()` | text | Caller's program under the same condition |
-| `public.caller_assigned_preacher_id()` | uuid | Caller's assigned preacher, `NULL` unless both rows are `Active` |
-| `public.caller_effective_location_ids()` | uuid[] | Preacher's own `location_ids`; a Volunteer/Assistant's active assigned preacher's `location_ids`; `{}` otherwise |
-| `public.caller_can_read_attendance_session(session_id)` | boolean | TRUE when the session is in the caller's program and its `preacher_id` is the caller or the caller's active assigned preacher |
+| `public.caller_assigned_preacher_id()` | uuid | Caller's assigned Preacher, `NULL` unless both rows are `Active`, in the same programme, and the assigned row is `Admin` or `Preacher` |
+| `public.caller_effective_location_ids()` | uuid[] | Preacher's own `location_ids`; a Volunteer/Assistant's active assigned Admin/Preacher's `location_ids`; `{}` otherwise |
+| `public.caller_can_read_attendance_session(session_id)` | boolean | TRUE when the session matches the caller's session predicate: Admin any session in the programme; Preacher `preacher_id`/`created_by = caller` or `created_by` in active staff assigned to them; Assistant the assigned Admin/Preacher's sessions or `created_by = caller` |
 
 ### Read policies
 
@@ -232,22 +232,22 @@ All are `STABLE`, `SECURITY DEFINER`, pinned to `search_path = public, pg_temp`,
 | --- | --- | --- |
 | `public.users` | "Users can read own row or program rows as admin" | Own row always; all rows in own program when Admin |
 | `public.contacts` | "Contacts are scoped by caller role and program" | Program **and** (Admin ∨ Preacher with `assigned_preacher_id = caller` ∨ Assistant with `assigned_preacher_id = caller's active assigned preacher`) |
-| `public.sessions` | "Sessions are scoped by creator, preacher and program" | Program **and** (Admin ∨ Preacher/Assistant with `created_by = caller` ∨ `preacher_id = caller` ∨ `created_by`/`preacher_id` = caller's active assigned preacher) |
+| `public.sessions` | "Sessions are scoped by creator, preacher and program" | Program **and** (Admin ∨ Preacher with `preacher_id`/`created_by = caller` or `created_by` in active staff assigned to them ∨ Assistant with `preacher_id`/`created_by` = the assigned Admin/Preacher or `created_by = caller`) |
 | `public.attendance` | "Attendance is scoped by session preacher and program" | Program **and** (Admin ∨ (Preacher/Assistant ∨ Assistant) where `caller_can_read_attendance_session(session_id)`) |
 | `public.locations` | "Locations are scoped by effective locations and program" | Program **and** (Admin ∨ `id = ANY(caller_effective_location_ids())`) |
 
 A Volunteer with an assigned preacher falls through to zero rows on contacts, sessions, and attendance; their location scope is the assigned preacher's.
 
-`node scripts/verify-rls.mjs` exercises all 75 checks against the hosted project.
+`node scripts/verify-rls.mjs` exercises the fixture matrix against the local stack, including Admin-supervised Assistants, a wrong-role assignee and a cross-programme assignee.
 
 ## In-Memory And Client State
 
 ### `StaffContext`
 
-Resolved by `getStaffContext()` in `lib/authz.ts`, returned by `GET /api/auth/me`, and consumed by `AuthProvider`:
+Resolved by `getStaffContext()` in `lib/authz.ts`, projected by `toClientStaff()`, returned by `GET /api/auth/me`, and consumed by `AuthProvider`:
 
 ```ts
-interface StaffContext {
+interface ClientStaff {
   programId: "folk" | "gita-life"
   supabaseUserId: string
   email: string
@@ -257,11 +257,19 @@ interface StaffContext {
   status: "Active" | "Inactive" | "Suspended" | "Revoked"
   locationIds: string[]
   assignedPreacherUserId?: string // public.users.assigned_preacher_id (UUID)
+  hasPatchScope: boolean
+  supervisorName: string | null
+  supervisorRole: "Admin" | "Preacher" | null
+  canReadContacts: boolean
+  canManage: boolean
+  canInviteVolunteers: boolean
+  canUseCampaignAdmin: boolean
+  canUseCallerQueue: boolean
   lastSyncedAt: string
 }
 ```
 
-`userId` and `assignedPreacherUserId` are `public.users` UUIDs — the same vocabulary used by the contact and invite request bodies.
+`userId` and `assignedPreacherUserId` are `public.users` UUIDs — the same vocabulary used by the contact and invite request bodies. `getStaffContext()` also resolves a server-only `patchOwner` (the caller for an Admin or Preacher, the assigned Active Admin or Preacher for an Assistant, `null` otherwise); `toClientStaff()` strips it, so no RSC or route payload carries the owner's location list.
 
 ### Auth Provider State
 

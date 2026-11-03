@@ -77,17 +77,21 @@ interface StaffContext {
 
 ### Role Matrix
 
-| Surface | Public | Volunteer | Preacher | Admin |
-| --- | --- | --- | --- | --- |
-| `/` | Yes | Yes | Yes | Yes |
-| `/register` | Yes | Yes | Yes | Yes |
-| `/attend` | Yes | Yes | Yes | Yes |
-| `/contact` | No | Yes | Yes | Yes |
-| `/sessions` | No | No | Yes | Yes |
-| `/dashboard` | No | No | Yes | Yes |
-| `/volunteers` | No | No | Yes | Yes |
-| `/admin/invite` | No | No | No | Yes |
-| `/manage` | No | No | Yes | Yes |
+| Surface | Public | Volunteer | Preacher | Assistant | Admin |
+| --- | --- | --- | --- | --- | --- |
+| `/` | Yes | Yes | Yes | Yes | Yes |
+| `/register` | Yes | Yes | Yes | Yes | Yes |
+| `/attend` | Yes | Yes | Yes | Yes | Yes |
+| `/contact` | No | Yes | Yes | Yes | Yes |
+| `/contacts*` | No | No | Yes (self) | Yes (patch) | Yes (self) |
+| `/sessions` | No | No | Yes (self) | Yes (patch) | Yes (self, creator-only) |
+| `/dashboard` | No | No | Yes (self) | Yes (patch) | Yes (programme) |
+| `/volunteers` | No | No | Yes | No | No |
+| `/admin/invite` | No | No | No | No | Yes |
+| `/manage` | No | No | Yes (self) | Yes (patch) | Yes (programme or self) |
+| `/attendance` (staff GET) | No | No | Yes (patch) | Yes (patch) | Yes (programme) |
+
+An Assistant reads only the assigned Preacher's personal patch. The assigned Preacher may be an Active **Admin** or Preacher; the UI keeps the word "Preacher" for both, and the role is shown where the person is named. A Volunteer's binding is form routing, not a scope grant.
 
 ## Data Architecture
 

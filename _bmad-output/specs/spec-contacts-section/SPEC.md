@@ -36,13 +36,13 @@ them. The form stays exactly where staff already know it.
 
 | Route | Page | Who |
 |---|---|---|
-| `/contacts` | Overview — the section root and the first pill's target | `Admin`, `Preacher` |
-| `/contacts/grid` | Contacts — the grid | `Admin`, `Preacher` |
-| `/contacts/reports` | Reports | `Admin`, `Preacher` |
+| `/contacts` | Overview — the section root and the first pill's target | `Admin`, `Preacher`, `Assistant` |
+| `/contacts/grid` | Contacts — the grid | `Admin`, `Preacher`, `Assistant` |
+| `/contacts/reports` | Reports | `Admin`, `Preacher`, `Assistant` |
 | `/contact` | Add contact — the form, unchanged | all four roles |
 | `/manage?view=contacts` | redirects to `/contacts/grid` | — |
 
-`Volunteer` and `Assistant` opening any `/contacts*` route land on `/contact`.
+`Volunteer` opening any `/contacts*` route lands on `/contact`. An Assistant opens the section on the assigned Preacher's personal patch (the assigned Preacher may be an Admin or a Preacher); an Assistant with no eligible assignment sees the section's empty explanation. Amended by `SPEC-admin-assistants`.
 
 ## Capabilities
 
@@ -110,11 +110,13 @@ them. The form stays exactly where staff already know it.
   keeps its columns, editors, commit and rollback path, keyboard model, selection semantics and
   URL contract. Its visible column set and hidden set are unchanged from Manage. This tab does not
   render the toolbar's `Add record`; that is the only difference from the surface `/manage` had.
-- **The section is personal-scope.** `P` is the reader's own contacts: rows whose
-  `assigned_preacher_id` is the reader. `Admin` and `Preacher` read the same rule. There is no
-  scope switch and no `?mode=` anywhere in the section. A contact with no assigned preacher is not
-  in `P` and is not reachable from these three tabs. This is a read rule, not a permission
-  boundary: `/api/manage/contacts*` and the contacts RLS policy are unchanged.
+- **The section is personal-scope.** `P` is the patch owner's contacts: rows whose
+  `assigned_preacher_id` is the resolved patch owner. `Admin`, `Preacher` and `Assistant` read the
+  same rule; an Assistant's owner is the assigned Admin or Preacher. There is no scope switch and
+  no `?mode=` anywhere in the section. A contact with no assigned preacher is not in `P` and is not
+  reachable from these three tabs. This is a read rule, not a permission boundary:
+  `/api/manage/contacts*` and the contacts RLS policy grant the same patch. Amended by
+  `SPEC-admin-assistants`.
 - **The collection date is a stored field, not an inference.** `initial_contact` is written at
   create time by the form (`createContact`) and by public registration, and every period-scoped
   figure and link reads it. Nothing is derived from `created_at`, so the grid needs no new column
@@ -124,9 +126,10 @@ them. The form stays exactly where staff already know it.
   (`h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))]`, `overflow-hidden`), not the page-scrolling
   shape Campaigns uses, because the grid must own the only scroller
   (`grid-scroll-surface.spec.ts`).
-- **Roles.** Overview, Contacts and Reports are `Admin` and `Preacher`, matching today's `/manage`
-  gate. `Volunteer` and `Assistant` keep the form-only path: `/contacts*` redirects them to
-  `/contact`, which is the form.
+- **Roles.** Overview, Contacts and Reports are `Admin`, `Preacher` and `Assistant`, matching the
+  operational surface set. `Volunteer` keeps the form-only path: `/contacts*` redirects them to
+  `/contact`, which is the form. An Assistant reads the assigned Preacher's personal patch only.
+  Amended by `SPEC-admin-assistants`.
 - **The phone list is the prototype, not the imported frames.** Layout comes from
   `~/figcraft-scratch/contacts-mobile-prototype.figcraft` — outside the repo today; publish it to
   `_bmad-output/E-Assets/page-designs/` before the story starts. The app bar and the five-item
@@ -148,7 +151,7 @@ them. The form stays exactly where staff already know it.
 - No saved views, Ask-AI filter authoring, or condition groups; the grid's existing filter surface
   is what ships.
 - No change to the `/api/manage/contacts*` endpoint names or their authorization.
-- No Assistant access to the grid; that is a permission change, not a design one.
+- Assistant access to the grid is the `SPEC-admin-assistants` change; it is patch-scoped, not programme-scoped.
 
 ## Success signal
 
@@ -165,7 +168,7 @@ and adds one contact through the form and sees it in the list — without openin
   keeps all five. The prototype is a layout authority only.
 - The two `1 Contacts List` frames pasted into `contacts.figcraft` on 2026-11-01 are that prototype
   brought in for reference, not new screens to build.
-- `Admin` and `Preacher` are the only roles that will ever reach these three tabs.
+- `Admin`, `Preacher` and `Assistant` reach these three tabs; an Assistant reads only the assigned Preacher's patch.
 - Unassigned contacts are outside `P` by design. Making them visible is a change to the scope rule,
   not an implementation detail.
 
@@ -177,6 +180,6 @@ and adds one contact through the form and sees it in the list — without openin
 | D2 | Undated rows | The period filter is the only rule: a dated window excludes `initial_contact` null, `All time` applies no filter and includes them. No backfill. |
 | D3 | The count invariant | Asserted against the grid's status readout (`{visible} of {total} in scope`), not the footer's record total. |
 | D4 | CSV export | Not in this section. No endpoint, no button, no spec file. |
-| D5 | Scope | No control in either shape. `P` is `assigned_preacher_id = me` for `Admin` and `Preacher` alike; `/manage` keeps its own switch for its remaining tabs. |
+| D5 | Scope | No control in either shape. `P` is `assigned_preacher_id = patchOwner` for `Admin`, `Preacher` and `Assistant` alike; `/manage` keeps its own switch for its remaining tabs. |
 | D6 | Reports month chart | Always the last twelve months; the period select does not move it, and the card's subtitle says so. |
 | D7 | Inline create | The toolbar's `Add record` is not rendered on this tab; `Add contact` is the one create. |

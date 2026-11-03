@@ -364,6 +364,7 @@ not a local change — run the specs named for every consumer.
 | `hooks/use-mobile.ts` | `manage-contacts-table.tsx` (the device detection) and `components/ui/sidebar.tsx` | `test:e2e:manage` |
 | `lib/manage/api-handlers.ts` | The three `/api/manage/contacts/*` routes ×2 apps | `test:e2e:manage` |
 | `lib/authz.ts` | Every staff page + every authz'd API route ×2 apps | Full `pnpm test:e2e` |
+| `lib/staff-roles.ts`, `lib/staff-patch.ts`, `lib/patch-scope.ts`, `lib/staff-dto.ts`, `lib/staff-routes.ts` | Every staff page, every auth route, both invite routes and the scoped data layer ×2 apps | Full `pnpm test:e2e` |
 | `lib/supabase/data.ts` | Sessions, dashboard, contact, invite, attendance, registration ×2 apps | Full `pnpm test:e2e` |
 | `lib/attendance-session.ts` | `/attendance` **and** `/api/registration` ×2 apps | `pnpm test:attendance-contract` |
 | `components/ui/*` primitives | Widely; `table.tsx` is attendance-view only, `button`/`checkbox` are manage-only | Match the consuming feature |

@@ -292,7 +292,8 @@ Request:
 Rules:
 
 - Role must be `Admin`, `Preacher`, `Volunteer`, or `Assistant`.
-- Volunteer and Assistant invites require an active assigned Preacher.
+- Volunteer invites require an active assigned Preacher.
+- Assistant invites require an active Admin or Preacher in the same programme. The picker is labelled "Assigned Preacher" and shows each person's role; `/volunteers` is the Preacher's self-only surface, and an Admin invites from `/admin/invite`.
 - Non-Volunteer/Assistant roles may receive location access.
 - The route upserts the `public.users` row, sending a Supabase invite or existing-user sign-in link, and writes `invite_log`.
 
@@ -328,9 +329,9 @@ Responses:
 
 ### `POST /api/volunteers/invite`
 
-Invites a Volunteer. Admins may choose the assigned Preacher; Preachers assign the volunteer to themselves.
+Invites a Volunteer or Assistant assigned to the signed-in Preacher. `/volunteers` is the Preacher's self-only surface; an Admin invites from `/admin/invite`.
 
-Auth: Admin or Preacher.
+Auth: Preacher.
 
 Request:
 
@@ -338,14 +339,13 @@ Request:
 {
   "name": "Nitai",
   "email": "nitai@example.com",
-  "role": "Volunteer",
-  "assignedPreacherUserId": "9f1c2f0e-6a1a-4a9a-9a2e-1b7c8d3f5a10"
+  "role": "Volunteer"
 }
 ```
 
 Responses:
 
-- `201 { invited: true, delivery: "invite" | "sign-in-link", user: { id, email, role: "Volunteer" } }`
+- `201 { invited: true, delivery: "invite" | "sign-in-link", user: { id, email, role: "Volunteer" | "Assistant" } }`
 - `400/403/502 { error }`
 - `401/500 { error, code? }`
 

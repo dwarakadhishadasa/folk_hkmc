@@ -424,3 +424,23 @@ the service role and removed in `afterAll`; the seed's open session is never
 mutated, because the attendance contract still needs it. The report expectations
 are read back from `sessions` and `attendance`, so the seed's own rows count
 without being hard-coded.
+
+## Admin-supervised Assistants — `spec-admin-assistants`
+
+The contract is `_bmad-output/specs/spec-admin-assistants/SPEC.md`. Its
+browser- and HTTP-observable rows are covered by one spec; the verdicts below
+are from the run recorded underneath, not a prediction.
+
+| # | Row | Layer | Verdict | Spec |
+|---|---|---|---|---|
+| A1 | An Admin invites an Assistant assigned to themselves; the picker offers an Admin and the binding is written | UI + DB | **Covered** | `admin-assistants.spec.ts` |
+| A2 | An Admin-supervised Assistant reads the Admin's contacts, sessions, attendance and campaign surface, not the Preacher's | UI + API | **Covered** | `admin-assistants.spec.ts` |
+| A3 | A Preacher's Assistant still reads the Preacher's patch, not the Admin's | UI + API | **Covered** | `admin-assistants.spec.ts` |
+| A4 | A null-patch Assistant gets the surface-specific empty states and no dead Contacts/Manage/Invite nav items | UI | **Covered** | `admin-assistants.spec.ts` |
+| A5 | No user-facing string renders "Supervisor"; the label stays "Preacher" | UI | **Covered** | `admin-assistants.spec.ts` |
+| A6 | RLS grants the Admin-supervised patch, refuses a wrong-role or cross-programme assignee, and collapses a null patch to zero rows | DB | **Covered** | `scripts/verify-rls.mjs` |
+
+**The recorded run.** 2026-11-03, local stack, Playwright 1.62, single worker,
+`pnpm test:e2e admin-assistants` — **9 passed** (4 setup + 5 spec) in 50.2s.
+The RLS matrix is `node scripts/verify-rls.mjs` — **109/109 passed** against the
+local stack with the Admin-supervised, wrong-role and cross-programme fixtures.
