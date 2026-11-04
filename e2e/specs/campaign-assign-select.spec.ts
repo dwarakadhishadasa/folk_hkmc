@@ -23,8 +23,15 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 import { isLocalSupabaseUrl } from "../../scripts/local-supabase-target.mjs"
 import { readEnvValue } from "../fixtures/auth-users"
+import { ensureActiveCaller } from "../fixtures/dialer-caller"
 import { createDisposableCampaign, deleteDisposableCampaign } from "../fixtures/dialer-campaign"
-import { e2eProgramId, storageStatePath } from "../fixtures/roles"
+import { e2eProgramId, fixtureEmail, storageStatePath } from "../fixtures/roles"
+import {
+  assignContacts,
+  cleanupCampaign,
+  createCallLog,
+  seededContacts,
+} from "./campaign-caller-helpers"
 
 /** A valid UUID that is impossible to seed, for the refusal path. */
 const ABSENT_CAMPAIGN_ID = "00000000-0000-4000-8000-000000000000"
@@ -228,6 +235,7 @@ test.describe("the assign-contacts surface — an Admin", () => {
         "Initial Contact",
         "Location",
         "Assigned To",
+        "Recent status",
         "Collected By",
         "Notes",
       ]) {
@@ -247,6 +255,47 @@ test.describe("the assign-contacts surface — an Admin", () => {
       await expect(page.getByRole("button", { name: "Previous", exact: true })).toHaveCount(0)
     } finally {
       await deleteDisposableCampaign(campaignId)
+    }
+  })
+
+  test("shows the latest call status across campaigns, not just this one", async ({ page }) => {
+    const campaignId = await createDisposableCampaign(page.request, "assign select recent status")
+    const otherCampaignId = await createDisposableCampaign(page.request, "assign select other campaign")
+    const caller = await ensureActiveCaller(fixtureEmail("volunteer"))
+
+    try {
+      const [contact] = await seededContacts(1)
+      const [assignment] = await assignContacts(campaignId, caller.callerId, [contact])
+      const [otherAssignment] = await assignContacts(otherCampaignId, caller.callerId, [contact])
+
+      // This campaign's call is older than the other campaign's.
+      await createCallLog({
+        assignmentId: assignment.id,
+        callerId: caller.callerId,
+        phone: contact.phone,
+        attempt: 1,
+        dispositionStatus: "CONFIRMED",
+        calledAt: "2026-11-01T10:00:00.000Z",
+      })
+      await createCallLog({
+        assignmentId: otherAssignment.id,
+        callerId: caller.callerId,
+        phone: contact.phone,
+        attempt: 1,
+        dispositionStatus: "MAY_COME",
+        calledAt: "2026-11-02T10:00:00.000Z",
+      })
+
+      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+      await showContact(page, contact.phone)
+
+      const row = contactRow(page, contact.phone)
+      await expect(row.getByRole("cell", { name: "May come", exact: true })).toBeVisible()
+      await expect(row.getByText("Confirmed", { exact: true })).toHaveCount(0)
+    } finally {
+      await cleanupCampaign(campaignId)
+      await cleanupCampaign(otherCampaignId)
+      await caller.cleanup()
     }
   })
 

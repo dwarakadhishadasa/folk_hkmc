@@ -5,13 +5,17 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
-import { CampaignDateField } from "@/components/campaign/campaign-date-field"
+import { CampaignStatusPill } from "@/components/campaign/campaign-status-pill"
+import { formatCampaignDate } from "@/components/campaign/campaign-format"
+import { Button } from "@/components/ui/button"
 
 /**
- * The assign-contacts header: the campaign's own name, editable in place, with
- * its end date beneath it. Both save on their own — the name when the field
- * loses focus, the date as soon as a day is picked — because this header is a
- * property sheet, not a second form with a Save button.
+ * The campaign page's head: the name the report will be run against, its
+ * status, its end date, and the one lifecycle action a DRAFT campaign has.
+ *
+ * Name, description and end date are edited in the details card below, so this
+ * row never becomes a second form. A COMPLETED campaign renders the same head
+ * with no action: its record is closed.
  */
 export function CampaignAssignHeader({
   campaign,
@@ -21,53 +25,46 @@ export function CampaignAssignHeader({
     name: string
     description: string | null
     campaignDate: string
+    status: string
   }
 }) {
   const router = useRouter()
-  const [name, setName] = useState(campaign.name)
-  const [campaignDate, setCampaignDate] = useState(campaign.campaignDate)
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [isStarting, setIsStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const save = async (nextName: string, nextDate: string) => {
-    const trimmed = nextName.trim()
+  const canStart = campaign.status === "DRAFT"
 
-    if (!trimmed) {
-      setError("Enter a campaign name.")
-      setStatus("error")
+  const startCampaign = async () => {
+    if (isStarting) {
       return
     }
 
-    if (trimmed === campaign.name && nextDate === campaign.campaignDate) {
-      return
-    }
-
-    setStatus("saving")
     setError(null)
+    setIsStarting(true)
 
     try {
-      const response = await fetch(`/api/dialer/admin/campaigns/${campaign.id}`, {
-        method: "PATCH",
+      const response = await fetch(`/api/dialer/admin/campaigns/${campaign.id}/transition`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmed,
-          description: campaign.description,
-          campaignDate: nextDate,
-        }),
+        body: JSON.stringify({ action: "start" }),
       })
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; code?: string }
+        | null
 
       if (!response.ok) {
-        setError(payload?.error ?? "Unable to save the campaign.")
-        setStatus("error")
+        setError(payload?.error ?? "Unable to start the campaign.")
+        setIsStarting(false)
         return
       }
 
-      setStatus("saved")
-      router.refresh()
+      setIsStarting(false)
+      // Starting is the end of the setup surface: the campaign now lives on
+      // the Overview, where its status and counts are read.
+      router.push("/campaigns")
     } catch {
-      setError("Unable to reach the server. The campaign was not saved.")
-      setStatus("error")
+      setError("Unable to reach the server. The campaign was not started.")
+      setIsStarting(false)
     }
   }
 
@@ -82,40 +79,18 @@ export function CampaignAssignHeader({
       </Link>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <input
-          aria-label="Campaign name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          onBlur={() => {
-            void save(name, campaignDate)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.currentTarget.blur()
-            }
-          }}
-          maxLength={120}
-          autoComplete="off"
-          className="-ml-1 w-full truncate rounded-md bg-transparent px-1 py-0.5 font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-        />
+        <h1 className="truncate font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)]">
+          {campaign.name}
+        </h1>
 
         <div className="flex flex-wrap items-center gap-2">
+          <CampaignStatusPill status={campaign.status} />
           <span className="text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">
             Ends
           </span>
-          <CampaignDateField
-            compact
-            value={campaignDate}
-            onChange={(next) => {
-              setCampaignDate(next)
-              void save(name, next)
-            }}
-          />
-          {status === "saving" ? (
-            <span className="text-[11px] text-[var(--muted-foreground)]">Saving…</span>
-          ) : status === "saved" ? (
-            <span className="text-[11px] text-[var(--chart-2)]">Saved</span>
-          ) : null}
+          <span className="text-[13px] text-[var(--program-text)]">
+            {formatCampaignDate(campaign.campaignDate)}
+          </span>
         </div>
 
         {error ? (
@@ -124,6 +99,20 @@ export function CampaignAssignHeader({
           </p>
         ) : null}
       </div>
+
+      {canStart ? (
+        <Button
+          type="button"
+          size="lg"
+          className="h-10 shrink-0 rounded-lg px-4"
+          disabled={isStarting}
+          onClick={() => {
+            void startCampaign()
+          }}
+        >
+          {isStarting ? "Starting…" : "Start campaign"}
+        </Button>
+      ) : null}
     </div>
   )
 }

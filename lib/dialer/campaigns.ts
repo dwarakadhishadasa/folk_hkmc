@@ -298,6 +298,18 @@ export async function updateCampaign(
   const description = optionalCampaignDescription(input.description)
   const campaignDate = requireCampaignDate(input.campaignDate)
 
+  // A completed campaign is a closed record: its name and end date are what the
+  // report was run against, so the property sheet stops being a form. Refused
+  // here as well as hidden in the header, because the header is a client hint.
+  const existing = await readCampaignRow(staff, campaignId)
+  if (existing.status === "COMPLETED") {
+    throw new AuthzError(
+      409,
+      "campaign_completed",
+      "A completed campaign's name and end date can no longer be changed.",
+    )
+  }
+
   const supabaseAdmin = createSupabaseAdminClient()
   let update = supabaseAdmin
     .from("dialer_campaigns")

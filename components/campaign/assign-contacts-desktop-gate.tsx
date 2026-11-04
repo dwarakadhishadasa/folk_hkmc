@@ -8,7 +8,6 @@ import type {
   AssignableContactView,
   LocationOption,
 } from "@/components/campaign/assign-contacts-types"
-import type { SurveyQuestionView } from "@/components/campaign/campaign-survey-types"
 
 const DESKTOP_QUERY = "(min-width: 768px)"
 
@@ -39,14 +38,12 @@ export function AssignContactsDesktopGate({
   contacts,
   callers,
   locations,
-  questions,
 }: {
   campaignId: string
   campaignStatus: string
   contacts: AssignableContactView[]
   callers: AssignableCallerView[]
   locations: LocationOption[]
-  questions: SurveyQuestionView[]
 }) {
   const isDesktop = useSyncExternalStore(subscribeToViewport, isDesktopViewport, isDesktopOnServer)
 
@@ -77,7 +74,6 @@ export function AssignContactsDesktopGate({
       contacts={contacts}
       callers={callers}
       locations={locations}
-      questions={questions}
     />
   )
 }

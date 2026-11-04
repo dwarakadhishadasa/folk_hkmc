@@ -1,10 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createColumnHelper } from "@tanstack/react-table"
 import type { RowSelectionState, Table } from "@tanstack/react-table"
-import { Minus, Pencil, Plus, TriangleAlert, X } from "lucide-react"
+import { Minus, Plus, TriangleAlert, X } from "lucide-react"
 
 import { AssignContactsAssignedBar } from "@/components/campaign/assign-contacts-assigned-bar"
 import {
@@ -14,8 +14,6 @@ import {
   type AssignmentSplitEntryView,
   type LocationOption,
 } from "@/components/campaign/assign-contacts-types"
-import { CampaignSurveyBuilder } from "@/components/campaign/campaign-survey-builder"
-import type { SurveyQuestionView } from "@/components/campaign/campaign-survey-types"
 import {
   Grid,
   GRID_DEFAULT_DENSITY,
@@ -42,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 const SELECT_COLUMN_ID = "select"
 const NAME_COLUMN_ID = "name"
@@ -49,6 +48,7 @@ const PHONE_COLUMN_ID = "phone"
 const INITIAL_CONTACT_COLUMN_ID = "initialContact"
 const LOCATION_COLUMN_ID = "location"
 const ASSIGNED_TO_COLUMN_ID = "assignedTo"
+const RECENT_STATUS_COLUMN_ID = "recentStatus"
 const COLLECTED_BY_COLUMN_ID = "collectedBy"
 const NOTES_COLUMN_ID = "notes"
 const CENTRE_COLUMN_ID = "centre"
@@ -57,8 +57,9 @@ const GENDER_COLUMN_ID = "gender"
 const LANGUAGE_COLUMN_ID = "language"
 
 /**
- * Frame 324's grid: the five columns the frame draws, then the four calling
- * facets the assignment rules actually filter on.
+ * Frame 324's grid: the five columns the frame draws, the campaign's latest
+ * call status, then the four calling facets the assignment rules actually
+ * filter on.
  *
  * The facet columns ship hidden. The frame's own toolbar reports hidden fields,
  * and these are the fields this screen has that the frame's five do not: an
@@ -72,6 +73,7 @@ const COLUMN_IDS = [
   INITIAL_CONTACT_COLUMN_ID,
   LOCATION_COLUMN_ID,
   ASSIGNED_TO_COLUMN_ID,
+  RECENT_STATUS_COLUMN_ID,
   COLLECTED_BY_COLUMN_ID,
   NOTES_COLUMN_ID,
   CENTRE_COLUMN_ID,
@@ -93,6 +95,7 @@ const FIELD_TYPES: Record<string, GridFieldType> = {
   [INITIAL_CONTACT_COLUMN_ID]: "date",
   [LOCATION_COLUMN_ID]: "linked",
   [ASSIGNED_TO_COLUMN_ID]: "text",
+  [RECENT_STATUS_COLUMN_ID]: "text",
   [COLLECTED_BY_COLUMN_ID]: "text",
   [NOTES_COLUMN_ID]: "longtext",
   [CENTRE_COLUMN_ID]: "text",
@@ -100,6 +103,37 @@ const FIELD_TYPES: Record<string, GridFieldType> = {
   [GENDER_COLUMN_ID]: "text",
   [LANGUAGE_COLUMN_ID]: "text",
 }
+
+const RECENT_STATUS_PILL =
+  "inline-flex max-w-full items-center truncate rounded-full px-2 py-[3px] text-[11px] font-medium"
+
+/** The same fills the campaign status pill uses, keyed by the call's group. */
+const RECENT_STATUS_CLASSES: Record<string, string> = {
+  CONFIRMED: "bg-[#e8f5ec] text-[#15803d] dark:bg-[#10331c] dark:text-[#7ee2a3]",
+  MAY_COME: "bg-[color-mix(in_oklab,var(--info)_10%,var(--card))] text-[var(--info)]",
+  DEFERRED: "bg-[var(--muted)] text-[var(--grid-linked-fg)]",
+  NOT_REACHABLE: "bg-[var(--muted)] text-[var(--muted-foreground)]",
+  WRONG_NUMBER: "bg-[color-mix(in_oklab,var(--destructive)_10%,var(--card))] text-[var(--destructive)]",
+  NOT_INTERESTED: "bg-[color-mix(in_oklab,var(--destructive)_10%,var(--card))] text-[var(--destructive)]",
+}
+
+const RECENT_STATUS_FALLBACK = "bg-[var(--muted)] text-[var(--muted-foreground)]"
+
+/** A status group is data, so an own-key lookup keeps `constructor` out of `cn`. */
+function recentStatusClass(group: string): string {
+  return Object.prototype.hasOwnProperty.call(RECENT_STATUS_CLASSES, group)
+    ? RECENT_STATUS_CLASSES[group]
+    : RECENT_STATUS_FALLBACK
+}
+
+const CALLED_AT_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Asia/Kolkata",
+})
 
 const UNRESOLVED_LOCATION = "Unknown location"
 const PREVIEW_DEBOUNCE_MS = 250
@@ -219,8 +253,8 @@ function SelectAllControl({
 }
 
 /**
- * Frame 324's assign-contacts surface: the shared grid on the left, the
- * weighted caller panel on the right, and one primary action.
+ * The assignment surface: the weighted caller pane on the left and the shared
+ * contact grid on the right, under section one's details and survey.
  *
  * Every contact in scope is handed to the grid in one read, because the grid's
  * search, sort, filters and selection all describe the whole set — a page at a
@@ -228,9 +262,9 @@ function SelectAllControl({
  * different populations.
  *
  * The primary action assigns with `skip`: the frame states that a selected
- * contact already assigned in this campaign "will be skipped", and asks that
- * the campaign be started in the same click. A campaign that is already ACTIVE
- * is not transitioned again, so the same control works from the edit page.
+ * contact already assigned in this campaign "will be skipped". Starting the
+ * campaign is the page head's action, because it is a lifecycle change, not a
+ * property of the selection.
  */
 export function AssignContactsSelect({
   campaignId,
@@ -238,14 +272,12 @@ export function AssignContactsSelect({
   contacts,
   callers,
   locations,
-  questions,
 }: {
   campaignId: string
   campaignStatus: string
   contacts: AssignableContactView[]
   callers: AssignableCallerView[]
   locations: LocationOption[]
-  questions: SurveyQuestionView[]
 }) {
   const router = useRouter()
   const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
@@ -260,34 +292,8 @@ export function AssignContactsSelect({
   const [isPrechecking, setIsPrechecking] = useState(false)
   const [writeError, setWriteError] = useState<string | null>(null)
   const [isWriting, setIsWriting] = useState(false)
-  const [startError, setStartError] = useState<string | null>(null)
-  const [isStarting, setIsStarting] = useState(false)
   const [assignDecisionOpen, setAssignDecisionOpen] = useState(false)
   const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null)
-  /** The right panel: the caller split until an assign succeeds, then the survey. */
-  const [panel, setPanel] = useState<"assign" | "survey">("assign")
-  const surfaceRef = useRef<HTMLDivElement | null>(null)
-  const [surfaceHeight, setSurfaceHeight] = useState<number | null>(null)
-
-  // The campaign shell lets its pages grow; the assign surface is the one page
-  // that should end at the viewport instead of scrolling the whole document.
-  // Measuring the space above it is the only offset that survives the responsive
-  // header and the editable campaign title.
-  useEffect(() => {
-    const measure = () => {
-      const element = surfaceRef.current
-      if (!element) {
-        return
-      }
-
-      const top = element.getBoundingClientRect().top
-      setSurfaceHeight(Math.max(420, Math.floor(window.innerHeight - top - 24)))
-    }
-
-    measure()
-    window.addEventListener("resize", measure)
-    return () => window.removeEventListener("resize", measure)
-  }, [])
 
   const locationNames = useMemo(
     () => new Map(locations.map((location) => [location.id, location.name])),
@@ -296,9 +302,9 @@ export function AssignContactsSelect({
 
   const {
     state: viewState,
-    filterConnective,
+    filterTree,
     onStateChange,
-    setFilterConnective,
+    onFilterTreeChange,
     clearFilters,
     beginTransientChange,
     commitTransientChange,
@@ -581,6 +587,29 @@ export function AssignContactsSelect({
         meta: { grid: { fieldType: "text" } },
       }),
 
+      helper.accessor((row) => row.recentStatus?.label ?? "", {
+        id: RECENT_STATUS_COLUMN_ID,
+        header: "Recent status",
+        size: 170,
+        cell: ({ row }) => {
+          const recent = row.original.recentStatus
+
+          if (!recent) {
+            return <span className="text-[var(--muted-foreground)]">—</span>
+          }
+
+          return (
+            <span
+              className={cn(RECENT_STATUS_PILL, recentStatusClass(recent.group))}
+              title={`Called ${CALLED_AT_FORMATTER.format(new Date(recent.calledAt))}`}
+            >
+              {recent.label}
+            </span>
+          )
+        },
+        meta: { grid: { fieldType: "text" } },
+      }),
+
       helper.accessor((row) => row.collectedByName ?? "", {
         id: COLLECTED_BY_COLUMN_ID,
         header: "Collected By",
@@ -673,43 +702,10 @@ export function AssignContactsSelect({
       }
 
       setIsWriting(false)
-      setPanel("survey")
       router.refresh()
     } catch {
       setWriteError("Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.")
       setIsWriting(false)
-    }
-  }
-
-  const startCampaign = async () => {
-    if (campaignStatus !== "DRAFT" || isStarting) {
-      return
-    }
-
-    setStartError(null)
-    setIsStarting(true)
-
-    try {
-      const response = await fetch(`/api/dialer/admin/campaigns/${campaignId}/transition`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start" }),
-      })
-      const payload = (await response.json().catch(() => null)) as
-        | { error?: string; code?: string }
-        | null
-
-      if (!response.ok) {
-        setStartError(errorMessage(payload))
-        setIsStarting(false)
-        return
-      }
-
-      setIsStarting(false)
-      router.refresh()
-    } catch {
-      setStartError("Unable to reach the server. The campaign was not started.")
-      setIsStarting(false)
     }
   }
 
@@ -802,124 +798,26 @@ export function AssignContactsSelect({
     void submit("skip", pending)
   }
 
-  const surveyFooter = (
-    <div className="flex flex-col gap-2">
-      {campaignStatus === "DRAFT" ? (
-        <Button
-          type="button"
-          className={PRIMARY_BUTTON_CLASS}
-          disabled={isStarting}
-          onClick={() => {
-            void startCampaign()
-          }}
-        >
-          {isStarting ? "Starting…" : "Start campaign"}
-        </Button>
-      ) : campaignStatus === "ACTIVE" ? (
-        <Button
-          type="button"
-          className={PRIMARY_BUTTON_CLASS}
-          disabled={primaryDisabled}
-          onClick={handleAssignClick}
-        >
-          {isWriting ? "Updating…" : "Update campaign"}
-        </Button>
-      ) : (
-        <p role="status" className="text-center text-[12px] font-medium text-[var(--muted-foreground)]">
-          Campaign {campaignStatus.toLowerCase()}
-        </p>
-      )}
-      {startError ? (
-        <p role="alert" className="text-[12px] text-[var(--destructive)]">
-          {startError}
-        </p>
-      ) : null}
-    </div>
-  )
-
   return (
-    <div
-      ref={surfaceRef}
-      className="grid min-h-0 items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_408px]"
-      style={{ height: surfaceHeight ?? undefined }}
-    >
-      <section aria-label="Contacts in scope" className="min-h-0 min-w-0">
-        <div className="flex h-[520px] min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card lg:h-full">
-          <Grid<AssignableContactView>
-            rows={contacts}
-            columns={columns}
-            getRowId={(contact) => contact.contactId}
-            state={{ ...viewState, rowSelection }}
-            onStateChange={onStateChange}
-            filterConnective={filterConnective}
-            onFilterConnectiveChange={setFilterConnective}
-            onRowSelectionChange={setRowSelection}
-            ariaLabel="Contacts in scope"
-            density={density}
-            onDensityChange={setDensity}
-            transient={{
-              begin: beginTransientChange,
-              commit: commitTransientChange,
-              cancel: cancelTransientChange,
-            }}
-            onClearFilters={clearFilters}
-            className="rounded-none border-0"
-          />
-
-          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] px-4 py-3">
-            <p className="text-[13px] font-semibold text-[var(--program-text)]">
-              {selectedCount} of {contacts.length} selected
-            </p>
-            {isPrechecking ? (
-              <p className="text-[12px] text-[var(--muted-foreground)]">Checking assignments…</p>
-            ) : conflictCount > 0 ? (
-              <p className="text-[12px] text-[var(--grid-warning-ink)]">
-                · {conflictCount} already assigned
-              </p>
-            ) : null}
-          </div>
+    <div className="grid items-stretch gap-5 lg:grid-cols-[408px_minmax(0,1fr)]">
+      <aside
+        aria-label="Assignment"
+        className="flex h-[560px] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card"
+      >
+        <div className="flex items-start justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+          <h2
+            id="assign-contacts-callers-heading"
+            className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
+          >
+            Assign to
+          </h2>
         </div>
-      </section>
 
-      <aside aria-label="Assignment" className="flex h-full min-h-0 min-w-0">
-        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card">
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <div
-              className="flex h-full w-full transition-transform duration-200 ease-out"
-              style={{ transform: panel === "survey" ? "translateX(-100%)" : "translateX(0)" }}
-            >
-              <div
-                aria-label="Assign contacts"
-                aria-hidden={panel !== "assign"}
-                inert={panel !== "assign"}
-                className="flex h-full w-full shrink-0 flex-col"
-              >
-                <div className="flex items-start justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
-                  <h2
-                    id="assign-contacts-callers-heading"
-                    className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
-                  >
-                    Assign to
-                  </h2>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-1.5 px-2 text-[12px] font-medium text-[var(--muted-foreground)] hover:text-[var(--program-text)]"
-                    aria-label="Call-outcome survey"
-                    onClick={() => setPanel("survey")}
-                  >
-                    <Pencil className="size-3.5" aria-hidden="true" />
-                    Survey
-                  </Button>
-                </div>
-
-                <section
-                  aria-labelledby="assign-contacts-callers-heading"
-                  className="min-h-0 flex-1 overflow-y-auto p-4"
-                >
-                  <div className="flex flex-col gap-4">
+        <section
+          aria-labelledby="assign-contacts-callers-heading"
+          className="min-h-0 flex-1 overflow-y-auto p-4"
+        >
+          <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <p className="text-[14px] font-medium text-[var(--program-text)]">Callers</p>
             <p className="text-[12px] text-[var(--muted-foreground)]">
@@ -1093,41 +991,59 @@ export function AssignContactsSelect({
         ) : null}
 
         {isPreviewing ? <p className="sr-only">Previewing the split</p> : null}
-                </section>
+        </section>
 
-                <AssignContactsAssignedBar campaignStatus={campaignStatus} contacts={contacts} />
+        <AssignContactsAssignedBar campaignStatus={campaignStatus} contacts={contacts} />
 
-                <div className="border-t border-[var(--border)] p-3">
-                  <Button
-                    type="button"
-                    className={PRIMARY_BUTTON_CLASS}
-                    disabled={primaryDisabled}
-                    onClick={handleAssignClick}
-                  >
-                    {primaryLabel}
-                  </Button>
-                </div>
-              </div>
-
-              <div
-                aria-label="Call-outcome survey"
-                aria-hidden={panel !== "survey"}
-                inert={panel !== "survey"}
-                className="flex h-full w-full shrink-0 flex-col"
-              >
-                <CampaignSurveyBuilder
-                  campaignId={campaignId}
-                  status={campaignStatus}
-                  questions={questions}
-                  footer={surveyFooter}
-                  onBack={() => setPanel("assign")}
-                  embedded
-                />
-              </div>
-            </div>
-          </div>
+        <div className="border-t border-[var(--border)] p-3">
+          <Button
+            type="button"
+            className={PRIMARY_BUTTON_CLASS}
+            disabled={primaryDisabled}
+            onClick={handleAssignClick}
+          >
+            {primaryLabel}
+          </Button>
         </div>
       </aside>
+
+      <section aria-label="Contacts in scope" className="min-h-0 min-w-0">
+        <div className="flex h-[520px] min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card lg:h-[560px]">
+          <Grid<AssignableContactView>
+            rows={contacts}
+            columns={columns}
+            getRowId={(contact) => contact.contactId}
+            state={{ ...viewState, rowSelection }}
+            onStateChange={onStateChange}
+            filterTree={filterTree}
+            onFilterTreeChange={onFilterTreeChange}
+            onRowSelectionChange={setRowSelection}
+            ariaLabel="Contacts in scope"
+            density={density}
+            onDensityChange={setDensity}
+            transient={{
+              begin: beginTransientChange,
+              commit: commitTransientChange,
+              cancel: cancelTransientChange,
+            }}
+            onClearFilters={clearFilters}
+            className="rounded-none border-0"
+          />
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] px-4 py-3">
+            <p className="text-[13px] font-semibold text-[var(--program-text)]">
+              {selectedCount} of {contacts.length} selected
+            </p>
+            {isPrechecking ? (
+              <p className="text-[12px] text-[var(--muted-foreground)]">Checking assignments…</p>
+            ) : conflictCount > 0 ? (
+              <p className="text-[12px] text-[var(--grid-warning-ink)]">
+                · {conflictCount} already assigned
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       <AlertDialog
         open={assignDecisionOpen}

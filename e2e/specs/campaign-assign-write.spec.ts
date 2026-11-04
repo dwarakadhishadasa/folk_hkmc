@@ -509,10 +509,10 @@ test.describe("the assign-contacts screen — an Admin", () => {
 
       await expect(page.getByText(selectedLine(2, page1.total), { exact: true })).toBeVisible()
 
-      // The campaign cannot be started from the assign view: Start campaign is
-      // inside the call-outcome survey, which is not in view yet.
-      await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toHaveCount(0)
-      await expect(page.getByRole("region", { name: "Call-outcome survey" })).toHaveCount(0)
+      // The survey and the page head's Start action are part of the same
+      // scrollable workspace; neither waits for the assignment write.
+      await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toHaveCount(1)
+      await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
 
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
       await page.getByRole("menuitem", { name: caller.name, exact: true }).click()
@@ -525,12 +525,24 @@ test.describe("the assign-contacts screen — an Admin", () => {
       // conflict dialog carry their own snapshot of the rows.
       await expect(page.getByText(selectedLine(0, page1.total), { exact: true })).toBeVisible()
 
-      // Assigning keeps the reader on the screen and slides the call-outcome
-      // survey into view; starting is a separate, review-gated action.
+      // Assigning keeps the reader on the screen; the survey stays in view.
       // The grid keeps its search in `?q=`, so the path is the assertion.
       await expect(page).toHaveURL((url) => url.pathname.endsWith("/assign-contacts"))
       await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
       await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toBeVisible()
+
+      // The survey is always open, so its visibility no longer marks the write;
+      // wait for both rows to land before asking the precheck.
+      await expect
+        .poll(async () => {
+          const check = await precheck(
+            page.request,
+            campaignId,
+            targets.map((target) => target.contactId),
+          )
+          return check.status === 200 ? check.body.conflicts.length : -1
+        })
+        .toBe(2)
 
       const landed = await precheck(
         page.request,
@@ -628,6 +640,10 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
       await expect(page.getByRole("button", { name: "Start campaign", exact: true })).toBeVisible()
 
+      // The survey is always open, so its visibility no longer marks the write;
+      // wait for the second row before reading the table.
+      await expect.poll(async () => (await readAssignments(campaignId)).length).toBe(2)
+
       const rows = await readAssignments(campaignId)
       const byContact = new Map(rows.map((row) => [row.contact_id, row]))
 
@@ -694,6 +710,9 @@ test.describe("the assign-contacts screen — an Admin", () => {
 
       await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
 
+      // The survey is always open, so wait for the row the move inserts.
+      await expect.poll(async () => (await readAssignments(campaignId)).length).toBe(2)
+
       const rows = await readAssignments(campaignId)
       const byContact = new Map(rows.map((row) => [row.contact_id, row]))
 
@@ -752,6 +771,16 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await decision.getByRole("button", { name: "Reassign all", exact: true }).click()
 
       await expect(page.getByRole("region", { name: "Call-outcome survey" })).toBeVisible()
+
+      // The two rows already exist, so wait for the move to name the replacement
+      // before reading the table.
+      await expect
+        .poll(async () =>
+          (await readAssignments(campaignId)).every(
+            (row) => row.dialer_callers?.user_id === replacement.userId,
+          ),
+        )
+        .toBe(true)
 
       const rows = await readAssignments(campaignId)
       expect(rows, "two moves update two rows, never four").toHaveLength(2)

@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation"
 
 /**
- * `/campaigns/new` is retired: creating a campaign is the Overview's popover
- * (name + end date), which lands on the assign-contacts screen where the
- * call-outcome survey now lives. The old URL stays as a redirect so a bookmark
- * or an export link still lands somewhere useful.
+ * `/campaigns/new` is retired: `New campaign` writes a DRAFT and opens the
+ * campaign's own workspace, so details, survey, assign-to and grid are all
+ * present without a pre-id screen. The old URL stays as a redirect so a
+ * bookmark still lands somewhere useful.
  */
 export default function NewCampaignPage() {
   redirect("/campaigns")

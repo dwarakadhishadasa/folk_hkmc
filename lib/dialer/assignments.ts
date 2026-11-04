@@ -3,6 +3,7 @@ import "server-only"
 import { AuthzError, type StaffContext } from "@/lib/authz"
 import { type CallerProfile, promoteCallers } from "@/lib/dialer/callers"
 import { getCampaign, type CampaignRow } from "@/lib/dialer/campaigns"
+import { dispositionLabel } from "@/lib/dialer/disposition"
 import {
   campaignScope,
   requireCampaignAdmin,
@@ -24,6 +25,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const CONTACT_COLUMNS = "id,name,phone,initial_contact,collected_by_id,location_ids,assigned_preacher_id,notes"
 const CONTACT_PROFILE_COLUMNS = "contact_id,centre,level,gender,language"
 const ASSIGNMENT_COLUMNS = "contact_id,caller_id,status,contacts(name),dialer_callers(display_name)"
+const RECENT_CALL_COLUMNS =
+  "assignment_id,disposition_status,status_group,called_at,dialer_assignments!inner(contact_id,campaign_id)"
 const STAFF_NAME_COLUMNS = "id,name,email"
 
 const CONTACT_FACET_KEYS = ["centre", "level", "gender", "language"] as const
@@ -60,6 +63,17 @@ export interface AssignableContactProfile {
   language: string | null
 }
 
+/** The latest call in this campaign, as the assign grid's Recent status column reads it. */
+export interface RecentCallStatus {
+  /** The stored `dialer_call_logs.disposition_status`. */
+  status: string
+  /** The database's generated `status_group`, used for the pill's colour. */
+  group: string
+  /** `dispositionLabel(status)`: the same words the caller's chips use. */
+  label: string
+  calledAt: string
+}
+
 /** One contact in the assigner's AD-3 scope, with its optional calling profile. */
 export interface AssignableContact {
   contactId: string
@@ -80,6 +94,13 @@ export interface AssignableContact {
    * contact's own `assigned_preacher_id`, which is a different fact.
    */
   assignedCallerName: string | null
+  /**
+   * The latest call for this contact across every campaign in the programme,
+   * or `null` when the programme has no call log for it. The column is a
+   * contact fact: a newer outcome in another campaign is still the most recent
+   * thing that happened to this person.
+   */
+  recentStatus: RecentCallStatus | null
   profile: AssignableContactProfile
 }
 
@@ -171,6 +192,14 @@ type AssignmentConflictRow = {
   dialer_callers: { display_name: string } | null
 }
 
+type RecentCallRow = {
+  assignment_id: string
+  disposition_status: string
+  status_group: string
+  called_at: string
+  dialer_assignments: { contact_id: string; campaign_id: string } | null
+}
+
 const CONTACT_READ_FAILURES: PagingFailures = {
   read: () => new AuthzError(500, "contact_list_read_failed", "Unable to read the campaign contacts."),
   truncated: () => new AuthzError(500, "contact_list_truncated", "The campaign contact read was truncated."),
@@ -184,6 +213,11 @@ const CONTACT_PROFILE_READ_FAILURES: PagingFailures = {
 const ASSIGNMENT_READ_FAILURES: PagingFailures = {
   read: () => new AuthzError(500, "assignment_read_failed", "Unable to read the campaign assignments."),
   truncated: () => new AuthzError(500, "assignment_read_truncated", "The campaign assignment read was truncated."),
+}
+
+const RECENT_STATUS_READ_FAILURES: PagingFailures = {
+  read: () => new AuthzError(500, "recent_status_read_failed", "Unable to read the recent call statuses."),
+  truncated: () => new AuthzError(500, "recent_status_read_truncated", "The recent call status read was truncated."),
 }
 
 const STAFF_NAME_READ_FAILURES: PagingFailures = {
@@ -252,6 +286,7 @@ function toAssignableContact(
   profile: AssignableContactProfile,
   assignment: AssignmentConflictRow | undefined,
   collectedByName: string | null,
+  recentStatus: RecentCallStatus | null,
 ): AssignableContact {
   const callerName = assignment?.dialer_callers?.display_name.trim()
 
@@ -265,6 +300,7 @@ function toAssignableContact(
     ...(row.assigned_preacher_id ? { assignedPreacherUserId: row.assigned_preacher_id } : {}),
     notes: row.notes ?? null,
     assignedCallerName: callerName && callerName.length > 0 ? callerName : null,
+    recentStatus,
     profile,
   }
 }
@@ -417,13 +453,14 @@ async function readAssignableEntries(
   const contacts = await readScopedContacts(staff, scope)
   const contactIds = contacts.map((contact) => contact.id)
 
-  const [profileRows, assignmentRows, staffNames] = await Promise.all([
+  const [profileRows, assignmentRows, staffNames, recentStatuses] = await Promise.all([
     readContactProfiles(staff.programId, contactIds),
     readAssignmentConflicts(staff.programId, campaignId, contactIds),
     readStaffNames(
       staff.programId,
       contacts.map((contact) => contact.collected_by_id),
     ),
+    readRecentCallStatuses(staff.programId, contactIds),
   ])
 
   return contacts.map((contact) => {
@@ -434,6 +471,7 @@ async function readAssignableEntries(
       profile: toContactProfile(profileRows.get(contact.id)),
       assignment: assignmentRows.get(contact.id),
       collectedByName: collectedById ? staffNames.get(collectedById) ?? "Unknown staff" : null,
+      recentStatus: recentStatuses.get(contact.id) ?? null,
     }
   })
 }
@@ -488,8 +526,8 @@ export async function listAssignableContacts(
   const start = (page - 1) * pageSize
   const rows = filtered
     .slice(start, start + pageSize)
-    .map(({ contact, profile, assignment, collectedByName }) =>
-      toAssignableContact(contact, profile, assignment, collectedByName),
+    .map(({ contact, profile, assignment, collectedByName, recentStatus }) =>
+      toAssignableContact(contact, profile, assignment, collectedByName, recentStatus),
     )
 
   return {
@@ -522,8 +560,8 @@ export async function listAllAssignableContacts(
 
   return entries
     .sort((left, right) => compareContacts(left.contact, right.contact))
-    .map(({ contact, profile, assignment, collectedByName }) =>
-      toAssignableContact(contact, profile, assignment, collectedByName),
+    .map(({ contact, profile, assignment, collectedByName, recentStatus }) =>
+      toAssignableContact(contact, profile, assignment, collectedByName, recentStatus),
     )
 }
 
@@ -743,6 +781,60 @@ async function readAssignmentConflicts(
   }
 
   return rows
+}
+
+/**
+ * The latest call log per contact across every campaign in the programme, for
+ * the assign grid's Recent status column.
+ *
+ * `dialer_call_logs` belongs to an assignment, and an assignment belongs to one
+ * campaign and one contact, so the embedded join supplies the contact id. The
+ * read is scoped to the grid's contact set (in chunks) but **not** to the
+ * current campaign: a call recorded in another campaign is still the most
+ * recent thing that happened to the contact. Logs are read newest first
+ * (`called_at`, then `id` for a stable tie) and the first row per contact wins;
+ * pagination preserves the order, so a contact's newest log cannot be hidden on
+ * a later page.
+ */
+async function readRecentCallStatuses(
+  programId: StaffContext["programId"],
+  contactIds: string[],
+): Promise<Map<string, RecentCallStatus>> {
+  const statuses = new Map<string, RecentCallStatus>()
+  const supabaseAdmin = createSupabaseAdminClient()
+
+  for (let offset = 0; offset < contactIds.length; offset += ASSIGNMENT_CHUNK_SIZE) {
+    const chunk = contactIds.slice(offset, offset + ASSIGNMENT_CHUNK_SIZE)
+    const rows = await collectPagedRows<RecentCallRow>(async (from, to) => {
+      const response = await supabaseAdmin
+        .from("dialer_call_logs")
+        .select(RECENT_CALL_COLUMNS)
+        .eq("program_id", programId)
+        .in("dialer_assignments.contact_id", chunk)
+        .order("called_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to)
+
+      return { data: response.data as RecentCallRow[] | null, error: response.error }
+    }, RECENT_STATUS_READ_FAILURES)
+
+    for (const row of rows) {
+      const contactId = row.dialer_assignments?.contact_id
+
+      if (!contactId || statuses.has(contactId)) {
+        continue
+      }
+
+      statuses.set(contactId, {
+        status: row.disposition_status,
+        group: row.status_group,
+        label: dispositionLabel(row.disposition_status),
+        calledAt: row.called_at,
+      })
+    }
+  }
+
+  return statuses
 }
 
 /**

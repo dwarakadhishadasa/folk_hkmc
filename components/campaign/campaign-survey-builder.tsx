@@ -1,9 +1,8 @@
 "use client"
 
 import { useRef, useState } from "react"
-import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowDown, ArrowLeft, ArrowUp, Pencil, Plus, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowUp, Lock, Pencil, Plus, Trash2, X } from "lucide-react"
 
 import {
   SURVEY_QUESTION_TYPES,
@@ -32,8 +31,51 @@ const TYPE_PILL_CLASS = "bg-[var(--muted)] text-[var(--grid-linked-fg)]"
 const REQUIRED_PILL_CLASS = "bg-[color-mix(in_oklab,var(--success)_12%,var(--card))] text-[var(--success)]"
 const OPTIONAL_PILL_CLASS = "bg-[var(--muted)] text-[var(--muted-foreground)]"
 const RETIRED_PILL_CLASS = "border border-[var(--border)] text-[var(--muted-foreground)]"
+const DEFAULT_PILL_CLASS = "border border-[var(--border)] text-[var(--muted-foreground)]"
 const CHIP_CLASS =
   "inline-flex items-center rounded-full border border-[var(--border)] bg-card px-2.5 py-0.5 text-[12px] text-[var(--program-text)]"
+
+/**
+ * A field the caller screen always records, shown so the survey reads as the
+ * caller sees it. It has no question row, so it has no editor, order control or
+ * delete button; the lock and the `Default` pill say why.
+ */
+function DefaultSurveyField({
+  title,
+  hint,
+  required,
+}: {
+  title: string
+  hint: string
+  required: boolean
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={`${title} — default question`}
+      className="rounded-xl border border-dashed border-[var(--border)] bg-[color-mix(in_oklab,var(--muted)_18%,var(--card))] p-3"
+    >
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--muted)] text-[var(--muted-foreground)]">
+          <Lock className="size-3" aria-hidden="true" />
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-[13px] font-semibold leading-snug text-[var(--program-text)]">{title}</p>
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <span className={cn(PILL_CLASS, DEFAULT_PILL_CLASS)}>Default</span>
+            <span className={cn(PILL_CLASS, required ? REQUIRED_PILL_CLASS : OPTIONAL_PILL_CLASS)}>
+              {required ? "Required" : "Optional"}
+            </span>
+          </div>
+
+          <p className="mt-1.5 text-xs leading-5 text-[var(--muted-foreground)]">{hint}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /**
  * A campaign being `COMPLETED` or `CANCELLED` is terminal, so the builder stops
@@ -303,19 +345,10 @@ export function CampaignSurveyBuilder({
   campaignId,
   status,
   questions,
-  footer,
-  onBack,
-  embedded = false,
 }: {
   campaignId: string
   status: string
   questions: SurveyQuestionView[]
-  /** Pinned below the scrolling question list, inside the survey's card. */
-  footer?: ReactNode
-  /** Renders the circular back control beside the heading. */
-  onBack?: () => void
-  /** The parent supplies the card frame; the builder only fills it. */
-  embedded?: boolean
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState<{ questionId: string | null } | null>(null)
@@ -402,40 +435,21 @@ export function CampaignSurveyBuilder({
   return (
     <section
       aria-labelledby="campaign-survey-heading"
-      className={
-        embedded
-          ? "flex h-full min-h-0 flex-col overflow-hidden"
-          : "flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card"
-      }
+      className="flex flex-col rounded-xl border border-[var(--border)] bg-card p-4 md:p-5"
     >
-      <div className="border-b border-[var(--border)] px-4 py-3">
-        <div className="flex items-start gap-3">
-          {onBack ? (
-            <button
-              type="button"
-              aria-label="Back to assigning"
-              onClick={onBack}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-card text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-            >
-              <ArrowLeft className="size-[18px]" aria-hidden="true" />
-            </button>
-          ) : null}
-
-          <div className="min-w-0 flex-1">
-            <h2
-              id="campaign-survey-heading"
-              className="font-[family-name:var(--font-poppins)] text-[15px] font-semibold text-[var(--program-text)]"
-            >
-              Call-outcome survey
-            </h2>
-            <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-              Every caller records these answers, for this campaign only.
-            </p>
-          </div>
-        </div>
+      <div className="mb-3">
+        <h2
+          id="campaign-survey-heading"
+          className="font-[family-name:var(--font-poppins)] text-[15px] font-semibold text-[var(--program-text)]"
+        >
+          Call-outcome survey
+        </h2>
+        <p className="mt-0.5 text-[12px] text-[var(--muted-foreground)]">
+          Every caller records these answers, for this campaign only.
+        </p>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+      <div className="flex flex-col gap-3">
         {readOnly ? (
           <p className="text-xs text-[var(--muted-foreground)]">
             This campaign is closed, so its survey is read-only here.
@@ -447,6 +461,12 @@ export function CampaignSurveyBuilder({
             {actionError}
           </p>
         ) : null}
+
+        <DefaultSurveyField
+          title="Status"
+          hint="The caller's outcome chip. Every call records it before the custom questions."
+          required
+        />
 
         {questions.length === 0 ? (
           <p className="text-[13px] text-[var(--muted-foreground)]">No questions yet</p>
@@ -584,6 +604,12 @@ export function CampaignSurveyBuilder({
           </ol>
         )}
 
+        <DefaultSurveyField
+          title="Notes"
+          hint="The caller's own words, free text. Every call can record them after the custom questions."
+          required={false}
+        />
+
         {editing?.questionId === null ? (
           <SurveyQuestionEditor
             key="new"
@@ -612,10 +638,6 @@ export function CampaignSurveyBuilder({
           </Button>
         )}
       </div>
-
-      {footer ? (
-        <div className="shrink-0 border-t border-[var(--border)] p-3">{footer}</div>
-      ) : null}
 
       <AlertDialog
         open={confirming !== null}

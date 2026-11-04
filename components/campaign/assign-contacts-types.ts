@@ -29,6 +29,14 @@ export interface AssignableContactProfileView {
   language: string | null
 }
 
+/** The latest call in this campaign, as the grid's Recent status column reads it. */
+export interface RecentCallStatusView {
+  status: string
+  group: string
+  label: string
+  calledAt: string
+}
+
 export interface AssignableContactView {
   contactId: string
   name: string
@@ -39,6 +47,8 @@ export interface AssignableContactView {
   assignedPreacherUserId?: string
   notes: string | null
   assignedCallerName: string | null
+  /** `null` until this campaign has a call log for the contact. */
+  recentStatus: RecentCallStatusView | null
   profile: AssignableContactProfileView
 }
 
