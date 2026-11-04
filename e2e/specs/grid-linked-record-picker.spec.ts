@@ -422,7 +422,7 @@ test.describe("a linked record is picked, not typed", () => {
     await expect(popover).toBeVisible()
 
     // A fresh condition starts on the identity column; switch it to Location.
-    await popover.getByRole("button", { name: "Add condition" }).click()
+    await popover.getByRole("button", { name: "Add condition", exact: true }).click()
     await popover.locator('[data-grid-filter-condition="name"] [data-grid-filter-field]').click()
     await page.getByRole("option", { name: "Location", exact: true }).click()
 

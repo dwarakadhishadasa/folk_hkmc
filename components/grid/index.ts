@@ -25,6 +25,23 @@ export {
   type GridFilterOperator,
   type GridFilterValueShape,
 } from "@/components/grid/grid-filter-operators"
+export {
+  GRID_FILTER_MAX_GROUP_DEPTH,
+  collectColumnIds,
+  createFilterGroup,
+  evaluateFilterGroup,
+  filterGroupFromConditions,
+  filterGroupKey,
+  filterGroupToSerialized,
+  flattenConditions,
+  hasNestedGroups,
+  needsManualEvaluation,
+  parseFilterTreeJson,
+  type GridFilterGroup,
+  type GridFilterNode,
+  type SerializedFilterGroup,
+  type SerializedFilterNode,
+} from "@/components/grid/grid-filter-tree"
 export { GridFilterPopover, type GridFilterField } from "@/components/grid/grid-filter-popover"
 export { GRID_EDITOR_KEYS, resolveGridEditor } from "@/components/grid/grid-editors"
 export type {

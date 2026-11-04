@@ -16,6 +16,11 @@
  *   globally-filterable leaf column and ORed by TanStack;
  * - every filterable column resolves through the same condition evaluation, so
  *   the operator travels inside the condition rather than beside it.
+ *
+ * This is the FLAT path: `Grid` hands TanStack one column filter per leaf when
+ * the tree is a flat all-of list. A nested group or a match-any root cannot be
+ * expressed as an AND chain, so those trees are evaluated by
+ * `evaluateFilterGroup` in `grid-filter-tree.ts` instead.
  */
 
 import type { Row, RowData } from "@tanstack/react-table"

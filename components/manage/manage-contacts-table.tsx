@@ -35,6 +35,7 @@ import {
   type GridRowContextMenuProps,
   type GridRowLifecycle,
 } from "@/components/grid"
+import { filterGroupKey, flattenConditions } from "@/components/grid/grid-filter-tree"
 import { useDeviceView } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -1334,9 +1335,9 @@ export function ManageContactsTable({
    */
   const {
     state: viewState,
-    filterConnective,
+    filterTree,
     onStateChange,
-    setFilterConnective,
+    onFilterTreeChange,
     clearFilters,
     beginTransientChange,
     commitTransientChange,
@@ -1369,26 +1370,25 @@ export function ManageContactsTable({
       filterContactsForPhone({
         contacts,
         query: typeof viewState.globalFilter === "string" ? viewState.globalFilter : "",
-        conditions: viewState.columnFilters ?? [],
-        connective: filterConnective,
+        filterTree,
         fieldTypes,
         resolvers: { locationNameById, staffNameById },
       }),
-    [contacts, fieldTypes, filterConnective, locationNameById, staffNameById, viewState],
+    [contacts, fieldTypes, filterTree, locationNameById, staffNameById, viewState],
   )
 
   /** The chip's one-sentence-per-condition description. */
   const phoneFilterLabels = useMemo(() => {
-    const labels = (viewState.columnFilters ?? [])
+    const labels = flattenConditions(filterTree)
       .map((condition) =>
-        describeContactCondition(condition.id, condition.value, fieldTypes[condition.id]),
+        describeContactCondition(condition.columnId, condition, fieldTypes[condition.columnId]),
       )
       .filter((label): label is string => Boolean(label))
 
     const query = typeof viewState.globalFilter === "string" ? viewState.globalFilter.trim() : ""
 
     return query.length > 0 ? [`Search: ${query}`, ...labels] : labels
-  }, [fieldTypes, viewState])
+  }, [fieldTypes, filterTree, viewState])
 
   /**
    * The row lifecycle the grid renders against.
@@ -1523,7 +1523,7 @@ export function ManageContactsTable({
    * objects because `useGridViewState` hands back fresh arrays, and a
    * dependency on those would fire on every render.
    */
-  const filterSignature = `${viewState.globalFilter}\u0000${JSON.stringify(viewState.columnFilters)}\u0000${filterConnective}`
+  const filterSignature = `${viewState.globalFilter}\u0000${filterGroupKey(filterTree)}`
 
   useEffect(() => {
     setNotice((current) => (current?.message === FILTERED_DRAFT_NOTICE ? null : current))
@@ -1574,8 +1574,8 @@ export function ManageContactsTable({
           getRowId={(contact) => contact.id}
           state={{ ...viewState, rowSelection }}
           onStateChange={onStateChange}
-          filterConnective={filterConnective}
-          onFilterConnectiveChange={setFilterConnective}
+          filterTree={filterTree}
+          onFilterTreeChange={onFilterTreeChange}
           onRowSelectionChange={setRowSelection}
           ariaLabel="Contacts"
           density={density}

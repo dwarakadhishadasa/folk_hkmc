@@ -318,7 +318,7 @@ change there still escalates to the full `pnpm test:e2e`.
 | `components/grid/grid-scroll-surface.spec.ts`'s surface: the frame, the scroll container, the status strip below it, and the column layout | `e2e/specs/grid-scroll-surface.spec.ts` | 10 |
 | `components/grid/grid-header-cell.tsx`, `grid-toolbar.tsx` (CAP-18's column menu), `grid.tsx` drag handling | `e2e/specs/grid-column-drag-menu.spec.ts` | 11 |
 | `components/grid/grid-edit-model.spec.ts`'s model: `use-grid-keyboard.ts`, `grid-editors.tsx`, the optimistic override | `e2e/specs/grid-edit-model.spec.ts` | 24 |
-| `components/grid/grid-filter-popover.tsx`, `grid-filter-operators.ts`, `grid-view-state.ts` (`f.`/`fa.`) | `e2e/specs/grid-filter-conditions.spec.ts` | 46 |
+| `components/grid/grid-filter-popover.tsx`, `grid-filter-tree.ts`, `grid-filter-operators.ts`, `grid-view-state.ts` (`f.`/`fa.`/`fg`) | `e2e/specs/grid-filter-conditions.spec.ts` | 51 |
 | `components/grid/grid-toolbar.tsx`, `grid-view-state.ts` (`hide`), `use-grid-view-state.ts`, `grid-sort-popover.tsx`, `grid-row-lifecycle.tsx` | `e2e/specs/grid-toolbar.spec.ts` | 18 |
 | " (contacts only — CAP-18's default field set and the status row) | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
 

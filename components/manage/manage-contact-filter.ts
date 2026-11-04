@@ -17,6 +17,7 @@ import {
   type GridFilterCondition,
   type GridFilterConnective,
 } from "@/components/grid/grid-filter-operators"
+import { evaluateFilterGroup, type GridFilterGroup } from "@/components/grid/grid-filter-tree"
 import type { GridFieldType } from "@/components/grid/grid-types"
 import {
   UNRESOLVED_LOCATION,
@@ -171,17 +172,21 @@ export function contactMatchesSearch(contact: ManageContact, query: string, reso
 export function filterContactsForPhone(params: {
   contacts: readonly ManageContact[]
   query: string
-  conditions: ReadonlyArray<{ id: string; value: unknown }>
-  connective: GridFilterConnective
+  filterTree: GridFilterGroup
   fieldTypes: Readonly<Record<string, GridFieldType | undefined>>
   resolvers: ContactFilterResolvers
 }): ManageContact[] {
-  const { contacts, query, conditions, connective, fieldTypes, resolvers } = params
+  const { contacts, query, filterTree, fieldTypes, resolvers } = params
+  const fieldTypeById = new Map(Object.entries(fieldTypes))
 
   return contacts.filter(
     (contact) =>
       contactMatchesSearch(contact, query, resolvers) &&
-      contactMatchesConditions(contact, conditions, connective, fieldTypes, resolvers),
+      evaluateFilterGroup(
+        filterTree,
+        (columnId) => contactColumnValue(contact, columnId, resolvers),
+        fieldTypeById,
+      ),
   )
 }
 

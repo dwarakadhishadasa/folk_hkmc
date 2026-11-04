@@ -6,6 +6,12 @@ import { Plus, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -17,13 +23,27 @@ import {
 } from "@/components/ui/select"
 import {
   emptyCondition,
-  encodeCondition,
   filterOperatorsFor,
-  isConditionUnfilled,
   isConditionValueInvalid,
   type GridFilterCondition,
   type GridFilterConnective,
 } from "@/components/grid/grid-filter-operators"
+import {
+  GRID_FILTER_MAX_GROUP_DEPTH,
+  addNode,
+  collectColumnIds,
+  conditionNode,
+  createFilterGroup,
+  filterGroupKey,
+  flattenConditions,
+  groupNode,
+  hasNestedGroups,
+  pruneFilterTree,
+  removeNodeAt,
+  replaceNodeAt,
+  setGroupConnective,
+  type GridFilterGroup,
+} from "@/components/grid/grid-filter-tree"
 import { GridFilterDateControl, GridFilterMultiSelectControl } from "@/components/grid/grid-filter-value"
 import type { GridFieldType } from "@/components/grid/grid-types"
 
@@ -50,10 +70,9 @@ export interface GridFilterPopoverProps {
   /** The node the popover anchors to. Rendered where the caller puts it. */
   anchor: ReactNode
   fields: readonly GridFilterField[]
-  conditions: readonly GridFilterCondition[]
-  connective: GridFilterConnective
-  onConditionsChange: (conditions: GridFilterCondition[]) => void
-  onConnectiveChange: (connective: GridFilterConnective) => void
+  /** The complete filter, groups included. */
+  filter: GridFilterGroup
+  onFilterChange: (next: GridFilterGroup, immediate?: boolean) => void
 }
 
 /**
@@ -78,8 +97,9 @@ const SLOT_OPERATOR = "w-[128px]"
 const SLOT_VALUE = "w-[154px]"
 
 /**
- * The footer's two actions, which share ONE treatment: quiet siblings at the
- * foot of the list, not a brand link beside a plain button.
+ * The footer's actions, which share ONE treatment: quiet siblings at the foot
+ * of the list, not a brand link beside a plain button. There are three now —
+ * add condition, add condition group, clear all — and they stay matched.
  *
  * **The no-fill hover needs both variant scopes named.** `ghost` fills with
  * `hover:bg-accent` in light and `dark:hover:bg-accent/50` in dark; those are
@@ -92,14 +112,14 @@ const SLOT_VALUE = "w-[154px]"
  * invisible, and `--foreground` is the value `ghost`'s own hover already gives
  * there, so light is unchanged rather than newly styled.
  *
- * One string for both buttons is what makes them matched by construction —
- * `gap-1` is inert on `Clear all`, which has no icon.
+ * One string for every footer action is what makes them matched by
+ * construction — `gap-1` is inert on `Clear all`, which has no icon.
  */
 const FOOTER_ACTION =
   "text-muted-foreground h-7 gap-1 px-0 text-[12px] font-semibold hover:bg-transparent dark:hover:bg-transparent hover:text-foreground dark:hover:text-white"
 
 /**
- * The filter conditions popover (CAP-12).
+ * The filter conditions popover (CAP-12), now with condition groups.
  *
  * **A POPOVER ANCHORED UNDER THE TOOLBAR, not an inline bar and not a modal.**
  * `surface-and-toolbar.md` struck through the modal argument and then the inline
@@ -109,87 +129,56 @@ const FOOTER_ACTION =
  * the operator cannot watch *which* rows match, because the popover covers the
  * grid. Do not "fix" that by building a second count in here.
  *
- * **THE `and ▾` PREFIX IS NOT PER ROW.** One connective governs the whole list,
- * so the list is never `A and B or C`: there are no precedence rules and nothing
- * is serialized in order. The prefix on rows 2+ is driven by the single connective
- * that governs them all, which is why it reads identically on every row.
+ * **GROUPS ARE A TREE, NOT A LIST WITH A FLAG.** Airtable's live filter state is
+ * `{ conjunction, filterSet }` all the way down, and the UI sends the whole
+ * tree on every edit. This surface uses the same shape (`grid-filter-tree.ts`),
+ * so a group's connective governs its own children and the parent's connective
+ * governs the group as one item. That is the whole difference from the old flat
+ * list: `A and (B or C)` is expressible; `A and B or C` at one level is not,
+ * which is exactly why Airtable says "add a condition group" when you try to
+ * mix connectives.
  *
- * **NO DRAG HANDLE, and no condition groups, no "Copy from another view", no Ask
- * AI.** All three appear in the reference screenshot and all three are out of
- * scope. A handle would be worse than absent: conditions are a SET of columns, so
- * reordering them cannot change the result set, and a handle would imply a
- * capability with no effect.
+ * **NO DRAG HANDLE, "Copy from another view" OR Ask AI.** The reference
+ * screenshot shows all of them. A same-level reorder cannot change an AND/OR
+ * set's result, so a handle would imply a capability with no effect; the other
+ * two need saved views and an AI service, both out of scope. Say why in the
+ * code, or a later agent reading only the screenshot will re-add them.
  *
  * **AN OPERATOR WITH NO VALUE RENDERS ITS CONTROL DISABLED, NOT ABSENT.** Under
  * `is empty` the control is greyed rather than removed, so the operator can see it
  * is not applicable rather than wondering where it went. It carries a real
  * `disabled`/`aria-disabled`, and a value written while disabled is discarded —
  * greyed that still accepted input would be a lie.
- *
- * Composition: `Visual-Design/contacts-toolbar-stitch-v1-corrected.html`. Colours
- * go through tokens rather than the composition's hex, so the file stays inside
- * the token-clean gate `harness-guards.spec.ts:89` enforces under
- * `components/grid/`.
  */
 export function GridFilterPopover({
   open,
   onOpenChange,
   anchor,
   fields,
-  conditions,
-  connective,
-  onConditionsChange,
-  onConnectiveChange,
+  filter,
+  onFilterChange,
 }: GridFilterPopoverProps) {
   const fieldById = new Map(fields.map((field) => [field.id, field]))
 
   /**
-   * The conditions the rows render from, and the list every writer in this file
+   * The tree the rows render from, and the base every writer in this file
    * builds on — one value, so the rows and the writers cannot disagree about
-   * what the list is. See `useConditionMirror`.
-   *
-   * `conditionsRef` survives inside it: the write base for `replace`,
-   * `addCondition` and the close-time prune, not a display buffer, and written
-   * synchronously by every commit. What it no longer is is a ref BESIDE the
-   * prop, which is why the rows render from the same thing the writers read.
+   * what the tree is. See `usePendingMirror`.
    */
-  const [renderedConditions, conditionsRef, commitConditions] = useConditionMirror(
-    conditions,
-    onConditionsChange,
+  const [renderedFilter, filterRef, commitFilter] = usePendingMirror(
+    filter,
+    filterGroupKey,
+    onFilterChange,
   )
 
-  /**
-   * The connective is the same lag for a different reason: `setFilterConnective`
-   * PUSHES rather than debouncing, so the prop comes back a whole router
-   * transition later and the trigger reads `and` while the grid is already on
-   * `or`. Its identity is its own value, so its key needs no help.
-   */
-  const [renderedConnective, , commitConnective] = usePendingMirror<GridFilterConnective>(
-    connective,
-    (value) => value,
-    onConnectiveChange,
+  const filteredColumnIds = new Set(
+    flattenConditions(renderedFilter).map((condition) => condition.columnId),
   )
+  const showGroupWidth = hasNestedGroups(renderedFilter)
 
-  /**
-   * Every column the list currently filters on, built ONCE per render.
-   *
-   * Each row's field list derives its disabled set from this, and `FilterValueControl`
-   * commits on every keystroke — so building the set per row made an n-row list cost
-   * O(n²) on every paint.
-   */
-  const filteredColumnIds = new Set(renderedConditions.map((condition) => condition.columnId))
-
-  const replace = (next: GridFilterCondition) => {
-    commitConditions(
-      conditionsRef.current.map((condition) =>
-        condition.columnId === next.columnId ? next : condition,
-      ),
-    )
-  }
-
-  const addCondition = () => {
-    const current = conditionsRef.current
-    const taken = new Set(current.map((condition) => condition.columnId))
+  const addCondition = (parentPath: readonly number[]) => {
+    const current = filterRef.current
+    const taken = collectColumnIds(current)
     const available = fields.filter((field) => !taken.has(field.id))
 
     // The identity column first, then the rest in column order. A newly added
@@ -201,26 +190,55 @@ export function GridFilterPopover({
       return
     }
 
-    commitConditions([...current, emptyCondition(next.id, next.fieldType)])
+    commitFilter(
+      addNode(current, parentPath, conditionNode(emptyCondition(next.id, next.fieldType))),
+      true,
+    )
   }
 
   /**
-   * Drops conditions the operator started and never finished.
-   *
-   * A `none`-shape operator is COMPLETE without a value — `is empty` is the
-   * whole condition — so only value-taking operators with a blank value are
-   * removed. Without this, closing the popover over a half-built row leaves it
-   * sitting there inert, reading as a filter that is on.
+   * A new group is seeded with one empty condition so it is a usable surface on
+   * the click rather than a box with only a `+` menu. The default field is the
+   * same one `+ Add condition` would pick. If every column is already used the
+   * group is still added; the operator can remove an existing condition first.
    */
-  const pruneUnfilled = () => {
-    const current = conditionsRef.current
-    const kept = current.filter(
-      (condition) =>
-        !isConditionUnfilled(condition, fieldById.get(condition.columnId)?.fieldType),
+  const addGroup = (parentPath: readonly number[]) => {
+    const current = filterRef.current
+    const taken = collectColumnIds(current)
+    const available = fields.filter((field) => !taken.has(field.id))
+    const next = available.find((field) => field.primary) ?? available[0]
+    const group = createFilterGroup(
+      "all",
+      next ? [conditionNode(emptyCondition(next.id, next.fieldType))] : [],
     )
 
-    if (kept.length !== current.length) {
-      commitConditions(kept)
+    commitFilter(addNode(current, parentPath, groupNode(group)), true)
+  }
+
+  const removeNode = (parentPath: readonly number[], index: number) => {
+    commitFilter(removeNodeAt(filterRef.current, parentPath, index), true)
+  }
+
+  const changeGroupConnective = (
+    parentPath: readonly number[],
+    connective: GridFilterConnective,
+  ) => {
+    commitFilter(setGroupConnective(filterRef.current, parentPath, connective), true)
+  }
+
+  /**
+   * Drops conditions the operator started and never finished, and groups left
+   * with nothing to govern. A `none`-shape operator is COMPLETE without a value
+   * — `is empty` is the whole condition — so only value-taking operators with a
+   * blank value are removed. Without this, closing the popover over a half-built
+   * row leaves it sitting there inert, reading as a filter that is on.
+   */
+  const pruneUnfilled = () => {
+    const current = filterRef.current
+    const pruned = pruneFilterTree(current, new Map(fields.map((field) => [field.id, field.fieldType])))
+
+    if (filterGroupKey(pruned) !== filterGroupKey(current)) {
+      commitFilter(pruned)
     }
   }
 
@@ -237,6 +255,351 @@ export function GridFilterPopover({
     onOpenChange(next)
   }
 
+  const renderConnective = (
+    connective: GridFilterConnective,
+    parentPath: readonly number[],
+    index: number,
+    depth: number,
+  ) => {
+    if (index === 0) {
+      return (
+        <div
+          aria-hidden="true"
+          className="text-muted-foreground flex h-9 w-14 shrink-0 select-none items-center justify-center text-xs font-medium uppercase tracking-wider"
+        >
+          Where
+        </div>
+      )
+    }
+
+    return (
+      <Select
+        value={connective}
+        onValueChange={(value) => {
+          changeGroupConnective(parentPath, value as GridFilterConnective)
+        }}
+      >
+        <SelectTrigger
+          data-grid-filter-connective=""
+          aria-label={
+            depth === 0
+              ? "Match all or any of these conditions"
+              : "Match all or any of these group conditions"
+          }
+          className={`${TRIGGER} w-14 shrink-0 px-1 text-center text-[12px] font-medium`}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all" className="text-[13px]">
+            and
+          </SelectItem>
+          <SelectItem value="any" className="text-[13px]">
+            or
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    )
+  }
+
+  const renderConditionRow = (
+    condition: GridFilterCondition,
+    parentPath: readonly number[],
+    index: number,
+    connective: GridFilterConnective,
+    depth: number,
+  ) => {
+    const field = fieldById.get(condition.columnId)
+    const fieldType = field?.fieldType
+    const operators = filterOperatorsFor(fieldType)
+    const operator = operators.find((entry) => entry.id === condition.operator)
+    const takesValue = operator?.valueShape !== "none"
+    const invalid = isConditionValueInvalid(condition, fieldType)
+
+    // A column some OTHER row already filters on is disabled below. The row's
+    // own column is excluded deliberately: disabling it would grey the value
+    // this row is already showing and block every same-row re-pick.
+    const columnTakenElsewhere = (columnId: string) =>
+      columnId !== condition.columnId && filteredColumnIds.has(columnId)
+
+    return (
+      <div
+        key={`${parentPath.join(".")}-${index}-${condition.columnId}`}
+        className="flex items-center gap-2"
+        data-grid-filter-condition={condition.columnId}
+        data-grid-filter-depth={depth}
+      >
+        {renderConnective(connective, parentPath, index, depth)}
+
+        <Select
+          value={condition.columnId}
+          onValueChange={(value) => {
+            const nextField = fieldById.get(value)
+
+            if (!nextField) {
+              return
+            }
+
+            // Switching field RESETS the operator and the value. Carrying
+            // `contains` onto a date field, or an orphaned value from the
+            // previous field, is the bug that filters nothing and looks exactly
+            // like "no matches".
+            const fresh = emptyCondition(value, nextField.fieldType)
+            const keepList = Array.isArray(fresh.value) && Array.isArray(condition.value)
+            const nextCondition = {
+              ...fresh,
+              value: keepList ? condition.value : fresh.value,
+            }
+
+            commitFilter(
+              replaceNodeAt(filterRef.current, parentPath, index, conditionNode(nextCondition)),
+              true,
+            )
+          }}
+        >
+          <SelectTrigger
+            data-grid-filter-field=""
+            aria-label={`Condition ${index + 1} field`}
+            className={`${TRIGGER} ${SLOT_FIELD} shrink-0`}
+          >
+            <SelectValue placeholder="Choose a field" />
+          </SelectTrigger>
+          <SelectContent>
+            {/* THIS OPTION LIST IS THE ONLY GATE. `onValueChange` below does
+             * not re-check that the picked column is free, because Radix's
+             * `handleSelect` is `if (!disabled)` — a disabled item never
+             * reaches it. Drop the `disabled` without adding the check there
+             * and this control can build two conditions with one id again.
+             *
+             * Disabled rather than absent: the column is not withdrawn from
+             * view, only marked unavailable, which is what
+             * `grid-header-cell.tsx:216` and `grid-toolbar.tsx:210` do for the
+             * menu items they cannot offer. */}
+            {fields.map((entry) => (
+              <SelectItem
+                key={entry.id}
+                value={entry.id}
+                disabled={columnTakenElsewhere(entry.id)}
+                className="text-[13px]"
+              >
+                {entry.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={condition.operator}
+          onValueChange={(value) => {
+            const next = operators.find((entry) => entry.id === value)
+            const nextCondition: GridFilterCondition = {
+              columnId: condition.columnId,
+              operator: value,
+              // An operator that takes no value must not keep one, or the
+              // stale value would filter the moment it is reselected.
+              value:
+                next?.valueShape === "none" || !Array.isArray(condition.value)
+                  ? ""
+                  : condition.value,
+            }
+
+            commitFilter(
+              replaceNodeAt(filterRef.current, parentPath, index, conditionNode(nextCondition)),
+              true,
+            )
+          }}
+        >
+          <SelectTrigger
+            data-grid-filter-operator=""
+            aria-label={`Condition ${index + 1} operator`}
+            className={`${TRIGGER} ${SLOT_OPERATOR} shrink-0`}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {operators.map((entry) => (
+              <SelectItem key={entry.id} value={entry.id} className="text-[13px]">
+                {entry.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <FilterValueControl
+          key={`${condition.columnId}:${condition.operator}`}
+          condition={condition}
+          field={field}
+          fieldType={fieldType}
+          takesValue={takesValue}
+          invalid={invalid}
+          onCommit={(value) => {
+            commitFilter(
+              replaceNodeAt(
+                filterRef.current,
+                parentPath,
+                index,
+                conditionNode({ ...condition, value }),
+              ),
+            )
+          }}
+        />
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Delete ${field?.label ?? condition.columnId} condition`}
+          className="text-muted-foreground hover:text-destructive size-8 shrink-0"
+          onClick={() => {
+            removeNode(parentPath, index)
+          }}
+        >
+          <Trash2 aria-hidden="true" className="size-4" strokeWidth={1.5} />
+        </Button>
+      </div>
+    )
+  }
+
+  const renderGroup = (
+    group: GridFilterGroup,
+    path: readonly number[],
+    depth: number,
+  ): ReactNode => {
+    const nested = depth > 0
+    const summary =
+      group.connective === "all"
+        ? "All of the following are true…"
+        : "Any of the following are true…"
+
+    return (
+      <div
+        key={`group-${path.join(".")}`}
+        className={
+          nested
+            ? "space-y-2.5 rounded-md border border-border bg-muted/20 p-2"
+            : "space-y-2.5"
+        }
+        data-grid-filter-conditions={nested ? undefined : ""}
+        data-grid-filter-group={nested ? path.join(".") : undefined}
+        data-grid-filter-group-depth={nested ? depth : undefined}
+        role={nested ? "group" : undefined}
+        aria-label={nested ? summary : undefined}
+      >
+        {nested ? (
+          <div className="flex items-center justify-between gap-2" data-grid-filter-group-header="">
+            <div className="text-muted-foreground min-w-0 truncate text-[12px] font-medium">
+              {summary}
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {group.children.length <= 1 ? (
+                <Select
+                  value={group.connective}
+                  onValueChange={(value) => {
+                    changeGroupConnective(path, value as GridFilterConnective)
+                  }}
+                >
+                  <SelectTrigger
+                    data-grid-filter-connective=""
+                    aria-label="Match all or any of these group conditions"
+                    className={`${TRIGGER} h-7 w-[70px] px-1 text-center text-[11px] font-medium`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-[13px]">
+                      and
+                    </SelectItem>
+                    <SelectItem value="any" className="text-[13px]">
+                      or
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : null}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Add to condition group"
+                    data-grid-filter-group-add=""
+                    className="text-muted-foreground hover:text-foreground size-7"
+                  >
+                    <Plus aria-hidden="true" className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="text-[13px]">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      addCondition(path)
+                    }}
+                  >
+                    Add condition
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={depth >= GRID_FILTER_MAX_GROUP_DEPTH}
+                    title={
+                      depth >= GRID_FILTER_MAX_GROUP_DEPTH
+                        ? `Condition groups are limited to a maximum depth of ${GRID_FILTER_MAX_GROUP_DEPTH}`
+                        : undefined
+                    }
+                    onSelect={() => {
+                      addGroup(path)
+                    }}
+                  >
+                    Add condition group
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Delete condition group"
+                className="text-muted-foreground hover:text-destructive size-7"
+                onClick={() => {
+                  const parentPath = path.slice(0, -1)
+                  const index = path[path.length - 1]
+
+                  removeNode(parentPath, index)
+                }}
+              >
+                <Trash2 aria-hidden="true" className="size-3.5" strokeWidth={1.5} />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {group.children.length === 0 ? (
+          <p className="text-muted-foreground text-[12px]">
+            Add a condition or condition group.
+          </p>
+        ) : null}
+
+        {group.children.map((node, index) => {
+          if (node.type === "condition") {
+            return renderConditionRow(node.condition, path, index, group.connective, depth)
+          }
+
+          return (
+            <div
+              key={`group-row-${path.join(".")}-${index}`}
+              className="flex items-start gap-2"
+              data-grid-filter-group-row={path.concat(index).join(".")}
+            >
+              {index === 0 ? (
+                <div aria-hidden="true" className="h-9 w-14 shrink-0" />
+              ) : (
+                renderConnective(group.connective, path, index, depth)
+              )}
+              <div className="min-w-0 flex-1">{renderGroup(node.group, path.concat(index), depth + 1)}</div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{anchor}</PopoverTrigger>
@@ -245,7 +608,7 @@ export function GridFilterPopover({
         side="bottom"
         sideOffset={6}
         data-grid-filter-popover=""
-        className="w-[600px] rounded-lg p-4 text-[13px]"
+        className={`${showGroupWidth ? "w-[860px]" : "w-[600px]"} max-h-[min(70vh,var(--radix-popover-content-available-height))] max-w-[calc(100vw-2rem)] overflow-x-auto overflow-y-auto rounded-lg p-4 text-[13px]`}
         onFocusOutside={(event) => {
           // Same reason as `grid-sort-popover.tsx`: a column menu's close returns
           // focus to its trigger, which is outside this popover, and Radix reads
@@ -279,200 +642,45 @@ export function GridFilterPopover({
           </Button>
         </div>
 
-        <div className="space-y-2.5" data-grid-filter-conditions="">
-          {renderedConditions.map((condition, index) => {
-            const field = fieldById.get(condition.columnId)
-            const fieldType = field?.fieldType
-            const operators = filterOperatorsFor(fieldType)
-            const operator = operators.find((entry) => entry.id === condition.operator)
-            const takesValue = operator?.valueShape !== "none"
-            const invalid = isConditionValueInvalid(condition, fieldType)
+        {renderGroup(renderedFilter, [], 0)}
 
-            // A column some OTHER row already filters on is disabled below. The row's
-            // own column is excluded deliberately: disabling it would grey the value
-            // this row is already showing and block every same-row re-pick.
-            const columnTakenElsewhere = (columnId: string) =>
-              columnId !== condition.columnId && filteredColumnIds.has(columnId)
-
-            return (
-              <div key={condition.columnId} className="flex items-center gap-2" data-grid-filter-condition={condition.columnId}>
-                {index === 0 ? (
-                  <div
-                    aria-hidden="true"
-                    className="text-muted-foreground flex h-9 w-16 shrink-0 select-none items-center justify-center text-xs font-medium uppercase tracking-wider"
-                  >
-                    Where
-                  </div>
-                ) : (
-                  <Select
-                    value={renderedConnective}
-                    onValueChange={(value) => commitConnective(value as GridFilterConnective)}
-                  >
-                    <SelectTrigger
-                      data-grid-filter-connective=""
-                      aria-label="Match all or any of these conditions"
-                      className={`${TRIGGER} w-16 shrink-0 px-1 text-center text-[12px] font-medium`}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-[13px]">
-                        and
-                      </SelectItem>
-                      <SelectItem value="any" className="text-[13px]">
-                        or
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-
-                <Select
-                  value={condition.columnId}
-                  onValueChange={(value) => {
-                    const nextField = fieldById.get(value)
-
-                    if (!nextField) {
-                      return
-                    }
-
-                    // Switching field RESETS the operator and the value.
-                    // Carrying `contains` onto a date field, or an orphaned value
-                    // from the previous field, is the bug that filters nothing and
-                    // looks exactly like "no matches".
-                    const fresh = emptyCondition(value, nextField.fieldType)
-                    const keepList = Array.isArray(fresh.value) && Array.isArray(condition.value)
-
-                    // Replaces the entry carrying the OLD id, not one matching the
-                    // new id — `replace` looks its target up by `columnId`, and on
-                    // a field change those two differ, so replacing by the new id
-                    // matches nothing and silently leaves the old condition alone.
-                    //
-                    // Off the mirror, not the prop: three field picks in a row each
-                    // build on the last, and the prop is still the list from before
-                    // the first of them until the debounced write lands.
-                    commitConditions(
-                      conditionsRef.current.map((entry) =>
-                        entry.columnId === condition.columnId
-                          ? { ...fresh, value: keepList ? condition.value : fresh.value }
-                          : entry,
-                      ),
-                    )
-                  }}
-                >
-                  <SelectTrigger
-                    data-grid-filter-field=""
-                    aria-label={`Condition ${index + 1} field`} className={`${TRIGGER} ${SLOT_FIELD} shrink-0`}>
-                    <SelectValue placeholder="Choose a field" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {/* THIS OPTION LIST IS THE ONLY GATE. `onValueChange` below does
-                     * not re-check that the picked column is free, because Radix's
-                     * `handleSelect` is `if (!disabled)` — a disabled item never
-                     * reaches it. Drop the `disabled` without adding the check there
-                     * and this control can build two conditions with one id again.
-                     *
-                     * Disabled rather than absent: the column is not withdrawn from
-                     * view, only marked unavailable, which is what
-                     * `grid-header-cell.tsx:216` and `grid-toolbar.tsx:210` do for the
-                     * menu items they cannot offer. */}
-                    {fields.map((entry) => (
-                      <SelectItem
-                        key={entry.id}
-                        value={entry.id}
-                        disabled={columnTakenElsewhere(entry.id)}
-                        className="text-[13px]"
-                      >
-                        {entry.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={condition.operator}
-                  onValueChange={(value) => {
-                    const next = operators.find((entry) => entry.id === value)
-
-                    replace({
-                      columnId: condition.columnId,
-                      operator: value,
-                      // An operator that takes no value must not keep one, or the
-                      // stale value would filter the moment it is reselected.
-                      value: next?.valueShape === "none" || !Array.isArray(condition.value) ? "" : condition.value,
-                    })
-                  }}
-                >
-                  <SelectTrigger
-                    data-grid-filter-operator=""
-                    aria-label={`Condition ${index + 1} operator`} className={`${TRIGGER} ${SLOT_OPERATOR} shrink-0`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {operators.map((entry) => (
-                      <SelectItem key={entry.id} value={entry.id} className="text-[13px]">
-                        {entry.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <FilterValueControl
-                  key={`${condition.columnId}:${condition.operator}`}
-                  condition={condition}
-                  field={field}
-                  fieldType={fieldType}
-                  takesValue={takesValue}
-                  invalid={invalid}
-                  onCommit={(value) => {
-                    replace({ ...condition, value })
-                  }}
-                />
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Delete ${field?.label ?? condition.columnId} condition`}
-                  className="text-muted-foreground hover:text-destructive size-8 shrink-0"
-                  onClick={() => {
-                    commitConditions(
-                      conditionsRef.current.filter(
-                        (entry) => entry.columnId !== condition.columnId,
-                      ),
-                    )
-                  }}
-                >
-                  <Trash2 aria-hidden="true" className="size-4" strokeWidth={1.5} />
-                </Button>
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="mt-6 flex items-center justify-between" data-grid-filter-footer="">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className={FOOTER_ACTION}
-            onClick={addCondition}
-          >
-            <Plus aria-hidden="true" className="size-3.5" />
-            Add condition
-          </Button>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-2" data-grid-filter-footer="">
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={FOOTER_ACTION}
+              onClick={() => {
+                addCondition([])
+              }}
+            >
+              <Plus aria-hidden="true" className="size-3.5" />
+              Add condition
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={FOOTER_ACTION}
+              data-grid-filter-add-group=""
+              onClick={() => {
+                addGroup([])
+              }}
+            >
+              <Plus aria-hidden="true" className="size-3.5" />
+              Add condition group
+            </Button>
+          </div>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className={FOOTER_ACTION}
             onClick={() => {
-              // Through the one writer, like every other change in this file, and
-              // that is the point of moving it: `Clear all` is a local change to
-              // the list, so the rows go on the click rather than a transition
-              // later, and a close straight afterwards prunes against the cleared
-              // list instead of resurrecting what was just cleared. The URL write
-              // is unchanged — it is the same `onConditionsChange([])`.
-              commitConditions([])
+              // Through the one writer, like every other change in this file.
+              // The URL write is unchanged — it is the same empty root.
+              commitFilter(createFilterGroup(), true)
             }}
           >
             Clear all
@@ -512,9 +720,8 @@ type PendingMirror<T> = readonly [
    *
    * `setState` is asynchronous, so a handler that read `value` would build on the
    * PREVIOUS one — which is how three field picks inside one debounce window
-   * leave the URL carrying only the first. This is the same guarantee
-   * `conditionsRef` existed for, and it is now the mirror's own field rather than
-   * a second copy of it.
+   * leave the URL carrying only the first. The ref is that synchronous write
+   * base, kept on the mirror rather than as a second copy beside the prop.
    */
   ref: RefObject<T>,
   /**
@@ -523,7 +730,7 @@ type PendingMirror<T> = readonly [
    * reads the list later in the same tick — `replace`, the close-time prune — sees
    * what was just written rather than what was last rendered.
    */
-  commit: (next: T) => void,
+  commit: (next: T, immediate?: boolean) => void,
 ]
 
 /**
@@ -547,14 +754,16 @@ type PendingMirror<T> = readonly [
  *
  * `identity` is how the committed value is COMPARED, and it is a parameter
  * because the right comparison is the one the codec preserves, not the one that
- * is easiest to write — see `conditionsListKey`. `onCommit` fires on EVERY
- * commit; the debounce downstream is what stops that being a router call per
- * character, and this hook has no business adding a second debounce of its own.
+ * is easiest to write — see `filterGroupKey` in `grid-filter-tree.ts`. `onCommit`
+ * fires on EVERY commit; the debounce downstream is what stops that being a
+ * router call per character, and this hook has no business adding a second
+ * debounce of its own. `immediate` rides along because a structural change —
+ * adding a group, switching a connective — is a discrete act, not typing.
  */
 function usePendingMirror<T>(
   committed: T,
   identity: (value: T) => string,
-  onCommit: (value: T) => void,
+  onCommit: (value: T, immediate?: boolean) => void,
 ): PendingMirror<T> {
   const committedKey = identity(committed)
 
@@ -592,65 +801,14 @@ function usePendingMirror<T>(
   return [
     value,
     ref,
-    (next: T) => {
+    (next: T, immediate?: boolean) => {
       setValue(next)
       setValueKey(identity(next))
       setPending(true)
       ref.current = next
-      onCommit(next)
+      onCommit(next, immediate)
     },
   ]
-}
-
-/**
- * How two condition lists are compared: each condition's column id and its
- * SERIALIZED token, as one JSON string.
- *
- * **NOT `JSON.stringify` of the list itself, and that is load-bearing.** A list
- * reaches this component by two routes that do not agree about its shape: the
- * commit the mirror has just made, and the URL that commit travelled through.
- * `emptyCondition` gives a single-valued select column `value: []` — the shape
- * its first operator declares — and the codec writes that as `f.source=is:` and
- * reads it back as `value: ""`, because `is` is not a set operator and an array
- * cannot survive as an array. A key taken from the raw list therefore differs
- * across that round trip for good: the mirror decides its own write never landed,
- * stops reconciling, and leaves `Clear all` and Back showing rows the URL has
- * already thrown away.
- *
- * The serialized token is the one identity the codec preserves in both
- * directions, so a key built from it is equal exactly when the display and the
- * URL agree — which is the whole question the mirror is asking. Order is part of
- * it: the query string's own key order is the order the rows stack in, so a
- * reorder is a real change to what the URL will carry.
- *
- * `JSON.stringify` of the pairs rather than a separator-joined string, so a value
- * carrying the separator cannot make two different lists compare equal.
- */
-function conditionsListKey(conditions: readonly GridFilterCondition[]): string {
-  return JSON.stringify(conditions.map((condition) => [condition.columnId, encodeCondition(condition)]))
-}
-
-/**
- * The conditions the rows render from, and the base `replace`, `addCondition`,
- * `pruneUnfilled` and the field Select all build on.
- *
- * Before this, the freshest list lived in a ref alone — a write base with no
- * display behind it. Choosing an operator and closing straight after left the
- * prune reading the PREVIOUS conditions, so it deleted the row the operator had
- * just made complete: pick `is empty`, hit the `×`, and the `is empty` filter
- * vanished because the prune still saw `contains` with a blank value. The mirror
- * keeps that guarantee and gives it a display, and it is one value rather than a
- * ref beside the prop — the rows and the writers cannot drift apart.
- *
- * The parent is handed its OWN copy of the list: it writes it straight into
- * TanStack's `columnFilters`, and a mirror that handed over the array it renders
- * from would be one mutation away from having its own rows change underneath it.
- */
-function useConditionMirror(
-  committed: readonly GridFilterCondition[],
-  onCommit: (next: GridFilterCondition[]) => void,
-): PendingMirror<readonly GridFilterCondition[]> {
-  return usePendingMirror(committed, conditionsListKey, (next) => onCommit([...next]))
 }
 
 /**

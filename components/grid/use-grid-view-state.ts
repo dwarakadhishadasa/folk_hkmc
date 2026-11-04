@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import type { OnChangeFn, TableState } from "@tanstack/react-table"
+import type { ColumnFiltersState, OnChangeFn, TableState } from "@tanstack/react-table"
 
 import {
   applyGridParams,
@@ -12,19 +12,41 @@ import {
   type GridFilterConnective,
   type GridViewState,
 } from "@/components/grid/grid-view-state"
+import {
+  createFilterGroup,
+  filterGroupFromConditions,
+  flattenConditions,
+  type GridFilterGroup,
+} from "@/components/grid/grid-filter-tree"
+import type { GridFilterCondition } from "@/components/grid/grid-filter-operators"
 
 export const GRID_FILTER_DEBOUNCE_MS = 250
 
 export interface GridViewStateController {
   /** URL-derived table state. The URL is the only source of truth. */
   state: Partial<TableState>
-  /** Governs the whole condition list — one connective, never per condition. */
+  /**
+   * The root connective, kept for callers that only need the flat list.
+   * `filterTree.connective` is the authoritative value.
+   */
   filterConnective: GridFilterConnective
+  /** The complete filter, groups included. */
+  filterTree: GridFilterGroup
   /** TanStack's controlled `onStateChange`, accepting both updater forms. */
   onStateChange: OnChangeFn<TableState>
-  /** Writes a connective without disturbing the conditions it governs. */
+  /**
+   * Writes the complete filter tree. `immediate` pushes a discrete structural
+   * change (add/delete/connective); without it the write is debounced like a
+   * keystroke, so typing does not emit a router transition per character.
+   */
+  onFilterTreeChange: (next: GridFilterGroup, immediate?: boolean) => void
+  /**
+   * Root-connective compatibility wrapper over `onFilterTreeChange`. Kept for
+   * callers that predate groups; a nested group's own connective goes through
+   * `onFilterTreeChange` with the updated tree.
+   */
   setFilterConnective: (connective: GridFilterConnective) => void
-  /** Clears `q`, every `f.<colId>`, every `fa.<colId>` and `sort`. */
+  /** Clears `q`, every `f.<colId>`, every `fa.<colId>`, `fg` and `sort`. */
   clearFilters: () => void
   /**
    * Escape hatch for in-flight interaction. A column-resize drag holds its
@@ -70,12 +92,24 @@ function splitColumnKey(columnKey: string): string[] {
 }
 
 /** Only the grid-owned slice of the table state survives a URL round trip. */
-function pickGridState(state: Partial<TableState>, connective: GridFilterConnective): GridViewState {
+function pickGridState(
+  state: Partial<TableState>,
+  filterTree: GridFilterGroup,
+): GridViewState {
+  const conditions = flattenConditions(filterTree)
+
   return {
     sorting: state.sorting ?? [],
     globalFilter: typeof state.globalFilter === "string" ? state.globalFilter : "",
-    columnFilters: state.columnFilters ?? [],
-    filterConnective: connective,
+    // The flat projection is derived from the tree, never adopted from the
+    // table. In manual-evaluation mode the table is handed `[]` on purpose, and
+    // reading that back would erase every condition on the next sort or hide.
+    columnFilters: conditions.map((condition) => ({
+      id: condition.columnId,
+      value: condition,
+    })),
+    filterConnective: filterTree.connective,
+    filterTree,
     columnOrder: state.columnOrder ?? [],
     columnVisibility: state.columnVisibility ?? {},
     columnSizing: state.columnSizing ?? {},
@@ -87,6 +121,24 @@ function sameExceptFilters(previous: GridViewState, next: GridViewState): boolea
   return (
     previous.globalFilter === next.globalFilter &&
     JSON.stringify(previous.columnFilters) === JSON.stringify(next.columnFilters)
+  )
+}
+
+/** The flat conditions a legacy caller may still write through `columnFilters`. */
+function conditionsFromColumnFilters(filters: ColumnFiltersState): GridFilterCondition[] {
+  return filters.flatMap((entry) => {
+    const value = entry.value as GridFilterCondition
+
+    return value && typeof value.operator === "string"
+      ? [{ ...value, columnId: entry.id }]
+      : []
+  })
+}
+
+/** The flat list's identity, so a legacy write is not mistaken for a no-op. */
+function conditionsSignature(conditions: readonly GridFilterCondition[]): string {
+  return JSON.stringify(
+    conditions.map((condition) => [condition.columnId, condition.operator, condition.value]),
   )
 }
 
@@ -123,28 +175,30 @@ export function useGridViewState({
     [searchParams, columnKey, hiddenDefaultKey, fieldTypes],
   )
 
-  // The connective is not table state — TanStack has no such field — so it is
+  // The filter tree is not table state — TanStack has no such field — so it is
   // read here and threaded into every write explicitly rather than smuggled
   // through the state object the table also receives.
-  const { filterConnective, ...tableState } = parsed
+  const { filterConnective, filterTree, ...tableState } = parsed
   const state: Partial<TableState> = tableState
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const transientRef = useRef(false)
   const pendingRef = useRef<Partial<TableState> | null>(null)
   /**
-   * The connective a debounced filter write must carry when it fires.
+   * The tree a debounced filter write must carry when it fires.
    *
-   * Read at fire time, not at schedule time: a connective switch inside the
-   * 250 ms window moves every condition to the `fa.` family, and a write
-   * carrying the old one would flip the URL — and the grid — back to `and`.
-   * `setFilterConnective` owns it; the effect below follows external changes
-   * (Back, Forward, a shared link) so a keystroke after one carries what the
-   * URL actually shows.
+   * Read at fire time, not at schedule time: a field change inside the 250 ms
+   * window can move the condition between columns, and a write carrying the old
+   * tree would undo it. `onFilterTreeChange` owns the ref; the effect below
+   * follows external changes (Back, Forward, a shared link) so a later
+   * keystroke carries what the URL actually shows.
    */
-  const connectiveRef = useRef<GridFilterConnective>(filterConnective)
-  /** The filter edit a pending debounce holds, for the connective switch to fold in. */
-  const pendingFilterRef = useRef<Partial<TableState> | null>(null)
+  const filterTreeRef = useRef<GridFilterGroup>(filterTree)
+  /** The filter edit a pending debounce holds, for a structural write to fold in. */
+  const pendingFilterRef = useRef<{
+    state: Partial<TableState>
+    filterTree: GridFilterGroup
+  } | null>(null)
 
   useEffect(() => {
     return () => {
@@ -155,11 +209,11 @@ export function useGridViewState({
   }, [])
 
   const write = useCallback(
-    (next: Partial<TableState>, mode: "push" | "replace", connective: GridFilterConnective) => {
+    (next: Partial<TableState>, mode: "push" | "replace", tree: GridFilterGroup) => {
       const query = applyGridParams(
         searchParams,
         serializeGridViewState(
-          pickGridState(next, connective),
+          pickGridState(next, tree),
           columnIds,
           splitColumnKey(hiddenDefaultKey),
         ),
@@ -181,29 +235,33 @@ export function useGridViewState({
   )
 
   const scheduleFilterWrite = useCallback(
-    (next: Partial<TableState>) => {
+    (next: Partial<TableState>, tree: GridFilterGroup) => {
       if (debounceRef.current !== null) {
         clearTimeout(debounceRef.current)
       }
 
-      pendingFilterRef.current = next
+      pendingFilterRef.current = { state: next, filterTree: tree }
 
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null
         const pending = pendingFilterRef.current
         pendingFilterRef.current = null
-        write(pending ?? next, "replace", connectiveRef.current)
+        write(
+          pending?.state ?? next,
+          "replace",
+          pending?.filterTree ?? tree,
+        )
       }, GRID_FILTER_DEBOUNCE_MS)
     },
     [write],
   )
 
-  // External connective changes — Back, Forward, a shared link — move the ref
-  // the debounced write reads, so a keystroke after one carries the connective
-  // the URL actually shows rather than a superseded pick.
+  // External tree changes — Back, Forward, a shared link — move the ref the
+  // debounced write reads, so a keystroke after one carries the tree the URL
+  // actually shows rather than a superseded edit.
   useEffect(() => {
-    connectiveRef.current = filterConnective
-  }, [filterConnective])
+    filterTreeRef.current = filterTree
+  }, [filterTree])
 
   const onStateChange = useCallback<OnChangeFn<TableState>>(
     (updater) => {
@@ -217,49 +275,88 @@ export function useGridViewState({
         return
       }
 
-      const previous = pickGridState(state, filterConnective)
-      const resolved = pickGridState(next, filterConnective)
+      const tree = filterTreeRef.current
+      // A caller that still writes the flat `columnFilters` list (the path
+      // before `filterTree`) is adopted here. In manual-evaluation mode the
+      // table was handed `[]`, so an empty incoming list is not a clear; only a
+      // non-empty list that differs from the tree is a legacy filter edit.
+      let effectiveTree = tree
+      const incoming = next.columnFilters
+
+      if (incoming && incoming.length > 0) {
+        const incomingConditions = conditionsFromColumnFilters(incoming)
+        const committedConditions = conditionsFromColumnFilters(state.columnFilters ?? [])
+
+        // Differing from the URL-derived list means the caller intentionally
+        // wrote a new flat list. A sort/hide refresh carries the committed list
+        // unchanged, so it must not overwrite a tree edit that is still in its
+        // debounce window.
+        if (
+          conditionsSignature(incomingConditions) !== conditionsSignature(committedConditions) &&
+          conditionsSignature(incomingConditions) !==
+            conditionsSignature(flattenConditions(effectiveTree))
+        ) {
+          effectiveTree = filterGroupFromConditions(incomingConditions, effectiveTree.connective)
+          filterTreeRef.current = effectiveTree
+        }
+      }
+
+      const previous = pickGridState(state, effectiveTree)
+      const resolved = pickGridState(next, effectiveTree)
 
       if (sameExceptFilters(previous, resolved)) {
-        write(next, "push", filterConnective)
+        write(next, "push", effectiveTree)
       } else {
-        scheduleFilterWrite(next)
+        scheduleFilterWrite(next, effectiveTree)
       }
     },
-    [filterConnective, scheduleFilterWrite, state, write],
+    [scheduleFilterWrite, state, write],
+  )
+
+  const onFilterTreeChange = useCallback(
+    (next: GridFilterGroup, immediate = false) => {
+      filterTreeRef.current = next
+
+      if (immediate) {
+        // A `push`, not a debounced `replace`: adding a group or switching a
+        // connective is a discrete act that changes the meaning of the whole
+        // filter at once, so it belongs in history rather than in a typing-style
+        // debounce window.
+        let base = state
+
+        if (debounceRef.current !== null) {
+          clearTimeout(debounceRef.current)
+          debounceRef.current = null
+
+          if (pendingFilterRef.current !== null) {
+            // A just-typed value travels with the structural change instead of
+            // firing later and restoring the tree it was typed into.
+            base = pendingFilterRef.current.state
+            pendingFilterRef.current = null
+          }
+        }
+
+        write(base, "push", next)
+        return
+      }
+
+      // Fold in a filter edit already waiting on the debounce, so a value typed
+      // just before this one does not get overwritten by the URL-derived state
+      // that has not caught up yet.
+      scheduleFilterWrite(pendingFilterRef.current?.state ?? state, next)
+    },
+    [scheduleFilterWrite, state, write],
   )
 
   const setFilterConnective = useCallback(
     (next: GridFilterConnective) => {
-      // A `push`, not a debounced `replace`: switching the connective is a
-      // discrete act that moves every condition between the `f.` and `fa.` key
-      // families at once, so it belongs in history rather than in a typing-style
-      // debounce window.
-      connectiveRef.current = next
-
-      // A debounced filter edit still in flight was built against the old
-      // connective and the pre-keystroke list. It is folded into this push —
-      // the just-typed value travels with the switch — instead of firing
-      // later and flipping the URL back to the family it came from.
-      let base = state
-
-      if (debounceRef.current !== null) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = null
-
-        if (pendingFilterRef.current !== null) {
-          base = pendingFilterRef.current
-          pendingFilterRef.current = null
-        }
-      }
-
-      write(base, "push", next)
+      onFilterTreeChange({ ...filterTreeRef.current, connective: next }, true)
     },
-    [state, write],
+    [onFilterTreeChange],
   )
 
   const clearFilters = useCallback(() => {
-    // Clears `q`, every `f.<colId>`, every `fa.<colId>` and `sort`, and
+    // Clears `q`, every `f.<colId>`, every `fa.<colId>`, `fg` and `sort`, and
     // deliberately keeps the arrangement (`cols`, `hide`, `size.*`): an operator
     // who filtered their way down to one view and cleared the filter text did not
     // ask to lose it. Back to match-all for the same reason — the connective
@@ -273,14 +370,16 @@ export function useGridViewState({
     }
 
     pendingFilterRef.current = null
+    const emptyTree = createFilterGroup()
+    filterTreeRef.current = emptyTree
+
     const query = applyGridParams(
       searchParams,
       serializeGridViewState(
         {
-          ...pickGridState(state, "all"),
+          ...pickGridState(state, emptyTree),
           sorting: [],
           globalFilter: "",
-          columnFilters: [],
         },
         columnIds,
         splitColumnKey(hiddenDefaultKey),
@@ -302,9 +401,9 @@ export function useGridViewState({
     pendingRef.current = null
 
     if (pending) {
-      write(pending, "push", filterConnective)
+      write(pending, "push", filterTreeRef.current)
     }
-  }, [filterConnective, write])
+  }, [write])
 
   const cancelTransientChange = useCallback(() => {
     transientRef.current = false
@@ -314,7 +413,9 @@ export function useGridViewState({
   return {
     state,
     filterConnective,
+    filterTree,
     onStateChange,
+    onFilterTreeChange,
     setFilterConnective,
     clearFilters,
     beginTransientChange,

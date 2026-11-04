@@ -20,7 +20,7 @@ import type { GridDensity } from "@/components/grid/grid-types"
 import { GRID_BASE_FONT_CLASS, GRID_DENSITY_OPTIONS } from "@/components/grid/grid-row"
 import { useUrlBackedDraft } from "@/components/grid/use-grid-view-state"
 import { GridFilterPopover, type GridFilterField } from "@/components/grid/grid-filter-popover"
-import type { GridFilterCondition, GridFilterConnective } from "@/components/grid/grid-filter-operators"
+import { flattenConditions, type GridFilterGroup } from "@/components/grid/grid-filter-tree"
 import { GridSortPopover, type GridSortField } from "@/components/grid/grid-sort-popover"
 
 export interface GridToolbarColumn {
@@ -65,10 +65,9 @@ export interface GridToolbarProps {
   totalCount: number
   /** Every column a condition may name, with the type that picks its operators. */
   filterFields: readonly GridFilterField[]
-  conditions: readonly GridFilterCondition[]
-  onConditionsChange: (conditions: GridFilterCondition[]) => void
-  filterConnective: GridFilterConnective
-  onFilterConnectiveChange: (connective: GridFilterConnective) => void
+  /** The complete filter, groups included. */
+  filterTree: GridFilterGroup
+  onFilterTreeChange: (next: GridFilterGroup, immediate?: boolean) => void
   /**
    * Open state lives in `Grid`, not here, because the column menu's Filter item
    * opens this same popover. Local state would give the menu no way in.
@@ -126,10 +125,8 @@ export function GridToolbar({
   visibleCount,
   totalCount,
   filterFields,
-  conditions,
-  onConditionsChange,
-  filterConnective,
-  onFilterConnectiveChange,
+  filterTree,
+  onFilterTreeChange,
   filterOpen,
   onFilterOpenChange,
   sortFields,
@@ -150,8 +147,11 @@ export function GridToolbar({
   // deliberately no second indicator on the affected headers: that rule came from
   // the withdrawn inline bar, whose toolbar could only show a count, and it went
   // with it. A permanently visible per-column funnel is separately forbidden.
+  const conditionColumnIds = new Set(
+    flattenConditions(filterTree).map((condition) => condition.columnId),
+  )
   const indicator = columns
-    .filter((column) => conditions.some((condition) => condition.columnId === column.id))
+    .filter((column) => conditionColumnIds.has(column.id))
     .map((column) => column.label)
     .join(", ")
 
@@ -206,10 +206,8 @@ export function GridToolbar({
           open={filterOpen}
           onOpenChange={onFilterOpenChange}
           fields={filterFields}
-          conditions={conditions}
-          connective={filterConnective}
-          onConditionsChange={onConditionsChange}
-          onConnectiveChange={onFilterConnectiveChange}
+          filter={filterTree}
+          onFilterChange={onFilterTreeChange}
           anchor={
             <Button
               type="button"

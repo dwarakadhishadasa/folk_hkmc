@@ -11,6 +11,7 @@
  * | `q`            | global filter text                                   |
  * | `f.<colId>`    | one condition, ANDed across columns                  |
  * | `fa.<colId>`   | one condition, ORed across columns                   |
+ * | `fg`           | a complete filter tree, groups included (JSON)       |
  * | `cols`         | ordered, comma-joined column ids                     |
  * | `hide`         | COMPLETE hidden set, comma-joined — see below        |
  * | `size.<colId>` | committed column width in integer px                 |
@@ -36,12 +37,20 @@
  *    would silently promote a Preacher following a shared link into admin
  *    scope, and this grid is the one thing on a `/manage` page rewriting URLs.
  *
- * **The connective is carried by the prefix, not by a flag.** `f.` means "all of
- * these", `fa.` means "any of these", and match-any is on exactly when some `fa.`
- * key is present. A `fm=any` param would be a second way to say the same thing
- * and the two could disagree — a link could carry `fm=any` and no `fa.` keys,
- * which means nothing. Because one connective governs the whole list, both cases
- * are SETS of columns: nothing is order-sensitive, and no list is ever parsed.
+ * **A FLAT filter's connective is carried by the prefix, not by a flag.** `f.`
+ * means "all of these", `fa.` means "any of these", and match-any is on exactly
+ * when some `fa.` key is present. A `fm=any` param would be a second way to say
+ * the same thing and the two could disagree — a link could carry `fm=any` and
+ * no `fa.` keys, which means nothing. A flat list has one connective, so both
+ * cases are SETS of columns: nothing is order-sensitive, and no list is parsed.
+ *
+ * **A GROUPED filter travels as `fg`, because no flat encoding can express it.**
+ * An OR inside an AND is not a set of columns; it is a tree. `fg` holds the
+ * complete `{ conjunction, filterSet }` shape Airtable itself sends to
+ * `updateFilters`, with `{ type: "nested" }` for a group. A grouped link never
+ * writes `f.`/`fa.` keys, and a flat link never writes `fg`; reading prefers
+ * `fg` when present, so the two forms cannot be silently merged into a filter
+ * nobody composed. See `grid-filter-tree.ts` for the shape and its evaluator.
  *
  * **A condition token is never empty.** `f.<colId>` holds `<operator>:<value>`,
  * so `is empty` serializes as `isEmpty:` — eight characters — and survives the
@@ -62,10 +71,19 @@ import {
   type GridFilterCondition,
   type GridFilterConnective,
 } from "@/components/grid/grid-filter-operators"
+import {
+  createFilterGroup,
+  filterGroupFromConditions,
+  filterGroupToSerialized,
+  flattenConditions,
+  hasNestedGroups,
+  parseFilterTreeJson,
+  type GridFilterGroup,
+} from "@/components/grid/grid-filter-tree"
 import type { GridFieldType } from "@/components/grid/grid-types"
 
 /** Exact query keys the grid owns. */
-export const GRID_PARAM_KEYS = ["q", "sort", "cols", "hide"] as const
+export const GRID_PARAM_KEYS = ["q", "sort", "cols", "hide", "fg"] as const
 
 /**
  * Query key prefixes the grid owns.
@@ -82,8 +100,19 @@ export interface GridViewState {
   sorting: SortingState
   globalFilter: string
   columnFilters: ColumnFiltersState
-  /** Governs the whole `columnFilters` list. Never per condition. */
+  /**
+   * The ROOT connective, derived from `filterTree`. Nested groups carry their
+   * own in the tree; this field exists for the flat table path and for callers
+   * that predate groups.
+   */
   filterConnective: GridFilterConnective
+  /**
+   * The complete filter, groups included. A flat filter is a root whose
+   * children are all conditions; see `grid-filter-tree.ts`. `columnFilters` is
+   * its flattened projection and is what TanStack receives when the tree can
+   * be evaluated by ANDing leaves.
+   */
+  filterTree: GridFilterGroup
   /** Always a complete permutation of the known column ids, in display order. */
   columnOrder: string[]
   /** Absent key means visible; only explicitly hidden ids are present. */
@@ -97,6 +126,7 @@ const EMPTY_VIEW_STATE: GridViewState = {
   globalFilter: "",
   columnFilters: [],
   filterConnective: "all",
+  filterTree: createFilterGroup(),
   columnOrder: [],
   columnVisibility: {},
   columnSizing: {},
@@ -205,9 +235,10 @@ export function parseGridViewState(
       }
     }
 
-    // Match-any wins over match-all rather than merging: one connective governs
-    // the whole list, so a link carrying both prefixes is not two lists to
-    // reconcile — it is one list whose connective is `any`.
+    // For the FLAT fallback, match-any wins over match-all rather than merging:
+    // one connective governs the whole flat list, so a link carrying both
+    // prefixes is not two lists to reconcile — it is one list whose connective
+    // is `any`. A valid `fg` replaces this list below.
     const columnFilters: ColumnFiltersState = []
     let filterConnective: GridFilterConnective = "all"
 
@@ -277,6 +308,31 @@ export function parseGridViewState(
       }
     }
 
+    /**
+     * `fg` is the complete tree and WINS over the flat keys. A nested tree has
+     * no faithful flat projection — `f.`/`fa.` cannot express an OR inside an
+     * AND — so reading both and merging would invent a filter nobody wrote.
+     * A flat tree is still written as `f.`/`fa.` for links that predate groups;
+     * `fg` is the only form a grouped tree takes.
+     */
+    const flatConditions = columnFilters.map((entry) => ({
+      ...(entry.value as GridFilterCondition),
+      columnId: entry.id,
+    }))
+    const parsedTree = parseFilterTreeJson(params.get("fg"), known, fieldTypes)
+    const filterTree =
+      parsedTree ??
+      filterGroupFromConditions(flatConditions, filterConnective)
+
+    if (parsedTree) {
+      filterConnective = parsedTree.connective
+      columnFilters.length = 0
+
+      for (const condition of flattenConditions(parsedTree)) {
+        columnFilters.push({ id: condition.columnId, value: condition })
+      }
+    }
+
     const ordered: string[] = []
     const seen = new Set<string>()
     for (const id of splitList(params.get("cols") ?? "")) {
@@ -327,6 +383,7 @@ export function parseGridViewState(
       globalFilter: params.get("q") ?? "",
       columnFilters,
       filterConnective,
+      filterTree,
       columnOrder: ordered,
       columnVisibility,
       columnSizing,
@@ -344,7 +401,12 @@ export function parseGridViewState(
       }
     }
 
-    return { ...EMPTY_VIEW_STATE, columnOrder: [...columnIds], columnVisibility }
+    return {
+      ...EMPTY_VIEW_STATE,
+      filterTree: createFilterGroup(),
+      columnOrder: [...columnIds],
+      columnVisibility,
+    }
   }
 }
 
@@ -376,8 +438,10 @@ export function serializeGridViewState(
     params.q = globalFilter
   }
 
-  const connective = state.filterConnective ?? "all"
-  const conditionPrefix = connective === "any" ? "fa." : "f."
+  // The tree is authoritative when it is present. `columnFilters` is its
+  // flattened projection, kept for TanStack and for callers that predate
+  // groups; it is not read back into a different tree here.
+  const flatConditions: GridFilterCondition[] = []
 
   for (const filter of state.columnFilters ?? []) {
     if (!known.has(filter.id) || filter.value === undefined || filter.value === null) {
@@ -389,11 +453,30 @@ export function serializeGridViewState(
     // the next reload had to interpret again.
     const condition = asCondition(filter.value)
 
-    if (!condition) {
-      continue
+    if (condition) {
+      flatConditions.push({ ...condition, columnId: filter.id })
     }
+  }
 
-    params[`${conditionPrefix}${filter.id}`] = encodeCondition(condition)
+  const filterTree =
+    state.filterTree ?? filterGroupFromConditions(flatConditions, state.filterConnective ?? "all")
+  const treeConditions = flattenConditions(filterTree).filter((condition) =>
+    known.has(condition.columnId),
+  )
+
+  if (treeConditions.length > 0) {
+    if (hasNestedGroups(filterTree)) {
+      // Groups have no faithful flat encoding, so the whole tree travels as
+      // `fg`. Its shape is Airtable's observed `filters` shape: conjunction +
+      // filterSet, with `{ type: "nested" }` for a group.
+      params.fg = JSON.stringify(filterGroupToSerialized(filterTree))
+    } else {
+      const conditionPrefix = filterTree.connective === "any" ? "fa." : "f."
+
+      for (const condition of treeConditions) {
+        params[`${conditionPrefix}${condition.columnId}`] = encodeCondition(condition)
+      }
+    }
   }
 
   const order = (state.columnOrder ?? []).filter((id) => known.has(id))

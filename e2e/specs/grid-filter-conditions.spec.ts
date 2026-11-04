@@ -498,7 +498,7 @@ test.describe("CAP-12 — the filter conditions popover", () => {
   test("a multiselect offers the four set operations", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
     await page.getByRole("option", { name: "Books Read", exact: true }).click()
@@ -520,7 +520,7 @@ test.describe("CAP-12 — the filter conditions popover", () => {
   test("a single select offers is / is not and nothing set-shaped", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
     await page.getByRole("option", { name: "Source", exact: true }).click()
@@ -729,7 +729,7 @@ test.describe("CAP-12 — the filter conditions popover", () => {
     await gotoGrid(page, {})
     await openPopover(page)
 
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
     await expect.poll(() => new URL(page.url()).searchParams.get("f.name")).toBe("contains:")
     await expect(filterControl(page)).toContainText("Name")
 
@@ -737,7 +737,7 @@ test.describe("CAP-12 — the filter conditions popover", () => {
     // count is read while the operator is still typing.
     await expectVisibleCount(page, (await scopedContacts()).length)
 
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
     await expect(conditionRow(page, "phone")).toBeVisible()
 
     await conditionRow(page, "phone").getByRole("button", { name: /Delete/ }).click()
@@ -818,7 +818,7 @@ test.describe("CAP-12 — the four reported defects", () => {
 
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     const value = conditionRow(page, "name").locator("[data-grid-filter-value]")
     await value.click()
@@ -839,7 +839,7 @@ test.describe("CAP-12 — the four reported defects", () => {
   test("AC-D2: every keystroke inside the debounce window survives", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     const value = conditionRow(page, "name").locator("[data-grid-filter-value]")
     await value.click()
@@ -887,13 +887,14 @@ test.describe("CAP-12 — the four reported defects", () => {
     expect(footerBottom, "and none below them").toBe("0px")
   })
 
-  test("the two footer actions share one quiet treatment", async ({ page }) => {
+  test("the footer actions share one quiet treatment", async ({ page }) => {
     await gotoGrid(page, { params: { "f.name": "contains:a" } })
     await openPopover(page)
 
     const footer = popover(page).locator("[data-grid-filter-footer]")
-    const addCondition = footer.getByRole("button", { name: "Add condition" })
-    const clearAll = footer.getByRole("button", { name: "Clear all" })
+    const addCondition = footer.getByRole("button", { name: "Add condition", exact: true })
+    const addGroup = footer.getByRole("button", { name: "Add condition group", exact: true })
+    const clearAll = footer.getByRole("button", { name: "Clear all", exact: true })
 
     /** The footer button's resting face, as the browser resolves it. */
     const face = (button: Locator) =>
@@ -906,10 +907,13 @@ test.describe("CAP-12 — the four reported defects", () => {
         }
       })
 
-    // One shared class string, so neither can drift into being the louder of the
-    // two — which is what `+ Add condition` in brand royal used to be.
-    expect(await face(addCondition), "the two actions render identically").toEqual(
+    // One shared class string, so no action can drift into being the louder of
+    // the others — which is what `+ Add condition` in brand royal used to be.
+    expect(await face(addCondition), "the three actions render identically").toEqual(
       await face(clearAll),
+    )
+    expect(await face(addGroup), "the group action is the same quiet sibling").toEqual(
+      await face(addCondition),
     )
     expect(await face(addCondition), "bold, quiet and unfilled at rest").toMatchObject({
       fontWeight: "600",
@@ -920,7 +924,7 @@ test.describe("CAP-12 — the four reported defects", () => {
     // light scope and a separate `dark:hover:bg-accent/50` in the dark one, and
     // the override has to name both — a pointer-over that greys the button is
     // the regression this holds.
-    for (const button of [addCondition, clearAll]) {
+    for (const button of [addCondition, addGroup, clearAll]) {
       await button.hover()
       expect((await face(button)).backgroundColor, "hover paints no fill").toBe(
         "rgba(0, 0, 0, 0)",
@@ -971,7 +975,7 @@ test.describe("CAP-12 — the four reported defects", () => {
   test("AC-D4: clicking a day sets the value", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     const row = conditionRow(page, "name")
     await row.locator("[data-grid-filter-field]").click()
@@ -1003,7 +1007,7 @@ test.describe("CAP-12 — the four reported defects", () => {
   test("AC-D4: `is within` takes two clicks and serialises a span", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
     await page.getByRole("option", { name: "Date of Birth", exact: true }).click()
@@ -1071,7 +1075,7 @@ test.describe("CAP-12 — the follow-up requests", () => {
   test("an unfinished condition is removed when the popover closes", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await expect(conditionRow(page, "name")).toBeVisible()
     await expect
@@ -1093,7 +1097,7 @@ test.describe("CAP-12 — the follow-up requests", () => {
   test("`is empty` is complete without a value and must survive the close", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await conditionRow(page, "name").locator("[data-grid-filter-operator]").click()
     await page.getByRole("option", { name: "is empty", exact: true }).click()
@@ -1113,14 +1117,14 @@ test.describe("CAP-12 — the follow-up requests", () => {
   test("a filled condition and an unfinished one: only the unfinished one goes", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     const value = conditionRow(page, "name").locator("[data-grid-filter-value]")
     await value.click()
     await value.fill("a")
     await expect.poll(() => new URL(page.url()).searchParams.get("f.name")).toBe("contains:a")
 
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
     await expect
       .poll(() => new URL(page.url()).searchParams.get("f.phone"))
       .toBe("contains:")
@@ -1136,7 +1140,7 @@ test.describe("CAP-12 — the follow-up requests", () => {
   test("a single select's value is chosen from a dropdown", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
     await page.getByRole("option", { name: "Source", exact: true }).click()
@@ -1160,7 +1164,7 @@ test.describe("CAP-12 — the follow-up requests", () => {
   test("a freshly added multiselect condition survives the URL round trip", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
     await page.getByRole("option", { name: "Books Read", exact: true }).click()
@@ -1180,7 +1184,7 @@ test.describe("CAP-12 — the follow-up requests", () => {
 test("a multiselect's values are ticked in a dropdown", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
     await page.getByRole("option", { name: "Books Read", exact: true }).click()
@@ -1216,7 +1220,7 @@ test("a multiselect's values are ticked in a dropdown", async ({ page }) => {
   test("a long list of chosen values truncates instead of overflowing", async ({ page }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
 
     await conditionRow(page, "name").locator("[data-grid-filter-field]").click()
     await page.getByRole("option", { name: "Books Read", exact: true }).click()
@@ -1274,14 +1278,14 @@ test("a multiselect's values are ticked in a dropdown", async ({ page }) => {
 
     // `name` sorts early in the grid's column order, which is exactly what made
     // the parse rebuild the list in column order and insert this row at the top.
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
     await expect
       .poll(() => new URL(page.url()).searchParams.get("f.name"))
       .toBe("contains:")
     // `+ Add condition` offers the row's identity column first.
     await expect(conditionRow(page, "name").locator("[data-grid-filter-field]")).toHaveText("Name")
 
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
     await expect.poll(() => new URL(page.url()).searchParams.get("f.phone")).toBe("contains:")
 
     const order = await popover(page)
@@ -1476,7 +1480,7 @@ test.describe("CAP-12 — the choice controls lead the URL", () => {
   }) => {
     await gotoGrid(page, {})
     await openPopover(page)
-    await popover(page).getByRole("button", { name: "Add condition" }).click()
+    await popover(page).getByRole("button", { name: "Add condition", exact: true }).click()
     await expect.poll(() => new URL(page.url()).searchParams.get("f.name")).toBe("contains:")
 
     // Each pick is read back in the instant it is made, so a build that displays
@@ -1558,5 +1562,165 @@ test.describe("CAP-12 — the choice controls lead the URL", () => {
     await expect(conditionRow(page, "notes")).toBeVisible()
     await expect(conditionRow(page, "notes").locator("[data-grid-filter-field]")).toHaveText("Notes")
     await expect(conditionRow(page, "notes").locator("[data-grid-filter-value]")).toHaveValue("zzz")
+  })
+})
+
+/**
+ * CAP-12 extension — condition groups.
+ *
+ * Airtable's live filter state and its `updateFilters` request body were
+ * observed on 2026-10-29: a recursive `{ conjunction, filterSet }` tree, a leaf
+ * `{ columnId, operator, value }`, and a group `{ type: "nested", conjunction,
+ * filterSet }`. These tests assert the same observable behaviour in this grid:
+ * a group is one item in its parent's connective, a group has its own
+ * connective, the whole tree survives a reload, and deleting the group removes
+ * its subtree from the URL.
+ */
+test.describe("CAP-12 — condition groups", () => {
+  function treeParam(page: Page): unknown {
+    const raw = new URL(page.url()).searchParams.get("fg")
+    return raw ? JSON.parse(raw) : null
+  }
+
+  async function addConditionToGroup(page: Page): Promise<void> {
+    await popover(page).locator("[data-grid-filter-group-add]").first().click()
+    await page.getByRole("menuitem", { name: "Add condition", exact: true }).click()
+  }
+
+  test("Add condition group creates a nested group and survives a reload", async ({ page }) => {
+    const rows = await scopedContacts()
+    const value = rows.find((row) => row.name && row.name.length > 4)!.name!.slice(0, 3)
+
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition group", exact: true }).click()
+
+    await expect(popover(page).locator("[data-grid-filter-group]")).toHaveCount(1)
+    await expect(conditionRow(page, "name")).toBeVisible()
+
+    await conditionRow(page, "name").locator("[data-grid-filter-value]").fill(value)
+
+    await expect
+      .poll(() => treeParam(page), { message: "the grouped filter must reach the URL" })
+      .not.toBeNull()
+
+    const tree = treeParam(page) as {
+      conjunction: string
+      filterSet: Array<{ type?: string; conjunction?: string; filterSet?: unknown[] }>
+    }
+    expect(tree.conjunction).toBe("and")
+    expect(tree.filterSet).toHaveLength(1)
+    expect(tree.filterSet[0].type).toBe("nested")
+    expect(tree.filterSet[0].conjunction).toBe("and")
+    expect(tree.filterSet[0].filterSet).toHaveLength(1)
+
+    const expected = rows.filter((row) => (row.name ?? "").toLowerCase().includes(value.toLowerCase())).length
+    await expectVisibleCount(page, expected)
+
+    await page.reload()
+    await expect(popover(page)).toBeHidden()
+    await filterControl(page).click()
+    await expect(popover(page).locator("[data-grid-filter-group]")).toHaveCount(1)
+    await expect(conditionRow(page, "name")).toBeVisible()
+    await expectVisibleCount(page, expected)
+  })
+
+  test("a group's own connective combines its children, independently of the root", async ({ page }) => {
+    const rows = await scopedContacts()
+    const nameValue = rows[0].name!.slice(0, 2)
+
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition group", exact: true }).click()
+
+    await addConditionToGroup(page)
+
+    const rowsInPopover = popover(page).locator("[data-grid-filter-condition]")
+    await expect(rowsInPopover).toHaveCount(2)
+
+    // Make the second column explicit: the auto-pick is the next free field,
+    // but the expectation below needs to know which comparison it is counting.
+    await rowsInPopover.nth(1).locator("[data-grid-filter-field]").click()
+    await page.getByRole("option", { name: "Phone", exact: true }).click()
+    const secondId = "phone"
+
+    await conditionRow(page, "name").locator("[data-grid-filter-value]").fill(nameValue)
+    await conditionRow(page, secondId).locator("[data-grid-filter-value]").fill("009")
+
+    // The group has two children, so its connective selector is the one in the
+    // second row's gutter; switch it to OR.
+    const connective = popover(page)
+      .locator("[data-grid-filter-group] [data-grid-filter-connective]")
+      .first()
+    await expect(connective).toHaveText("and")
+    await connective.click()
+    await page.getByRole("option", { name: "or", exact: true }).click()
+
+    await expect
+      .poll(() => {
+        const tree = treeParam(page) as
+          | { filterSet?: Array<{ type?: string; conjunction?: string }> }
+          | null
+        return tree?.filterSet?.[0]?.conjunction ?? null
+      })
+      .toBe("or")
+
+    const expected = rows.filter((row) => {
+      const first = (row.name ?? "").toLowerCase().includes(nameValue.toLowerCase())
+      const cell = (row as unknown as Record<string, unknown>)[secondId]
+      const second = String(cell ?? "").toLowerCase().includes("009")
+      return first || second
+    }).length
+
+    await expectVisibleCount(page, expected)
+
+    // The root still has one child (the group), so its own connective does not
+    // change the result: the group's OR is the whole expression.
+    await page.reload()
+    await filterControl(page).click()
+    await expect(popover(page).locator("[data-grid-filter-group]")).toHaveCount(1)
+    await expectVisibleCount(page, expected)
+  })
+
+  test("deleting a condition group removes its subtree from the URL", async ({ page }) => {
+    const rows = await scopedContacts()
+
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition group", exact: true }).click()
+    await conditionRow(page, "name").locator("[data-grid-filter-value]").fill("a")
+    await expect.poll(() => new URL(page.url()).searchParams.get("fg")).not.toBeNull()
+
+    await popover(page).getByRole("button", { name: "Delete condition group" }).click()
+
+    await expect(popover(page).locator("[data-grid-filter-group]")).toHaveCount(0)
+    await expect.poll(() => new URL(page.url()).searchParams.get("fg")).toBeNull()
+    await expectVisibleCount(page, rows.length)
+  })
+
+  test("a group can contain another group", async ({ page }) => {
+    await gotoGrid(page, {})
+    await openPopover(page)
+    await popover(page).getByRole("button", { name: "Add condition group", exact: true }).click()
+
+    await popover(page).locator("[data-grid-filter-group-add]").first().click()
+    await page.getByRole("menuitem", { name: "Add condition group", exact: true }).click()
+
+    await expect(popover(page).locator("[data-grid-filter-group]")).toHaveCount(2)
+
+    await expect
+      .poll(() => {
+        const tree = treeParam(page) as
+          | {
+              filterSet?: Array<{
+                type?: string
+                filterSet?: Array<{ type?: string; filterSet?: unknown[] }>
+              }>
+            }
+          | null
+        const outer = tree?.filterSet?.[0]
+        return outer?.type === "nested" ? outer.filterSet?.some((child) => child.type === "nested") ?? false : false
+      })
+      .toBe(true)
   })
 })

@@ -43,10 +43,19 @@ import {
 import { GridToolbar, type GridToolbarColumn } from "@/components/grid/grid-toolbar"
 import {
   emptyCondition,
-  evaluateCondition,
   type GridFilterCondition,
   type GridFilterConnective,
 } from "@/components/grid/grid-filter-operators"
+import {
+  addNode,
+  collectColumnIds,
+  conditionNode,
+  evaluateFilterGroup,
+  filterGroupFromConditions,
+  flattenConditions,
+  needsManualEvaluation,
+  type GridFilterGroup,
+} from "@/components/grid/grid-filter-tree"
 import type { GridFilterField } from "@/components/grid/grid-filter-popover"
 import { gridConditionFilter, gridGlobalFilterFn } from "@/components/grid/grid-filter-fn"
 import type {
@@ -548,9 +557,18 @@ export interface GridProps<TData extends RowData> {
   /**
    * Match-all or match-any across the condition list. One value for the whole
    * list — never per condition.
+   *
+   * Kept for callers that predate groups. When `filterTree` is supplied it
+   * wins, and the tree's own root connective is the authority.
    */
   filterConnective?: GridFilterConnective
   onFilterConnectiveChange?: (connective: GridFilterConnective) => void
+  /**
+   * The complete filter, groups included. A flat filter is a root group whose
+   * children are all conditions; `useGridViewState` supplies the tree.
+   */
+  filterTree?: GridFilterGroup
+  onFilterTreeChange?: (next: GridFilterGroup, immediate?: boolean) => void
   /**
    * Receives the resolved selection whenever it changes.
    *
@@ -871,6 +889,8 @@ export function Grid<TData extends RowData>({
   onStateChange,
   filterConnective = "all",
   onFilterConnectiveChange = () => {},
+  filterTree,
+  onFilterTreeChange,
   onRowSelectionChange,
   ariaLabel,
   density,
@@ -1088,24 +1108,34 @@ export function Grid<TData extends RowData>({
 
   const [filterOpen, setFilterOpen] = useState(false)
 
-  // The column id lives on the TanStack filter entry and the rest of the
-  // condition lives in its value; the two are reunited here so nothing downstream
-  // has to know that split. `state` is read rather than `tableState`, because in
-  // match-any mode the table's copy has been emptied on purpose.
-  const parsedConditions = useMemo<GridFilterCondition[]>(
+  // A caller that predates groups supplies only `columnFilters` + a connective;
+  // wrapping them in a root group here means everything downstream sees one
+  // shape. `state` is read rather than `tableState`, because in manual-filtering
+  // mode the table's copy has been emptied on purpose.
+  const fallbackTree = useMemo(
     () =>
-      (state.columnFilters ?? []).flatMap((entry) => {
-        const value = entry.value as GridFilterCondition
+      filterGroupFromConditions(
+        (state.columnFilters ?? []).flatMap((entry) => {
+          const value = entry.value as GridFilterCondition
 
-        return value && typeof value.operator === "string" ? [{ ...value, columnId: entry.id }] : []
-      }),
-    [state.columnFilters],
+          return value && typeof value.operator === "string"
+            ? [{ ...value, columnId: entry.id }]
+            : []
+        }),
+        filterConnective,
+      ),
+    [filterConnective, state.columnFilters],
+  )
+  const resolvedFilterTree = filterTree ?? fallbackTree
+  const parsedConditions = useMemo(
+    () => flattenConditions(resolvedFilterTree),
+    [resolvedFilterTree],
   )
 
   const handleConditionsChange = useCallback(
     (next: GridFilterCondition[]) => {
-      // Spreads `state`, not `tableState`: in match-any mode `tableState` has
-      // emptied `columnFilters`, and writing that back would erase every
+      // Spreads `state`, not `tableState`: in manual-filtering mode `tableState`
+      // has emptied `columnFilters`, and writing that back would erase every
       // condition the moment one of them was edited.
       onStateChange(
         forUrlWriter({
@@ -1115,6 +1145,30 @@ export function Grid<TData extends RowData>({
       )
     },
     [onStateChange, state],
+  )
+
+  /**
+   * The one writer the toolbar and popover use. When the consumer supplies a
+   * tree (the URL-backed controller does), it is the authority. The flat
+   * fallback keeps an older consumer working: it can express the root
+   * connective and the leaves, but not a nested group, which is exactly the
+   * capability such a consumer never had.
+   */
+  const handleFilterTreeChange = useCallback(
+    (next: GridFilterGroup, immediate?: boolean) => {
+      if (onFilterTreeChange) {
+        onFilterTreeChange(next, immediate)
+
+        return
+      }
+
+      handleConditionsChange(flattenConditions(next))
+
+      if (next.connective !== filterConnective) {
+        onFilterConnectiveChange(next.connective)
+      }
+    },
+    [filterConnective, handleConditionsChange, onFilterConnectiveChange, onFilterTreeChange],
   )
 
   /**
@@ -1129,32 +1183,38 @@ export function Grid<TData extends RowData>({
    */
   const handleFilterColumn = useCallback(
     (columnId: string) => {
-      if (!parsedConditions.some((condition) => condition.columnId === columnId)) {
+      if (!collectColumnIds(resolvedFilterTree).has(columnId)) {
         const fieldType = fieldTypeByColumnId[columnId]
 
-        handleConditionsChange([...parsedConditions, emptyCondition(columnId, fieldType)])
+        handleFilterTreeChange(
+          addNode(
+            resolvedFilterTree,
+            [],
+            conditionNode(emptyCondition(columnId, fieldType)),
+          ),
+          true,
+        )
       }
 
       requestAnimationFrame(() => {
         setFilterOpen(true)
       })
     },
-    [fieldTypeByColumnId, handleConditionsChange, parsedConditions],
+    [fieldTypeByColumnId, handleFilterTreeChange, resolvedFilterTree],
   )
 
   /**
-   * Match-ANY needs the union of the conditions, which the per-column chain
-   * cannot produce — TanStack ANDs column filters and this version has no
-   * `filterFromRowIds` hook. So in match-any mode the union is evaluated here
+   * A tree with a nested group or a match-any root cannot be expressed as
+   * TanStack column filters, which only AND. Those trees are evaluated here
    * against the source rows and the table is handed the surviving rows with an
    * EMPTY `columnFilters`, leaving the global `q` filter to compose on top
-   * exactly as it does in match-all mode.
+   * exactly as it does in the flat match-all case.
    *
-   * Both modes run the same `evaluateCondition`; the only difference is whether
-   * the AND happens in TanStack or here.
+   * A flat all-of tree still takes the TanStack path: it is the common case and
+   * the table already does that AND for us.
    */
   const conditionedRows = useMemo<TData[]>(() => {
-    if (filterConnective !== "any" || parsedConditions.length === 0) {
+    if (!needsManualEvaluation(resolvedFilterTree) || parsedConditions.length === 0) {
       return rows
     }
 
@@ -1173,15 +1233,13 @@ export function Grid<TData extends RowData>({
     }
 
     return rows.filter((row) =>
-      parsedConditions.some((condition) =>
-        evaluateCondition(
-          readById.get(condition.columnId)?.(row),
-          condition,
-          typeById.get(condition.columnId),
-        ),
+      evaluateFilterGroup(
+        resolvedFilterTree,
+        (columnId) => readById.get(columnId)?.(row),
+        typeById,
       ),
     )
-  }, [columnDefinitions, filterConnective, parsedConditions, rows])
+  }, [columnDefinitions, parsedConditions.length, resolvedFilterTree, rows])
 
   /**
    * The width being dragged, held locally for the duration of one gesture. The
@@ -1213,17 +1271,20 @@ export function Grid<TData extends RowData>({
       ...state,
       sorting: state.sorting ?? [],
       globalFilter: state.globalFilter ?? "",
-      // Match-any has already been applied to `conditionedRows`, and TanStack
-      // would AND anything left in here on top of it — so the table is told there
-      // are no column filters. `state` keeps them for the indicator and the URL.
-      columnFilters: filterConnective === "any" ? [] : state.columnFilters ?? [],
+      // A nested or match-any tree has already been applied to
+      // `conditionedRows`, and TanStack would AND anything left in here on top
+      // of it — so the table is told there are no column filters. `state` keeps
+      // them for the indicator and the URL.
+      columnFilters: needsManualEvaluation(resolvedFilterTree)
+        ? []
+        : state.columnFilters ?? [],
       columnOrder: state.columnOrder ?? columnIds,
       columnVisibility: state.columnVisibility ?? {},
       columnSizing: dragWidth
         ? { ...committedColumnSizing, [dragWidth.columnId]: dragWidth.size }
         : committedColumnSizing,
     }
-  }, [columnIds, dragWidth, filterConnective, state])
+  }, [columnIds, dragWidth, resolvedFilterTree, state])
 
   const tableRef = useRef<Table<TData> | null>(null)
 
@@ -1262,13 +1323,12 @@ export function Grid<TData extends RowData>({
       // whole state on every move — does not re-notify the selection.
       const forwarded: Partial<TableState> = { ...resolved }
 
-      // In match-any mode the table was deliberately handed EMPTY
-      // `columnFilters` (`tableState`), so the resolved table state can never
-      // be written back as-is: the next write — a sort, a search keystroke, a
-      // hide — would erase every `fa.` condition from the URL, which is the
-      // defect that made switching to `or` lose the conditions it governs.
-      // The real list lives in `state` and is re-attached here.
-      if (filterConnective === "any") {
+      // With a URL-backed tree the writer reads `filterTreeRef`, so an emptied
+      // `columnFilters` here cannot erase the filter. The flat fallback still
+      // needs the real list re-attached: in match-any mode it was deliberately
+      // handed EMPTY `columnFilters`, and a sort or hide would otherwise write
+      // that emptiness back.
+      if (!onFilterTreeChange && filterConnective === "any") {
         forwarded.columnFilters = parsedConditions.map((condition) => ({
           id: condition.columnId,
           value: condition,
@@ -1289,7 +1349,13 @@ export function Grid<TData extends RowData>({
 
       onStateChange(forUrlWriter(forwarded))
     },
-    [filterConnective, onRowSelectionChange, onStateChange, parsedConditions],
+    [
+      filterConnective,
+      onFilterTreeChange,
+      onRowSelectionChange,
+      onStateChange,
+      parsedConditions,
+    ],
   )
 
   const handleColumnSizingInfoChange = useCallback<OnChangeFn<ColumnSizingInfoState>>(
@@ -1711,10 +1777,8 @@ export function Grid<TData extends RowData>({
         visibleCount={rowModel.length}
         totalCount={rows.length}
         filterFields={filterFields}
-        conditions={parsedConditions}
-        onConditionsChange={handleConditionsChange}
-        filterConnective={filterConnective}
-        onFilterConnectiveChange={onFilterConnectiveChange}
+        filterTree={resolvedFilterTree}
+        onFilterTreeChange={handleFilterTreeChange}
         filterOpen={filterOpen}
         onFilterOpenChange={setFilterOpen}
         sortFields={sortableColumns}

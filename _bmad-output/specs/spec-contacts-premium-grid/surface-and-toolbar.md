@@ -247,11 +247,20 @@ In this view, show contacts
 
 **The first condition is `Notes · is empty`, not the `Current status · is empty` the compositions draw.** There is no status field — not in `lib/supabase/types.ts`, not in the fourteen at `manage-contacts-table.tsx:820-1010`. The comps render it because `stitch-prompt-contacts-toolbar.md:101` asked for it. `Notes` is used instead because it is in CAP-18's visible nine and is frequently blank, so the operator is looking straight at the column they are filtering (OQ-22). The defect OQ-20 records is about **any** zero-length value, so the column choice does not weaken it.
 
-**Absent, deliberately:** *"Copy from another view"* (needs saved views, a non-goal), *"Describe how to filter this view"* (Ask AI, a non-goal), **`+ Add condition group`** — which the reference screenshot also shows, and which stays out because grouping is what forces an ordered mixed expression — and **the `⠿` drag handle** on condition rows, which the reference screenshot also shows. Say why in the code, or a later agent reading only the screenshot will re-add them.
+> **Superseded 2026-10-29 — condition groups now ship.** The paragraph below
+> records the original CAP-12 decision, kept because it explains why the flat
+> surface looked the way it did. `+ Add condition group` and a nested group
+> surface were added after the live Airtable observation in
+> `_bmad-output/implementation-artifacts/airtable-condition-group-observation.md`.
+> The root still has one connective; each group now carries its own. The
+> no-drag-handle reasoning is unchanged (a same-level reorder still cannot
+> change an AND/OR set), and *"Copy from another view"* / Ask AI remain out.
+
+**Absent, deliberately at the time:** *"Copy from another view"* (needs saved views, a non-goal), *"Describe how to filter this view"* (Ask AI, a non-goal), **`+ Add condition group`** — which the reference screenshot also shows, and which stayed out because grouping is what forces an ordered mixed expression — and **the `⠿` drag handle** on condition rows, which the reference screenshot also shows. Say why in the code, or a later agent reading only the screenshot will re-add them.
 
 **Why there is no drag handle.** One connective governs the whole list, so conditions are a **set of columns**, never an ordered expression (see "Where the conditions live in the URL"). Reordering two conditions joined by a global *match all* or *match any* cannot change the result set — there are no precedence rules for an order to affect. The handle would imply a capability that has no effect. If grouping is ever added, this reasoning is what must be revisited first.
 
-**One connective governs the whole list.** The `and ▾` prefix shown on the second row is driven by a single value for the whole bar, not per row: *match all* or *match any*. So the list is never `A and B or C`, which means **no precedence rules, no ordered expression, and no ordered serialization**. Airtable's own bar looks per-row and behaves per-group; this one looks the same and behaves globally. That difference is the whole point and it should be stated in the code, because the visual suggests the more complicated semantics.
+**One connective governs the whole ROOT list.** The `and ▾` prefix shown on the second root row is driven by a single value for that list, not per row: *match all* or *match any*. Without groups the list is never `A and B or C`, which means no precedence rules and no ordered serialization. Airtable's own bar looks per-row and behaves per-group; the 2026-10-29 rebuild adds groups, so a group's connective now governs its own children and the parent's connective governs the group as one item. `A and (B or C)` is expressible; an unordered same-level mix still is not, which is why the group exists.
 
 **`is empty` must survive the URL.** See OQ-20 and OQ-21 — `grid-view-state.ts:130` and `:211` drop any value whose length is zero, so a bare empty value is deleted on write and ignored on read. The operator therefore travels *inside* the value (`f.status=is:`), which is non-empty as a whole. `+ Add condition` makes this bug reachable constantly; it was already true with one condition.
 
