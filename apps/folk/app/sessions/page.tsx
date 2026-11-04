@@ -75,7 +75,8 @@ function readLocationParam(value: string | string[] | undefined): string {
  *
  * The reporting window's two charts live here now: the separate Reports route
  * was retired, so `sessions_report` is read once for the default 90-day window
- * and rendered beside the table rather than behind a tab.
+ * and rendered above the session list rather than behind a tab. The list itself
+ * — the desktop table and its phone cards — is the page's last section.
  *
  * `SessionsAutoRefresh` is handed the rows' open/close boundaries so a page
  * left open flips a row at its own boundary without a reload or a write.
@@ -142,6 +143,16 @@ export default async function SessionsOverviewPage({
             <SessionLiveStrip rows={visible} />
             <SessionOverviewStats stats={stats} />
 
+            <SessionOverviewCharts
+              rows={visible}
+              report={report}
+              topAttendees={topAttendees}
+              rangeLabel={rangeLabel}
+            />
+
+            {/* The list is the page's last section: the phone cards and the
+                desktop table are one surface in two shapes, with the count and
+                status note beneath them. */}
             <SessionOverviewTable rows={visible} />
             <SessionOverviewCards rows={visible} />
 
@@ -158,12 +169,6 @@ export default async function SessionsOverviewPage({
               </p>
             </div>
 
-            <SessionOverviewCharts
-              rows={visible}
-              report={report}
-              topAttendees={topAttendees}
-              rangeLabel={rangeLabel}
-            />
             <SessionsAutoRefresh boundaries={boundaries} />
           </>
         )}
