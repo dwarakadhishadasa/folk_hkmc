@@ -31,7 +31,7 @@ function Pill({ children, tone }: { children: React.ReactNode; tone: "required" 
       className={
         tone === "required"
           ? "rounded-full bg-[#E8F5E9] px-1.5 py-0.5 text-[10px] font-normal text-[#15803D] dark:bg-[#12311F] dark:text-[#4ADE80]"
-          : "rounded-full bg-[#F1F5F9] px-1.5 py-0.5 text-[10px] font-normal text-[#64748B] dark:bg-[var(--secondary)] dark:text-[var(--muted-foreground)]"
+          : "rounded-full bg-[#F1F5F9] px-1.5 py-0.5 text-[10px] font-normal text-[var(--muted-foreground)] dark:bg-[var(--secondary)] dark:text-[var(--muted-foreground)]"
       }
     >
       {children}
@@ -51,7 +51,7 @@ function SurveyField({
   const answer = value?.answer ?? ""
   const values = value?.answerValues ?? []
   const fieldClass =
-    "w-full rounded-xl border border-[#E2E8F0] bg-card px-3 py-2.5 text-[12px] text-[var(--program-text)] outline-none placeholder:text-[#91959C] focus:border-[var(--program-primary)] focus:ring-2 focus:ring-[var(--program-primary)]/20 dark:border-[var(--border)]"
+    "w-full rounded-xl border border-[#E2E8F0] bg-card px-3 py-2.5 text-[12px] text-[var(--program-text)] outline-none placeholder:text-[var(--muted-foreground)] focus:border-[var(--program-primary)] focus:ring-2 focus:ring-[var(--program-primary)]/20 dark:border-[var(--border)]"
 
   if (question.questionType === "TEXT") {
     return (
@@ -247,7 +247,7 @@ export function DispositionScreen({
             value={notes}
             onChange={(event) => onNotesChange(event.target.value)}
             placeholder="Type the caller's words…"
-            className="mt-2 min-h-[70px] w-full resize-y rounded-xl border border-[#E2E8F0] bg-card px-3 py-2.5 text-[12px] leading-4 text-[var(--program-text)] outline-none placeholder:text-[#91959C] focus:border-[var(--program-primary)] focus:ring-2 focus:ring-[var(--program-primary)]/20 dark:border-[var(--border)]"
+            className="mt-2 min-h-[70px] w-full resize-y rounded-xl border border-[#E2E8F0] bg-card px-3 py-2.5 text-[12px] leading-4 text-[var(--program-text)] outline-none placeholder:text-[var(--muted-foreground)] focus:border-[var(--program-primary)] focus:ring-2 focus:ring-[var(--program-primary)]/20 dark:border-[var(--border)]"
           />
         </section>
 

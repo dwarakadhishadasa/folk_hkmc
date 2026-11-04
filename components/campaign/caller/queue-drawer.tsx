@@ -99,9 +99,9 @@ export function QueueDrawer({
   const rendered = virtualizer.getVirtualItems()
   const renderedCount = rendered.length > 0 ? rendered.length : Math.min(roster.length, 8)
   const stats = [
-    { label: "Called", value: counts.called, tone: "text-[var(--program-primary)]" },
-    { label: "Reached", value: counts.reached, tone: "text-[var(--program-primary)]" },
-    { label: "No answer", value: counts.noAnswer, tone: "text-[var(--program-primary)]" },
+    { label: "Called", value: counts.called, tone: "text-[var(--program-text)]" },
+    { label: "Reached", value: counts.reached, tone: "text-[var(--program-text)]" },
+    { label: "No answer", value: counts.noAnswer, tone: "text-[var(--program-text)]" },
     { label: "Pending", value: counts.pending, tone: "text-[#F97F29]" },
   ]
 
@@ -137,7 +137,7 @@ export function QueueDrawer({
               key={stat.label}
               className="flex min-w-0 flex-col rounded-[10px] border border-[#E2E8F0] bg-card px-2.5 py-2.5 dark:border-[var(--border)]"
             >
-              <span className="truncate text-[10px] font-semibold text-[#64748B]">{stat.label}</span>
+              <span className="truncate text-[10px] font-semibold text-[var(--muted-foreground)]">{stat.label}</span>
               <span
                 className={`font-[family-name:var(--font-poppins)] text-[24px] leading-9 font-bold ${stat.tone}`}
               >
@@ -190,7 +190,7 @@ export function QueueDrawer({
                     ) : isDone ? (
                       <Check className="size-[13px]" strokeWidth={2.5} aria-hidden="true" />
                     ) : (
-                      <span className="size-1 rounded-full bg-[#CBD5E1]" aria-hidden="true" />
+                      <span className="size-1 rounded-full bg-[var(--muted-foreground)]" aria-hidden="true" />
                     )}
                   </span>
 
@@ -210,7 +210,7 @@ export function QueueDrawer({
 
                   <span
                     className={`shrink-0 text-[12px] ${
-                      isCurrent ? "font-semibold text-[var(--program-primary)]" : "text-[#64748B]"
+                      isCurrent ? "font-semibold text-[var(--program-text)]" : "text-[var(--muted-foreground)]"
                     }`}
                   >
                     {isCurrent ? "← you" : status}

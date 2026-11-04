@@ -58,7 +58,7 @@ export function CallCard({
   onResumeDraft: () => void
 }) {
   return (
-    <article className="flex flex-col rounded-xl border border-[#E2E8F0] bg-card p-3 text-[var(--program-text)]">
+    <article className="flex flex-col rounded-xl border border-[#E2E8F0] bg-card p-3 text-[var(--program-text)] dark:border-[var(--border)]">
       {receipt ? (
         <p
           role="status"
@@ -82,7 +82,7 @@ export function CallCard({
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-card px-3 text-[12px] font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-[var(--secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-card px-3 text-[12px] font-semibold text-[var(--muted-foreground)] dark:border-[var(--border)] transition-colors hover:bg-[var(--secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
         >
           <Copy className="size-3" strokeWidth={1.2} aria-hidden="true" />
           {copyState === "copied" ? "Copied" : "Copy"}

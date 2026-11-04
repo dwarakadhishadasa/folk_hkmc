@@ -7,8 +7,8 @@ import type { CallerSessionSummary } from "./caller-types"
 function CountTile({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex min-w-0 flex-col rounded-[10px] border border-[#E2E8F0] bg-card px-2.5 py-2.5 dark:border-[var(--border)]">
-      <span className="truncate text-[10px] font-semibold text-[#64748B]">{label}</span>
-      <span className="font-[family-name:var(--font-poppins)] text-[24px] leading-9 font-bold text-[var(--program-primary)]">
+      <span className="truncate text-[10px] font-semibold text-[var(--muted-foreground)]">{label}</span>
+      <span className="font-[family-name:var(--font-poppins)] text-[24px] leading-9 font-bold text-[var(--program-text)]">
         {value}
       </span>
     </div>

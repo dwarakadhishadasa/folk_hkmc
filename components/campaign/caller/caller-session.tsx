@@ -1122,10 +1122,10 @@ export function CallerSession({
               className="flex h-[54px] w-full items-center gap-2.5 rounded-[10px] border border-[#E2E8F0] bg-card px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] dark:border-[var(--border)]"
             >
               <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#EEF1F8] dark:bg-[var(--secondary)]">
-                <Megaphone className="size-4 text-[var(--program-primary)]" strokeWidth={1.35} aria-hidden="true" />
+                <Megaphone className="size-4 text-[var(--program-text)]" strokeWidth={1.35} aria-hidden="true" />
               </span>
               <span className="flex min-w-0 flex-col">
-                <span className="text-[10px] font-semibold text-[#64748B]">Campaign</span>
+                <span className="text-[10px] font-semibold text-[var(--muted-foreground)]">Campaign</span>
                 <span className="truncate text-[14px] font-semibold text-[var(--program-text)]">
                   {currentCampaign?.name ?? "Choose a campaign"}
                 </span>
@@ -1150,7 +1150,7 @@ export function CallerSession({
                       onClick={() => selectCampaign(campaign.id)}
                       className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-[13px] hover:bg-[var(--secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] ${
                         campaign.id === currentCampaign?.id
-                          ? "font-semibold text-[var(--program-primary)]"
+                          ? "font-semibold text-[var(--program-text)]"
                           : "text-[var(--program-text)]"
                       }`}
                     >
@@ -1182,7 +1182,7 @@ export function CallerSession({
             <button
               type="button"
               onClick={() => setQueueOpen(true)}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-card px-3 text-[12px] font-semibold text-[var(--program-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] dark:border-[var(--border)]"
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#E2E8F0] bg-card px-3 text-[12px] font-semibold text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)] dark:border-[var(--border)]"
             >
               <List className="size-3" strokeWidth={1.35} aria-hidden="true" />
               Queue
