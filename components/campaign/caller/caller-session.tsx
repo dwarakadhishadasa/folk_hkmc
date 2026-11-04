@@ -16,6 +16,7 @@ import {
   isReachedGroup,
   type DispositionStatus,
 } from "@/lib/dialer/disposition"
+import { callHref } from "@/lib/dialer/phone-link"
 import type { StaffRole } from "@hkmc/data-contracts"
 
 import { CallCard } from "./call-card"
@@ -829,7 +830,7 @@ export function CallerSession({
       setCallError("The number could not be copied. Dial the number shown above.")
     }
 
-    window.location.href = `tel:${current.phone.replace(/[^\d+]/g, "")}`
+    window.location.href = callHref(current.phone, navigator.userAgent)
   }
 
   async function handleCopy() {
