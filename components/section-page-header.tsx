@@ -42,7 +42,13 @@ export function SectionPageHeader({
       )}
     >
       <div className="min-w-0">
-        <div className="flex items-center gap-1">
+        {/*
+          `relative` is what gives a section's menu trigger its hit area. The
+          trigger draws an absolutely positioned overlay against this row rather
+          than against itself, so tapping the title beside the chevron opens the
+          menu too. The chevron alone is an 18px target and reads as decoration.
+        */}
+        <div className="relative flex items-center gap-1">
           <h1 className={cn(SECTION_TITLE_CLASS, "truncate")}>{title}</h1>
           {menu}
         </div>

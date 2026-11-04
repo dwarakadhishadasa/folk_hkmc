@@ -95,7 +95,7 @@ export function CampaignMenu({ subtitle }: { subtitle: string }) {
         <button
           type="button"
           aria-label="Open the Campaign menu"
-          className="-ml-1 flex size-[18px] shrink-0 items-center justify-center rounded-full text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
+          className="-ml-1 flex size-[18px] shrink-0 items-center justify-center rounded-full text-[var(--program-text)] after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-primary)]"
         >
           <ChevronDown className="size-[18px]" strokeWidth={2} aria-hidden="true" />
         </button>
