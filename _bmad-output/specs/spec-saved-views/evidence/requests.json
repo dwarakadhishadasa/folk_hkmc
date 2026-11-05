@@ -1,0 +1,580 @@
+{
+  "capturedAt": "2026-11-05T13:22:26.197Z",
+  "views": [
+    {
+      "viewType": "Grid",
+      "viewName": "Grid 11",
+      "viewId": "viwutCRv6OWfwMvzy",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+          "status": 200,
+          "params": {
+            "includeDataForTableIds": [
+              "tbltzdtCmCHf6gJKD"
+            ],
+            "includeDataForViewIds": [
+              "viwutCRv6OWfwMvzy"
+            ],
+            "shouldIncludeSchemaChecksum": false,
+            "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+            "mayExcludeCellDataForLargeViews": true,
+            "allowMsgpackOfResult": true,
+            "canClientSupportPreviewMode": true
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/v0.3/view/viwutCRv6OWfwMvzy/setAsLastUsed",
+          "status": 200,
+          "params": {}
+        }
+      ]
+    },
+    {
+      "viewType": "Gallery",
+      "viewName": "Gallery",
+      "viewId": "viwdoum0yAnXFEcz5",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+          "status": 200,
+          "params": {
+            "includeDataForTableIds": [
+              "tbltzdtCmCHf6gJKD"
+            ],
+            "includeDataForViewIds": [
+              "viwdoum0yAnXFEcz5"
+            ],
+            "shouldIncludeSchemaChecksum": false,
+            "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+            "mayExcludeCellDataForLargeViews": true,
+            "allowMsgpackOfResult": true,
+            "canClientSupportPreviewMode": true
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/v0.3/view/viwdoum0yAnXFEcz5/setAsLastUsed",
+          "status": 200,
+          "params": {}
+        }
+      ]
+    },
+    {
+      "viewType": "Kanban",
+      "viewName": "Kanban",
+      "viewId": "viweCLwoTq8zvGeOX",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+          "status": 200,
+          "params": {
+            "includeDataForTableIds": [
+              "tbltzdtCmCHf6gJKD"
+            ],
+            "includeDataForViewIds": [
+              "viweCLwoTq8zvGeOX"
+            ],
+            "shouldIncludeSchemaChecksum": false,
+            "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+            "mayExcludeCellDataForLargeViews": true,
+            "allowMsgpackOfResult": true,
+            "canClientSupportPreviewMode": true
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/v0.3/view/viweCLwoTq8zvGeOX/setAsLastUsed",
+          "status": 200,
+          "params": {}
+        }
+      ]
+    },
+    {
+      "viewType": "Form",
+      "viewName": "New Registration - Youth Empowerment Club – FOLK",
+      "viewId": "viwpXmxM6qbYusBSX",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+          "status": 200,
+          "params": {
+            "includeDataForTableIds": [
+              "tbltzdtCmCHf6gJKD"
+            ],
+            "includeDataForViewIds": [
+              "viwpXmxM6qbYusBSX"
+            ],
+            "shouldIncludeSchemaChecksum": false,
+            "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+            "mayExcludeCellDataForLargeViews": true,
+            "allowMsgpackOfResult": true,
+            "canClientSupportPreviewMode": true
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/v0.3/view/viwpXmxM6qbYusBSX/setAsLastUsed",
+          "status": 200,
+          "params": {}
+        }
+      ]
+    },
+    {
+      "viewType": "List",
+      "viewName": "Contacts",
+      "viewId": "viwwJxrUngvx58yGJ",
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+          "status": 200,
+          "params": {
+            "includeDataForTableIds": [
+              "tbltzdtCmCHf6gJKD"
+            ],
+            "includeDataForViewIds": [
+              "viwwJxrUngvx58yGJ"
+            ],
+            "shouldIncludeSchemaChecksum": false,
+            "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+            "mayExcludeCellDataForLargeViews": true,
+            "allowMsgpackOfResult": true,
+            "canClientSupportPreviewMode": true
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/v0.3/application/appqea9DRLOXqErXb/readQueries",
+          "status": 200,
+          "params": {
+            "queries": [
+              {
+                "id": "qryNVfJMTq133Z4Wa",
+                "spec": {
+                  "source": {
+                    "type": "table",
+                    "tableId": "tbltzdtCmCHf6gJKD"
+                  },
+                  "columnIds": [
+                    "fld8SsX2vXZU3uE1g",
+                    "fld746R8PKbcKRXse",
+                    "fldWas3szsBZ9ueZR",
+                    "fldPfmDbDZjQQGuPa"
+                  ],
+                  "filters": {
+                    "conjunction": "and",
+                    "filterSet": [
+                      {
+                        "columnId": "fld8SsX2vXZU3uE1g",
+                        "operator": "contains",
+                        "value": "ram"
+                      },
+                      {
+                        "columnId": "fld746R8PKbcKRXse",
+                        "operator": "contains",
+                        "value": "95"
+                      }
+                    ]
+                  },
+                  "sorts": [],
+                  "virtualColumns": {
+                    "commentCounts": {
+                      "includeRowLevelComments": true,
+                      "columnIds": []
+                    }
+                  }
+                },
+                "realm": {
+                  "type": "application"
+                },
+                "mayHaveAcceptableAuthorizationError": false
+              }
+            ],
+            "subscribeToRealtimeUpdates": true,
+            "allowMsgpackOfResult": true,
+            "isBackgroundRequest": false
+          }
+        }
+      ]
+    }
+  ],
+  "lifecycle": [
+    {
+      "run": "run5",
+      "step": "land",
+      "method": "GET",
+      "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+      "status": 200,
+      "params": {
+        "includeDataForTableIds": [
+          "tbltzdtCmCHf6gJKD"
+        ],
+        "includeDataForViewIds": [
+          "viwutCRv6OWfwMvzy"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run5",
+      "step": "confirm-create",
+      "method": "POST",
+      "path": "/v0.3/view/viwfq9xMondrMilX9/create",
+      "status": 200,
+      "params": {
+        "tableId": "tbltzdtCmCHf6gJKD",
+        "name": "Grid 15",
+        "type": "grid",
+        "copyFromViewId": "viwutCRv6OWfwMvzy",
+        "copyMode": "new",
+        "personalForUserId": null,
+        "lock": null
+      }
+    },
+    {
+      "run": "run5",
+      "step": "confirm-create",
+      "method": "GET",
+      "path": "/v0.3/table/tbltzdtCmCHf6gJKD/readData",
+      "status": 200,
+      "params": {
+        "includeDataForViewIds": [
+          "viwfq9xMondrMilX9"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run5",
+      "step": "confirm-create",
+      "method": "POST",
+      "path": "/v0.3/view/viwfq9xMondrMilX9/setAsLastUsed",
+      "status": 200,
+      "params": {}
+    },
+    {
+      "run": "run12",
+      "step": "land",
+      "method": "GET",
+      "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+      "status": 200,
+      "params": {
+        "includeDataForTableIds": [
+          "tbltzdtCmCHf6gJKD"
+        ],
+        "includeDataForViewIds": [
+          "viwutCRv6OWfwMvzy"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run12",
+      "step": "hide-source",
+      "method": "POST",
+      "path": "/v0.3/view/viwutCRv6OWfwMvzy/showOrHideColumns",
+      "status": 200,
+      "params": {
+        "columnIds": [
+          "fld2oGmIKM21mGpDM"
+        ],
+        "visibility": false
+      }
+    },
+    {
+      "run": "run12",
+      "step": "show-source",
+      "method": "POST",
+      "path": "/v0.3/view/viwutCRv6OWfwMvzy/showOrHideColumns",
+      "status": 200,
+      "params": {
+        "columnIds": [
+          "fld2oGmIKM21mGpDM"
+        ],
+        "visibility": true
+      }
+    },
+    {
+      "run": "run13",
+      "step": "land",
+      "method": "GET",
+      "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+      "status": 200,
+      "params": {
+        "includeDataForTableIds": [
+          "tbltzdtCmCHf6gJKD"
+        ],
+        "includeDataForViewIds": [
+          "viwfq9xMondrMilX9"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run13",
+      "step": "commit-name",
+      "method": "POST",
+      "path": "/v0.3/view/viwfq9xMondrMilX9/updateName",
+      "status": 200,
+      "params": {
+        "name": "Views probe",
+        "origin": "viewName"
+      }
+    },
+    {
+      "run": "run13",
+      "step": "pick-duplicate",
+      "method": "POST",
+      "path": "/v0.3/view/viwsNqwbrDcRayGwI/create",
+      "status": 200,
+      "params": {
+        "tableId": "tbltzdtCmCHf6gJKD",
+        "name": "Views probe copy",
+        "type": "grid",
+        "copyFromViewId": "viwfq9xMondrMilX9",
+        "copyMode": "duplicate",
+        "personalForUserId": null,
+        "lock": null
+      }
+    },
+    {
+      "run": "run13",
+      "step": "pick-duplicate",
+      "method": "GET",
+      "path": "/v0.3/table/tbltzdtCmCHf6gJKD/readData",
+      "status": 200,
+      "params": {
+        "includeDataForViewIds": [
+          "viwsNqwbrDcRayGwI"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run14",
+      "step": "land",
+      "method": "GET",
+      "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+      "status": 200,
+      "params": {
+        "includeDataForTableIds": [
+          "tbltzdtCmCHf6gJKD"
+        ],
+        "includeDataForViewIds": [
+          "viwsNqwbrDcRayGwI"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run14",
+      "step": "pick-delete",
+      "method": "POST",
+      "path": "/v0.3/view/viwsNqwbrDcRayGwI/destroy",
+      "status": 200,
+      "params": {}
+    },
+    {
+      "run": "run14",
+      "step": "pick-delete",
+      "method": "GET",
+      "path": "/v0.3/table/tbltzdtCmCHf6gJKD/readData",
+      "status": 200,
+      "params": {
+        "includeDataForViewIds": [
+          "viwwJxrUngvx58yGJ"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run14",
+      "step": "confirm-delete",
+      "method": "POST",
+      "path": "/v0.3/application/appqea9DRLOXqErXb/readQueries",
+      "status": 200,
+      "params": {
+        "queries": [
+          {
+            "id": "qryW30txAR0IQE4OU",
+            "spec": {
+              "source": {
+                "type": "table",
+                "tableId": "tbltzdtCmCHf6gJKD"
+              },
+              "columnIds": [
+                "fld8SsX2vXZU3uE1g",
+                "fld746R8PKbcKRXse",
+                "fldWas3szsBZ9ueZR",
+                "fldPfmDbDZjQQGuPa"
+              ],
+              "filters": {
+                "conjunction": "and",
+                "filterSet": [
+                  {
+                    "columnId": "fld8SsX2vXZU3uE1g",
+                    "operator": "contains",
+                    "value": "ram"
+                  },
+                  {
+                    "columnId": "fld746R8PKbcKRXse",
+                    "operator": "contains",
+                    "value": "95"
+                  }
+                ]
+              },
+              "sorts": [],
+              "virtualColumns": {
+                "commentCounts": {
+                  "includeRowLevelComments": true,
+                  "columnIds": []
+                }
+              }
+            },
+            "realm": {
+              "type": "application"
+            },
+            "mayHaveAcceptableAuthorizationError": false
+          }
+        ],
+        "subscribeToRealtimeUpdates": true,
+        "allowMsgpackOfResult": true,
+        "isBackgroundRequest": false
+      }
+    },
+    {
+      "run": "run15",
+      "step": "land",
+      "method": "GET",
+      "path": "/v0.3/application/appqea9DRLOXqErXb/read",
+      "status": 200,
+      "params": {
+        "includeDataForTableIds": [
+          "tbltzdtCmCHf6gJKD"
+        ],
+        "includeDataForViewIds": [
+          "viwfq9xMondrMilX9"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run15",
+      "step": "delete-probe",
+      "method": "POST",
+      "path": "/v0.3/view/viwfq9xMondrMilX9/destroy",
+      "status": 200,
+      "params": {}
+    },
+    {
+      "run": "run15",
+      "step": "delete-probe",
+      "method": "GET",
+      "path": "/v0.3/table/tbltzdtCmCHf6gJKD/readData",
+      "status": 200,
+      "params": {
+        "includeDataForViewIds": [
+          "viwwJxrUngvx58yGJ"
+        ],
+        "shouldIncludeSchemaChecksum": false,
+        "mayOnlyIncludeRowAndCellDataForIncludedViews": true,
+        "mayExcludeCellDataForLargeViews": true,
+        "allowMsgpackOfResult": true,
+        "canClientSupportPreviewMode": true
+      }
+    },
+    {
+      "run": "run15",
+      "step": "delete-probe",
+      "method": "POST",
+      "path": "/v0.3/application/appqea9DRLOXqErXb/readQueries",
+      "status": 200,
+      "params": {
+        "queries": [
+          {
+            "id": "qrybyOYMmmLQBgMDi",
+            "spec": {
+              "source": {
+                "type": "table",
+                "tableId": "tbltzdtCmCHf6gJKD"
+              },
+              "columnIds": [
+                "fld8SsX2vXZU3uE1g",
+                "fld746R8PKbcKRXse",
+                "fldWas3szsBZ9ueZR",
+                "fldPfmDbDZjQQGuPa"
+              ],
+              "filters": {
+                "conjunction": "and",
+                "filterSet": [
+                  {
+                    "columnId": "fld8SsX2vXZU3uE1g",
+                    "operator": "contains",
+                    "value": "ram"
+                  },
+                  {
+                    "columnId": "fld746R8PKbcKRXse",
+                    "operator": "contains",
+                    "value": "95"
+                  }
+                ]
+              },
+              "sorts": [],
+              "virtualColumns": {
+                "commentCounts": {
+                  "includeRowLevelComments": true,
+                  "columnIds": []
+                }
+              }
+            },
+            "realm": {
+              "type": "application"
+            },
+            "mayHaveAcceptableAuthorizationError": false
+          }
+        ],
+        "subscribeToRealtimeUpdates": true,
+        "allowMsgpackOfResult": true,
+        "isBackgroundRequest": false
+      }
+    }
+  ]
+}
