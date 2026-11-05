@@ -79,7 +79,7 @@ const CURRENCY_SCALE = 100
 
 /** Shared geometry for the in-cell single-line controls. Tokens, not colours. */
 const FIELD_CLASS =
-  "border-ring bg-card focus-visible:ring-ring/50 h-full w-full rounded-[3px] border bg-transparent px-1 text-[13px] outline-none focus-visible:ring-[2px]"
+  "bg-card text-[13px] h-full w-full rounded-none border-0 p-1.5 outline-none"
 
 /** Shared geometry for the controls that live inside a popover. */
 const PANEL_FIELD_CLASS =
@@ -134,10 +134,10 @@ function InlineField({
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    const input = inputRef.current
-
-    input?.focus()
-    input?.select()
+    // Caret at the end, matching the reference grid's `Enter` and double-click
+    // openers. Type-to-edit seeds the first character, so the caret lands after
+    // the replacing character rather than selecting the old value.
+    inputRef.current?.focus()
   }, [])
 
   return (
@@ -362,7 +362,7 @@ function Pill({
     return (
       <span
         data-grid-editor="pill"
-        className="border-border text-muted-foreground inline-flex max-w-full items-center truncate rounded-[3px] border border-dashed px-1 text-[12px]"
+        className="border-border text-muted-foreground inline-flex h-[22px] max-w-full items-center truncate rounded-full border border-dashed px-2.5 text-[13px]"
       >
         {children}
       </span>
@@ -377,23 +377,18 @@ function Pill({
   const style =
     tone === "link"
       ? {
-          backgroundColor: "var(--grid-linked-bg)",
-          color: "var(--grid-linked-fg)",
-          borderColor: "var(--grid-linked-bg)",
+          backgroundColor: "color-mix(in oklab, var(--tag-1) 20%, var(--card))",
+          color: "var(--tag-1)",
         }
       : {
           color: `var(--tag-${slot})`,
-          // 11% is the strongest mix that still clears 4.5:1 for the dimmest
-          // slot in *both* themes; a stronger mix tints the pill more but pushes
-          // the 12px label under AA.
-          backgroundColor: `color-mix(in oklab, var(--tag-${slot}) 11%, var(--card))`,
-          borderColor: `color-mix(in oklab, var(--tag-${slot}) 42%, transparent)`,
+          backgroundColor: `color-mix(in oklab, var(--tag-${slot}) 20%, var(--card))`,
         }
 
   return (
     <span
       data-grid-editor="pill"
-      className="inline-flex max-w-full items-center truncate rounded-[3px] border px-1 text-[12px]"
+      className="inline-flex h-[22px] max-w-full items-center truncate rounded-full px-2.5 text-[13px]"
       style={style}
     >
       {children}

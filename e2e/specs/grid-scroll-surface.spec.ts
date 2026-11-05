@@ -533,7 +533,7 @@ test.describe("the grid's scroll surface", () => {
     ).toBeLessThanOrEqual(viewportHeight + FLUSH_PX)
   })
 
-  test("surface 5 — the row is still 32px and the header is a different surface from the body", async ({
+  test("surface 5 — the row is still 32px and the header shares the body surface with a divider", async ({
     page,
   }) => {
     await openContactsGrid(page)
@@ -549,28 +549,22 @@ test.describe("the grid's scroll surface", () => {
       })
       .toEqual([32])
 
-    // **A comparison, never a literal.** "The header differs from the body" is a
-    // relation between two elements' backgrounds; asserting `oklch(...)` would
-    // freeze a token and fail the first time anyone tunes the accent for dark mode.
-    // `design-constraints.md` bans shadows and stripes, which is exactly the CSS
-    // a hardcoded appearance assertion would freeze.
+    // **A comparison, never a literal.** The reference header uses the same
+    // surface as the body; the 1px divider under it is what separates the sticky
+    // row while the body scrolls. Asserting equality keeps the two on one token
+    // and a hardcoded `oklch(...)` out of the test.
     const header = page.locator("[data-grid-column]").first()
-
-    // **Row 2, not row 0 — and this is not an arbitrary index.** `grid-row.tsx`
-    // gives the *focused* row `[&>td]:bg-muted/40` and a hovered row
-    // `[&:hover>td]:bg-muted/50`, and the grid focuses row 0 on mount. Measuring
-    // row 0 therefore compared the header's plain surface against the focus
-    // surface and passed with the header still on `bg-card`: measured at
-    // baseline, row 0's cell computes to `oklab(… / 0.4)` against the header's
-    // `lab(100 0 0)` — different for a reason that has nothing to do with the
-    // header, so the assertion had no power at all. Row 2 carries the plain
-    // per-cell `bg-card` that the change is supposed to contrast with.
     const body = cellIn(renderedRows(page).nth(2), "name")
 
     expect(
       await backgroundOf(header),
-      "the header row must not be the same surface as the body it scrolls over",
-    ).not.toBe(await backgroundOf(body))
+      "the header shares the reference grid's surface",
+    ).toBe(await backgroundOf(body))
+
+    expect(
+      await header.evaluate((element) => getComputedStyle(element).borderBottomWidth),
+      "the header divider is what separates the sticky row from the body",
+    ).toBe("1px")
   })
 
   test("surface 6 — at 1024×768 the tab row is not squeezed, the grid still fills, and the page still does not scroll", async ({

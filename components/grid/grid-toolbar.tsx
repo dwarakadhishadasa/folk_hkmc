@@ -106,13 +106,14 @@ export interface GridToolbarProps {
  * update the field.
  *
  * **One band, one order: search · Filter · Sort · Hide fields · density ·
- * record creation · the count.** Every control is `h-8` and every surface is
- * `rounded-[6px]` at `text-[13px]`, transcribed from
- * `Visual-Design/contacts-toolbar-stitch-v1-corrected.html:136-207`; fifteen
- * columns at fifteen different weights was the hierarchy problem this replaced.
- * The comp also draws a view dropdown, which is **not** a control — there is no
- * view to save — and no `New contact` beside `Add record`, because two controls
- * doing one job is the same nonfunctional affordance.
+ * record creation · the count.** Controls are 26px high, borderless and
+ * `rounded-[3px]` at `text-[13px]`, with a neutral hover fill — the reference
+ * grid's view-configuration bar. The search field keeps its leading DOM order
+ * (the band's existing contract) and is ordered last only in the visual run, so
+ * it sits at the trailing edge like the reference find bar. The comp also draws
+ * a view dropdown, which is **not** a control — there is no view to save — and
+ * no `New contact` beside `Add record`, because two controls doing one job is
+ * the same nonfunctional affordance.
  */
 export function GridToolbar({
   columns,
@@ -143,10 +144,11 @@ export function GridToolbar({
     onGlobalFilterChange,
     searchFocused,
   )
-  // ONE indicator, naming the columns it is filtering, in saffron. There is
-  // deliberately no second indicator on the affected headers: that rule came from
-  // the withdrawn inline bar, whose toolbar could only show a count, and it went
-  // with it. A permanently visible per-column funnel is separately forbidden.
+  // ONE indicator, naming the columns it is filtering, in the view bar's
+  // active-control fill. There is deliberately no second indicator on the
+  // affected headers: that rule came from the withdrawn inline bar, whose
+  // toolbar could only show a count, and it went with it. A permanently visible
+  // per-column funnel is separately forbidden.
   const conditionColumnIds = new Set(
     flattenConditions(filterTree).map((condition) => condition.columnId),
   )
@@ -161,18 +163,19 @@ export function GridToolbar({
       // `shrink-0` because the frame is a bounded flex column now: a flex item
       // defaults to `flex-shrink: 1`, so a short row set would otherwise
       // compress the toolbar's own controls instead of the scroll container
-      // giving up the space. `px-3.5 py-2.5` and the `justify-between` split are
-      // the comp's; the left group wraps so a narrow window takes the controls
-      // onto a second line rather than pushing the count below the band.
-      className={`${GRID_BASE_FONT_CLASS} bg-card flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-3.5 py-2.5`}
+      // giving up the space. The controls are right-aligned as one run, the way
+      // the reference view bar sets them against the right edge; the group wraps
+      // so a narrow window takes them onto a second line rather than pushing the
+      // count below the band.
+      className={`${GRID_BASE_FONT_CLASS} bg-[var(--grid-chrome-bg)] flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-b-[color:var(--grid-header-border)] px-3 py-2`}
     >
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <div className="relative w-64 shrink-0">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
+        <div className="relative order-last w-56 shrink-0">
           <span
             aria-hidden="true"
-            className="text-muted-foreground pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5"
+            className="text-[var(--grid-control-icon)] pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2"
           >
-            <Search className="size-3.5" />
+            <Search className="size-4" />
           </span>
           <Input
             type="search"
@@ -186,14 +189,14 @@ export function GridToolbar({
             onChange={(event) => handleGlobalFilterChange(event.target.value)}
             placeholder="Search every column"
             aria-label="Search every column"
-            className="h-8 pl-8 pr-3 text-[13px]"
+            className="h-7 rounded-[3px] border-[color:var(--grid-cell-border)] bg-card pl-7 pr-2 text-[13px] shadow-none md:text-[13px]"
           />
           {draft.length > 0 ? (
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="absolute right-0.5 top-1/2 size-7 -translate-y-1/2"
+              className="absolute right-0.5 top-1/2 size-6 -translate-y-1/2"
               onClick={() => handleGlobalFilterChange("")}
               aria-label="Clear search"
             >
@@ -211,24 +214,27 @@ export function GridToolbar({
           anchor={
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               aria-label={indicator ? `Filter conditions. Filtered by ${indicator}` : "Filter conditions"}
               aria-expanded={filterOpen}
               data-grid-filter-control=""
-              // `hover:bg-muted` rather than the `outline` variant's default
-              // `hover:bg-accent`. `--accent` is a light neutral in this
-              // palette, so the default hover would repaint the button in
-              // roughly its own resting colour and the label would not read as
-              // pressed. The composition hovers neutral (`hover:bg-slate-50`),
-              // and `visual-design.md:80` sends slate-50 to `--muted` anyway.
-              className="hover:bg-muted hover:text-foreground h-8 gap-1.5 rounded-[6px] px-2.5 text-[13px] font-medium"
+              // Airtable's active view-bar control is a filled pill, not an
+              // outlined one. The filter, hidden-fields and sort controls share
+              // that fill; there is no second accent in the grid chrome.
+              className={`h-[26px] gap-1.5 rounded-[3px] px-2 text-[13px] font-normal has-[>svg]:px-2 ${
+                indicator
+                  ? "bg-[var(--grid-active-bg)] text-[var(--grid-active-ink)] hover:bg-[var(--grid-active-bg)] hover:text-[var(--grid-active-ink)]"
+                  : `text-[var(--grid-control-ink)] hover:bg-[var(--grid-chrome-hover)] hover:text-[var(--grid-control-ink)] ${
+                      filterOpen ? "bg-[var(--grid-chrome-hover)]" : ""
+                    }`
+              }`}
             >
               <ListFilter
                 aria-hidden="true"
-                className={`size-3.5 ${indicator ? "text-saffron" : "text-muted-foreground"}`}
+                className={`size-4 ${indicator ? "text-[var(--grid-active-ink)]" : "text-[var(--grid-control-icon)]"}`}
               />
               {indicator ? (
-                <span className="text-saffron font-semibold">Filtered by {indicator}</span>
+                <span>Filtered by {indicator}</span>
               ) : (
                 <span>Filter</span>
               )}
@@ -253,18 +259,16 @@ export function GridToolbar({
           anchor={
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               aria-expanded={sortOpen}
               aria-label="Sort"
               data-grid-sort-control=""
-              className={`hover:bg-muted hover:text-[var(--grid-accent-ink)] h-8 gap-1.5 rounded-[6px] px-3 text-[13px] font-medium ${
-                sortOpen
-                  ? "border-[var(--grid-accent-ink)] bg-muted text-[var(--grid-accent-ink)]"
-                  : "text-foreground"
+              className={`hover:bg-[var(--grid-chrome-hover)] hover:text-[var(--grid-control-ink)] h-[26px] gap-1.5 rounded-[3px] px-2 text-[13px] font-normal text-[var(--grid-control-ink)] has-[>svg]:px-2 ${
+                sortOpen ? "bg-[var(--grid-chrome-hover)]" : ""
               }`}
             >
-              <ArrowUpDown aria-hidden="true" className="size-3.5 text-[var(--grid-accent-ink)]" />
-              <span className="font-semibold">Sort</span>
+              <ArrowUpDown aria-hidden="true" className="size-4 text-[var(--grid-control-icon)]" />
+              <span>Sort</span>
             </Button>
           }
         />
@@ -281,19 +285,17 @@ export function GridToolbar({
            * on the grid itself. A field that is off is simply absent, so nothing
            * else in the frame reports it. Hence the count.
            *
-           * The amber is that report, and it is deliberately not the accent ink:
-           * the accent means "this control is open", which is a *transient* state
-           * lasting as long as the pointer is over the control. A persistent
-           * control that borrowed it would be claiming to be open for as long as
-           * a field stayed hidden. `--grid-warning-ink` is its own token because
-           * "something is off out here" and "you are looking at me" are different
-           * statements.
+           * The fill is that report, and it is deliberately the active-control
+           * fill rather than the accent ink: the accent means "this control is
+           * open", which is a *transient* state lasting as long as the pointer is
+           * over the control. A persistent control that borrowed it would be
+           * claiming to be open for as long as a field stayed hidden.
            *
-           * The warning colour lands on the **label and the glyph**, and is
-           * carried through `style` rather than a class because it is a token
-           * value read at runtime — `components/grid/` stays hex-free per
-           * `harness-guards`, and a consumer can re-tint the report without
-           * touching this component.
+           * The active ink lands on the **label and the glyph**, and is carried
+           * through `style` rather than a class because it is a token value read
+           * at runtime — `components/grid/` stays hex-free per `harness-guards`,
+           * and a consumer can re-tint the report without touching this
+           * component.
            *
            * Counted over the listed columns rather than over all of them: the
            * selection column is not a field and never appears in the popover, so
@@ -311,36 +313,39 @@ export function GridToolbar({
               <PopoverTrigger asChild>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   aria-expanded={hideFieldsOpen}
                   aria-label={label}
                   data-grid-hide-fields-control=""
                   data-grid-hidden-count={hiddenCount}
-                  className={`hover:bg-muted h-8 gap-1.5 rounded-[6px] px-3 text-[13px] font-medium ${
-                    hideFieldsOpen
-                      ? "border-[var(--grid-accent-ink)] bg-muted"
-                      : "border-border"
+                  className={`h-[26px] gap-1.5 rounded-[3px] px-2 text-[13px] font-normal has-[>svg]:px-2 ${
+                    reporting
+                      ? "bg-[var(--grid-active-bg)] text-[var(--grid-active-ink)] hover:bg-[var(--grid-active-bg)] hover:text-[var(--grid-active-ink)]"
+                      : `text-[var(--grid-control-ink)] hover:bg-[var(--grid-chrome-hover)] hover:text-[var(--grid-control-ink)] ${
+                          hideFieldsOpen ? "bg-[var(--grid-chrome-hover)]" : ""
+                        }`
                   }`}
                 >
                   {/*
                     * **One glyph in both states, and it joins the label once the
                     * label starts reporting.** At rest the icon names the control
-                    * and carries `--grid-accent-ink`, which is white on the dark
-                    * canvas and the theme's own ink on paper. Once a field is
-                    * hidden the whole pill is a report rather than an action, so
-                    * glyph and label share the same warning ink: two inks inside
-                    * one 32px control would read as two different states.
+                    * and carries the control-icon ink. Once a field is hidden the
+                    * whole pill is a report rather than an action, so glyph and
+                    * label share the active ink: two inks inside one 26px control
+                    * would read as two different states.
                     */}
                   <EyeOff
                     aria-hidden="true"
-                    className="size-3.5"
+                    className="size-4"
                     style={{
-                      color: reporting ? "var(--grid-warning-ink)" : "var(--grid-accent-ink)",
+                      color: reporting
+                        ? "var(--grid-active-ink)"
+                        : "var(--grid-control-icon)",
                     }}
                   />
                   <span
-                    className="font-semibold"
-                    style={{ color: reporting ? "var(--grid-warning-ink)" : undefined }}
+                    className="font-normal"
+                    style={{ color: reporting ? "var(--grid-active-ink)" : undefined }}
                   >
                     {label}
                   </span>
@@ -349,7 +354,7 @@ export function GridToolbar({
           <PopoverContent
             align="start"
             data-grid-hide-fields-popover=""
-            className="w-[260px] rounded-lg p-3"
+            className="w-[260px] rounded-[6px] p-3"
           >
             <p className="text-muted-foreground pb-1 text-[12px] font-medium">Fields</p>
             {/* Transcribed from `contacts-overlays-stitch-v1-corrected.html:189-270`.
@@ -410,22 +415,17 @@ export function GridToolbar({
         })()}
 
         <Select value={density} onValueChange={(value) => onDensityChange(value as GridDensity)}>
-          {/* `w-32 px-2`, not `w-28`: the trigger spends its width on chrome (padding +
-            `gap-2` + a 16px chevron) and shadcn clips the value with
-            `line-clamp-1`, so the widest label — "Default rows", measured at 80px
-            — needed 128px and had 112. It rendered as "Default ro⌄". A density
-            readout that is clipped cannot be checked by eye against the rendered
-            height, which is the only thing it is for.
-
-            **Story 7 compacted this band and the width stayed.** The composition
-            draws 32px-tall buttons, not narrower ones, and nothing in it narrows
-            the density control — so re-measuring it would be re-deciding a number
-            a committed spec already measures
-            (`grid-cell-metrics.spec.ts:138-148`). `h-7` → `h-8` is the band's
-            rhythm; `w-32` is this control's own. `px-2` rather than shadcn's
-            `px-3` buys the last 8px without widening the control past `w-32`, and
-            matches the outline controls beside it. */}
-          <SelectTrigger size="sm" aria-label="Row density" className="h-8 w-32 px-2 text-[13px]">
+          {/* The trigger's chrome (padding + `gap-2` + a 16px chevron) plus the
+            widest label — "Default rows", measured at 80px — needs 112px, so a
+            fixed `w-28` would clip it to "Default ro⌄". `min-w-[7.5rem]` holds
+            that floor while `w-auto` lets the trigger take only what the label
+            and chrome need; a readout that is clipped cannot be checked by eye
+            against the rendered height, which is the only thing it is for. */}
+          <SelectTrigger
+            size="sm"
+            aria-label="Row density"
+            className="hover:bg-[var(--grid-chrome-hover)] h-[26px] w-auto min-w-[7.5rem] rounded-[3px] border-0 px-2 text-[13px] shadow-none"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

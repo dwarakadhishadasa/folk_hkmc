@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
  * so a token added to one file would break the other app's build of this
  * component. `text-[13px]` plus inline heights keep both apps byte-identical.
  */
-export const GRID_BASE_FONT_CLASS = "text-[13px]"
+export const GRID_BASE_FONT_CLASS = "text-[13px] [font-family:var(--grid-font)]"
 
 /**
  * One row-density option, and everything the two halves of the contract need.
@@ -102,13 +102,10 @@ const ALIGN_CLASS: Record<GridCellView["align"], string> = {
 /**
  * The in-cell editor for a column with no `meta.grid.editor`.
  *
- * It takes focus and selects the current value on mount, so the first keystroke
- * *replaces* the value rather than appending to it. Without the selection the
- * caret lands at the end of the pre-filled text and the first keystroke after a
- * double-click silently commits a concatenation — the worst possible failure for
- * a write that looks like it succeeded. Focus and select are done in an effect
- * rather than through `autoFocus` because `select()` needs the input mounted and
- * focused first.
+ * Focus on mount leaves the caret at the end of the value, which is the
+ * reference grid's behaviour for both `Enter` and a double-click. Type-to-edit
+ * seeds the draft with the first character, so the same rule gives a replaced
+ * value with the caret after it.
  */
 function GridCellEditor({
   draft,
@@ -124,10 +121,7 @@ function GridCellEditor({
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    const input = inputRef.current
-
-    input?.focus()
-    input?.select()
+    inputRef.current?.focus()
   }, [])
 
   return (
@@ -142,7 +136,7 @@ function GridCellEditor({
       onBlur={onDraftBlur}
       onPointerDown={(event) => event.stopPropagation()}
       aria-label="Edit cell value"
-      className="border-ring bg-card focus-visible:ring-ring/50 h-full w-full rounded-[3px] border bg-transparent px-1 text-[13px] outline-none select-text focus-visible:ring-[2px]"
+      className="bg-card h-full w-full border-0 p-1.5 text-[13px] outline-none select-text"
     />
   )
 }
@@ -230,8 +224,8 @@ export interface GridRowProps<TData> {
    */
   onCellPointerDown: (rowId: string, columnId: string, extend: boolean) => void
   /**
-   * Double-click on one cell: the sole opener, and the commit route when the
-   * cell's editor is already open. Read-only and checkbox columns no-op.
+   * Double-click on one cell: opens its editor, or commits when the cell's
+   * editor is already open. Read-only and checkbox columns no-op.
    */
   onCellDoubleClick: (rowId: string, columnId: string) => void
 }
@@ -321,7 +315,7 @@ function GridRowInner<TData>({
         // surface can differ per theme without the primitive naming one.
         // No `transition-colors` here: animating every row's background turns
         // hover churn during scroll into per-frame paint.
-        "[&>td]:border-b [&>td]:border-r [&>td]:border-border [&>td:last-child]:border-r-0",
+        "[&>td]:border-b [&>td]:border-r [&>td]:border-[color:var(--grid-cell-border)] [&>td:last-child]:border-r-0",
         "[&>td]:bg-card",
         // Hover is its own token, not `bg-muted/50`: a 50% mix of `--muted`
         // *lightens* a row, which is right on a light canvas but wrong on the
@@ -330,11 +324,21 @@ function GridRowInner<TData>({
         // states stay separable without either borrowing the other's colour.
         "[&:hover>td:not([data-grid-frozen])]:bg-[var(--grid-row-hover,var(--muted))]",
         "[&:hover>td[data-grid-frozen]]:bg-[var(--grid-row-hover,var(--muted))]",
+        // The reference paints the active row with the cursor surface even when
+        // the pointer is elsewhere. Selected rows are more specific and keep
+        // their own tint.
+        isFocused && "[&>td]:bg-[var(--grid-row-hover,var(--muted))]",
+        isFocused && "[&>td[data-grid-frozen]]:bg-[var(--grid-row-hover,var(--muted))]",
         "data-[state=selected]:[&>td]:bg-[var(--grid-selected,var(--muted))]",
         "data-[state=selected]:[&>td[data-grid-frozen]]:bg-[var(--grid-selected,var(--muted))]",
-        isFocused && "[&>td:not([data-grid-frozen])]:bg-muted/40",
-        isFocused &&
-          "[&>td[data-grid-frozen]]:bg-[color-mix(in_oklab,var(--muted)_40%,var(--card))]",
+        // A selected row keeps its selection tint while hovered; otherwise the
+        // pointer's cursor surface would repaint the very row just selected.
+        "data-[state=selected]:[&:hover>td]:bg-[var(--grid-selected,var(--muted))]!",
+        "data-[state=selected]:[&:hover>td[data-grid-frozen]]:bg-[var(--grid-selected,var(--muted))]!",
+        // The row itself carries no focus or edit wash: the reference grid marks
+        // the active cell with a blue outline and leaves its neighbours on the
+        // plain surface, so a full-width tint would be a second, louder signal
+        // for the same state.
         // The cell range, applied per cell rather than per row. It has to be
         // qualified by the cell's own attribute instead of being a `bg-*` on the
         // `<td>`: the four rules above target `>td` from this row and would
@@ -375,7 +379,7 @@ function GridRowInner<TData>({
             data-grid-cell-selected={cell.isSelected ? "true" : undefined}
             // The **active** cell — the one the pointer or an arrow is on — named
             // as a seam rather than asserted through the ring class beside it.
-            // `ring-1` is a Tailwind detail: renaming it to a `box-shadow`
+            // `ring-2` is a Tailwind detail: renaming it to a `box-shadow`
             // silently breaks a spec that was never about rings, while this
             // attribute is the statement that exactly one cell is active at a
             // time. Presence-only, like `-selected` and `-emphasis`, so "exactly
@@ -448,27 +452,28 @@ function GridRowInner<TData>({
               // structure. Applied here on top of `[&>td]:border-b`, it measures
               // **35px**: in a CSS table `height` is a minimum and never clamps a
               // cell whose padding and border already exceed it, which is the
-              // trap UX-DR19 records. So this cell carries the 8px horizontal
-              // padding and the middle alignment, and deliberately **no** vertical
-              // padding and **no** explicit line height — inheriting the page's is
-              // what keeps the row at exactly 32px.
+              // trap UX-DR19 records. So this cell carries the reference grid's
+              // 6px horizontal padding and the middle alignment, and deliberately
+              // **no** vertical padding and **no** explicit line height —
+              // inheriting the page's is what keeps the row at exactly 32px.
               //
               // `pnpm test:e2e grid-cell-metrics` is what pins that, by measuring
               // the row rather than reading a class.
-              "truncate px-2 align-middle text-[13px]",
+              "truncate px-1.5 align-middle text-[13px]",
+              // The reference's active cell is a 2px blue inset; the open editor
+              // narrows that to 1px and puts the 6px inset on the input itself,
+              // so the editor's text starts where the display text does rather
+              // than 12px in.
+              cell.editing && "px-0",
+              cell.isFocused && "ring-ring relative z-[5] ring-inset",
+              cell.isFocused && (cell.editing ? "ring-1" : "ring-2"),
               ALIGN_CLASS[cell.align],
               cell.tabular && "tabular-nums",
-              cell.isFocused && "ring-ring relative z-[5] ring-1 ring-inset",
-              // Read-only is muted and the identity column is weighted, so one
-              // row has one emphasis and the eye can tell at a glance which
-              // cells will accept an edit.
-              //
-              // The muted class is withheld when the cell is in error, because
-              // `text-destructive` and `text-muted-foreground` are the same
-              // Tailwind specificity and which one wins would depend on
-              // stylesheet order. An explicit guard is readable; a silent
-              // precedence fight is not.
-              !cell.editable && !cell.error && cell.render === undefined && "text-muted-foreground",
+              // Read-only is a behaviour flag, not an ink treatment: the
+              // reference grid leaves formula and rollup values on the same
+              // foreground as typed ones, and the cell keeps
+              // `data-grid-cell-editable="false"` for anything that needs to
+              // distinguish them. The identity column stays weighted.
               cell.emphasis && "font-medium",
               cell.error && "text-destructive",
               // 1px divider instead of a scroll shadow, which design-constraints.md bans —
@@ -477,7 +482,16 @@ function GridRowInner<TData>({
               stickyLeft !== undefined && "sticky z-10 bg-card",
               cell.columnId === lastFrozenColumnId && "border-r border-border",
             )}
-            style={stickyLeft === undefined ? undefined : { left: stickyLeft }}
+            style={{
+              left: stickyLeft === undefined ? undefined : stickyLeft,
+              // The open editor keeps the card surface while the rest of the
+              // hovered row goes to the cursor colour, as the reference does.
+              backgroundColor: cell.editing ? "var(--card)" : undefined,
+              // Let the input fill the full 32px row; the 1px editor ring is
+              // the boundary, so the hairline under the cell would only steal a
+              // pixel from the text box.
+              borderBottomWidth: cell.editing ? 0 : undefined,
+            }}
           >
             {/*
               Five cases, and the order is load-bearing twice over.

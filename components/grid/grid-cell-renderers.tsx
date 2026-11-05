@@ -126,7 +126,7 @@ function Pill({
 }) {
   if (tone === "muted") {
     return (
-      <span className="border-border text-muted-foreground inline-flex max-w-full items-center truncate rounded-[3px] border border-dashed px-1 text-[12px]">
+      <span className="border-border text-muted-foreground inline-flex h-[22px] max-w-full items-center truncate rounded-full border border-dashed px-2.5 text-[13px]">
         {children}
       </span>
     )
@@ -140,22 +140,17 @@ function Pill({
   const style =
     tone === "link"
       ? {
-          backgroundColor: "var(--grid-linked-bg)",
-          color: "var(--grid-linked-fg)",
-          borderColor: "var(--grid-linked-bg)",
+          backgroundColor: "color-mix(in oklab, var(--tag-1) 20%, var(--card))",
+          color: "var(--tag-1)",
         }
       : {
           color: `var(--tag-${slot})`,
-          // 11% is the strongest mix that still clears 4.5:1 for the dimmest
-          // slot in *both* themes; a stronger mix tints the pill more but pushes
-          // the 12px label under AA.
-          backgroundColor: `color-mix(in oklab, var(--tag-${slot}) 11%, var(--card))`,
-          borderColor: `color-mix(in oklab, var(--tag-${slot}) 42%, transparent)`,
+          backgroundColor: `color-mix(in oklab, var(--tag-${slot}) 20%, var(--card))`,
         }
 
   return (
     <span
-      className="inline-flex max-w-full items-center truncate rounded-[3px] border px-1 text-[12px]"
+      className="inline-flex h-[22px] max-w-full items-center truncate rounded-full px-2.5 text-[13px]"
       style={style}
     >
       {children}
@@ -176,7 +171,7 @@ function LinkedValue({ text, unresolved }: { text: string; unresolved: boolean }
     return (
       <span
         data-grid-linked="unresolved"
-        className="text-muted-foreground border-border inline-flex max-w-full items-center truncate rounded-[3px] border border-dashed px-1 text-[12px]"
+        className="text-muted-foreground border-border inline-flex h-[22px] max-w-full items-center truncate rounded-full border border-dashed px-2.5 text-[13px]"
       >
         {text}
       </span>

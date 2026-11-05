@@ -1886,7 +1886,7 @@ export function Grid<TData extends RowData>({
     <div
       data-grid-root=""
       className={cn(
-        "bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border",
+        "bg-card flex min-h-0 flex-1 flex-col overflow-hidden",
         className,
       )}
     >
@@ -2142,7 +2142,7 @@ export function Grid<TData extends RowData>({
           data-grid-footer=""
           data-grid-footer-scroll=""
           onScroll={syncFooterScroll}
-          className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-border bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="shrink-0 overflow-x-auto overflow-y-hidden border-t border-t-[color:var(--grid-cell-border)] bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {/*
             The wide content the scroller above clips. The strip is sized from the
@@ -2176,7 +2176,7 @@ export function Grid<TData extends RowData>({
                     left: stickyLeft === null ? undefined : stickyLeft,
                     backgroundColor: stickyLeft === null ? undefined : "var(--card)",
                   }}
-                  className="text-[13px] flex-none px-2 py-1"
+                  className="text-[13px] flex-none px-2 py-1 text-[var(--grid-footer-ink)]"
                 >
                   {tableFooter({ columnId: header.column.id, width: header.getSize() })}
                 </div>

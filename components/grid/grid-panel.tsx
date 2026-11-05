@@ -19,7 +19,7 @@ import { GRID_ROW_HEIGHT, GRID_SKELETON_ROWS } from "@/components/grid/grid-row"
 const PANEL_MIN_HEIGHT = 232
 
 /** Panel cells span the grid but stay pinned to the left edge while scrolled right. */
-const PANEL_CELL_CLASS = "sticky left-0 z-10 border-b border-border bg-card p-0 align-top"
+const PANEL_CELL_CLASS = "sticky left-0 z-10 border-b border-b-[color:var(--grid-cell-border)] bg-card p-0 align-top"
 
 /**
  * A single marker for whichever variant is on screen, so the two empty flavours

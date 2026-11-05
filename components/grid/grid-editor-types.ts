@@ -88,11 +88,11 @@ export interface GridEditorContext<TData> {
   /**
    * The hook's own draft key handler.
    *
-   * Handed to the editor rather than reimplemented: `Enter` commits, `Escape`
-   * cancels and `Tab` commits-then-moves, and those three have to behave
-   * identically whether the draft is typed into a plain cell or an editor's
-   * in-cell field. An editor that grew its own copy of this would be free to
-   * get `Tab` wrong, which is exactly the regression `grid-keyboard.spec.ts`
+   * Handed to the editor rather than reimplemented: `Enter` commits and steps
+   * down, `Escape` cancels and `Tab` commits-then-moves, and those three have to
+   * behave identically whether the draft is typed into a plain cell or an
+   * editor's in-cell field. An editor that grew its own copy of this would be
+   * free to get `Tab` wrong, which is exactly the regression `grid-keyboard.spec.ts`
    * key 8 exists to catch.
    */
   onDraftKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void

@@ -6,10 +6,12 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import type { SortingState } from "@tanstack/react-table"
 import {
+  ArrowDown,
   ArrowDownWideNarrow,
+  ArrowUp,
   ArrowUpNarrowWide,
+  ChevronDown,
   ListFilter,
-  MoreHorizontal,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -213,24 +215,16 @@ export function GridHeaderCell({
       }}
       className={cn(
         GRID_BASE_FONT_CLASS,
-        // `bg-muted`, not the body's `bg-card`: the header row was the same
-        // surface as the data, so the sticky row had nothing to read against
-        // while the body scrolled under it. Token-only — a comparison of two
-        // elements' computed backgrounds is what a spec asserts, never a hex.
+        // The header shares the cell surface, as it does in the reference grid:
+        // the hairline under it is what separates the two, not a second grey.
         //
         // `text-foreground` rather than `text-muted-foreground`: the header is the
         // one row that has to be read *while* a body row slides under it, so it
-        // carries the theme's highest-contrast foreground — which is the near-
-        // white of the dark canvas and its light-canvas counterpart in light,
-        // because a literal light value would be unreadable on `bg-muted` in one
-        // of the two themes. The guard bans that literal under this directory
-        // anyway, and a theme token is the answer it wants.
+        // carries the theme's highest-contrast foreground in both themes.
         //
-        // `font-semibold` for the same reason: the header is a row of *names*,
-        // and at 13px against a muted surface the labels needed the extra step to
-        // read as a row rather than as a strip of clipped text.
-        "bg-muted text-foreground sticky top-0 border-b border-border p-0 font-semibold",
-        !isLast && "border-r",
+        // The label is 500 at 13px; the glyph beside it is the only muted ink.
+        "bg-[var(--grid-header-bg)] text-foreground sticky top-0 border-b border-b-[color:var(--grid-header-border)] p-0 font-medium hover:bg-[var(--grid-row-hover)]",
+        !isLast && "border-r border-r-[color:var(--grid-cell-border)]",
         isFrozen ? "z-30" : "z-20",
         isDragging && "z-40 opacity-80",
       )}
@@ -239,7 +233,7 @@ export function GridHeaderCell({
         <div className="flex h-full items-center justify-center px-1">{render}</div>
       ) : (
         <>
-          <div className="group relative flex h-full items-center gap-0.5 px-1">
+          <div className="group relative flex h-full items-center gap-1 px-1.5">
             {/*
               The type glyph, ahead of the label and outside the drag activator.
 
@@ -251,7 +245,9 @@ export function GridHeaderCell({
               through the column's own affordances, and a glyph has no accessible
               name worth having.
             */}
-            {resolveGridFieldIcon(fieldType)}
+            <span className="flex shrink-0 items-center text-[var(--grid-control-icon)]">
+              {resolveGridFieldIcon(fieldType)}
+            </span>
 
             {canDrag ? (
               <span
@@ -275,6 +271,18 @@ export function GridHeaderCell({
               </span>
             )}
 
+            {sortDirection === "asc" ? (
+              <ArrowUp
+                aria-hidden="true"
+                className="size-3 shrink-0 text-[var(--grid-control-icon)]"
+              />
+            ) : sortDirection === "desc" ? (
+              <ArrowDown
+                aria-hidden="true"
+                className="size-3 shrink-0 text-[var(--grid-control-icon)]"
+              />
+            ) : null}
+
             {showMenu ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -283,9 +291,9 @@ export function GridHeaderCell({
                     variant="ghost"
                     size="icon-sm"
                     aria-label={`Column options for ${label}`}
-                    className="size-6 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                    className="size-6 text-[var(--grid-control-icon)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
                   >
-                    <MoreHorizontal aria-hidden="true" className="size-3.5 opacity-60" />
+                    <ChevronDown aria-hidden="true" className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-44">
@@ -327,7 +335,7 @@ export function GridHeaderCell({
             aria-label={`Resize ${label}`}
             onMouseDown={resizeHandler}
             onTouchStart={resizeHandler}
-            className="absolute right-0 top-0 h-full w-3 cursor-col-resize touch-none select-none before:absolute before:inset-y-0 before:right-0 before:w-px before:bg-border before:transition-colors hover:before:bg-ring"
+            className="absolute right-0 top-0 h-full w-3 cursor-col-resize touch-none select-none before:absolute before:inset-y-0 before:right-0 before:w-px before:bg-[var(--grid-cell-border)] before:transition-colors hover:before:bg-ring"
           />
         </>
       )}

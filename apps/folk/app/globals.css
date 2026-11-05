@@ -434,3 +434,60 @@
 .animate-fade-in-up {
   animation: fadeInUp 0.4s ease-out forwards;
 }
+
+/*
+ * Desktop grid chrome, matched to Airtable's light/dark grid.
+ *
+ * Scoped to the two desktop surfaces that carry it — the grid frame and the
+ * saved-views bar — rather than declared on `:root`: `--grid-row-hover` is also
+ * read by the overview cards, which are the phone's surface too, and this
+ * change must not move the phone at all.
+ */
+[data-grid-root],
+[data-grid-views-bar] {
+  --grid-font:
+    -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu,
+    Cantarell, "Helvetica Neue", sans-serif;
+  /* Airtable's grid hairlines: `hsl(202 10% 88%)` between cells and
+     `hsl(0 0% 82%)` under the header. */
+  --grid-cell-border: #dee1e3;
+  --grid-header-border: #d1d1d1;
+  /* The header shares the cell surface; the divider is what separates the two,
+     which is how the reference grid reads. */
+  --grid-header-bg: #ffffff;
+  --grid-row-number-ink: #616670;
+  --grid-control-ink: #1d1f25;
+  --grid-control-icon: #91959c;
+  --grid-control-hover: #f2f4f8;
+  --grid-active-bg: #c4ecff;
+  --grid-active-ink: #041d2d;
+  --grid-footer-ink: #616670;
+  --grid-row-hover: #f8f8f8;
+  --grid-selected: #f1f6ff;
+  --grid-list-selected: #f2f2f2;
+  /* The reference's view chrome — sidebar header and view-config bar — is the
+     subtle surface, one step off the grid/list card. */
+  --grid-chrome-bg: var(--muted);
+  --grid-chrome-hover: #e5e9f0;
+  --grid-star: #f5b301;
+}
+
+.dark [data-grid-root],
+.dark [data-grid-views-bar] {
+  --grid-cell-border: #33363b;
+  --grid-header-border: #3d3f45;
+  --grid-header-bg: #1d1f25;
+  --grid-row-number-ink: #91959c;
+  --grid-control-ink: #ffffff;
+  --grid-control-icon: #91959c;
+  --grid-control-hover: #31353e;
+  --grid-active-bg: #202833;
+  --grid-active-ink: #a0c6ff;
+  --grid-footer-ink: #91959c;
+  --grid-row-hover: #060606;
+  --grid-selected: #083065;
+  --grid-list-selected: #2a2c31;
+  --grid-chrome-bg: var(--muted);
+  --grid-chrome-hover: #3d4148;
+  --grid-star: #ffd66b;
+}

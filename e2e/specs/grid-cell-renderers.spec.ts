@@ -9,7 +9,7 @@
  * | type 4 | a dangling link | the consumer's unresolved marker — never the raw id |
  * | type 5 | a genuinely absent link | nothing at all, so absent and dangling stay different facts |
  * | type 6 | blank-not-dash | an empty cell renders nothing, in the grid, in `title`, and in the clipboard |
- * | type 7 | editable vs read-only | the two carry a distinguishing attribute and the read-only cell is muted |
+ * | type 7 | editable vs read-only | the two carry a distinguishing attribute, and both use the default ink |
  * | type 8 | a custom-control column | the widget column is untouched by both the registry and the read-only treatment |
  * | type 9 | error precedence | a rejected commit still reads destructive, not muted |
  * | type 10 | truncation stays inspectable | a cell the registry draws still carries its full value in `title` |
@@ -205,9 +205,10 @@ test.describe("CAP-3 and CAP-4 — type-keyed cell renderers", () => {
     await expect(editable).toHaveAttribute("data-grid-cell-editable", "true")
     await expect(readOnly).toHaveAttribute("data-grid-cell-editable", "false")
 
-    // The treatment itself, on the read-only cell only. Asserted as a class
-    // presence rather than a computed colour, because the token can change.
-    await expect(readOnly).toHaveClass(/text-muted-foreground/)
+    // The reference grid does not mute a read-only field: formula and rollup
+    // values share the body's ink with typed ones. The distinguishing signal is
+    // the attribute, not a second colour.
+    await expect(readOnly).not.toHaveClass(/text-muted-foreground/)
     await expect(editable).not.toHaveClass(/text-muted-foreground/)
   })
 
@@ -242,10 +243,9 @@ test.describe("CAP-3 and CAP-4 — type-keyed cell renderers", () => {
     await previewScroll(page).focus()
     await page.keyboard.press("Delete")
 
-    // `text-muted-foreground` and `text-destructive` are the same Tailwind
-    // specificity, so the grid withholds the muted class outright rather than
-    // letting stylesheet order decide which wins. This asserts that decision —
-    // without the guard, the refusal could be greyed out and read as fine.
+    // An error must read destructive, never muted: the cell is the only place
+    // the refusal is surfaced. Asserting both keeps a future read-only treatment
+    // from greying out a refusal and making it read as fine.
     await expect(cell).toHaveClass(/text-destructive/)
     await expect(cell).not.toHaveClass(/text-muted-foreground/)
   })

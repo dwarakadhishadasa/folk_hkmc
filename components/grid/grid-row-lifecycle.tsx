@@ -121,26 +121,13 @@ export function GridRowAddControl({
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="ghost"
       size="sm"
-      // **The comp's primary treatment, transcribed from
-      // `contacts-toolbar-stitch-v1-corrected.html:194-200`:** royal blue, white
-      // label, `h-8 px-3 rounded-[6px]`. Record creation is the one thing in the
-      // band that acts rather than inspects, so it is the one thing that gets
-      // primary weight — and it is the *same* slot, not a second button beside
-      // it. The comp's "New contact" is deliberately not added: two controls
-      // doing one job is the nonfunctional affordance CAP-6 forbids.
-      //
-      // `text-primary-foreground` rather than the comp's `text-white`, because
-      // `harness-guards.spec.ts:89` scans this directory as text and bans the
-      // literal outright — a token is also what keeps the label legible if the
-      // primary ever stops being dark.
-      // `hover:text-primary-foreground` because the `outline` variant this button is
-      // built on carries `hover:text-accent-foreground`, and `--accent-foreground`
-      // is the light theme's `#24324A` navy: hovering repainted the white label to
-      // navy *on this navy fill*, which is ~1:1. The hover is a background change
-      // only — the label keeps its own ink.
-      className="border-royal bg-royal text-primary-foreground hover:bg-royal-light hover:text-primary-foreground h-8 gap-1.5 rounded-[6px] px-3 text-[13px]"
+      // Airtable's record-creation affordance is a quiet plus in the toolbar,
+      // not a filled primary button: the grid's rows are the subject, and a
+      // second filled control competes with them. The control stays in the one
+      // slot beside the density selector.
+      className="hover:bg-[var(--grid-chrome-hover)] text-[var(--grid-control-ink)] h-[26px] gap-1.5 rounded-[3px] px-2 text-[13px] font-normal has-[>svg]:px-2"
       disabled={!canCreate}
       data-grid-add-record=""
       // No `aria-label`: the button's own text is its accessible name, and a
@@ -151,7 +138,7 @@ export function GridRowAddControl({
         onAdd()
       }}
     >
-      <Plus aria-hidden="true" className="size-3.5" />
+      <Plus aria-hidden="true" className="size-4 text-[var(--grid-control-icon)]" />
       Add record
     </Button>
   )

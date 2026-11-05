@@ -213,7 +213,8 @@ export interface GridKeyboardApi<TData> {
    */
   focusCell: (rowId: string, columnId: string, extend?: boolean) => void
   /**
-   * The one opener. Double-clicking a closed cell opens its editor; double-clicking
+   * The double-click opener: double-clicking a closed cell opens its editor;
+   * double-clicking
    * the cell whose editor is already open commits that draft and closes.
    *
    * Returns nothing because the caller already knows the gesture happened: the
@@ -557,32 +558,6 @@ export function useGridKeyboard<TData>({
     [containerRef, visibleRows],
   )
 
-  const moveFocus = useCallback(
-    (nextIndex: number) => {
-      if (visibleRows.length === 0) {
-        return
-      }
-
-      const clamped = Math.min(Math.max(nextIndex, 0), visibleRows.length - 1)
-      setFocusedRowIndex(clamped)
-      scrollToIndex(clamped)
-
-      const row = visibleRows[clamped]
-      const columnId = focusedColumnId ?? row?.getVisibleCells()[0]?.column.id
-
-      if (row && columnId) {
-        // A move without `Shift` collapses the range onto the cell it lands on,
-        // exactly as a drag without `Shift` would. Leaving the anchor behind
-        // would make the highlight grow every time the operator simply arrowed
-        // across the grid.
-        setSelectionAnchor({ rowIndex: clamped, columnId })
-        focusCellIfGridHasFocus(gridCellKey(row.id, columnId))
-        revealCell(clamped, columnId)
-      }
-    },
-    [focusCellIfGridHasFocus, focusedColumnId, revealCell, scrollToIndex, visibleRows],
-  )
-
   /**
    * Moves the focus one cell, re-anchoring the range or growing it.
    *
@@ -921,10 +896,9 @@ export function useGridKeyboard<TData>({
   )
 
   /**
-   * The one opener. A double-click on a closed cell is the **only** gesture that
-   * gets here — `e`, printable-character type-to-edit, `Space`-seeding,
-   * `Enter`-when-not-editing and the old click-to-open display are all retired by
-   * CAP-10 — so the seeding rule is the cell's own display text and nothing can
+   * Opens the editor for the three gestures that are allowed to: a double-click,
+   * `Enter`, or the first printable character of type-to-edit. The seeding rule
+   * is the cell's own display text and nothing can
    * drift apart from it. An editor whose `draftSeed` differs gets its own
    * representation (a date cell edits `2026-03-05`, not `5 Mar 2026`).
    *
@@ -932,7 +906,7 @@ export function useGridKeyboard<TData>({
    * than an error, and `false` is what proves `meta.grid.editable` is the guard.
    */
   const openEditor = useCallback(
-    (rowIndex: number, columnId: string): boolean => {
+    (rowIndex: number, columnId: string, seed?: string): boolean => {
       const row = visibleRows[rowIndex]
 
       if (!row) {
@@ -973,11 +947,18 @@ export function useGridKeyboard<TData>({
       touchedRef.current = false
       discardRequestedRef.current = false
 
+      if (seed !== undefined) {
+        // The first character of type-to-edit is already a real edit: blur must
+        // commit it, not treat the draft as untouched.
+        setEditorDraft(seed)
+        return true
+      }
+
       const text = displayCellText(row.id, cell)
       setDraft(definition?.draftSeed?.(text, cell.getValue()) ?? text)
       return true
     },
-    [displayCellText, runCommit, visibleRows],
+    [displayCellText, runCommit, setEditorDraft, visibleRows],
   )
 
   const cancelEditing = useCallback(() => {
@@ -1184,7 +1165,7 @@ export function useGridKeyboard<TData>({
   }, [commitEditing, editing, exitEditing])
 
   /**
-   * The sole opener gesture, and the commit route when the cell is already open.
+   * The pointer opener, and the commit route when the cell is already open.
    *
    * Two jobs, one handler, because they are the same gesture seen twice: a
    * double-click on a closed cell opens it; a double-click on the open cell's own
@@ -1494,7 +1475,21 @@ export function useGridKeyboard<TData>({
       if (event.key === "Enter") {
         event.preventDefault()
         event.stopPropagation()
+
+        if (!editing) {
+          return
+        }
+
+        const editingRowIndex = visibleRows.findIndex((row) => row.id === editing.rowId)
+
         commitEditing()
+        restoreFocusRef.current = null
+
+        // The reference commits on `Enter` and lands on the cell below.
+        if (editingRowIndex !== -1) {
+          stepFocus({ row: 1, column: 0 }, false)
+        }
+
         return
       }
 
@@ -1529,7 +1524,7 @@ export function useGridKeyboard<TData>({
         }
       }
     },
-    [cancelEditing, commitEditing, editing, moveTab, visibleRows],
+    [cancelEditing, commitEditing, editing, moveTab, stepFocus, visibleRows],
   )
 
   // Synced after every render rather than assigned during one: updating a ref
@@ -1617,27 +1612,35 @@ export function useGridKeyboard<TData>({
         return
       }
 
-      if (event.key === "j" && visibleRows.length > 0) {
+      // The reference grid opens the editor on `Enter` from a selected cell.
+      if (!editing && event.key === "Enter") {
         event.preventDefault()
-        moveFocus(clampedRowIndex + 1)
+        if (focusedColumnId) {
+          openEditor(clampedRowIndex, focusedColumnId)
+        }
         return
       }
 
-      if (event.key === "k" && visibleRows.length > 0) {
-        event.preventDefault()
-        moveFocus(clampedRowIndex - 1)
-        return
-      }
-
-      // CAP-10: `e` and `Enter`-when-not-editing are **not** openers. There is no
-      // branch here for them, and that absence is the contract — a branch that
-      // existed and did nothing would be a second thing to keep in step with the
-      // opener. `Enter` while a draft is open still commits it, which is the one
-      // of the three that survives.
       if (event.key === "Enter" && editing) {
         event.preventDefault()
         commitEditing()
         return
+      }
+
+      // Type-to-edit: the first printable character replaces the cell value and
+      // opens the editor with the caret after it. `Space` on a checkbox falls
+      // through to the toggle below; a printable character on a checkbox does
+      // nothing, and a read-only cell never claims the key.
+      if (!editing && !event.nativeEvent.isComposing && event.key.length === 1) {
+        const row = visibleRows[clampedRowIndex]
+        const cell = row?.getVisibleCells().find((candidate) => candidate.column.id === focusedColumnId)
+        const meta = cell?.column.columnDef.meta?.grid
+
+        if (cell && focusedColumnId && meta?.editable === true && meta.editor !== CHECKBOX_EDITOR) {
+          event.preventDefault()
+          openEditor(clampedRowIndex, focusedColumnId, event.key)
+          return
+        }
       }
 
       if (event.key === "Escape" && editing) {
@@ -1688,9 +1691,9 @@ export function useGridKeyboard<TData>({
       editing,
       focusedColumnId,
       hasRangeSelection,
-      moveFocus,
       moveTab,
       moveToEdge,
+      openEditor,
       stepFocus,
       toggleCheckboxCell,
       visibleRows,

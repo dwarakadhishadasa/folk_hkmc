@@ -6,8 +6,8 @@
  * | key 1 | Arrow navigation | plain arrows move focus and re-anchor, without opening an editor |
  * | key 2 | `Tab` / `Shift+Tab` | advance across the row, wrap at the ends, stop at the corners |
  * | key 3 | `Home` / `End`, `Cmd+Home/End` | row edges and grid corners |
- * | key 4 | Type-to-edit — **retired by CAP-10** | a printable character opens nothing at all |
- * | key 5 | `Space` on a text cell — **seeding retired by CAP-10** | opens nothing, and still does not scroll the page |
+ * | key 4 | Type-to-edit | a printable character replaces the value and opens the editor |
+ * | key 5 | `Space` on a text cell | starts type-to-edit with a space, and does not scroll the page |
  * | key 6 | `Space` on a checkbox cell | toggles the value through the commit path |
  * | key 7 | `Delete` clears, skips, and reverts | empty commits through the revertable path; read-only and checkbox cells are skipped; a rejected clear reverts visibly |
  * | key 8 | `Tab` out of the editor | commits first, then moves |
@@ -22,14 +22,11 @@
  *
  * ## Why `Space` needs its own two tests
  *
- * `Space` **was** the one key with two meanings: a toggle on a checkbox cell and a
- * printable character everywhere else, which seeded an editor with `" "`. CAP-10
- * retired the seeding half and deliberately kept the toggle — a `Space` that
- * toggled nothing would be worse than one that toggles the wrong thing, and
- * removing the toggle with the seeding would have taken a working gesture with
- * it. So the spec pins both halves separately, and key 5 now asserts that the
- * retired half is *gone*. The checkbox column is `flagged`, which carries
- * `editor: "checkbox"`.
+ * `Space` **is** the one key with two meanings: a toggle on a checkbox cell and a
+ * printable character everywhere else, which starts type-to-edit with `" "`.
+ * Both halves are pinned separately because they are different code paths — the
+ * checkbox toggles through the commit path, while a text cell opens an editor.
+ * The checkbox column is `flagged`, which carries `editor: "checkbox"`.
  *
  * ## `flagged` stopped rendering as text when the editor registry landed
  *
@@ -154,20 +151,11 @@ test.describe("grid keyboard completion", () => {
   })
 
   /**
-   * **Retired by CAP-10 — this test asserts the removal, not the behaviour it
-   * used to assert.** It used to read "typing a printable character seeds the
-   * editor, replacing the value" and prove that `R` opened `owner`, seeded the
-   * draft with `R`, and that `avi` appended to it.
-   *
-   * Why it was removed: type-to-edit was one of five ways to open a cell editor,
-   * which is the opposite of the "one opener, every time" the edit model is for —
-   * and a seeded draft is indistinguishable, on screen, from a deliberate
-   * overwrite of the cell's whole value. Double-click is the opener now, and the
-   * replacement assertion is that the key does *nothing at all*, so a later agent
-   * who helpfully restores the branch sees this go red rather than reading a
-   * green suite as evidence the keyboard model still works.
+   * Airtable's type-to-edit: a printable character on a selected editable cell
+   * replaces the value and opens the editor with the caret after the typed
+   * character. The same key is not an opener on a read-only or checkbox cell.
    */
-  test("key 4 (retired) — a printable character opens nothing and leaves the cell alone", async ({ page }) => {
+  test("key 4 — a printable character replaces the value and opens the editor", async ({ page }) => {
     await openPreviewGrid(page)
     await focusPreviewCellAt(page, 0, "owner")
 
@@ -175,31 +163,31 @@ test.describe("grid keyboard completion", () => {
 
     await page.keyboard.press("R")
 
-    await expect(cellEditor(page), "a printable character must not open the editor").toHaveCount(0)
+    await expect(cellEditor(page), "a printable character opens the editor").toBeVisible()
+    await expect(cellEditor(page), "and starts with that character, not the old value").toHaveValue(
+      "R",
+    )
+    expect(
+      await cellEditor(page).evaluate((el) => [el.selectionStart, el.selectionEnd, el.value.length]),
+      "the caret follows the typed character",
+    ).toEqual([1, 1, 1])
+
+    await page.keyboard.press("Escape")
+    await expect(cellEditor(page), "Escape discards the seeded draft").toHaveCount(0)
     await expect(cellAt(page, 0, "owner"), "and must not change the cell").toHaveText(before)
     await expect(cellAt(page, 0, "owner"), "and must not leave it marked").not.toHaveClass(
       /text-destructive/,
     )
-
-    // The opener that replaced it is asserted where it belongs — a
-    // double-click — in `grid-edit-model.spec.ts`, and by every conversion in
-    // `grid-editors.spec.ts`.
-    await openCellEditor(cellAt(page, 0, "owner"))
-    await expect(cellEditor(page), "a double-click is the opener that replaced it").toBeFocused()
   })
 
   /**
-   * **`Space`-seeding retired by CAP-10; the `preventDefault` deliberately kept.**
-   *
-   * This used to assert that `Space` on a text cell opened the editor seeded with
-   * a single space. Why that behaviour was removed: it was a fourth and fifth way
-   * into an editor, it opened a draft whose entire contents were a space the
-   * operator never typed into that cell, and `Space` now means exactly one thing
-   * on a non-checkbox cell — nothing. What survives is that the key does not
-   * scroll the page, which is what `preventDefault` is for, so that half is
-   * still asserted rather than assumed.
+   * `Space` on a text cell is a printable character: it starts type-to-edit
+   * seeded with a space, and the grid still claims the key so the page does not
+   * scroll.
    */
-  test("key 5 (retired) — Space on a text cell opens nothing and does not scroll the page", async ({ page }) => {
+  test("key 5 — Space on a text cell starts type-to-edit and does not scroll the page", async ({
+    page,
+  }) => {
     await openPreviewGrid(page)
     await focusPreviewCellAt(page, 0, "owner")
 
@@ -208,12 +196,16 @@ test.describe("grid keyboard completion", () => {
 
     await page.keyboard.press("Space")
 
-    await expect(cellEditor(page), "Space must not open the editor on a text cell").toHaveCount(0)
-    await expect(cellAt(page, 0, "owner"), "and must not change the cell").toHaveText(before)
+    await expect(cellEditor(page), "Space opens the editor on a text cell").toBeVisible()
+    await expect(cellEditor(page), "seeded with the space that opened it").toHaveValue(" ")
     expect(
       await previewScroll(page).evaluate((element) => element.scrollTop),
       "Space must not scroll the page out from under the grid",
     ).toBe(scrollBefore)
+
+    await page.keyboard.press("Escape")
+    await expect(cellEditor(page)).toHaveCount(0)
+    await expect(cellAt(page, 0, "owner"), "and must not change the cell").toHaveText(before)
   })
 
   test("key 6 — Space on a checkbox cell toggles through the commit path", async ({ page }) => {

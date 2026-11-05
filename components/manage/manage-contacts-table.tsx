@@ -75,6 +75,7 @@ import {
 import { useDeviceView } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { GripVertical, Maximize2, MessageSquareText } from "lucide-react"
+
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   ContextMenuItem,
@@ -102,6 +103,7 @@ function readError(payload: unknown, fallback: string): string {
 }
 
 const SELECT_COLUMN_ID = "select"
+const VIEW_SIDEBAR_STORAGE_KEY = "hkmc.contacts.viewSidebarConfig"
 const NAME_COLUMN_ID = CONTACT_FIELD_IDS.name
 const PHONE_COLUMN_ID = CONTACT_FIELD_IDS.phone
 const LOCATION_COLUMN_ID = CONTACT_FIELD_IDS.location
@@ -474,6 +476,7 @@ function SelectAllControl({
       }}
     >
       <Checkbox
+        className="rounded-[3px]"
         checked={
           selectedInView === 0 ? false : selectedInView === visibleIds.length ? true : "indeterminate"
         }
@@ -515,7 +518,7 @@ function renderFooterCell(
     return (
       <span
         data-manage-status-count=""
-        className="text-[var(--program-text)] font-medium tabular-nums"
+        className="text-[var(--grid-footer-ink)] font-normal tabular-nums"
       >
         {summaryLabel}
       </span>
@@ -531,7 +534,7 @@ function renderFooterCell(
   return (
     <span
       data-manage-status-aggregate={columnId}
-      className="text-foreground block w-full text-right tabular-nums"
+      className="text-[var(--grid-footer-ink)] block w-full text-right tabular-nums"
     >
       Sum {sum.toLocaleString("en-IN")}
     </span>
@@ -815,6 +818,49 @@ export function ManageContactsTable({
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [pendingContactId, setPendingContactId] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
+  /**
+   * Whether the saved-views sidebar is showing. Desktop only; the phone never
+   * mounts it. Local to the visit rather than URL state because it is a way of
+   * looking at the grid, not part of the shareable arrangement.
+   */
+  const [viewsSidebarOpen, setViewsSidebarOpen] = useState(true)
+
+  /*
+   * Airtable persists this preference across reloads. The shape mirrors the
+   * reference's `{version, shouldExpandOnBaseOpen}` record so the two read the
+   * same way; the read runs after mount, because reading storage during the
+   * first render would make the server and client markup disagree.
+   */
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(VIEW_SIDEBAR_STORAGE_KEY)
+      if (!raw) {
+        return
+      }
+      const parsed = JSON.parse(raw) as { shouldExpandOnBaseOpen?: unknown }
+      if (typeof parsed.shouldExpandOnBaseOpen === "boolean") {
+        setViewsSidebarOpen(parsed.shouldExpandOnBaseOpen)
+      }
+    } catch {
+      // A corrupt or unavailable store falls back to the default, open.
+    }
+  }, [])
+
+  const toggleViewsSidebar = () => {
+    setViewsSidebarOpen((open) => {
+      const next = !open
+      try {
+        window.localStorage.setItem(
+          VIEW_SIDEBAR_STORAGE_KEY,
+          JSON.stringify({ version: 2, shouldExpandOnBaseOpen: next }),
+        )
+      } catch {
+        // The preference is a convenience; a blocked store must not stop the
+        // toggle from working for this visit.
+      }
+      return next
+    })
+  }
   /**
    * The record shown in the expanded dialog, if any.
    *
@@ -1294,10 +1340,6 @@ export function ManageContactsTable({
       try {
         const written = await patchContact(contact.id, { isFavorite: !contact.isFavorite })
         applyWrite(written)
-        setNotice({
-          kind: "ok",
-          message: `${written.name} ${written.isFavorite ? "added to" : "removed from"} favorites.`,
-        })
       } catch (cause) {
         setNotice({
           kind: "error",
@@ -1373,6 +1415,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
               {selected ? (
                 <span className="flex w-4 shrink-0 justify-center">
                   <Checkbox
+                    className="rounded-[3px]"
                     checked
                     onCheckedChange={(checked) => {
                       row.toggleSelected(checked === true)
@@ -1382,11 +1425,12 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
                 </span>
               ) : (
                 <>
-                  <span className="w-4 shrink-0 text-center text-[12px] tabular-nums text-muted-foreground [tr:hover_&]:hidden">
+                  <span className="w-4 shrink-0 text-center text-[12px] tabular-nums text-[var(--grid-row-number-ink)] [tr:hover_&]:hidden">
                     <RowSerial fallback={row.index + 1} />
                   </span>
                   <span className="hidden w-4 shrink-0 justify-center [tr:hover_&]:flex">
                     <Checkbox
+                      className="rounded-[3px]"
                       checked={false}
                       onCheckedChange={(checked) => {
                         row.toggleSelected(checked === true)
@@ -1608,7 +1652,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
               onClick={() => {
                 void toggleFavorite(row.original)
               }}
-              className="text-[var(--program-accent)] text-lg leading-none disabled:opacity-40"
+              className="text-[var(--grid-star)] text-lg leading-none disabled:opacity-40"
             >
               {row.original.isFavorite ? "★" : "☆"}
             </button>
@@ -2386,20 +2430,22 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
   }, [filterSignature])
 
   /*
-   * Two flex columns, one inside the other. The outer one holds the views bar
-   * flush against the grid's own toolbar — they are one band of chrome, and the
-   * band's `gap-3` must not open between them. The inner one is the last hop
-   * before the grid, and it is what makes the grid's `flex-1` mean anything:
-   * `space-y-3` → `gap-3` is the same rhythm. The `role="status"` notice is
-   * *above* whichever view is showing, so it stays visible in a bounded layout
-   * rather than scrolling out with the rows. The status row is the grid's own
-   * footer: see `renderFooterCell` for why it cannot live below the table.
+   * One row: the saved-views sidebar beside the grid, as the reference lays it
+   * out. The sidebar is rendered only on desktop, so the phone keeps the
+   * single-column list it had. The inner column is the last hop before the
+   * grid, and `min-w-0` is what lets the grid shrink beside a fixed-width
+   * sidebar instead of forcing the page wider.
+   *
+   * The `role="status"` notice stays *above* whichever view is showing, so it
+   * remains visible in a bounded layout rather than scrolling out with the
+   * rows. The status row is the grid's own footer: see `renderFooterCell` for
+   * why it cannot live below the table.
    *
    * The container keeps its box whatever the device view is, so the page does
    * not jump while the viewport is still being found.
    */
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1">
       {viewsAvailable && deviceView === "desktop" ? (
         <ManageViewsBar
           views={views}
@@ -2413,11 +2459,13 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
           onDuplicateView={duplicateView}
           onDeleteView={deleteView}
           currentUserId={payload.scope.actorUserId}
+          open={viewsSidebarOpen}
+          onToggle={toggleViewsSidebar}
         />
       ) : null}
       <div
         className={cn(
-          "flex min-h-0 flex-1 flex-col gap-3",
+          "flex min-h-0 min-w-0 flex-1 flex-col gap-3",
           hideInlineCreate && "[&_[data-grid-add-record]]:hidden",
         )}
       >
@@ -2470,6 +2518,9 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
               onRowRemoved={handleRowRemoved}
               rowContextMenu={ContactsRowContextMenu}
               onRowReorder={handleRowReorder}
+              className={
+                viewsSidebarOpen ? undefined : "[&_[data-grid-toolbar]]:pl-[292px]"
+              }
             />
           </ContactRecordOpenContext.Provider>
         ) : null}

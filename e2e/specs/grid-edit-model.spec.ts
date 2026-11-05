@@ -1,5 +1,5 @@
 /**
- * The CAP-10 edit model — one opener, one commit path, one discard.
+ * The grid edit model — the open, commit and discard gestures.
  *
  * `grid-editors.spec.ts` covers *editors* (parsing, validation, the optimistic
  * display, the revert). This file covers the **gesture model** around them, which
@@ -17,8 +17,8 @@
  * | popover close | an outside click on a popover editor **commits**, and a picked option survives it |
  * | `Escape` | discards on every editor, including the ones with no local handler |
  * | navigation | arrows / `Tab` / `Home` move focus and open nothing |
- * | `Space` | still toggles a checkbox, and opens nothing on a text cell |
- * | retired openers | `e`, a printable character, `Space` on a text cell and `Enter` open nothing |
+ * | `Space` | still toggles a checkbox, and starts type-to-edit on a text cell |
+ * | openers | a double-click, `Enter`, and the first printable character open the editor |
  * | validation | validation runs before the save; a rejected draft is never sent |
  * | hint line | Panel 5's line renders only while a cell is editing |
  *
@@ -140,7 +140,7 @@ const PREVIEW_OPENERS: ReadonlyArray<{
   { columnId: "website", columnLabel: "`url`", open: openCellEditorAtCorner },
 ]
 
-test.describe("CAP-10 — one opener", () => {
+test.describe("CAP-10 — the edit gestures", () => {
   for (const editor of PREVIEW_OPENERS) {
     test(`a double-click opens ${editor.columnLabel}`, async ({ page }) => {
       await openPreviewGrid(page)
@@ -575,31 +575,51 @@ test.describe("CAP-10 — what still works", () => {
     await expect(box, "and again").toHaveAttribute("aria-checked", "false")
   })
 
-  test("`e`, a printable character, Space on a text cell and Enter open nothing", async ({ page }) => {
+  test("`e`, a printable character, Space and Enter all open the editor", async ({ page }) => {
     await openPreviewGrid(page)
-    const before = (await cellAt(page, 0, "owner").textContent()) ?? ""
+    const cell = cellAt(page, 0, "owner")
+    const before = (await cell.textContent()) ?? ""
 
-    await cellAt(page, 0, "owner").click()
+    await cell.click()
 
-    // CAP-10's "no other gesture opens it", asserted per gesture rather than as
-    // one combined press, so restoring any single branch turns exactly one of
-    // these red and the others still pass.
+    // Airtable's type-to-edit: the first character replaces the value and the
+    // editor opens with the caret after it.
     await page.keyboard.press("e")
-    await expect(cellEditor(page), "`e` must not open an editor").toHaveCount(0)
+    await expect(cellEditor(page), "`e` starts type-to-edit").toBeVisible()
+    await expect(cellEditor(page)).toHaveValue("e")
+    await page.keyboard.press("Escape")
+    await expect(cellEditor(page)).toHaveCount(0)
 
     await page.keyboard.press("R")
-    await expect(cellEditor(page), "a printable character must not open an editor").toHaveCount(0)
+    await expect(cellEditor(page), "a printable character starts type-to-edit").toBeVisible()
+    await expect(cellEditor(page)).toHaveValue("R")
+    await page.keyboard.press("Escape")
+    await expect(cellEditor(page)).toHaveCount(0)
 
     await page.keyboard.press("Space")
-    await expect(cellEditor(page), "Space must not open an editor on a text cell").toHaveCount(0)
+    await expect(cellEditor(page), "Space starts type-to-edit on a text cell").toBeVisible()
+    await expect(cellEditor(page)).toHaveValue(" ")
+    await page.keyboard.press("Escape")
+    await expect(cellEditor(page)).toHaveCount(0)
 
+    // `Enter` opens with the existing value and the caret at the end, not a
+    // selected-all value: the reference grid appends from where you were.
     await page.keyboard.press("Enter")
-    await expect(cellEditor(page), "Enter must not open an editor").toHaveCount(0)
+    await expect(cellEditor(page), "Enter opens the editor").toBeVisible()
+    await expect(cellEditor(page)).toHaveValue(before)
+    expect(
+      await cellEditor(page).evaluate((el) => [
+        el.selectionStart,
+        el.selectionEnd,
+        el.value.length,
+      ]),
+      "Enter places the caret at the end",
+    ).toEqual([before.length, before.length, before.length])
+    await page.keyboard.press("Escape")
+    await expect(cellEditor(page)).toHaveCount(0)
 
-    await expect(cellAt(page, 0, "owner"), "and none of them changed the cell").toHaveText(before)
-    await expect(cellAt(page, 0, "owner"), "or left it marked").not.toHaveClass(
-      /text-destructive/,
-    )
+    await expect(cell, "and none of them changed the cell").toHaveText(before)
+    await expect(cell, "or left it marked").not.toHaveClass(/text-destructive/)
   })
 })
 

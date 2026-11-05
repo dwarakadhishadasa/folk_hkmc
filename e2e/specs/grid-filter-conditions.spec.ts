@@ -146,13 +146,14 @@ test.describe("CAP-12 — the filter conditions popover", () => {
     await gotoGrid(page, { params: { "f.name": "isNotEmpty:", "f.phone": "contains:" } })
     await expect(filterControl(page), `landed on ${page.url()}`).toContainText("Filtered by Name, Phone")
 
-    // The saffron is the whole point of the indicator: it is the only place the
-    // accent appears, so a filter cannot read as a status or an error.
+    // The fill is the whole point of the indicator: it is the reference grid's
+    // active-control surface, and it is the only place the grid chrome shows an
+    // applied filter.
     const colour = await filterControl(page)
       .locator("span")
       .first()
       .evaluate((el) => getComputedStyle(el).color)
-    expect(colour, "the indicator must be saffron, not the default foreground").toBe("rgb(249, 139, 28)")
+    expect(colour, "the indicator uses the active-control ink").toBe("rgb(4, 29, 45)")
 
     // CAP-14 forbids a permanently visible per-column control, and the
     // two-indicator rule went with the withdrawn inline bar.

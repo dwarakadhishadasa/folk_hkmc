@@ -552,11 +552,12 @@ test.describe("story 7 — the contacts toolbar", () => {
     await expect(page.getByRole("button", { name: /^Columns$/ })).toHaveCount(0)
   })
 
-  test("band order with an active filter — one saffron indicator, and no header carries one", async ({ page }) => {
+  test("band order with an active filter — one active-fill indicator, and no header carries one", async ({ page }) => {
     await openContactsGrid(page, { params: { "f.name": "isNotEmpty:" } })
 
     // The filter control keeps both of its jobs through the redesign: the same
-    // seam, the same accessible name naming the columns, the same saffron.
+    // seam, the same accessible name naming the columns, the same active fill
+    // the reference grid gives an applied filter.
     const control = page.locator("[data-grid-filter-control]")
     await expect(control).toContainText("Filtered by Name")
 
@@ -564,7 +565,7 @@ test.describe("story 7 — the contacts toolbar", () => {
       .locator("span")
       .first()
       .evaluate((element) => getComputedStyle(element).color)
-    expect(colour, "the indicator must still be saffron").toBe("rgb(249, 139, 28)")
+    expect(colour, "the indicator uses the active-control ink").toBe("rgb(4, 29, 45)")
 
     // CAP-14: no per-column funnel, now or after the move.
     await expect(headerCell(page, "name").getByRole("button", { name: /Filter/ })).toHaveCount(0)

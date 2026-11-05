@@ -184,7 +184,7 @@ test.describe("cell range selection", () => {
 
     // The focused cell keeps its focus ring *inside* the range, so the two
     // signals stay separable rather than one overwriting the other.
-    await expect(cellAt(page, 2, PHONE_COLUMN)).toHaveClass(/ring-1/)
+    await expect(cellAt(page, 2, PHONE_COLUMN)).toHaveClass(/ring-2/)
   })
 
   test("range 2 — Shift+click extends the same range from the anchor", async ({ page }) => {

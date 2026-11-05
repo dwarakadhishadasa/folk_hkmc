@@ -608,7 +608,7 @@ export function GridFilterPopover({
         side="bottom"
         sideOffset={6}
         data-grid-filter-popover=""
-        className={`${showGroupWidth ? "w-[860px]" : "w-[600px]"} max-h-[min(70vh,var(--radix-popover-content-available-height))] max-w-[calc(100vw-2rem)] overflow-x-auto overflow-y-auto rounded-lg p-4 text-[13px]`}
+        className={`${showGroupWidth ? "w-[860px]" : "w-[600px]"} max-h-[min(70vh,var(--radix-popover-content-available-height))] max-w-[calc(100vw-2rem)] overflow-x-auto overflow-y-auto rounded-[6px] p-3 text-[13px]`}
         onFocusOutside={(event) => {
           // Same reason as `grid-sort-popover.tsx`: a column menu's close returns
           // focus to its trigger, which is outside this popover, and Radix reads

@@ -28,7 +28,7 @@
  *
  * ## Why `data-grid-cell-active` and not the ring class
  *
- * `grid-cell-range.spec.ts` asserts `toHaveClass(/ring-1/)` to reach the focused
+ * `grid-cell-range.spec.ts` asserts `toHaveClass(/ring-2/)` to reach the focused
  * cell, which couples a behavioural spec to a Tailwind detail: renaming the ring
  * to a `box-shadow` breaks a test that was never about rings. This file asserts
  * the attribute instead — presence-only, like `data-grid-cell-selected`, so
@@ -168,8 +168,9 @@ test.describe("cell metrics and the active cell", () => {
     // and 4 + 24 + 4 = 32 — but it describes a different table structure. Applied
     // to the shipped cell, on top of `[&>td]:border-b`, it measures **35px**:
     // in a CSS table `height` is a minimum and cannot clamp a cell whose padding
-    // and border already exceed it (UX-DR19). So the cell keeps `px-2` and
-    // `align-middle` and inherits its line box, and that is what holds 32px.
+    // and border already exceed it (UX-DR19). So the cell keeps the reference
+    // grid's `px-1.5` and `align-middle` and inherits its line box, and that is
+    // what holds 32px.
     //
     // Asserted as an equality against 0px rather than a `not.toBe` so that
     // reintroducing the comp's padding fails here by name.
@@ -183,7 +184,7 @@ test.describe("cell metrics and the active cell", () => {
       }
     })
 
-    expect(cellBox.paddingLeft, "UX-DR4: 8px horizontal padding").toBe("8px")
+    expect(cellBox.paddingLeft, "UX-DR4: 6px horizontal padding").toBe("6px")
     expect(cellBox.verticalAlign, "UX-DR3: content vertically centred").toBe("middle")
     expect(
       cellBox.paddingTop,
@@ -237,7 +238,7 @@ test.describe("cell metrics and the active cell", () => {
 
     // The cell's own indicator must not cost it a layout box. `ring-inset` is
     // what makes that true, and the assertion is the byte-identical box rather
-    // than the class — a ring that grew the cell would still be `ring-1`.
+    // than the class — a ring that grew the cell would still be `ring-2`.
     expect(await cell.boundingBox(), "the active ring must not occupy a layout box").toEqual(boxBefore)
 
     // A click is not an edit: CAP-10 retired every single-click opener, and a

@@ -70,19 +70,9 @@ async function createView(
 }
 
 async function switchTo(page: Page, label: string): Promise<void> {
-  const trigger = page.locator("[data-grid-view-switcher]")
-
-  await trigger.click()
-
-  // A menu that was already open closes on the click above; open it again
-  // rather than clicking into a menu that is animating out.
-  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
-    await trigger.click()
-  }
-
-  await expect(trigger).toHaveAttribute("aria-expanded", "true")
-  await page.getByRole("menuitem", { name: label, exact: true }).click()
-  await expect(trigger).toHaveAttribute("aria-expanded", "false")
+  // The sidebar is the switcher; the view-name button opens the view's actions.
+  await page.locator("[data-grid-view-list-option]").filter({ hasText: label }).click()
+  await expect(page.locator("[data-grid-view-switcher]")).toContainText(label)
 }
 
 async function deleteActiveView(page: Page): Promise<void> {
@@ -224,14 +214,14 @@ test.describe("contacts saved views", () => {
 
     try {
       await otherPage.goto("/contacts/grid")
-      await otherPage.locator("[data-grid-view-switcher]").click()
+      const list = otherPage.locator("[data-grid-view-list-option]")
 
       await expect(
-        otherPage.getByRole("menuitem", { name: personal, exact: true }),
+        list.filter({ hasText: personal }),
         "a personal view belongs to its author",
       ).toHaveCount(0)
       await expect(
-        otherPage.getByRole("menuitem", { name: shared, exact: true }),
+        list.filter({ hasText: shared }),
         "a collaborative view is visible in the programme",
       ).toHaveCount(1)
     } finally {
@@ -281,6 +271,26 @@ test.describe("contacts saved views", () => {
     await switchTo(page, renamed)
     await deleteActiveView(page)
     await expect(page.locator("[data-grid-view-switcher]")).not.toContainText(renamed)
+  })
+
+  test("the views sidebar collapses, persists, and reopens from the view header", async ({ page }) => {
+    await openContactsGrid(page)
+    const sidebar = page.locator("[data-grid-views-bar]")
+    const toggle = page.locator("[data-grid-views-toggle]")
+
+    await expect(sidebar).toHaveAttribute("data-state", "expanded")
+    await expect(page.locator("[data-grid-view-list-option]").first()).toBeVisible()
+
+    await toggle.click()
+    await expect(sidebar).toHaveAttribute("data-state", "collapsed")
+    await expect(page.locator("[data-grid-view-list-option]").first()).toBeHidden()
+    await expect(page.locator("[data-grid-view-switcher]")).toBeVisible()
+
+    await page.reload()
+    await expect(sidebar).toHaveAttribute("data-state", "collapsed")
+
+    await toggle.click()
+    await expect(sidebar).toHaveAttribute("data-state", "expanded")
   })
 })
 

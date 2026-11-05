@@ -54,7 +54,7 @@ import type { GridFieldType } from "@/components/grid/grid-types"
  * caption — so the glyph takes the same colour as the name it introduces, which
  * is also how the reference header reads.
  */
-const ICON_CLASS = "size-3.5 shrink-0"
+const ICON_CLASS = "size-4 shrink-0"
 
 const GRID_FIELD_ICONS: Readonly<Record<GridFieldType, ReactNode>> = {
   // `Type` is a letterform, which is the point: it is the one glyph in this set
