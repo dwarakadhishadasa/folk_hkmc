@@ -9,6 +9,7 @@ import { getCampaign } from "@/lib/dialer/campaigns"
 import { getCampaignProgress } from "@/lib/dialer/progress"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
 import { listLocations } from "@/lib/supabase/data"
+import { loadLastSavedView, loadSavedViews } from "@/lib/supabase/saved-views"
 
 import { getCampaignStaff } from "../../staff"
 
@@ -58,10 +59,12 @@ export default async function AssignContactsPage({
       )
     }
 
-    const [contacts, callers, locations] = await Promise.all([
+    const [contacts, callers, locations, views, lastViewId] = await Promise.all([
       listAllAssignableContacts(staff, campaign.id),
       listAssignableCallers(staff),
       listLocations(),
+      loadSavedViews(staff, "campaigns"),
+      loadLastSavedView(staff, "campaigns"),
     ])
 
     return (
@@ -80,6 +83,9 @@ export default async function AssignContactsPage({
           campaignId={campaign.id}
           campaignStatus={campaign.status}
           contacts={contacts}
+          views={views}
+          lastViewId={lastViewId}
+          currentUserId={staff.userId}
           callers={callers.map((caller) => ({
             userId: caller.userId,
             name: caller.name,

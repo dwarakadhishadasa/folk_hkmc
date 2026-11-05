@@ -1,4 +1,4 @@
-import { handleManageViewDelete, handleManageViewUpdate } from "@/lib/manage/view-handlers"
+import { handleSavedViewDelete, handleSavedViewUpdate } from "@/lib/saved-views/view-handlers"
 
 export const dynamic = "force-dynamic"
 
@@ -9,11 +9,11 @@ interface ManageViewContext {
 export async function PATCH(request: Request, context: ManageViewContext) {
   const { viewId } = await context.params
 
-  return handleManageViewUpdate(request, viewId)
+  return handleSavedViewUpdate(request, viewId, "contacts")
 }
 
 export async function DELETE(_request: Request, context: ManageViewContext) {
   const { viewId } = await context.params
 
-  return handleManageViewDelete(viewId)
+  return handleSavedViewDelete(viewId, "contacts")
 }

@@ -78,6 +78,9 @@ const ABSENT_CONTACT_ID = "00000000-0000-4000-8000-000000000003"
 /** An assignment id that is valid in shape and absent by construction, like the ids above. */
 const ABSENT_ASSIGNMENT_ID = "00000000-0000-4000-8000-000000000004"
 
+/** A saved-view id that is valid in shape and absent by construction, like the ids above. */
+const ABSENT_VIEW_ID = "00000000-0000-4000-8000-000000000005"
+
 interface SweepRouteOptions {
   /** The route file's path, exactly as the guardrail derives it from the directory. */
   route: string
@@ -563,6 +566,53 @@ sweepRoute({
   method: "GET",
   kind: "admin",
   ownerStatuses: [200],
+})
+
+// ============================================================================
+// Campaign saved views. The list is per person, so the owner case is a plain
+// 200. Create is refused by its own type check (`kanban` is not renderable)
+// rather than writing a row every run would leave behind; the id-keyed rows use
+// an absent-view 404 to prove the gate admits the owner before the lookup.
+// ============================================================================
+
+sweepRoute({
+  route: "/api/dialer/campaign-views",
+  method: "GET",
+  kind: "admin",
+  ownerStatuses: [200],
+})
+
+sweepRoute({
+  route: "/api/dialer/campaign-views",
+  method: "POST",
+  kind: "admin",
+  ownerStatuses: [400],
+  body: { viewType: "kanban" },
+})
+
+sweepRoute({
+  route: "/api/dialer/campaign-views/[viewId]",
+  url: `/api/dialer/campaign-views/${ABSENT_VIEW_ID}`,
+  method: "PATCH",
+  kind: "admin",
+  ownerStatuses: [404],
+  body: { name: "Sweep view" },
+})
+
+sweepRoute({
+  route: "/api/dialer/campaign-views/[viewId]",
+  url: `/api/dialer/campaign-views/${ABSENT_VIEW_ID}`,
+  method: "DELETE",
+  kind: "admin",
+  ownerStatuses: [404],
+})
+
+sweepRoute({
+  route: "/api/dialer/campaign-views/[viewId]/use",
+  url: `/api/dialer/campaign-views/${ABSENT_VIEW_ID}/use`,
+  method: "POST",
+  kind: "admin",
+  ownerStatuses: [404],
 })
 
 // ============================================================================
