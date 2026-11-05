@@ -1,9 +1,20 @@
 "use client"
 
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { createColumnHelper } from "@tanstack/react-table"
-import type { RowSelectionState, Table } from "@tanstack/react-table"
+import type { OnChangeFn, RowSelectionState, Table, TableState } from "@tanstack/react-table"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
+import { ContactRecordDialog } from "@/components/manage/contact-record-dialog"
 import type {
   ManageContact,
   ManageContactPatch,
@@ -35,9 +46,35 @@ import {
   type GridRowContextMenuProps,
   type GridRowLifecycle,
 } from "@/components/grid"
-import { filterGroupKey, flattenConditions } from "@/components/grid/grid-filter-tree"
+import {
+  createFilterGroup,
+  filterGroupKey,
+  filterGroupToSerialized,
+  flattenConditions,
+  type GridFilterGroup,
+} from "@/components/grid/grid-filter-tree"
+import {
+  gridViewConfigToParams,
+  type GridViewConfig,
+} from "@/components/grid/grid-view-config"
+import { applyGridParams, isGridParamKey } from "@/components/grid/grid-view-state"
+import { useGridRowDragHandle } from "@/components/grid/grid-row-drag"
+import { useGridRowPosition } from "@/components/grid/grid-row-position"
+import { ManageViewsBar, type ViewSaveState } from "@/components/manage/manage-views-bar"
+import {
+  createContactViewRequest,
+  deleteContactViewRequest,
+  markContactViewUsed,
+  updateContactViewRequest,
+} from "@/components/manage/manage-views-client"
+import {
+  suggestContactViewName,
+  type ContactViewVisibility,
+  type ManageContactView,
+} from "@/components/manage/manage-view-types"
 import { useDeviceView } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
+import { GripVertical, Maximize2, MessageSquareText } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   ContextMenuItem,
@@ -277,6 +314,8 @@ function createDraftContact(assignedPreacherId: string, collectedById: string): 
     collectedById,
     totalAttendanceCount: 0,
     past60DayAttendanceCount: 0,
+    // A row that has never existed has no thread either.
+    commentCount: 0,
   }
 }
 
@@ -511,8 +550,143 @@ function renderFooterCell(
  * is the operator's requirement, and a label that changed with the selection
  * would rename the control between two right-clicks.
  */
+/**
+ * Opens a record from a row. `Grid` renders `rowContextMenu` without props, so
+ * the verb reaches the menu through context rather than through a prop the
+ * primitive has no vocabulary for.
+ */
+/**
+ * The row's expand affordance, in the leading gutter cell.
+ *
+ * The source product revealed a 24×24 `ArrowsOut` icon at the row's left edge
+ * on hover, at `opacity: 0` the rest of the time, with the row number still
+ * visible beside it. This is that icon: zero-opacity until the row is hovered,
+ * and never removed from the accessibility tree.
+ *
+ * The reveal is an arbitrary variant on the ancestor `tr` rather than a
+ * `group-hover` class, because adding `group` to the shared row would touch the
+ * grid primitive for a consumer's affordance.
+ */
+function RowExpandButton({
+  contactId,
+  contactName,
+  commentCount,
+  onExpand,
+}: {
+  contactId: string
+  contactName: string
+  commentCount: number
+  onExpand: (contactId: string) => void
+}) {
+  /**
+   * A record with comments shows a count beside a speech bubble, permanently
+   * visible — the source product kept that badge at `opacity: 1` while the
+   * plain expand arrow stayed hover-only, because a count is information you
+   * scan for rather than an action you go looking for. Both open the same
+   * dialog; only the label changes.
+   */
+  const hasComments = commentCount > 0
+  const label = hasComments
+    ? `Expand to see ${commentCount} ${commentCount === 1 ? "comment" : "comments"}`
+    : `Expand ${contactName}`
+
+  return (
+    <button
+      type="button"
+      // Pointer-only, like the source product's `expandRowWrapper` anchor:
+      // `tabindex="-1"`, so Tab keeps moving between cells. The keyboard route
+      // to the same dialog is the row context menu's "Expand record", which is
+      // reachable with Shift+F10 / the Menu key.
+      tabIndex={-1}
+      aria-label={label}
+      title={label}
+      onClick={() => onExpand(contactId)}
+      className={cn(
+        "flex h-6 shrink-0 items-center justify-center rounded text-muted-foreground",
+        hasComments
+          ? "gap-1 px-1 text-[11px] leading-none hover:bg-muted hover:text-[var(--program-text)]"
+          : "w-6 opacity-0 transition-opacity [tr:hover_&]:opacity-100",
+        "hover:bg-muted hover:text-[var(--program-text)]",
+        "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      )}
+    >
+      {hasComments ? (
+        <>
+          <span className="tabular-nums">{commentCount}</span>
+          <MessageSquareText aria-hidden="true" className="size-4" />
+        </>
+      ) : (
+        <Maximize2 aria-hidden="true" className="size-3.5" strokeWidth={2} />
+      )}
+    </button>
+  )
+}
+
+/**
+ * The grip that starts a row drag.
+ *
+ * `@dnd-kit/core`'s draggable rather than a hand-rolled pointer handler: the
+ * grid already runs one `DndContext` for column drags, and a second gesture
+ * system on the same surface would fight it for the pointer.
+ *
+ * Hidden until the row is hovered, like the source product's grab handle, so
+ * the row number owns that space at rest.
+ */
+function RowDragHandle({
+  contactName,
+  disabled,
+}: {
+  contactName: string
+  disabled: boolean
+}) {
+  /**
+   * The activator lives on the row, not here: `GridRow` calls `useSortable`
+   * because the row has to be both the draggable node and its own drop slot.
+   * This grip only receives the props that start the gesture, so the row never
+   * drags from a text selection or a cell click.
+   */
+  const drag = useGridRowDragHandle()
+  const isDisabled = disabled || drag === null
+
+  return (
+    <button
+      {...(drag?.attributes ?? {})}
+      {...(drag?.listeners ?? {})}
+      type="button"
+      tabIndex={-1}
+      aria-label={`Reorder ${contactName}`}
+      title={disabled ? "Clear the sort to reorder rows" : "Drag to reorder"}
+      disabled={isDisabled}
+      className={cn(
+        "flex w-3 shrink-0 items-center justify-center text-muted-foreground",
+        "opacity-0 transition-opacity [tr:hover_&]:opacity-100",
+        // A restricted gesture has to look restricted: the grip is still
+        // visible on hover so the cursor says *why* nothing happens, rather
+        // than the handle vanishing and leaving the operator to guess.
+        isDisabled ? "cursor-not-allowed" : "cursor-grab active:cursor-grabbing",
+      )}
+    >
+      <GripVertical aria-hidden="true" className="size-3" />
+    </button>
+  )
+}
+
+/**
+ * The gutter's serial: the row's position in the current view.
+ *
+ * A component only because the position arrives through context and a column
+ * definition's `cell` is a render callback, not a component.
+ */
+function RowSerial({ fallback }: { fallback: number }) {
+  const position = useGridRowPosition()
+  return <>{position ?? fallback}</>
+}
+
+const ContactRecordOpenContext = createContext<((contactId: string) => void) | null>(null)
+
 function ContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
   const lifecycle = useGridRowLifecycle()
+  const openRecord = useContext(ContactRecordOpenContext)
   const count = rowIds.length
 
   return (
@@ -521,6 +695,15 @@ function ContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
         {count} selected row{count === 1 ? "" : "s"}
       </ContextMenuLabel>
       <ContextMenuSeparator />
+      {/*
+        One row only: an expanded record is a single record, so offering the verb
+        over a multi-row selection would need a choice the menu cannot make.
+      */}
+      {count === 1 && openRecord ? (
+        <ContextMenuItem className="text-[13px]" onSelect={() => openRecord(rowIds[0])}>
+          Expand record
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuItem
         variant="destructive"
         className="text-[13px]"
@@ -541,6 +724,53 @@ function ContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
  * own count can only move when the server re-reads, which makes it the seed
  * rather than the source.
  */
+/**
+ * Folds a server payload into the in-memory view list without discarding a
+ * write the client has already made.
+ *
+ * A navigation re-renders the server component, and that read can finish before
+ * an autosave it raced with lands. Replacing the list wholesale would then put
+ * the view's *old* configuration back in memory: the grid keeps showing what the
+ * URL says, but the next switch to that view writes the stale copy over it.
+ * Newest `updatedAt` wins. A view created moments ago and not yet in the payload
+ * is kept; one deleted here is never resurrected by an older payload.
+ */
+function mergeContactViews(
+  current: readonly ManageContactView[],
+  incoming: readonly ManageContactView[],
+  removed: ReadonlySet<string>,
+): ManageContactView[] {
+  const localById = new Map(current.map((view) => [view.id, view]))
+  const incomingIds = new Set(incoming.map((view) => view.id))
+  const now = Date.now()
+
+  const merged = incoming
+    .filter((view) => !removed.has(view.id))
+    .map((view) => {
+      const local = localById.get(view.id)
+
+      if (!local) {
+        return view
+      }
+
+      return Date.parse(local.updatedAt) > Date.parse(view.updatedAt) ? local : view
+    })
+
+  for (const view of current) {
+    if (incomingIds.has(view.id) || removed.has(view.id)) {
+      continue
+    }
+
+    if (now - Date.parse(view.createdAt) > 30_000) {
+      continue
+    }
+
+    merged.push(view)
+  }
+
+  return merged
+}
+
 function useReportRowCount(onRowCountChange: ((count: number) => void) | undefined, count: number): void {
   useEffect(() => {
     onRowCountChange?.(count)
@@ -551,6 +781,8 @@ export function ManageContactsTable({
   payload,
   onRowCountChange,
   hideInlineCreate = false,
+  views: viewsProp,
+  lastViewId = null,
 }: {
   payload: ManageContactsPayload
   onRowCountChange?: (count: number) => void
@@ -563,11 +795,34 @@ export function ManageContactsTable({
    * it to remove a create button would take the row context menu with it.
    */
   hideInlineCreate?: boolean
+  /**
+   * Saved views for this grid, in display order.
+   *
+   * Absent means the surface has no views: the bar is not rendered and the grid
+   * behaves exactly as it did before views existed. Present-but-empty is a real
+   * state — the programme has saved none yet — and still renders the bar, so
+   * the create control has somewhere to live.
+   */
+  views?: ManageContactView[]
+  /**
+   * The view this person last opened, from the server. Used once, to reopen it
+   * on a bare `/contacts/grid` — including on a machine this account has never
+   * signed in from.
+   */
+  lastViewId?: string | null
 }) {
   const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [pendingContactId, setPendingContactId] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
+  /**
+   * The record shown in the expanded dialog, if any.
+   *
+   * Held as an id rather than as the row, so a write that replaces the mirrored
+   * row is reflected in the open dialog instead of leaving a stale copy behind
+   * it. `null` means the grid is the whole surface.
+   */
+  const [expandedContactId, setExpandedContactId] = useState<string | null>(null)
 
   /**
    * Which of the two contacts views this device takes.
@@ -603,6 +858,18 @@ export function ManageContactsTable({
   }
 
   const contacts = mirror.rows
+
+  /**
+   * The open record, resolved from the mirror on every render.
+   *
+   * `expandedIndex` is the row's position in the *current* order, which is what
+   * makes the chevrons step through "records in view order" rather than through
+   * the order the payload happened to arrive in.
+   */
+  const expandedIndex = expandedContactId
+    ? contacts.findIndex((contact) => contact.id === expandedContactId)
+    : -1
+  const expandedContact = expandedIndex >= 0 ? contacts[expandedIndex] : null
 
   /**
    * The create in flight for a draft row.
@@ -1059,37 +1326,94 @@ export function ManageContactsTable({
     })
   }, [])
 
-  const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
+
+
+const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
     return [
       columnHelper.display({
         id: SELECT_COLUMN_ID,
         header: ({ table }) => (
-          <SelectAllControl table={table} onToggle={setVisibleSelection} />
-        ),
-        cell: ({ row }) => (
-          <span
-            className="flex justify-center"
-            onPointerDown={(event) => {
-              // Without this the cell takes the pointer, the grid moves cell focus
-              // to a non-editable column, and the next double-click becomes a no-op.
-              event.stopPropagation()
-            }}
-          >
-            <Checkbox
-              checked={row.getIsSelected()}
-              onCheckedChange={(checked) => {
-                row.toggleSelected(checked === true)
-              }}
-              aria-label={`Select ${row.original.name}`}
-            />
+          // Three aligned slots: the grip, the checkbox, the expand control.
+          // `w-full px-1` is load-bearing: the header's custom-header wrapper
+          // centres its child inside `px-1`, while a body cell is `px-2`. Filling
+          // the box and adding the missing 4px makes both start at the same
+          // offset, so select-all sits exactly over the row checkboxes (and over
+          // the serial numbers they replace).
+          <span className="flex w-full items-center gap-1 px-1">
+            <span aria-hidden="true" className="w-3 shrink-0" />
+            <span className="flex w-4 shrink-0 justify-center">
+              <SelectAllControl table={table} onToggle={setVisibleSelection} />
+            </span>
+            <span aria-hidden="true" className="w-8 shrink-0" />
           </span>
         ),
-        size: 40,
-        // Pinned to a narrow gutter: the grid's shared `minSize` would otherwise
-        // widen a one-checkbox column to 72px, and the width is what the next
-        // column's pinned offset is computed from.
-        minSize: 40,
-        maxSize: 40,
+        cell: ({ row, table }) => {
+          const selected = row.getIsSelected()
+          // A sorted view owns row placement, so a manual drop cannot be shown:
+          // the grip stays put and refuses, which is a clearer answer than a
+          // drag that silently changes an order nobody can see.
+          const sortActive = (table.getState().sorting?.length ?? 0) > 0
+
+          return (
+            <span
+              className="flex items-center gap-1"
+              onPointerDown={(event) => {
+                // Without this the cell takes the pointer, the grid moves cell focus
+                // to a non-editable column, and the next double-click becomes a no-op.
+                event.stopPropagation()
+              }}
+            >
+              <RowDragHandle contactName={row.original.name} disabled={sortActive} />
+
+              {/*
+                The source product's gutter holds one 16px slot, not two: the
+                row number at rest, the selection checkbox once the row is
+                hovered or selected. Both were measured at the same x.
+              */}
+              {selected ? (
+                <span className="flex w-4 shrink-0 justify-center">
+                  <Checkbox
+                    checked
+                    onCheckedChange={(checked) => {
+                      row.toggleSelected(checked === true)
+                    }}
+                    aria-label={`Select ${row.original.name}`}
+                  />
+                </span>
+              ) : (
+                <>
+                  <span className="w-4 shrink-0 text-center text-[12px] tabular-nums text-muted-foreground [tr:hover_&]:hidden">
+                    <RowSerial fallback={row.index + 1} />
+                  </span>
+                  <span className="hidden w-4 shrink-0 justify-center [tr:hover_&]:flex">
+                    <Checkbox
+                      checked={false}
+                      onCheckedChange={(checked) => {
+                        row.toggleSelected(checked === true)
+                      }}
+                      aria-label={`Select ${row.original.name}`}
+                    />
+                  </span>
+                </>
+              )}
+
+              <span className="flex w-8 shrink-0 justify-center">
+                <RowExpandButton
+                  contactId={row.original.id}
+                  contactName={row.original.name}
+                  commentCount={row.original.commentCount}
+                  onExpand={setExpandedContactId}
+                />
+              </span>
+            </span>
+          )
+        },
+        // Padding (16) + grip (12) + slot (16) + expand (32) and two 4px gaps.
+        // 84 matches the source product's row-actions cell, and the fixed value
+        // is what the next column's pinned offset is computed from.
+        size: 84,
+        minSize: 84,
+        maxSize: 84,
         enableSorting: false,
         enableHiding: false,
         meta: { grid: { selectable: true, align: "center" } },
@@ -1302,6 +1626,7 @@ export function ManageContactsTable({
     locationRecords,
     payload.booksReadOptions,
     pendingContactId,
+    setExpandedContactId,
     setVisibleSelection,
     sourceOptions,
     staffNameById,
@@ -1328,6 +1653,25 @@ export function ManageContactsTable({
   )
 
 
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  /**
+   * The view the operator is working in.
+   *
+   * Set the moment a view is chosen, not when the navigation lands: a grid edit
+   * made during that round trip still belongs to the view that was picked, and
+   * `searchParams` will not name it yet.
+   */
+  const [selectedViewId, setSelectedViewId] = useState<string | null>(() => searchParams.get("view"))
+
+  /** The view id every grid write must keep, whatever its `searchParams` snapshot says. */
+  const stickyParams = useMemo(
+    () => (selectedViewId ? { view: selectedViewId } : undefined),
+    [selectedViewId],
+  )
+
   /**
    * URL-backed grid state. Declared after the column defs because the codec reads
    * their `fieldType` to give a bare, operator-less filter token its meaning, and
@@ -1346,7 +1690,463 @@ export function ManageContactsTable({
     columnIds: COLUMN_IDS,
     fieldTypes,
     defaultHiddenColumnIds: GRID_DEFAULT_HIDDEN_COLUMNS,
+    stickyParams,
   })
+
+  /*
+   * Saved views.
+   *
+   * The URL stays the single source of truth for what the grid is showing; a
+   * saved view is a snapshot written into it. Selecting a view therefore
+   * *replaces* every grid-owned key with that view's, rather than merging: a
+   * merge would let the sort of the view you just left survive into the one you
+   * opened, which is the same as not having per-view sort at all.
+   */
+  const viewsAvailable = viewsProp !== undefined
+
+  const [views, setViews] = useState<ManageContactView[]>(() => viewsProp ?? [])
+  const [viewsSource, setViewsSource] = useState<ManageContactView[] | undefined>(viewsProp)
+  const [saveState, setSaveState] = useState<ViewSaveState>("idle")
+  /** Views deleted here, so a payload read before the delete cannot bring one back. */
+  const removedViewIdsRef = useRef<Set<string>>(new Set())
+
+  if (viewsProp !== viewsSource) {
+    setViewsSource(viewsProp)
+    setViews((current) => mergeContactViews(current, viewsProp ?? [], removedViewIdsRef.current))
+  }
+
+  const activeViewId = searchParams.get("view")
+  const activeView = activeViewId
+    ? views.find((view) => view.id === activeViewId) ?? null
+    : null
+
+  /**
+   * Which view's configuration the URL was last seeded from.
+   *
+   * Claimed only after the effect has seen that view in `searchParams` — never
+   * when a navigation is merely requested. Claiming on request was the defect:
+   * if the push to the new view was superseded (a late render re-ran this
+   * effect while the URL still named the old view), the guard was already
+   * pointing at the new id, the effect saw a mismatch, and it re-applied the
+   * OLD view's stored configuration over the URL — which the autosave then
+   * wrote back to that view, erasing the change the operator had just made.
+   */
+  const hydratedViewRef = useRef<string | null>(null)
+  /**
+   * Whether the landing URL carried grid keys of its own.
+   *
+   * A link with `?f.status=contains:Invited&view=…` is a shared arrangement of
+   * that view, and the first hydration must not overwrite it — that is the whole
+   * point of the link. Read once, so a later switch still replaces everything.
+   */
+  const landingHadGridKeysRef = useRef<boolean | null>(null)
+
+  if (landingHadGridKeysRef.current === null) {
+    landingHadGridKeysRef.current = [...searchParams.keys()].some(isGridParamKey)
+  }
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /**
+   * The edit the operator has made and the view it belongs to.
+   *
+   * Recorded by the edit handlers themselves, not by an effect watching the
+   * URL. Both `useSearchParams` and `window.location` lag `router.push` by a
+   * server round trip, so at the moment a view is switched away from, neither
+   * can be trusted to hold the sort or filter the operator just applied. The
+   * handler is the only place that knows the arrangement for certain.
+   */
+  const pendingSaveRef = useRef<{ viewId: string; config: GridViewConfig } | null>(null)
+
+  /**
+   * Writes a config to the view it belongs to.
+   *
+   * One function for the debounced save and the flush, so a flushed save and a
+   * settled one cannot disagree about what "saved" means.
+   */
+  const saveViewConfig = useCallback(async (viewId: string, config: GridViewConfig) => {
+    try {
+      const updated = await updateContactViewRequest(viewId, { config })
+
+      setViews((current) => current.map((view) => (view.id === updated.id ? updated : view)))
+      setSaveState("saved")
+    } catch {
+      setSaveState("error")
+    }
+  }, [])
+
+  /**
+   * Queues the arrangement the operator just produced.
+   *
+   * `autosaveMs` is the quiet period before it is written. The queue holds one
+   * entry: the newest edit replaces the one before it, because a view stores a
+   * whole configuration and only the last one is true.
+   */
+  const scheduleSave = useCallback(
+    (config: GridViewConfig, viewId: string | null = selectedViewId) => {
+      if (!viewId) {
+        return
+      }
+
+      pendingSaveRef.current = { viewId, config }
+
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current)
+      }
+
+      setSaveState("saving")
+
+      saveTimerRef.current = setTimeout(() => {
+        saveTimerRef.current = null
+        const pending = pendingSaveRef.current
+        pendingSaveRef.current = null
+
+        if (pending) {
+          void saveViewConfig(pending.viewId, pending.config)
+        }
+      }, 800)
+    },
+    [saveViewConfig, selectedViewId],
+  )
+
+  /**
+   * Writes whatever is queued, right now.
+   *
+   * Called when the operator leaves a view and when the surface unmounts: the
+   * edit already happened, and moving to another view is not a reason to drop
+   * it back to the stored one.
+   */
+  const flushPendingSave = useCallback(() => {
+    const pending = pendingSaveRef.current
+
+    pendingSaveRef.current = null
+
+    if (saveTimerRef.current !== null) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+
+    if (pending) {
+      void saveViewConfig(pending.viewId, pending.config)
+    }
+  }, [saveViewConfig])
+
+  const currentConfig = useMemo<GridViewConfig>(
+    () => ({
+      sorting: viewState.sorting ?? [],
+      globalFilter: typeof viewState.globalFilter === "string" ? viewState.globalFilter : "",
+      filter: flattenConditions(filterTree).length > 0 ? filterGroupToSerialized(filterTree) : null,
+      columnOrder: viewState.columnOrder ?? [],
+      hiddenColumnIds: Object.keys(viewState.columnVisibility ?? {}).filter(
+        (id) => viewState.columnVisibility?.[id] === false,
+      ),
+      columnSizing: viewState.columnSizing ?? {},
+      density,
+    }),
+    [density, filterTree, viewState],
+  )
+
+  const viewHref = useCallback(
+    (view: ManageContactView) => {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set("view", view.id)
+
+      const query = applyGridParams(
+        params,
+        gridViewConfigToParams(view.config, COLUMN_IDS, {
+          fieldTypes,
+          defaultHiddenColumnIds: GRID_DEFAULT_HIDDEN_COLUMNS,
+        }),
+      ).toString()
+
+      return query.length > 0 ? `${pathname}?${query}` : pathname
+    },
+    [fieldTypes, pathname, searchParams],
+  )
+
+  /**
+   * Opens a view: its config replaces the grid's, and its row height its own.
+   *
+   * This writes the URL but does **not** mark the view as hydrated. Hydration
+   * is a fact about what `searchParams` shows, and only the effect below can
+   * observe it. Re-running the hydration for a view whose URL already matches is
+   * harmless — the effect compares the href before writing — so the extra pass
+   * costs nothing and the guard can never be wrong about a navigation that has
+   * not landed yet.
+   */
+  const activateView = useCallback(
+    (view: ManageContactView, mode: "push" | "replace" = "push") => {
+      // The view being left may still owe a write; flush it before its URL is
+      // replaced, or the edit dies with the timer that was going to send it.
+      flushPendingSave()
+      setSelectedViewId(view.id)
+      setDensity(view.config.density)
+      setSaveState("saved")
+      markContactViewUsed(view.id)
+
+      if (mode === "push") {
+        router.push(viewHref(view), { scroll: false })
+      } else {
+        router.replace(viewHref(view), { scroll: false })
+      }
+    },
+    [flushPendingSave, router, viewHref],
+  )
+
+  /*
+   * Seeding the URL from the selected view.
+   *
+   * Skipped on the one landing that carried its own grid keys, and skipped once
+   * a view has already been hydrated, so this is not a second writer racing the
+   * one in `activateView`.
+   */
+  useEffect(() => {
+    if (!viewsAvailable || !activeViewId || hydratedViewRef.current === activeViewId) {
+      return
+    }
+
+    const view = views.find((entry) => entry.id === activeViewId)
+
+    if (!view) {
+      return
+    }
+
+    hydratedViewRef.current = view.id
+    setSelectedViewId(view.id)
+    setDensity(view.config.density)
+    setSaveState("saved")
+    markContactViewUsed(view.id)
+
+    if (landingHadGridKeysRef.current) {
+      landingHadGridKeysRef.current = false
+      return
+    }
+
+    const href = viewHref(view)
+    const current = searchParams.toString()
+
+    if (href !== `${pathname}${current.length > 0 ? `?${current}` : ""}`) {
+      router.replace(href, { scroll: false })
+    }
+  }, [activeViewId, pathname, payload.scope.programId, router, searchParams, viewHref, views, viewsAvailable])
+
+  const selectView = useCallback(
+    (viewId: string) => {
+      const view = views.find((entry) => entry.id === viewId)
+
+      if (view) {
+        activateView(view)
+      }
+    },
+    [activateView, views],
+  )
+
+  /** Back to the unsaved arrangement: no `view` and no grid keys at all. */
+  const selectUnsaved = useCallback(() => {
+    flushPendingSave()
+    hydratedViewRef.current = null
+    setSelectedViewId(null)
+    setSaveState("idle")
+    setDensity(GRID_DEFAULT_DENSITY)
+
+    // `view` must go with the grid keys: leaving it would keep the view
+    // selected, and the hydration effect would write its arrangement straight
+    // back over the one the operator just asked for.
+    const params = applyGridParams(new URLSearchParams(searchParams.toString()), {})
+    params.delete("view")
+
+    const query = params.toString()
+
+    router.push(query.length > 0 ? `${pathname}?${query}` : pathname, { scroll: false })
+  }, [flushPendingSave, pathname, router, searchParams])
+
+  const createView = useCallback(
+    async (name: string, visibility: ContactViewVisibility) => {
+      const created = await createContactViewRequest({ name, config: currentConfig, visibility })
+
+      setViews((current) => [...current, created])
+      activateView(created)
+    },
+    [activateView, currentConfig],
+  )
+
+  const renameView = useCallback(
+    async (viewId: string, name: string) => {
+      const updated = await updateContactViewRequest(viewId, { name })
+
+      setViews((current) => current.map((view) => (view.id === updated.id ? updated : view)))
+      setSaveState("saved")
+    },
+    [],
+  )
+
+  const duplicateView = useCallback(
+    async (viewId: string) => {
+      const source = views.find((view) => view.id === viewId)
+
+      if (!source) {
+        return
+      }
+
+      const created = await createContactViewRequest({
+        name: `${source.name} copy`,
+        config: currentConfig,
+        // A copy belongs to whoever made it, even when the source is shared.
+        visibility: source.visibility,
+      })
+
+      setViews((current) => [...current, created])
+      activateView(created)
+    },
+    [activateView, currentConfig, views],
+  )
+
+  const deleteView = useCallback(
+    async (viewId: string) => {
+      // Nothing to flush *to* once the view is gone; a pending write would 404.
+      pendingSaveRef.current = null
+
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+
+      await deleteContactViewRequest(viewId)
+      removedViewIdsRef.current.add(viewId)
+
+      const remaining = views.filter((view) => view.id !== viewId)
+      setViews(remaining)
+
+      if (activeViewId === viewId) {
+        if (remaining.length > 0) {
+          activateView(remaining[0], "replace")
+        } else {
+          selectUnsaved()
+        }
+      }
+    },
+    [activateView, activeViewId, selectUnsaved, views],
+  )
+
+  /*
+   * The last view this operator opened, restored on a bare `/contacts/grid`.
+   *
+   * A landing link with grid keys is left alone: it is an arrangement, not a
+   * request for "wherever I was last". Runs once per mount — the ref, not the
+   * dependency list, is what guarantees that.
+   */
+  const restoredLastViewRef = useRef(false)
+
+  useEffect(() => {
+    if (!viewsAvailable || restoredLastViewRef.current) {
+      return
+    }
+
+    restoredLastViewRef.current = true
+
+    if (activeViewId || landingHadGridKeysRef.current) {
+      return
+    }
+
+    const lastId = lastViewId
+
+    if (!lastId) {
+      return
+    }
+
+    const view = views.find((entry) => entry.id === lastId)
+
+    if (view) {
+      activateView(view, "replace")
+    }
+  }, [activateView, activeViewId, lastViewId, views, viewsAvailable])
+
+  /*
+   * A pending edit has to survive leaving the page, not just leaving the view.
+   * The component is going away, so this writes directly and takes no state
+   * with it.
+   */
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current)
+      }
+
+      const pending = pendingSaveRef.current
+      pendingSaveRef.current = null
+
+      if (pending) {
+        void updateContactViewRequest(pending.viewId, { config: pending.config }).catch(() => {})
+      }
+    }
+  }, [])
+
+  /**
+   * A table state as the configuration a view stores.
+   *
+   * `currentConfig` reads the URL-derived state, which is right whenever it is
+   * rendered but a beat behind an edit. This builds from the state the handler
+   * was handed, which is the edit itself.
+   */
+  const configForState = useCallback(
+    (
+      state: Partial<TableState>,
+      tree: GridFilterGroup,
+      nextDensity: GridDensity = density,
+    ): GridViewConfig => ({
+      sorting: state.sorting ?? [],
+      globalFilter: typeof state.globalFilter === "string" ? state.globalFilter : "",
+      filter: flattenConditions(tree).length > 0 ? filterGroupToSerialized(tree) : null,
+      columnOrder: state.columnOrder ?? [],
+      hiddenColumnIds: Object.keys(state.columnVisibility ?? {}).filter(
+        (id) => state.columnVisibility?.[id] === false,
+      ),
+      columnSizing: state.columnSizing ?? {},
+      density: nextDensity,
+    }),
+    [density],
+  )
+
+  /**
+   * Every edit path queues its own save, because every edit path knows the
+   * configuration it produced. `onStateChange` covers sort, field visibility,
+   * column order and width, search and row density; the filter tree and
+   * "Clear all" have writers of their own and are queued here too.
+   */
+  const handleGridStateChange = useCallback<OnChangeFn<TableState>>(
+    (updater) => {
+      const resolved =
+        typeof updater === "function"
+          ? (updater as (previous: Partial<TableState>) => Partial<TableState>)(viewState)
+          : updater
+
+      scheduleSave(configForState(resolved, filterTree))
+      onStateChange(updater)
+    },
+    [configForState, filterTree, onStateChange, scheduleSave, viewState],
+  )
+
+  const handleDensityChange = useCallback(
+    (next: GridDensity) => {
+      scheduleSave(configForState(viewState, filterTree, next))
+      setDensity(next)
+    },
+    [configForState, filterTree, scheduleSave, viewState],
+  )
+
+  const handleFilterTreeChange = useCallback<typeof onFilterTreeChange>(
+    (next, immediate) => {
+      scheduleSave(configForState(viewState, next))
+      onFilterTreeChange(next, immediate)
+    },
+    [configForState, onFilterTreeChange, scheduleSave, viewState],
+  )
+
+  const handleClearFilters = useCallback(() => {
+    const cleared = configForState(viewState, createFilterGroup())
+
+    scheduleSave({ ...cleared, sorting: [], globalFilter: "", filter: null })
+    clearFilters()
+  }, [clearFilters, configForState, scheduleSave, viewState])
 
   const selectedCount = useMemo(
     () =>
@@ -1460,6 +2260,62 @@ export function ManageContactsTable({
   }, [])
 
   /**
+   * A completed row drag.
+   *
+   * The write carries **neighbours**, not a list: the server seats the row
+   * between them and nothing else moves. The local mirror is reordered first so
+   * the row stays where it was dropped while the request is in flight, and a
+   * failure puts the whole previous order back rather than leaving the grid
+   * claiming an order the database does not have.
+   */
+  const handleRowReorder = useCallback(
+    (draggedId: string, targetId: string, placement: "before" | "after") => {
+      const from = contacts.findIndex((contact) => contact.id === draggedId)
+      const to = contacts.findIndex((contact) => contact.id === targetId)
+
+      if (from < 0 || to < 0 || from === to) {
+        return
+      }
+
+      const without = contacts.filter((contact) => contact.id !== draggedId)
+      const targetIndex = without.findIndex((contact) => contact.id === targetId)
+      const insertAt = placement === "before" ? targetIndex : targetIndex + 1
+
+      const beforeId = without[insertAt - 1]?.id ?? null
+      const afterId = without[insertAt]?.id ?? null
+      const previous = contacts
+
+      const reordered = [...without]
+      reordered.splice(insertAt, 0, contacts[from])
+
+      setContacts((current) => ({ ...current, rows: reordered }))
+
+      void (async () => {
+        try {
+          const response = await fetch("/api/manage/contacts/order", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ contactId: draggedId, beforeId, afterId }),
+          })
+
+          if (!response.ok && response.status !== 204) {
+            const payload = (await response.json().catch(() => null)) as { error?: string } | null
+            throw new Error(readError(payload, "Unable to save the new order."))
+          }
+        } catch (cause) {
+          setContacts((current) => ({ ...current, rows: previous }))
+          setNotice({
+            kind: "error",
+            message:
+              cause instanceof Error ? cause.message : "Unable to save the new order.",
+          })
+        }
+      })()
+    },
+    [contacts],
+  )
+
+  /**
    * The status row's readout, derived from the same mirror the grid holds.
    *
    * **One number, one basis.** At rest it is the record count the table holds;
@@ -1530,98 +2386,150 @@ export function ManageContactsTable({
   }, [filterSignature])
 
   /*
-   * `flex min-h-0 flex-1 flex-col` — the last hop before the grid, and the one
-   * that makes the grid's `flex-1` mean anything. `space-y-3` → `gap-3` is the
-   * same rhythm. The `role="status"` notice is *above* whichever view is
-   * showing, so it stays visible in a bounded layout rather than scrolling out
-   * with the rows. The status row is the grid's own footer: see
-   * `renderFooterCell` for why it cannot live below the table.
+   * Two flex columns, one inside the other. The outer one holds the views bar
+   * flush against the grid's own toolbar — they are one band of chrome, and the
+   * band's `gap-3` must not open between them. The inner one is the last hop
+   * before the grid, and it is what makes the grid's `flex-1` mean anything:
+   * `space-y-3` → `gap-3` is the same rhythm. The `role="status"` notice is
+   * *above* whichever view is showing, so it stays visible in a bounded layout
+   * rather than scrolling out with the rows. The status row is the grid's own
+   * footer: see `renderFooterCell` for why it cannot live below the table.
    *
    * The container keeps its box whatever the device view is, so the page does
    * not jump while the viewport is still being found.
    */
   return (
-    <div
-      className={cn(
-        "relative flex min-h-0 flex-1 flex-col gap-3",
-        hideInlineCreate && "[&_[data-grid-add-record]]:hidden",
-      )}
-    >
-      {notice ? (
-        <p
-          role="status"
-          className={
-            notice.kind === "error"
-              ? "shrink-0 text-sm font-medium text-red-700"
-              : "shrink-0 text-sm font-medium text-[var(--muted-foreground)]"
-          }
-        >
-          {notice.message}
-        </p>
-      ) : null}
-
-      {/*
-        The desktop view: the grid, untouched.
-
-        Same columns, same write path, same keyboard model as before — the
-        device detection only decides *which* view is on the screen, never
-        what the grid does.
-      */}
-      {deviceView === "desktop" ? (
-        <Grid<ManageContact>
-          rows={contacts}
-          columns={columns}
-          getRowId={(contact) => contact.id}
-          state={{ ...viewState, rowSelection }}
-          onStateChange={onStateChange}
-          filterTree={filterTree}
-          onFilterTreeChange={onFilterTreeChange}
-          onRowSelectionChange={setRowSelection}
-          ariaLabel="Contacts"
-          density={density}
-          onDensityChange={setDensity}
-          transient={{
-            begin: beginTransientChange,
-            commit: commitTransientChange,
-            cancel: cancelTransientChange,
-          }}
-          onCellCommit={handleCellCommit}
-          onClearFilters={clearFilters}
-          onUnreachableNewRow={handleUnreachableNewRow}
-          tableFooter={(column) =>
-            renderFooterCell(column.columnId, statusSummary.label, aggregateByColumnId)
-          }
-          rowLifecycle={rowLifecycle}
-          onRowRemoved={handleRowRemoved}
-          rowContextMenu={ContactsRowContextMenu}
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      {viewsAvailable && deviceView === "desktop" ? (
+        <ManageViewsBar
+          views={views}
+          activeView={activeView}
+          saveState={saveState}
+          defaultName={suggestContactViewName(views)}
+          onSelectView={selectView}
+          onSelectUnsaved={selectUnsaved}
+          onCreateView={createView}
+          onRenameView={renameView}
+          onDuplicateView={duplicateView}
+          onDeleteView={deleteView}
+          currentUserId={payload.scope.actorUserId}
         />
       ) : null}
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-3",
+          hideInlineCreate && "[&_[data-grid-add-record]]:hidden",
+        )}
+      >
+        {notice ? (
+          <p
+            role="status"
+            className={
+              notice.kind === "error"
+                ? "shrink-0 text-sm font-medium text-red-700"
+                : "shrink-0 text-sm font-medium text-[var(--muted-foreground)]"
+            }
+          >
+            {notice.message}
+          </p>
+        ) : null}
 
-      {/*
-        The phone view: the contact list, and nothing else.
+        {/*
+          The desktop view: the grid, untouched.
 
-        The grid is **not mounted** underneath it — not hidden, not covered —
-        so none of the grid's rows, its keyboard model or its virtualization
-        reaches the accessibility tree or the tab order behind the list.
+          Same columns, same write path, same keyboard model as before — the
+          device detection only decides *which* view is on the screen, never
+          what the grid does.
+        */}
+        {deviceView === "desktop" ? (
+          <ContactRecordOpenContext.Provider value={setExpandedContactId}>
+            <Grid<ManageContact>
+              rows={contacts}
+              columns={columns}
+              getRowId={(contact) => contact.id}
+              state={{ ...viewState, rowSelection }}
+              onStateChange={handleGridStateChange}
+              filterTree={filterTree}
+              onFilterTreeChange={handleFilterTreeChange}
+              onRowSelectionChange={setRowSelection}
+              ariaLabel="Contacts"
+              density={density}
+              onDensityChange={handleDensityChange}
+              transient={{
+                begin: beginTransientChange,
+                commit: commitTransientChange,
+                cancel: cancelTransientChange,
+              }}
+              onCellCommit={handleCellCommit}
+              onClearFilters={handleClearFilters}
+              onUnreachableNewRow={handleUnreachableNewRow}
+              tableFooter={(column) =>
+                renderFooterCell(column.columnId, statusSummary.label, aggregateByColumnId)
+              }
+              rowLifecycle={rowLifecycle}
+              onRowRemoved={handleRowRemoved}
+              rowContextMenu={ContactsRowContextMenu}
+              onRowReorder={handleRowReorder}
+            />
+          </ContactRecordOpenContext.Provider>
+        ) : null}
 
-        The wrapper is `relative flex-1` so the list's `absolute inset-0` root
-        fills the space under the notice line, and so the sheet and the record
-        — both positioned against the list's own frame — still resolve
-        against it.
-      */}
-      {deviceView === "mobile" ? (
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <ManageContactList
-            contacts={phoneRows}
+        {/*
+          The expanded record, over the grid. Rendered after the grid so it paints
+          above it, and only on desktop — the phone view has its own record frame
+          in `ManageContactList`, and two of them would be two answers to one
+          question.
+        */}
+        {deviceView === "desktop" && expandedContact ? (
+          <ContactRecordDialog
+            contact={expandedContact}
             locations={payload.locationOptions ?? payload.locations}
             resolvers={{ locationNameById, staffNameById }}
-            onCommit={handleListCommit}
-            activeFilters={phoneFilterLabels}
-            onClearFilters={clearFilters}
-            emptyScope={contacts.length === 0}
+            onCommit={(fieldId, value) => {
+              void handleListCommit(expandedContact.id, fieldId, value)
+            }}
+            onClose={() => setExpandedContactId(null)}
+            onPrevious={() => {
+              if (expandedIndex > 0) {
+                setExpandedContactId(contacts[expandedIndex - 1].id)
+              }
+            }}
+            onNext={() => {
+              if (expandedIndex >= 0 && expandedIndex < contacts.length - 1) {
+                setExpandedContactId(contacts[expandedIndex + 1].id)
+              }
+            }}
+            canGoPrevious={expandedIndex > 0}
+            canGoNext={expandedIndex >= 0 && expandedIndex < contacts.length - 1}
           />
-        </div>
-      ) : null}
+        ) : null}
+
+        {/*
+          The phone view: the contact list, and nothing else.
+
+          The grid is **not mounted** underneath it — not hidden, not covered —
+          so none of the grid's rows, its keyboard model or its virtualization
+          reaches the accessibility tree or the tab order behind the list.
+
+          The wrapper is `relative flex-1` so the list's `absolute inset-0` root
+          fills the space under the notice line, and so the sheet and the record
+          — both positioned against the list's own frame — still resolve
+          against it.
+        */}
+        {deviceView === "mobile" ? (
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <ManageContactList
+              contacts={phoneRows}
+              locations={payload.locationOptions ?? payload.locations}
+              resolvers={{ locationNameById, staffNameById }}
+              onCommit={handleListCommit}
+              activeFilters={phoneFilterLabels}
+              onClearFilters={handleClearFilters}
+              emptyScope={contacts.length === 0}
+            />
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

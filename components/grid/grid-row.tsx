@@ -3,6 +3,11 @@
 import { useEffect, useRef, memo } from "react"
 import type { KeyboardEvent } from "react"
 import type { Cell, Row } from "@tanstack/react-table"
+import { useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+
+import { GridRowDragContext } from "@/components/grid/grid-row-drag"
+import { GridRowPositionContext } from "@/components/grid/grid-row-position"
 
 import type { GridCellView, GridDensity, GridFrozenColumn } from "@/components/grid/grid-types"
 import { gridCellKey } from "@/components/grid/use-grid-keyboard"
@@ -209,6 +214,14 @@ export interface GridRowProps<TData> {
   density: GridDensity
   isFocused: boolean
   isEditing: boolean
+  /**
+   * Drop-target id for row dragging, supplied only when the consumer opted in.
+   * `undefined` leaves the row out of the drag model entirely rather than
+   * registering a droppable per row that can never be hit.
+   */
+  rowDragId?: string
+  /** 1-based position in the current (sorted, filtered) view. */
+  rowPosition?: number
   /** DOM id referenced by the container's `aria-activedescendant`. */
   domId?: string
   /**
@@ -246,21 +259,52 @@ function GridRowInner<TData>({
   isFocused,
   isEditing,
   domId,
+  rowDragId,
+  rowPosition,
   onCellPointerDown,
   onCellDoubleClick,
 }: GridRowProps<TData>) {
+  /**
+   * The row is both the draggable node and the droppable slot, which is what
+   * makes the sortable strategy's rectangles line up with what is on screen.
+   * The activator props go to the consumer's grip through context, so only the
+   * grip starts a drag — never a text selection or a cell click.
+   *
+   * Styles mirror the TanStack row-dnd example, measured during a live drag:
+   * the dragged row is `opacity: 0.8` at `z-index: 1` with no transition (it
+   * tracks the pointer), and its neighbours carry `transform 200ms` as they
+   * slide by one row height.
+   */
+  const sortable = useSortable({
+    id: rowDragId ?? `grid-row-inert:${row.id}`,
+    disabled: rowDragId === undefined,
+  })
   const stickyLeftByColumn = new Map(frozenColumns.map((entry) => [entry.columnId, entry.left]))
   const lastFrozenColumnId =
     frozenColumns.length === 0 ? null : frozenColumns[frozenColumns.length - 1].columnId
   const cells = row.getVisibleCells().map((cell) => getCellView(row, cell))
 
   return (
+    <GridRowPositionContext.Provider value={rowPosition ?? null}>
+    <GridRowDragContext.Provider
+      value={rowDragId ? { attributes: sortable.attributes, listeners: sortable.listeners } : null}
+    >
     <tr
+      ref={rowDragId ? sortable.setNodeRef : undefined}
       id={domId}
       data-grid-row={row.id}
+      data-grid-row-draggable={rowDragId ? "true" : undefined}
       data-state={isSelected ? "selected" : undefined}
       data-grid-row-focused={isFocused ? "true" : undefined}
-      style={{ height: GRID_ROW_HEIGHT[density] }}
+      data-grid-row-dragging={sortable.isDragging ? "true" : undefined}
+      style={{
+        height: GRID_ROW_HEIGHT[density],
+        position: "relative",
+        zIndex: sortable.isDragging ? 1 : 0,
+        opacity: sortable.isDragging ? 0.8 : 1,
+        transform: sortable.transform ? CSS.Translate.toString(sortable.transform) : undefined,
+        transition: sortable.transition ?? undefined,
+      }}
       className={cn(
         GRID_BASE_FONT_CLASS,
         "bg-card",
@@ -473,6 +517,8 @@ function GridRowInner<TData>({
         )
       })}
     </tr>
+    </GridRowDragContext.Provider>
+    </GridRowPositionContext.Provider>
   )
 }
 
@@ -498,6 +544,8 @@ function gridRowPropsEqual<TData>(prev: GridRowProps<TData>, next: GridRowProps<
     prev.isEditing === next.isEditing &&
     prev.isSelected === next.isSelected &&
     prev.domId === next.domId &&
+    prev.rowDragId === next.rowDragId &&
+    prev.rowPosition === next.rowPosition &&
     prev.onCellPointerDown === next.onCellPointerDown &&
     prev.onCellDoubleClick === next.onCellDoubleClick
   )

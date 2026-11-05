@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import type { ReactNode } from "react"
-import { useDraggable, useDroppable } from "@dnd-kit/core"
+import { useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import type { SortingState } from "@tanstack/react-table"
 import {
   ArrowDownWideNarrow,
@@ -143,13 +144,23 @@ export function GridHeaderCell({
 
   // Called under `DndContext` (see `grid.tsx`); disabled — never absent — for
   // pinned columns and custom headers, so hook order stays stable.
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  /*
+   * Sortable, not a bare draggable/droppable pair: the example this matches
+   * slides the neighbours out of the way while the column is in hand, which
+   * needs the strategy's per-item transform. The drop still resolves through
+   * `resolveColumnDropOrder`, so the commit and the preview agree.
+   */
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: columnId,
     disabled: !canDrag || hasCustomHeader,
-  })
-  const { setNodeRef: setDropRef } = useDroppable({
-    id: columnId,
-    disabled: hasCustomHeader,
   })
 
   const openSortPopover = (direction: "asc" | "desc") => {
@@ -169,7 +180,7 @@ export function GridHeaderCell({
 
   return (
     <th
-      ref={hasCustomHeader ? undefined : setDropRef}
+      ref={setNodeRef}
       scope="col"
       data-grid-column={columnId}
       // The same attribute `grid-row.tsx` puts on every body cell, so a column's
@@ -187,7 +198,18 @@ export function GridHeaderCell({
         width,
         height: rowHeight,
         left: stickyLeft ?? undefined,
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        // The source example's header style, minus `position: relative` and
+        // an inline `zIndex`: our header is `sticky` and layer-ordered by
+        // class, and either would fight the pinned run. `transform` is
+        // `CSS.Translate` (translate3d) exactly as the example builds it.
+        opacity: isDragging ? 0.8 : 1,
+        transform: CSS.Translate.toString(transform),
+        // The example animates `width` too, because resizing there is a
+        // discrete commit. Ours writes a width per pointer frame, so animating
+        // it would make every resize lag the pointer; the slide is what the
+        // drag is for.
+        transition: isDragging ? undefined : (transition ?? "transform 0.2s ease-in-out"),
+        whiteSpace: "nowrap",
       }}
       className={cn(
         GRID_BASE_FONT_CLASS,
@@ -233,7 +255,10 @@ export function GridHeaderCell({
 
             {canDrag ? (
               <span
-                ref={setNodeRef}
+                // The activator is the label, not the item: `setNodeRef` on the
+                // `<th>` is what moves, and giving the same node both refs would
+                // slide the label out of its own cell.
+                ref={setActivatorNodeRef}
                 {...attributes}
                 {...listeners}
                 role="button"

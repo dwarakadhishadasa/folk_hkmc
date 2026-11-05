@@ -31,8 +31,17 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core"
-import type { DragEndEvent } from "@dnd-kit/core"
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core"
 
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { restrictToHorizontalAxis } from "@dnd-kit/modifiers"
+import type { Modifier } from "@dnd-kit/core"
+
+import { GRID_ROW_DRAG_PREFIX } from "@/components/grid/grid-row-drag"
 import { GridHeaderCell } from "@/components/grid/grid-header-cell"
 import { GridPanel, gridPanelKey } from "@/components/grid/grid-panel"
 import { GridRow, GRID_BASE_FONT_CLASS, GRID_ROW_HEIGHT } from "@/components/grid/grid-row"
@@ -455,6 +464,34 @@ function forUrlWriter(state: Partial<TableState>): TableState {
 }
 
 /**
+ * Keys the consumer owns, and therefore the only ones worth forwarding.
+ *
+ * TanStack resets the page index whenever the row model changes size, and that
+ * reset arrives as a full state snapshot. A consumer's `state` has no
+ * `pagination`, so forwarding the snapshot would only re-send the *other*
+ * fields — resolved from the table's own state, which lags the prop on the
+ * render the reset lands in. A consumer that writes state to the URL then gets a
+ * stale sort or column set written back, the prop changes, the reset fires
+ * again, and the two ping-pong. A pagination-only change is not a consumer state
+ * change.
+ */
+const OWNED_STATE_KEYS = [
+  "sorting",
+  "globalFilter",
+  "columnFilters",
+  "columnOrder",
+  "columnVisibility",
+  "columnSizing",
+  "rowSelection",
+] as const
+
+function sameOwnedState(previous: TableState, next: Partial<TableState>): boolean {
+  return OWNED_STATE_KEYS.every(
+    (key) => JSON.stringify(previous[key] ?? null) === JSON.stringify(next[key] ?? null),
+  )
+}
+
+/**
  * Reads one cell out of a raw row, the same way TanStack would.
  *
  * `ColumnDef` is a union over its accessor forms, so `in` is what narrows it —
@@ -498,6 +535,8 @@ export function resolveColumnDropOrder(
     return null
   }
 
+  const from = fullOrder.indexOf(activeId)
+  const over = fullOrder.indexOf(overId)
   const next = fullOrder.filter((id) => id !== activeId)
   const slot = next.indexOf(overId)
 
@@ -511,7 +550,11 @@ export function resolveColumnDropOrder(
     return null
   }
 
-  next.splice(slot, 0, activeId)
+  // `arrayMove` semantics, which is what the drag preview shows: moving right
+  // lands the column *after* the one it passed, moving left lands before it.
+  // Inserting always-before would commit one slot short of the preview and the
+  // column would jump on release.
+  next.splice(from < over ? slot + 1 : slot, 0, activeId)
   return next
 }
 
@@ -634,6 +677,19 @@ export interface GridProps<TData extends RowData> {
    */
   rowContextMenu?: ComponentType<GridRowContextMenuProps>
   /**
+   * Row drag-and-drop, opted into by supplying it.
+   *
+   * The consumer owns the handle (it lives in a consumer column) and the write;
+   * `Grid` owns the drag context, the droppable rows and the placement
+   * resolution. `placement` says which side of `targetId` the row was released
+   * on, because "before" and "after" are different writes when rows are
+   * adjacent.
+   *
+   * Omit it and rows never register as drop targets, so the column drag that
+   * shares this `DndContext` is unaffected.
+   */
+  onRowReorder?: (draggedId: string, targetId: string, placement: "before" | "after") => void
+  /**
    * Called when a just-added row cannot be focused because the active filters
    * exclude it — a blank draft under a text filter, which nothing will ever
    * reveal on its own.
@@ -667,6 +723,8 @@ interface GridVirtualRowsProps<TData extends RowData> {
   columnCount: number
   visibleColumnIds: readonly string[]
   frozenColumns: readonly GridFrozenColumn[]
+  /** Whether rows register as drop targets for `onRowReorder`. */
+  rowDragEnabled: boolean
   getCellView: (row: Row<TData>, cell: Cell<TData, unknown>) => GridCellView<TData>
   isRowFocused: (row: Row<TData>) => boolean
   isRowEditing: (row: Row<TData>) => boolean
@@ -703,6 +761,7 @@ function GridVirtualRows<TData extends RowData>({
   columnCount,
   visibleColumnIds,
   frozenColumns,
+  rowDragEnabled,
   getCellView,
   isRowFocused,
   isRowEditing,
@@ -815,6 +874,19 @@ function GridVirtualRows<TData extends RowData>({
 
   return (
     <tbody data-grid-panel={gridPanelKey(panelState)}>
+      {/*
+        Every row in the model, not only the mounted window: the strategy reads
+        this list for indices, and a virtualized row that scrolled out is still
+        a slot the dragged row can land on.
+      */}
+      <SortableContext
+        items={
+          rowDragEnabled
+            ? rowModel.map((row) => `${GRID_ROW_DRAG_PREFIX}${row.id}`)
+            : []
+        }
+        strategy={verticalListSortingStrategy}
+      >
       <GridPanel
         state={panelState}
         density={density}
@@ -849,6 +921,10 @@ function GridVirtualRows<TData extends RowData>({
             density={density}
             isFocused={focused}
             isEditing={isRowEditing(row)}
+            rowDragId={rowDragEnabled ? `${GRID_ROW_DRAG_PREFIX}${row.id}` : undefined}
+            // The virtual row's index into the sorted, filtered model: the
+            // 1..N the gutter shows. `row.index` is the pre-sort index.
+            rowPosition={virtualRow.index + 1}
             domId={focused ? focusedRowDomId : undefined}
             onCellPointerDown={onCellPointerDown}
             onCellDoubleClick={onCellDoubleClick}
@@ -861,6 +937,7 @@ function GridVirtualRows<TData extends RowData>({
           <td colSpan={Math.max(columnCount, 1)} className="p-0" />
         </tr>
       ) : null}
+      </SortableContext>
     </tbody>
   )
 }
@@ -905,6 +982,7 @@ export function Grid<TData extends RowData>({
   rowLifecycle,
   onRowRemoved,
   rowContextMenu,
+  onRowReorder,
   onUnreachableNewRow,
   onNotice,
   panel,
@@ -1315,6 +1393,10 @@ export function Grid<TData extends RowData>({
       // the object form safe.
       const resolved = typeof updater === "function" ? updater(table.getState()) : updater
 
+      if (sameOwnedState(table.getState(), resolved)) {
+        return
+      }
+
       // Row selection rides the same updater as everything else, so every
       // checkbox click resolves a full table state that carries it. It is split
       // off here and never forwarded: `onStateChange` is the URL writer, and a
@@ -1656,22 +1738,68 @@ export function Grid<TData extends RowData>({
     [columnIds, frozenColumnIds, table],
   )
 
+  /**
+   * Columns move on one axis, rows on the other, and they share this
+   * `DndContext` — so the horizontal lock has to be decided per drag rather
+   * than by a modifier list that would also pin a row drag to the x axis.
+   */
+  const axisLock = useCallback<Modifier>((args) => {
+    if (String(args.active?.id ?? "").startsWith(GRID_ROW_DRAG_PREFIX)) {
+      return args.transform
+    }
+
+    return restrictToHorizontalAxis(args)
+  }, [])
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor),
   )
 
-  const handleDragStart = useCallback(() => {
-    // A drag writes nothing per frame; the drop commits once, like the width
-    // drag's `begin` / `commit` pair.
-    transient?.begin()
-  }, [transient])
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      // A row drag writes `sort_order` through `onRowReorder`, not through the
+      // URL, so it must not open the column drag's transient.
+      if (String(event.active.id).startsWith(GRID_ROW_DRAG_PREFIX)) {
+        return
+      }
+
+      // A drag writes nothing per frame; the drop commits once, like the width
+      // drag's `begin` / `commit` pair.
+      transient?.begin()
+    },
+    [transient],
+  )
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const activeId = String(event.active.id)
       const overId = event.over ? String(event.over.id) : null
+
+      if (activeId.startsWith(GRID_ROW_DRAG_PREFIX)) {
+        if (overId !== null && overId.startsWith(GRID_ROW_DRAG_PREFIX)) {
+          const draggedId = activeId.slice(GRID_ROW_DRAG_PREFIX.length)
+          const targetId = overId.slice(GRID_ROW_DRAG_PREFIX.length)
+
+          if (targetId !== draggedId && onRowReorder) {
+            // `arrayMove` semantics, read off the row model: the dragged row
+            // takes the target's index. Moving down means it lands after the
+            // target; moving up means before it. Reading indices rather than
+            // pointer halves is what makes the drop agree with the animation
+            // the operator just watched.
+            const ids = table.getRowModel().rows.map((row) => row.id)
+            const from = ids.indexOf(draggedId)
+            const to = ids.indexOf(targetId)
+            const placement = from < to ? "after" : "before"
+
+            onRowReorder(draggedId, targetId, placement)
+          }
+        }
+
+        // No URL field describes row order, so the column transient stays shut.
+        return
+      }
 
       if (overId === null || overId === activeId) {
         transient?.cancel()
@@ -1686,7 +1814,7 @@ export function Grid<TData extends RowData>({
         transient?.cancel()
       }
     },
-    [commitColumnDrop, transient],
+    [commitColumnDrop, onRowReorder, table, transient],
   )
 
   const handleDragCancel = useCallback(() => {
@@ -1849,6 +1977,7 @@ export function Grid<TData extends RowData>({
         <DndContext
           id={DND_CONTEXT_ID}
           sensors={sensors}
+          modifiers={[axisLock]}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
@@ -1890,6 +2019,13 @@ export function Grid<TData extends RowData>({
         >
           <thead>
             <tr style={{ height: rowHeight }}>
+              {/*
+                The visible columns are the sortable set, in display order — the
+                same list the drag preview slides. Hidden columns keep their
+                slots in `columnOrder`; the drop resolution maps this move back
+                onto the full order.
+              */}
+              <SortableContext items={visibleColumnIds} strategy={horizontalListSortingStrategy}>
               {headerHeaders.map((header, index) => {
                 const column = header.column
                 const stickyLeft =
@@ -1939,6 +2075,7 @@ export function Grid<TData extends RowData>({
                   />
                 )
               })}
+              </SortableContext>
             </tr>
           </thead>
 
@@ -1954,6 +2091,7 @@ export function Grid<TData extends RowData>({
             columnCount={visibleColumnIds.length}
             visibleColumnIds={visibleColumnIds}
             frozenColumns={frozenColumns}
+            rowDragEnabled={onRowReorder !== undefined}
             getCellView={keyboard.getCellView}
             isRowFocused={keyboard.isRowFocused}
             isRowEditing={keyboard.isRowEditing}

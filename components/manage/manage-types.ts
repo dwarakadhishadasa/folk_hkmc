@@ -77,6 +77,12 @@ export interface ManageContact {
    */
   totalAttendanceCount: number
   past60DayAttendanceCount: number
+  /**
+   * How many comments the record has, replies included. Drives the grid's
+   * gutter badge; a record with none carries `0` and shows the plain expand
+   * arrow instead.
+   */
+  commentCount: number
 }
 
 export interface ManageAttendee {

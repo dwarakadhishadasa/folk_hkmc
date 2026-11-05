@@ -12,6 +12,7 @@
  */
 
 import type { ManageContactsPayload } from "@/components/manage/manage-types"
+import type { ManageContactView } from "@/components/manage/manage-view-types"
 
 export interface ContactsSectionPayload extends ManageContactsPayload {
   /**
@@ -23,6 +24,19 @@ export interface ContactsSectionPayload extends ManageContactsPayload {
    * location exists, and the difference is intended.
    */
   activeLocationCount: number
+  /**
+   * Saved grid views, in their display order.
+   *
+   * Loaded with the section rather than fetched by the view bar: the bar is the
+   * first thing above the grid, and a client fetch would paint it empty and then
+   * move. Absent (`undefined`) on surfaces that do not offer views.
+   */
+  views?: ManageContactView[]
+  /**
+   * The view this person last opened, read from the server so it follows them to
+   * another machine. Only a hint: an id that no longer exists is ignored.
+   */
+  lastViewId?: string | null
 }
 
 export interface ContactsSectionSummary {

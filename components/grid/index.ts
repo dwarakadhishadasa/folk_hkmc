@@ -118,6 +118,15 @@ export {
   type GridViewState,
 } from "@/components/grid/grid-view-state"
 export {
+  EMPTY_GRID_VIEW_CONFIG,
+  GRID_DENSITY_VALUES,
+  gridViewConfigFromParams,
+  gridViewConfigKey,
+  gridViewConfigToParams,
+  normalizeGridViewConfig,
+  type GridViewConfig,
+} from "@/components/grid/grid-view-config"
+export {
   GridRowAddControl,
   GridRowDeleteReport,
   GridRowLifecycleProvider,

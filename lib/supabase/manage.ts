@@ -30,6 +30,7 @@ import {
   sessionInPatch,
 } from "@/lib/patch-scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { loadContactViews, loadLastContactView } from "@/lib/supabase/contact-views"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
 /**
@@ -399,6 +400,34 @@ function buildStatusQuo(params: {
  * would answer for contacts the caller may not read. The rollups are therefore
  * requested only for contact ids that are already RLS-scoped, in chunks.
  */
+async function loadCommentCounts(contactIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+
+  if (contactIds.length === 0) {
+    return counts
+  }
+
+  const supabaseAdmin = createSupabaseAdminClient()
+
+  for (let offset = 0; offset < contactIds.length; offset += MANAGE_ROLLUP_CHUNK_SIZE) {
+    const chunk = contactIds.slice(offset, offset + MANAGE_ROLLUP_CHUNK_SIZE)
+    const { data, error } = await supabaseAdmin
+      .from("contact_comment_counts")
+      .select("contact_id, comment_count")
+      .in("contact_id", chunk)
+
+    if (error) {
+      throw error
+    }
+
+    for (const row of (data ?? []) as Array<{ contact_id: string; comment_count: number }>) {
+      counts.set(row.contact_id, countOf(row.comment_count))
+    }
+  }
+
+  return counts
+}
+
 async function loadRollupCounts(contactIds: string[]): Promise<Map<string, RollupCounts>> {
   const rollups = new Map<string, RollupCounts>()
 
@@ -502,7 +531,11 @@ async function loadActiveAssistantIds(programId: string, ownerId: string): Promi
  * Shared by `/manage` and the Contacts section so a rollup or a text coercion
  * cannot mean one thing in the grid and another on the Overview.
  */
-function mapManageContact(row: ContactRow, rollup?: RollupCounts): ManageContact {
+function mapManageContact(
+  row: ContactRow,
+  rollup?: RollupCounts,
+  commentCount?: number,
+): ManageContact {
   return {
     id: row.id,
     name: text(row.name) ?? "Unknown",
@@ -523,6 +556,7 @@ function mapManageContact(row: ContactRow, rollup?: RollupCounts): ManageContact
     collectedById: row.collected_by_id,
     totalAttendanceCount: rollup?.total ?? 0,
     past60DayAttendanceCount: rollup?.past60 ?? 0,
+    commentCount: commentCount ?? 0,
   }
 }
 
@@ -545,6 +579,10 @@ export async function loadManagePortalData(params: {
         .from("contacts")
         .select(CONTACT_COLUMNS)
         .eq("program_id", programId)
+        // Manual order first: a drag writes `sort_order`, and the grid's
+        // default view is that order. `id` is the tie-break so two rows that
+        // share a value cannot swap between reads.
+        .order("sort_order", { ascending: true, nullsFirst: false })
         .order("id", { ascending: true })
         .range(from, to)
 
@@ -621,14 +659,17 @@ export async function loadManagePortalData(params: {
   const displayName = (userId: string | null): string | null =>
     userId ? (staffNames[userId] ?? null) : null
 
-  const rollups = await loadRollupCounts(scopedContactRows.map((row) => row.id))
+  const [rollups, commentCounts] = await Promise.all([
+    loadRollupCounts(scopedContactRows.map((row) => row.id)),
+    loadCommentCounts(scopedContactRows.map((row) => row.id)),
+  ])
 
   const contactsById = new Map<string, ContactRow>(
     scopedContactRows.map((row) => [row.id, row]),
   )
 
   const contacts: ManageContact[] = scopedContactRows.map((row) =>
-    mapManageContact(row, rollups.get(row.id)),
+    mapManageContact(row, rollups.get(row.id), commentCounts.get(row.id)),
   )
 
   const sessionById = new Map(scopedSessionRows.map((row) => [row.id, row]))
@@ -828,6 +869,10 @@ export async function loadContactsSectionData(params: {
         .from("contacts")
         .select(CONTACT_COLUMNS)
         .eq("program_id", programId)
+        // Manual order first: a drag writes `sort_order`, and the grid's
+        // default view is that order. `id` is the tie-break so two rows that
+        // share a value cannot swap between reads.
+        .order("sort_order", { ascending: true, nullsFirst: false })
         .order("id", { ascending: true })
         .range(from, to)
 
@@ -864,13 +909,16 @@ export async function loadContactsSectionData(params: {
     ...(ownerId ? [ownerId] : []),
   ].filter((userId): userId is string => Boolean(userId))
 
-  const [staffNames, rollups] = await Promise.all([
+  const [staffNames, rollups, commentCounts, views, lastViewId] = await Promise.all([
     loadStaffDisplayNames(programId, referencedUserIds),
     loadRollupCounts(scopedContactRows.map((row) => row.id)),
+    loadCommentCounts(scopedContactRows.map((row) => row.id)),
+    loadContactViews(staff),
+    loadLastContactView(staff),
   ])
 
   const contacts = scopedContactRows.map((row) =>
-    mapManageContact(row, rollups.get(row.id)),
+    mapManageContact(row, rollups.get(row.id), commentCounts.get(row.id)),
   )
 
   const locations: ManageLocation[] = locationRows.map((row) => ({
@@ -902,6 +950,8 @@ export async function loadContactsSectionData(params: {
     activeLocationCount: locations.filter((location) => location.status !== "Inactive").length,
     staffNames,
     contacts,
+    views,
+    lastViewId,
     booksReadOptions: [...new Set(contacts.flatMap((contact) => contact.booksRead))].sort((left, right) =>
       left.localeCompare(right),
     ),
@@ -916,7 +966,12 @@ export async function loadContactsSectionData(params: {
  * service-role existence probe used, purely to tell `403` (in program, out of
  * scope) from `404` (not in this program at all).
  */
-async function assertManageContactInScope(
+/**
+ * Exported so the comment reads and writes share this file's scope predicate
+ * rather than growing a second, subtly different one. `contact-comments.ts` is
+ * the only caller outside this module.
+ */
+export async function assertManageContactInScope(
   staff: StaffContext,
   contactId: string,
 ): Promise<ContactScopeRow> {
@@ -1271,6 +1326,28 @@ export async function createManageContact(params: {
   const { payload, writtenKeys } = await buildContactWritePayload(staff, patch)
 
   const supabaseAdmin = createSupabaseAdminClient()
+
+  /**
+   * A new contact goes to the bottom of the manual order.
+   *
+   * `sort_order` is what the grid's default view orders by, so a row appended
+   * without one would sort among the nulls instead of appearing where the
+   * operator just created it. `null` from `max()` means this is the first
+   * contact in the programme, which is position 1.
+   */
+  const { data: lastRow } = await supabaseAdmin
+    .from("contacts")
+    .select("sort_order")
+    .eq("program_id", staff.programId)
+    .order("sort_order", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle()
+
+  const nextSortOrder =
+    typeof (lastRow as { sort_order?: number } | null)?.sort_order === "number"
+      ? ((lastRow as { sort_order: number }).sort_order ?? 0) + 1
+      : 1
+
   const { data, error } = await supabaseAdmin
     .from("contacts")
     .insert({
@@ -1278,6 +1355,7 @@ export async function createManageContact(params: {
       program_id: staff.programId,
       assigned_preacher_id: attribution.assignedPreacherId,
       collected_by_id: attribution.collectedById,
+      sort_order: nextSortOrder,
     })
     .select(CONTACT_COLUMNS)
     .single()

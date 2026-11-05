@@ -24,6 +24,8 @@ export function ContactsGridSurface({ payload }: { payload: ContactsSectionPaylo
         payload={payload}
         onRowCountChange={setCount ?? undefined}
         hideInlineCreate
+        views={payload.views}
+        lastViewId={payload.lastViewId}
       />
     </div>
   )

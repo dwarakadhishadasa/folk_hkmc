@@ -79,6 +79,16 @@ export interface UseGridViewStateOptions {
    * list is compared and parsed as a SET, so order carries no meaning.
    */
   defaultHiddenColumnIds?: readonly string[]
+  /**
+   * Keys that belong to the surface, not to the grid, and must survive every
+   * grid write.
+   *
+   * `applyGridParams` already preserves non-grid keys, but it preserves the ones
+   * in the `searchParams` snapshot — and a navigation started a moment ago (a
+   * saved view being opened) may not have reached that snapshot yet. Carrying the
+   * value here means a sort or filter applied in that window cannot drop it.
+   */
+  stickyParams?: Readonly<Record<string, string | null>>
 }
 
 const COLUMN_KEY_SEPARATOR = "\u0000"
@@ -146,6 +156,7 @@ export function useGridViewState({
   columnIds,
   fieldTypes,
   defaultHiddenColumnIds,
+  stickyParams,
 }: UseGridViewStateOptions): GridViewStateController {
   const router = useRouter()
   const pathname = usePathname()
@@ -210,15 +221,28 @@ export function useGridViewState({
 
   const write = useCallback(
     (next: Partial<TableState>, mode: "push" | "replace", tree: GridFilterGroup) => {
-      const query = applyGridParams(
+      const params = applyGridParams(
         searchParams,
         serializeGridViewState(
           pickGridState(next, tree),
           columnIds,
           splitColumnKey(hiddenDefaultKey),
         ),
-      ).toString()
+      )
 
+      for (const [key, value] of Object.entries(stickyParams ?? {})) {
+        if (value === null) {
+          params.delete(key)
+        } else {
+          params.set(key, value)
+        }
+      }
+
+      const query = params.toString()
+
+      // Compared against the snapshot this write was computed from: a push to
+      // the same query is a no-op, and comparing with the address bar instead
+      // would re-push on every render until the router caught up.
       if (query === searchParams.toString()) {
         return
       }
@@ -231,7 +255,7 @@ export function useGridViewState({
         router.replace(url, { scroll: false })
       }
     },
-    [columnIds, hiddenDefaultKey, pathname, router, searchParams],
+    [columnIds, hiddenDefaultKey, pathname, router, searchParams, stickyParams],
   )
 
   const scheduleFilterWrite = useCallback(
@@ -373,7 +397,7 @@ export function useGridViewState({
     const emptyTree = createFilterGroup()
     filterTreeRef.current = emptyTree
 
-    const query = applyGridParams(
+    const params = applyGridParams(
       searchParams,
       serializeGridViewState(
         {
@@ -384,11 +408,20 @@ export function useGridViewState({
         columnIds,
         splitColumnKey(hiddenDefaultKey),
       ),
-    ).toString()
+    )
 
+    for (const [key, value] of Object.entries(stickyParams ?? {})) {
+      if (value === null) {
+        params.delete(key)
+      } else {
+        params.set(key, value)
+      }
+    }
+
+    const query = params.toString()
     const url = query.length > 0 ? `${pathname}?${query}` : pathname
     router.push(url, { scroll: false })
-  }, [columnIds, hiddenDefaultKey, pathname, router, searchParams, state])
+  }, [columnIds, hiddenDefaultKey, pathname, router, searchParams, state, stickyParams])
 
   const beginTransientChange = useCallback(() => {
     transientRef.current = true
