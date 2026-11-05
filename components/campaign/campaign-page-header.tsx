@@ -28,7 +28,7 @@ export function CampaignPageHeader({
   subtitle: string
   actionHref?: string
   actionLabel?: string
-  /** A control instead of a link. Takes precedence over `actionHref`. */
+  /** A control instead of a link, e.g. the New campaign popover. Takes precedence. */
   action?: ReactNode
   filters?: ReactNode
 }) {

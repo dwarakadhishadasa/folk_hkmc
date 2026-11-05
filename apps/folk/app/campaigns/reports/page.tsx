@@ -3,7 +3,6 @@ import { redirect } from "next/navigation"
 import { CampaignEmptyState } from "@/components/campaign/campaign-empty-state"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
-import { NewCampaignButton } from "@/components/campaign/new-campaign-button"
 import { ReportActivityCard } from "@/components/campaign/reports/report-activity-card"
 import { formatCampaignDate } from "@/components/campaign/reports/report-format"
 import { ReportFunnelCard } from "@/components/campaign/reports/report-funnel-card"
@@ -60,7 +59,8 @@ export default async function CampaignReportsPage({
           <CampaignEmptyState
             title="No campaigns yet"
             description="A report starts with a campaign, its contacts and a caller who works the queue. Create the first campaign to begin."
-            action={<NewCampaignButton label="Create campaign" size="default" />}
+            actionHref="/campaigns/new"
+            actionLabel="Create campaign"
           />
         </>
       )

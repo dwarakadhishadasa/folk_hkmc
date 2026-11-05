@@ -505,22 +505,17 @@ test.describe("the campaign overview — an Admin with no campaigns", () => {
     await page.goto("/campaigns")
 
     await expect(page.getByText("No campaigns yet", { exact: true })).toBeVisible()
+    await expect(page.getByRole("link", { name: "Create campaign" })).toHaveCount(0)
     const createCampaign = page.getByRole("button", { name: "Create campaign" })
     await expect(createCampaign).toBeVisible()
+    await createCampaign.click()
+    await expect(page.getByRole("dialog").getByLabel("Campaign name")).toBeVisible()
+    await expect(page.getByRole("dialog").getByRole("button", { name: /End date/ })).toBeVisible()
     await expect(
       page.getByRole("region", { name: "Campaign totals" }),
       "an action, not five zeroes",
     ).toHaveCount(0)
     await expect(page.getByRole("table")).toHaveCount(0)
-
-    try {
-      await createCampaign.click()
-      await expect(page).toHaveURL(/\/campaigns\/[0-9a-f-]{36}\/assign-contacts$/)
-      await expect(page.getByLabel("Campaign name")).toHaveValue("Untitled campaign")
-      await expect(page.getByRole("region", { name: "Assign to" })).toBeVisible()
-    } finally {
-      await deleteCampaignsForProgram()
-    }
   })
 })
 

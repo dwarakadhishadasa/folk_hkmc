@@ -63,7 +63,7 @@ export interface AssignableContactProfile {
   language: string | null
 }
 
-/** The latest call in this campaign, as the assign grid's Recent status column reads it. */
+/** The latest call for a contact across the programme, as the assign grid's Recent status column reads it. */
 export interface RecentCallStatus {
   /** The stored `dialer_call_logs.disposition_status`. */
   status: string
@@ -801,6 +801,11 @@ async function readRecentCallStatuses(
   contactIds: string[],
 ): Promise<Map<string, RecentCallStatus>> {
   const statuses = new Map<string, RecentCallStatus>()
+
+  if (contactIds.length === 0) {
+    return statuses
+  }
+
   const supabaseAdmin = createSupabaseAdminClient()
 
   for (let offset = 0; offset < contactIds.length; offset += ASSIGNMENT_CHUNK_SIZE) {

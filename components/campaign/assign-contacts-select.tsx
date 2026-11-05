@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createColumnHelper } from "@tanstack/react-table"
 import type { RowSelectionState, Table } from "@tanstack/react-table"
@@ -57,9 +57,9 @@ const GENDER_COLUMN_ID = "gender"
 const LANGUAGE_COLUMN_ID = "language"
 
 /**
- * Frame 324's grid: the five columns the frame draws, the campaign's latest
- * call status, then the four calling facets the assignment rules actually
- * filter on.
+ * Frame 324's grid: the five columns the frame draws, the contact's latest
+ * call status across the programme, then the four calling facets the
+ * assignment rules actually filter on.
  *
  * The facet columns ship hidden. The frame's own toolbar reports hidden fields,
  * and these are the fields this screen has that the frame's five do not: an
@@ -253,8 +253,8 @@ function SelectAllControl({
 }
 
 /**
- * The assignment surface: the weighted caller pane on the left and the shared
- * contact grid on the right, under section one's details and survey.
+ * Frame 324's assign-contacts surface: the shared grid on the left, the
+ * weighted caller panel on the right, and one primary action.
  *
  * Every contact in scope is handed to the grid in one read, because the grid's
  * search, sort, filters and selection all describe the whole set — a page at a
@@ -262,7 +262,7 @@ function SelectAllControl({
  * different populations.
  *
  * The primary action assigns with `skip`: the frame states that a selected
- * contact already assigned in this campaign "will be skipped". Starting the
+ * contact already assigned in this campaign "will be skipped". Starting a DRAFT
  * campaign is the page head's action, because it is a lifecycle change, not a
  * property of the selection.
  */
@@ -294,6 +294,28 @@ export function AssignContactsSelect({
   const [isWriting, setIsWriting] = useState(false)
   const [assignDecisionOpen, setAssignDecisionOpen] = useState(false)
   const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null)
+  const surfaceRef = useRef<HTMLDivElement | null>(null)
+  const [surfaceHeight, setSurfaceHeight] = useState<number | null>(null)
+
+  // The campaign shell lets its pages grow; the assign surface is the one page
+  // that should end at the viewport instead of scrolling the whole document.
+  // Measuring the space above it is the only offset that survives the responsive
+  // header and the editable campaign title.
+  useEffect(() => {
+    const measure = () => {
+      const element = surfaceRef.current
+      if (!element) {
+        return
+      }
+
+      const top = element.getBoundingClientRect().top
+      setSurfaceHeight(Math.max(420, Math.floor(window.innerHeight - top - 24)))
+    }
+
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [])
 
   const locationNames = useMemo(
     () => new Map(locations.map((location) => [location.id, location.name])),
@@ -799,25 +821,66 @@ export function AssignContactsSelect({
   }
 
   return (
-    <div className="grid items-stretch gap-5 lg:grid-cols-[408px_minmax(0,1fr)]">
-      <aside
-        aria-label="Assignment"
-        className="flex h-[560px] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card"
-      >
-        <div className="flex items-start justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
-          <h2
-            id="assign-contacts-callers-heading"
-            className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
-          >
-            Assign to
-          </h2>
-        </div>
+    <div
+      ref={surfaceRef}
+      className="grid min-h-0 items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_408px]"
+      style={{ height: surfaceHeight ?? undefined }}
+    >
+      <section aria-label="Contacts in scope" className="min-h-0 min-w-0">
+        <div className="flex h-[520px] min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card lg:h-full">
+          <Grid<AssignableContactView>
+            rows={contacts}
+            columns={columns}
+            getRowId={(contact) => contact.contactId}
+            state={{ ...viewState, rowSelection }}
+            onStateChange={onStateChange}
+            filterTree={filterTree}
+            onFilterTreeChange={onFilterTreeChange}
+            onRowSelectionChange={setRowSelection}
+            ariaLabel="Contacts in scope"
+            density={density}
+            onDensityChange={setDensity}
+            transient={{
+              begin: beginTransientChange,
+              commit: commitTransientChange,
+              cancel: cancelTransientChange,
+            }}
+            onClearFilters={clearFilters}
+            className="rounded-none border-0"
+          />
 
-        <section
-          aria-labelledby="assign-contacts-callers-heading"
-          className="min-h-0 flex-1 overflow-y-auto p-4"
-        >
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] px-4 py-3">
+            <p className="text-[13px] font-semibold text-[var(--program-text)]">
+              {selectedCount} of {contacts.length} selected
+            </p>
+            {isPrechecking ? (
+              <p className="text-[12px] text-[var(--muted-foreground)]">Checking assignments…</p>
+            ) : conflictCount > 0 ? (
+              <p className="text-[12px] text-[var(--grid-warning-ink)]">
+                · {conflictCount} already assigned
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <aside aria-label="Assignment" className="flex h-full min-h-0 min-w-0">
+        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card">
+          <div aria-label="Assign contacts" className="flex h-full min-h-0 w-full flex-col">
+            <div className="border-b border-[var(--border)] px-4 py-3">
+              <h2
+                id="assign-contacts-callers-heading"
+                className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
+              >
+                Assign to
+              </h2>
+            </div>
+
+                <section
+                  aria-labelledby="assign-contacts-callers-heading"
+                  className="min-h-0 flex-1 overflow-y-auto p-4"
+                >
+                  <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <p className="text-[14px] font-medium text-[var(--program-text)]">Callers</p>
             <p className="text-[12px] text-[var(--muted-foreground)]">
@@ -991,59 +1054,23 @@ export function AssignContactsSelect({
         ) : null}
 
         {isPreviewing ? <p className="sr-only">Previewing the split</p> : null}
-        </section>
+                </section>
 
-        <AssignContactsAssignedBar campaignStatus={campaignStatus} contacts={contacts} />
+                <AssignContactsAssignedBar campaignStatus={campaignStatus} contacts={contacts} />
 
-        <div className="border-t border-[var(--border)] p-3">
-          <Button
-            type="button"
-            className={PRIMARY_BUTTON_CLASS}
-            disabled={primaryDisabled}
-            onClick={handleAssignClick}
-          >
-            {primaryLabel}
-          </Button>
-        </div>
-      </aside>
-
-      <section aria-label="Contacts in scope" className="min-h-0 min-w-0">
-        <div className="flex h-[520px] min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card lg:h-[560px]">
-          <Grid<AssignableContactView>
-            rows={contacts}
-            columns={columns}
-            getRowId={(contact) => contact.contactId}
-            state={{ ...viewState, rowSelection }}
-            onStateChange={onStateChange}
-            filterTree={filterTree}
-            onFilterTreeChange={onFilterTreeChange}
-            onRowSelectionChange={setRowSelection}
-            ariaLabel="Contacts in scope"
-            density={density}
-            onDensityChange={setDensity}
-            transient={{
-              begin: beginTransientChange,
-              commit: commitTransientChange,
-              cancel: cancelTransientChange,
-            }}
-            onClearFilters={clearFilters}
-            className="rounded-none border-0"
-          />
-
-          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] px-4 py-3">
-            <p className="text-[13px] font-semibold text-[var(--program-text)]">
-              {selectedCount} of {contacts.length} selected
-            </p>
-            {isPrechecking ? (
-              <p className="text-[12px] text-[var(--muted-foreground)]">Checking assignments…</p>
-            ) : conflictCount > 0 ? (
-              <p className="text-[12px] text-[var(--grid-warning-ink)]">
-                · {conflictCount} already assigned
-              </p>
-            ) : null}
+                <div className="border-t border-[var(--border)] p-3">
+                  <Button
+                    type="button"
+                    className={PRIMARY_BUTTON_CLASS}
+                    disabled={primaryDisabled}
+                    onClick={handleAssignClick}
+                  >
+                    {primaryLabel}
+                  </Button>
+                </div>
           </div>
         </div>
-      </section>
+      </aside>
 
       <AlertDialog
         open={assignDecisionOpen}

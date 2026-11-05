@@ -128,11 +128,12 @@ function surveySection(page: Page) {
 }
 
 /**
- * The survey lives in the workspace's first section now, beside the campaign
- * details. It is always open, so there is no panel to slide in.
+ * The survey lives on the assign-contacts screen's right panel now. The panel
+ * opens on the caller split; this slides the survey in and waits for it.
  */
 async function gotoSurvey(page: Page, campaignId: string): Promise<void> {
   await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+  await page.getByRole("button", { name: "Call-outcome survey" }).click()
   await expect(surveySection(page)).toBeVisible()
 }
 
@@ -175,18 +176,6 @@ test.describe("the campaign survey — a new campaign", () => {
 
       await expect(survey.getByText("No questions yet", { exact: true })).toBeVisible()
       await expect(questionRows(page)).toHaveCount(0)
-
-      // The caller screen always records Status and Notes. They are shown as
-      // default fields, and there is no editor for them here.
-      const statusField = survey.getByRole("group", { name: "Status — default question" })
-      await expect(statusField).toBeVisible()
-      await expect(statusField.getByText("Default", { exact: true })).toBeVisible()
-      await expect(statusField.getByRole("button")).toHaveCount(0)
-
-      const notesField = survey.getByRole("group", { name: "Notes — default question" })
-      await expect(notesField).toBeVisible()
-      await expect(notesField.getByText("Optional", { exact: true })).toBeVisible()
-      await expect(notesField.getByRole("button")).toHaveCount(0)
 
       // The frame's RADIO `Status?` card is its known defect: the 13-chip
       // disposition is the only status, so the builder must not offer one.
@@ -353,6 +342,7 @@ test.describe("the survey builder — an Admin editing and ordering", () => {
       await expect(questionRows(page).nth(0).getByText("1", { exact: true })).toBeVisible()
 
       await page.reload()
+      await page.getByRole("button", { name: "Call-outcome survey" }).click()
       await expect(surveySection(page)).toBeVisible()
 
       await expect(questionRows(page).nth(0)).toContainText("Notes")

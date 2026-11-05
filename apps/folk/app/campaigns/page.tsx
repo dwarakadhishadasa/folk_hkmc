@@ -7,11 +7,12 @@ import { CampaignOverviewStats } from "@/components/campaign/campaign-overview-s
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { CampaignStatusFilter } from "@/components/campaign/campaign-status-filter"
 import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
-import { NewCampaignButton } from "@/components/campaign/new-campaign-button"
+import { NewCampaignPopover } from "@/components/campaign/new-campaign-popover"
 import { SectionCard } from "@/components/section-card"
 import { AuthzError } from "@/lib/authz"
 import { listCampaignsWithProgress } from "@/lib/dialer/progress"
 import { requireCampaignAdmin } from "@/lib/dialer/scope"
+import { programDay } from "@/lib/program-day"
 
 import { getCampaignStaff } from "./staff"
 
@@ -60,6 +61,7 @@ export default async function CampaignsOverviewPage({
       statusFilter === "all" ? campaigns : campaigns.filter((entry) => entry.campaign.status === statusFilter)
     const draft = visible.filter((entry) => entry.campaign.status === "DRAFT").length
     const cancelled = visible.filter((entry) => entry.campaign.status === "CANCELLED").length
+    const today = programDay()
 
     return (
       <>
@@ -67,7 +69,7 @@ export default async function CampaignsOverviewPage({
           <CampaignPageHeader
             title="Overview"
             subtitle={`${campaigns.length} ${campaigns.length === 1 ? "campaign" : "campaigns"} · folk programme`}
-            action={<NewCampaignButton label="New campaign" />}
+            action={<NewCampaignPopover label="New campaign" today={today} />}
             filters={<CampaignStatusFilter value={statusFilter === "all" ? "all" : statusFilter} />}
           />
           <CampaignSubNav role={staff.role} />
@@ -76,7 +78,7 @@ export default async function CampaignsOverviewPage({
           <CampaignEmptyState
             title="No campaigns yet"
             description="Create a campaign to start reaching contacts in this programme."
-            action={<NewCampaignButton label="Create campaign" size="default" />}
+            action={<NewCampaignPopover label="Create campaign" today={today} />}
           />
         ) : visible.length === 0 ? (
           <CampaignEmptyState
