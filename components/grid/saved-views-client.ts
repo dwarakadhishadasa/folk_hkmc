@@ -2,17 +2,20 @@
 
 import type { GridViewConfig } from "@/components/grid/grid-view-config"
 import type {
-  ContactViewVisibility,
-  ManageContactView,
-} from "@/components/manage/manage-view-types"
+  SavedGridView,
+  SavedViewVisibility,
+} from "@/components/grid/saved-view-types"
 
 /**
- * The saved-views endpoints, as the view bar calls them.
+ * The saved-views endpoints, as a surface's view bar calls them.
  *
  * Every call returns the server's row rather than the value the client sent:
  * the server resolves colliding names and stamps timestamps, and a local guess
  * at either would drift from what the next page load shows.
  */
+
+export const CONTACTS_VIEWS_ENDPOINT = "/api/manage/views"
+export const CAMPAIGNS_VIEWS_ENDPOINT = "/api/dialer/campaign-views"
 
 async function readError(response: Response, fallback: string): Promise<string> {
   try {
@@ -25,12 +28,12 @@ async function readError(response: Response, fallback: string): Promise<string> 
   }
 }
 
-async function readView(response: Response, fallback: string): Promise<ManageContactView> {
+async function readView(response: Response, fallback: string): Promise<SavedGridView> {
   if (!response.ok) {
     throw new Error(await readError(response, fallback))
   }
 
-  const payload = (await response.json()) as { view?: ManageContactView }
+  const payload = (await response.json()) as { view?: SavedGridView }
 
   if (!payload.view) {
     throw new Error(fallback)
@@ -39,12 +42,15 @@ async function readView(response: Response, fallback: string): Promise<ManageCon
   return payload.view
 }
 
-export async function createContactViewRequest(input: {
-  name: string
-  config: GridViewConfig
-  visibility: ContactViewVisibility
-}): Promise<ManageContactView> {
-  const response = await fetch("/api/manage/views", {
+export async function createSavedViewRequest(
+  endpoint: string,
+  input: {
+    name: string
+    config: GridViewConfig
+    visibility: SavedViewVisibility
+  },
+): Promise<SavedGridView> {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -53,11 +59,12 @@ export async function createContactViewRequest(input: {
   return readView(response, "Unable to create that view.")
 }
 
-export async function updateContactViewRequest(
+export async function updateSavedViewRequest(
+  endpoint: string,
   viewId: string,
   patch: { name?: string; config?: GridViewConfig },
-): Promise<ManageContactView> {
-  const response = await fetch(`/api/manage/views/${encodeURIComponent(viewId)}`, {
+): Promise<SavedGridView> {
+  const response = await fetch(`${endpoint}/${encodeURIComponent(viewId)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -66,8 +73,8 @@ export async function updateContactViewRequest(
   return readView(response, "Unable to save that view.")
 }
 
-export async function deleteContactViewRequest(viewId: string): Promise<void> {
-  const response = await fetch(`/api/manage/views/${encodeURIComponent(viewId)}`, {
+export async function deleteSavedViewRequest(endpoint: string, viewId: string): Promise<void> {
+  const response = await fetch(`${endpoint}/${encodeURIComponent(viewId)}`, {
     method: "DELETE",
   })
 
@@ -82,8 +89,8 @@ export async function deleteContactViewRequest(viewId: string): Promise<void> {
  * Fire-and-forget: failing to remember where someone was is not worth an error
  * in front of the grid, and the next navigation will try again.
  */
-export function markContactViewUsed(viewId: string): void {
-  void fetch(`/api/manage/views/${encodeURIComponent(viewId)}/use`, {
+export function markSavedViewUsed(endpoint: string, viewId: string): void {
+  void fetch(`${endpoint}/${encodeURIComponent(viewId)}/use`, {
     method: "POST",
     keepalive: true,
   }).catch(() => {})

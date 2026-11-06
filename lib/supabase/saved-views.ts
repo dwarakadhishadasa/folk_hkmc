@@ -5,17 +5,18 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { normalizeGridViewConfig, type GridViewConfig } from "@/components/grid/grid-view-config"
 import type {
-  ContactViewVisibility,
-  ManageContactView,
-} from "@/components/manage/manage-view-types"
+  SavedGridView,
+  SavedViewSurface,
+  SavedViewVisibility,
+} from "@/components/grid/saved-view-types"
 
 /**
- * Saved contacts-grid views.
+ * Saved grid views, for every surface that renders a `Grid`.
  *
- * A view is shared by the programme rather than owned by the person who saved
- * it: the read policy admits every operational role, and this module never
- * narrows by author. That is the Airtable behaviour the grid is modelled on —
- * a view is a working surface, and a personal one is a different feature.
+ * One table holds a view per (programme, surface, owner, name). A view is
+ * personal by default; a collaborative one is open to every operational role in
+ * the programme. That is the Airtable behaviour the grid is modelled on — a view
+ * is a working surface, and a personal one is a different feature.
  *
  * Reads go through the caller's session so RLS does the programme scoping.
  * Writes go through the service role because the table has no write policy:
@@ -23,25 +24,31 @@ import type {
  */
 
 const VIEW_COLUMNS =
-  "id, name, view_type, config, position, owner_user_id, visibility, created_at, updated_at"
+  "id, name, view_type, config, position, owner_user_id, visibility, surface, created_at, updated_at"
 
 const MAX_CONFIG_BYTES = 32_768
 
 const POSITION_STEP = 1024
 
-interface ContactViewRow {
+const LAST_VIEW_COLUMN: Record<SavedViewSurface, string> = {
+  contacts: "last_contact_view_id",
+  campaigns: "last_campaign_view_id",
+}
+
+interface SavedViewRow {
   id: string
   name: string
   view_type: string
   config: unknown
   position: number
   owner_user_id: string | null
-  visibility: ContactViewVisibility
+  visibility: SavedViewVisibility
+  surface: SavedViewSurface
   created_at: string
   updated_at: string
 }
 
-function toManageContactView(row: ContactViewRow): ManageContactView {
+function toSavedGridView(row: SavedViewRow): SavedGridView {
   return {
     id: row.id,
     name: row.name,
@@ -56,13 +63,6 @@ function toManageContactView(row: ContactViewRow): ManageContactView {
 }
 
 /**
- * Whether the caller may change a view's configuration or delete it.
- *
- * Personal views belong to one person; collaborative ones belong to the
- * programme and any operational writer may reshape them. An ownerless row
- * predates ownership and is treated as the shared view it was.
- */
-/**
  * Whether the caller may see — and therefore open, remember, or change — a view.
  *
  * Reading and writing share one rule today: a personal view has exactly one
@@ -70,7 +70,10 @@ function toManageContactView(row: ContactViewRow): ManageContactView {
  * role. Two predicates that agree would be one more place for the rules to drift
  * apart.
  */
-function canAccessView(staff: StaffContext, row: Pick<ContactViewRow, "owner_user_id" | "visibility">): boolean {
+function canAccessView(
+  staff: StaffContext,
+  row: Pick<SavedViewRow, "owner_user_id" | "visibility">,
+): boolean {
   return (
     row.visibility === "collaborative" ||
     row.owner_user_id === null ||
@@ -78,37 +81,46 @@ function canAccessView(staff: StaffContext, row: Pick<ContactViewRow, "owner_use
   )
 }
 
-async function readViewRow(staff: StaffContext, viewId: string): Promise<ContactViewRow> {
+async function readViewRow(
+  staff: StaffContext,
+  surface: SavedViewSurface,
+  viewId: string,
+): Promise<SavedViewRow> {
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin
     .from("contact_views")
     .select(VIEW_COLUMNS)
     .eq("program_id", staff.programId)
+    .eq("surface", surface)
     .eq("id", viewId)
     .maybeSingle()
 
   if (error) {
-    throw new AuthzError(500, "contact_views_read_failed", "Unable to read saved views.")
+    throw new AuthzError(500, "saved_views_read_failed", "Unable to read saved views.")
   }
 
   if (!data) {
-    throw new AuthzError(404, "contact_view_not_found", "That view does not exist.")
+    throw new AuthzError(404, "saved_view_not_found", "That view does not exist.")
   }
 
-  return data as ContactViewRow
+  return data as SavedViewRow
 }
 
 /**
- * The view this person last opened, wherever they signed in from.
+ * The view this person last opened on a surface, wherever they signed in from.
  *
  * Server-side rather than a browser cache: the preference belongs to the
  * account, so a different machine opens the same view.
  */
-export async function loadLastContactView(staff: StaffContext): Promise<string | null> {
+export async function loadLastSavedView(
+  staff: StaffContext,
+  surface: SavedViewSurface,
+): Promise<string | null> {
+  const column = LAST_VIEW_COLUMN[surface]
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin
     .from("staff_view_preferences")
-    .select("last_contact_view_id")
+    .select(column)
     .eq("user_id", staff.userId)
     .maybeSingle()
 
@@ -118,14 +130,18 @@ export async function loadLastContactView(staff: StaffContext): Promise<string |
     return null
   }
 
-  return (data as { last_contact_view_id: string | null } | null)?.last_contact_view_id ?? null
+  return (data as Record<string, string | null> | null)?.[column] ?? null
 }
 
-export async function setLastContactView(staff: StaffContext, viewId: string): Promise<void> {
-  const existing = await readViewRow(staff, viewId)
+export async function setLastSavedView(
+  staff: StaffContext,
+  surface: SavedViewSurface,
+  viewId: string,
+): Promise<void> {
+  const existing = await readViewRow(staff, surface, viewId)
 
   if (!canAccessView(staff, existing)) {
-    throw new AuthzError(403, "contact_view_forbidden", "That view belongs to someone else.")
+    throw new AuthzError(403, "saved_view_forbidden", "That view belongs to someone else.")
   }
 
   const supabaseAdmin = createSupabaseAdminClient()
@@ -133,50 +149,55 @@ export async function setLastContactView(staff: StaffContext, viewId: string): P
     {
       user_id: staff.userId,
       program_id: staff.programId,
-      last_contact_view_id: viewId,
+      [LAST_VIEW_COLUMN[surface]]: viewId,
     },
     { onConflict: "user_id" },
   )
 
   if (error) {
-    throw new AuthzError(500, "contact_view_preference_failed", "Unable to remember that view.")
+    throw new AuthzError(500, "saved_view_preference_failed", "Unable to remember that view.")
   }
 }
 
-export async function loadContactViews(staff: StaffContext): Promise<ManageContactView[]> {
+export async function loadSavedViews(
+  staff: StaffContext,
+  surface: SavedViewSurface,
+): Promise<SavedGridView[]> {
   const supabase = await createSupabaseServerClient()
   const { data, error } = await supabase
     .from("contact_views")
     .select(VIEW_COLUMNS)
     .eq("program_id", staff.programId)
+    .eq("surface", surface)
     .order("position", { ascending: true })
     .order("created_at", { ascending: true })
 
   if (error) {
-    throw new AuthzError(500, "contact_views_read_failed", "Unable to read saved views.")
+    throw new AuthzError(500, "saved_views_read_failed", "Unable to read saved views.")
   }
 
-  return ((data ?? []) as ContactViewRow[]).map(toManageContactView)
+  return ((data ?? []) as SavedViewRow[]).map(toSavedGridView)
 }
 
 function assertConfigSize(config: GridViewConfig): void {
   if (JSON.stringify(config).length > MAX_CONFIG_BYTES) {
-    throw new AuthzError(400, "contact_view_config_too_large", "That view configuration is too large.")
+    throw new AuthzError(400, "saved_view_config_too_large", "That view configuration is too large.")
   }
 }
 
-async function nextPosition(staff: StaffContext): Promise<number> {
+async function nextPosition(staff: StaffContext, surface: SavedViewSurface): Promise<number> {
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin
     .from("contact_views")
     .select("position")
     .eq("program_id", staff.programId)
+    .eq("surface", surface)
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle()
 
   if (error) {
-    throw new AuthzError(500, "contact_views_read_failed", "Unable to place a new view.")
+    throw new AuthzError(500, "saved_views_read_failed", "Unable to place a new view.")
   }
 
   const current = (data as { position: number } | null)?.position ?? 0
@@ -185,12 +206,10 @@ async function nextPosition(staff: StaffContext): Promise<number> {
 }
 
 /**
- * A name that is not already taken in this programme.
+ * A name that is not already taken for this owner on this surface.
  *
- * The table has a unique index on the lowercased name, so this is the friendly
- * path rather than the guard: two requests racing for "Grid 3" both resolve to
- * it here, and the loser gets the index error and retries through the same
- * function.
+ * The unique indexes are the real guard; this is the friendly path so two
+ * requests racing for "Grid 3" do not both surface an index error.
  */
 function freeName(desired: string, taken: ReadonlySet<string>): string {
   const base = desired.trim() || "Grid"
@@ -211,18 +230,19 @@ function freeName(desired: string, taken: ReadonlySet<string>): string {
   return `${base} ${Date.now()}`
 }
 
-async function takenNames(staff: StaffContext): Promise<Set<string>> {
+async function takenNames(staff: StaffContext, surface: SavedViewSurface): Promise<Set<string>> {
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin
     .from("contact_views")
     .select("name")
     .eq("program_id", staff.programId)
+    .eq("surface", surface)
     // Names are unique per owner: someone else's "My grid" is not in the way of
     // yours, which is the point of personal views.
     .eq("owner_user_id", staff.userId)
 
   if (error) {
-    throw new AuthzError(500, "contact_views_read_failed", "Unable to read saved views.")
+    throw new AuthzError(500, "saved_views_read_failed", "Unable to read saved views.")
   }
 
   return new Set(
@@ -230,13 +250,14 @@ async function takenNames(staff: StaffContext): Promise<Set<string>> {
   )
 }
 
-export async function createContactView(params: {
+export async function createSavedView(params: {
   staff: StaffContext
+  surface: SavedViewSurface
   name: string
   config: GridViewConfig
-  visibility: ContactViewVisibility
-}): Promise<ManageContactView> {
-  const { staff } = params
+  visibility: SavedViewVisibility
+}): Promise<SavedGridView> {
+  const { staff, surface } = params
   const config = normalizeGridViewConfig(params.config)
 
   assertConfigSize(config)
@@ -244,15 +265,16 @@ export async function createContactView(params: {
   const supabaseAdmin = createSupabaseAdminClient()
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const name = freeName(params.name, await takenNames(staff))
+    const name = freeName(params.name, await takenNames(staff, surface))
     const { data, error } = await supabaseAdmin
       .from("contact_views")
       .insert({
         program_id: staff.programId,
+        surface,
         name,
         view_type: "grid",
         config,
-        position: await nextPosition(staff),
+        position: await nextPosition(staff, surface),
         created_by: staff.userId,
         owner_user_id: staff.userId,
         visibility: params.visibility,
@@ -261,33 +283,34 @@ export async function createContactView(params: {
       .single()
 
     if (!error && data) {
-      return toManageContactView(data as ContactViewRow)
+      return toSavedGridView(data as SavedViewRow)
     }
 
     // 23505 is the unique-name index losing a race. The next pass picks the
     // suffixed name the winner took.
     if (error?.code !== "23505") {
-      throw new AuthzError(500, "contact_view_create_failed", "Unable to create that view.")
+      throw new AuthzError(500, "saved_view_create_failed", "Unable to create that view.")
     }
   }
 
-  throw new AuthzError(409, "contact_view_name_taken", "That view name is taken.")
+  throw new AuthzError(409, "saved_view_name_taken", "That view name is taken.")
 }
 
-export async function updateContactView(params: {
+export async function updateSavedView(params: {
   staff: StaffContext
+  surface: SavedViewSurface
   viewId: string
   name?: string
   config?: GridViewConfig
-}): Promise<ManageContactView> {
-  const { staff, viewId } = params
+}): Promise<SavedGridView> {
+  const { staff, surface, viewId } = params
   const patch: Record<string, unknown> = {}
 
   if (params.name !== undefined) {
     const name = params.name.trim()
 
     if (name.length === 0 || name.length > 80) {
-      throw new AuthzError(400, "contact_view_name_invalid", "A view name needs 1 to 80 characters.")
+      throw new AuthzError(400, "saved_view_name_invalid", "A view name needs 1 to 80 characters.")
     }
 
     patch.name = name
@@ -300,13 +323,13 @@ export async function updateContactView(params: {
   }
 
   if (Object.keys(patch).length === 0) {
-    throw new AuthzError(400, "contact_view_patch_empty", "Nothing to change.")
+    throw new AuthzError(400, "saved_view_patch_empty", "Nothing to change.")
   }
 
-  const existing = await readViewRow(staff, viewId)
+  const existing = await readViewRow(staff, surface, viewId)
 
   if (!canAccessView(staff, existing)) {
-    throw new AuthzError(403, "contact_view_forbidden", "That view belongs to someone else.")
+    throw new AuthzError(403, "saved_view_forbidden", "That view belongs to someone else.")
   }
 
   const supabaseAdmin = createSupabaseAdminClient()
@@ -314,34 +337,36 @@ export async function updateContactView(params: {
     .from("contact_views")
     .update(patch)
     .eq("program_id", staff.programId)
+    .eq("surface", surface)
     .eq("id", viewId)
     .select(VIEW_COLUMNS)
     .maybeSingle()
 
   if (error?.code === "23505") {
-    throw new AuthzError(409, "contact_view_name_taken", "That view name is already used.")
+    throw new AuthzError(409, "saved_view_name_taken", "That view name is already used.")
   }
 
   if (error) {
-    throw new AuthzError(500, "contact_view_update_failed", "Unable to update that view.")
+    throw new AuthzError(500, "saved_view_update_failed", "Unable to update that view.")
   }
 
   if (!data) {
-    throw new AuthzError(404, "contact_view_not_found", "That view does not exist.")
+    throw new AuthzError(404, "saved_view_not_found", "That view does not exist.")
   }
 
-  return toManageContactView(data as ContactViewRow)
+  return toSavedGridView(data as SavedViewRow)
 }
 
-export async function deleteContactView(params: {
+export async function deleteSavedView(params: {
   staff: StaffContext
+  surface: SavedViewSurface
   viewId: string
 }): Promise<void> {
-  const { staff, viewId } = params
-  const existing = await readViewRow(staff, viewId)
+  const { staff, surface, viewId } = params
+  const existing = await readViewRow(staff, surface, viewId)
 
   if (!canAccessView(staff, existing)) {
-    throw new AuthzError(403, "contact_view_forbidden", "That view belongs to someone else.")
+    throw new AuthzError(403, "saved_view_forbidden", "That view belongs to someone else.")
   }
 
   const supabaseAdmin = createSupabaseAdminClient()
@@ -349,15 +374,16 @@ export async function deleteContactView(params: {
     .from("contact_views")
     .delete()
     .eq("program_id", staff.programId)
+    .eq("surface", surface)
     .eq("id", viewId)
     .select("id")
     .maybeSingle()
 
   if (error) {
-    throw new AuthzError(500, "contact_view_delete_failed", "Unable to delete that view.")
+    throw new AuthzError(500, "saved_view_delete_failed", "Unable to delete that view.")
   }
 
   if (!data) {
-    throw new AuthzError(404, "contact_view_not_found", "That view does not exist.")
+    throw new AuthzError(404, "saved_view_not_found", "That view does not exist.")
   }
 }

@@ -21,6 +21,26 @@ export function formatCampaignDate(value: string): string {
   return Number.isNaN(parsed.getTime()) ? value : CAMPAIGN_DATE_FORMATTER.format(parsed)
 }
 
+/**
+ * A campaign timestamp — today, its creation date — shown as a programme day.
+ *
+ * `created_at` is an instant, not a DATE: formatting it in UTC would name the
+ * previous day for every campaign created before 05:30 IST. The programme's day
+ * is the one the operator remembers, so it is formatted in Asia/Kolkata.
+ */
+const CAMPAIGN_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "Asia/Kolkata",
+})
+
+export function formatCampaignTimestamp(value: string): string {
+  const parsed = new Date(value)
+
+  return Number.isNaN(parsed.getTime()) ? value : CAMPAIGN_TIMESTAMP_FORMATTER.format(parsed)
+}
+
 export function formatGapDuration(seconds: number): string {
   return `${seconds} ${seconds === 1 ? "second" : "seconds"}`
 }

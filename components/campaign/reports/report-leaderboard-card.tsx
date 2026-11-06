@@ -38,9 +38,10 @@ function initialsFor(name: string): string {
  */
 export function ReportLeaderboardCard({ callers }: { callers: CampaignProgress["callers"] }) {
   const rows = leaderboardRows(callers)
+  const busiest = Math.max(...rows.map((row) => row.callsMade), 1)
 
   return (
-    <ReportCard title="Caller leaderboard">
+    <ReportCard title="Caller leaderboard" badge="Ranked by attempts">
       <p className="hidden items-start gap-2 text-[12px] leading-4 text-[var(--muted-foreground)] md:flex">
         <Info className="mt-px size-3.5 shrink-0" aria-hidden="true" />
         <span>
@@ -61,27 +62,39 @@ export function ReportLeaderboardCard({ callers }: { callers: CampaignProgress["
               data-report-caller={caller.callerName}
               data-report-caller-calls={caller.callsMade}
               data-report-caller-reached={caller.reached}
-              className="flex items-center gap-3"
+              className="flex flex-col gap-1.5"
             >
-              <span className="w-4 shrink-0 text-[12px] tabular-nums text-[var(--muted-foreground)]">
-                {index + 1}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="w-4 shrink-0 text-[12px] tabular-nums text-[var(--muted-foreground)]">
+                  {index + 1}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--chart-1)_12%,var(--card))] text-[10px] font-semibold text-[var(--chart-1)]"
+                >
+                  {initialsFor(caller.callerName)}
+                </span>
+                <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                  <span className="truncate text-[13px] text-[var(--program-text)]">
+                    {caller.callerName}
+                  </span>
+                  <span className="hidden shrink-0 text-[11px] text-[var(--muted-foreground)] md:inline">
+                    {caller.reached} reached
+                  </span>
+                </span>
+                <span className="shrink-0 text-[13px] font-semibold tabular-nums text-[var(--chart-1)]">
+                  {caller.callsMade}
+                </span>
+              </div>
+
               <span
                 aria-hidden="true"
-                className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_oklab,var(--chart-1)_12%,var(--card))] text-[10px] font-semibold text-[var(--chart-1)]"
+                className="ml-7 block h-1.5 overflow-hidden rounded-full bg-[var(--muted)]"
               >
-                {initialsFor(caller.callerName)}
-              </span>
-              <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                <span className="truncate text-[13px] text-[var(--program-text)]">
-                  {caller.callerName}
-                </span>
-                <span className="hidden shrink-0 text-[11px] text-[var(--muted-foreground)] md:inline">
-                  {caller.reached} reached
-                </span>
-              </span>
-              <span className="shrink-0 text-[13px] font-semibold tabular-nums text-[var(--chart-1)]">
-                {caller.callsMade}
+                <span
+                  className="block h-full rounded-full bg-[var(--chart-1)]"
+                  style={{ width: `${Math.max(6, Math.round((caller.callsMade / busiest) * 100))}%` }}
+                />
               </span>
             </li>
           ))}

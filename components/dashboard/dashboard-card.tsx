@@ -56,20 +56,15 @@ export function DashboardInlineEmpty({
   children,
   href,
   action,
-  actionNode,
 }: {
   children: ReactNode
   href?: string
   action?: string
-  /** A control that cannot be a link, e.g. a create-and-open button. */
-  actionNode?: ReactNode
 }) {
   return (
     <div className="px-2 py-10 text-center">
       <p className="text-sm text-[var(--muted-foreground)]">{children}</p>
-      {actionNode ? (
-        <div className="mt-3 flex justify-center">{actionNode}</div>
-      ) : href && action ? (
+      {href && action ? (
         <Link
           href={href}
           className="mt-3 inline-flex text-sm font-semibold text-[var(--program-primary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"

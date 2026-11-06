@@ -1,6 +1,5 @@
 import Link from "next/link"
 
-import { NewCampaignButton } from "@/components/campaign/new-campaign-button"
 import { DashboardCard, DashboardInlineEmpty } from "@/components/dashboard/dashboard-card"
 import { formatCount, formatPercentage, percentageOf } from "@/lib/dashboard/format"
 import { PIPELINE_STAGE_LABELS, type DashboardCampaign, type DashboardKpis, type DashboardPipeline } from "@/lib/dashboard/types"
@@ -60,7 +59,7 @@ export function DashboardPipelineCard({
           No contacts were collected in this period.
         </DashboardInlineEmpty>
       ) : noCampaigns ? (
-        <DashboardInlineEmpty actionNode={<NewCampaignButton label="Create a campaign" size="default" />}>
+        <DashboardInlineEmpty href="/campaigns/new" action="Create a campaign">
           No campaigns yet. A campaign is how collected contacts get called and invited.
         </DashboardInlineEmpty>
       ) : (

@@ -30,7 +30,7 @@ import {
   sessionInPatch,
 } from "@/lib/patch-scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { loadContactViews, loadLastContactView } from "@/lib/supabase/contact-views"
+import { loadLastSavedView, loadSavedViews } from "@/lib/supabase/saved-views"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
 /**
@@ -913,8 +913,8 @@ export async function loadContactsSectionData(params: {
     loadStaffDisplayNames(programId, referencedUserIds),
     loadRollupCounts(scopedContactRows.map((row) => row.id)),
     loadCommentCounts(scopedContactRows.map((row) => row.id)),
-    loadContactViews(staff),
-    loadLastContactView(staff),
+    loadSavedViews(staff, "contacts"),
+    loadLastSavedView(staff, "contacts"),
   ])
 
   const contacts = scopedContactRows.map((row) =>

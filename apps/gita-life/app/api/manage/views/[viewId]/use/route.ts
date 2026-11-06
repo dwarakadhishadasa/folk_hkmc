@@ -1,4 +1,4 @@
-import { handleManageViewUse } from "@/lib/manage/view-handlers"
+import { handleSavedViewUse } from "@/lib/saved-views/view-handlers"
 
 export const dynamic = "force-dynamic"
 
@@ -9,5 +9,5 @@ interface ManageViewContext {
 export async function POST(_request: Request, context: ManageViewContext) {
   const { viewId } = await context.params
 
-  return handleManageViewUse(viewId)
+  return handleSavedViewUse(viewId, "contacts")
 }

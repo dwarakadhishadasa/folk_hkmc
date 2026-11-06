@@ -3,10 +3,9 @@ import { redirect } from "next/navigation"
 import { CampaignEmptyState } from "@/components/campaign/campaign-empty-state"
 import { CampaignPageHeader } from "@/components/campaign/campaign-page-header"
 import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
-import { NewCampaignButton } from "@/components/campaign/new-campaign-button"
 import { ReportActivityCard } from "@/components/campaign/reports/report-activity-card"
 import { formatCampaignDate } from "@/components/campaign/reports/report-format"
-import { ReportFunnelCard } from "@/components/campaign/reports/report-funnel-card"
+import { ReportKpis } from "@/components/campaign/reports/report-kpis"
 import { ReportLeaderboardCard } from "@/components/campaign/reports/report-leaderboard-card"
 import { ReportOutcomeMixCard } from "@/components/campaign/reports/report-outcome-mix-card"
 import { ReportCampaignPicker, ReportExportButton } from "@/components/campaign/reports/report-toolbar"
@@ -36,8 +35,8 @@ function readCampaignParam(value: string | string[] | undefined): string | null 
  * `listCampaigns` is the program's own list.
  *
  * Every number on this page is the RPC's. The page does not total a roster row,
- * derive a percentage for display or recount a call log; the funnel, the mix,
- * the leaderboard and the activity list are four views of one payload.
+ * derive a percentage for display or recount a call log; the KPI band, the
+ * mix, the leaderboard and the activity list are four views of one payload.
  */
 export default async function CampaignReportsPage({
   searchParams,
@@ -60,7 +59,8 @@ export default async function CampaignReportsPage({
           <CampaignEmptyState
             title="No campaigns yet"
             description="A report starts with a campaign, its contacts and a caller who works the queue. Create the first campaign to begin."
-            action={<NewCampaignButton label="Create campaign" size="default" />}
+            actionHref="/campaigns/new"
+            actionLabel="Create campaign"
           />
         </>
       )
@@ -102,6 +102,8 @@ export default async function CampaignReportsPage({
 
         {hasAssignments ? (
           <>
+            <ReportKpis summary={progress.summary} />
+
             <p className="text-xs text-[var(--muted-foreground)]">
               Queued dispositions are not counted until their replay lands.
             </p>
@@ -115,19 +117,17 @@ export default async function CampaignReportsPage({
               </p>
             ) : null}
 
-            <div className="hidden gap-4 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:items-start">
-              <div className="flex flex-col gap-4">
-                <ReportFunnelCard summary={progress.summary} />
+            <div className="hidden gap-5 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:items-start">
+              <div className="flex flex-col gap-5">
                 <ReportOutcomeMixCard outcomes={progress.outcomes} />
               </div>
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-5">
                 <ReportLeaderboardCard callers={progress.callers} />
                 <ReportActivityCard recent={progress.recent} campaignName={campaign.name} />
               </div>
             </div>
 
-            <div className="flex flex-col gap-4 md:hidden">
-              <ReportFunnelCard summary={progress.summary} />
+            <div className="flex flex-col gap-5 md:hidden">
               <ReportLeaderboardCard callers={progress.callers} />
               <p className="rounded-xl border border-[var(--border)] bg-card px-4 py-3 text-[13px] text-[var(--muted-foreground)]">
                 Outcome mix and recent activity are available on desktop.

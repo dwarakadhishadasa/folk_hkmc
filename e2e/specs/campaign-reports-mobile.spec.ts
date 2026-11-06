@@ -1,10 +1,10 @@
 /**
  * Story 3.3 — the phone reports screen (frame 1968, with Decision D3).
  *
- * The frame's funnel has four rows; this screen has five, because Confirmed is
- * the number the frame's omission would hide. Outcome mix and recent activity
- * stay desktop detail, and the screen says so in words rather than leaving a
- * reader to assume the phone is complete.
+ * The phone gets the same five KPI buckets as the desktop, because Confirmed
+ * is the number the frame's four-row funnel would hide. Outcome mix and recent
+ * activity stay desktop detail, and the screen says so in words rather than
+ * leaving a reader to assume the phone is complete.
  *
  * The viewport is the design's 390x844. One desktop assertion proves the wide
  * layout is the other branch, not a second screen shipped to phones.
@@ -50,9 +50,9 @@ test("the phone gets all five buckets, the scoped leaderboard and a visible redu
 
   await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
 
-  await expect(page.locator("[data-report-funnel]:visible")).toHaveCount(5)
-  await expect(page.locator('[data-report-funnel="Confirmed"]:visible')).toHaveAttribute(
-    "data-report-funnel-value",
+  await expect(page.locator("[data-report-kpi]:visible")).toHaveCount(5)
+  await expect(page.locator('[data-report-kpi="confirmed"]:visible')).toHaveAttribute(
+    "data-report-kpi-value",
     "2",
   )
 

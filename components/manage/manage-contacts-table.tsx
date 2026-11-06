@@ -60,13 +60,15 @@ import {
 import { applyGridParams, isGridParamKey } from "@/components/grid/grid-view-state"
 import { useGridRowDragHandle } from "@/components/grid/grid-row-drag"
 import { useGridRowPosition } from "@/components/grid/grid-row-position"
-import { ManageViewsBar, type ViewSaveState } from "@/components/manage/manage-views-bar"
 import {
-  createContactViewRequest,
-  deleteContactViewRequest,
-  markContactViewUsed,
-  updateContactViewRequest,
-} from "@/components/manage/manage-views-client"
+  CONTACTS_VIEWS_ENDPOINT,
+  createSavedViewRequest,
+  deleteSavedViewRequest,
+  markSavedViewUsed,
+  updateSavedViewRequest,
+} from "@/components/grid/saved-views-client"
+import { SavedViewsBar, type ViewSaveState } from "@/components/grid/saved-views-bar"
+import { mergeSavedViews } from "@/components/grid/saved-view-types"
 import {
   suggestContactViewName,
   type ContactViewVisibility,
@@ -727,53 +729,6 @@ function ContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
  * own count can only move when the server re-reads, which makes it the seed
  * rather than the source.
  */
-/**
- * Folds a server payload into the in-memory view list without discarding a
- * write the client has already made.
- *
- * A navigation re-renders the server component, and that read can finish before
- * an autosave it raced with lands. Replacing the list wholesale would then put
- * the view's *old* configuration back in memory: the grid keeps showing what the
- * URL says, but the next switch to that view writes the stale copy over it.
- * Newest `updatedAt` wins. A view created moments ago and not yet in the payload
- * is kept; one deleted here is never resurrected by an older payload.
- */
-function mergeContactViews(
-  current: readonly ManageContactView[],
-  incoming: readonly ManageContactView[],
-  removed: ReadonlySet<string>,
-): ManageContactView[] {
-  const localById = new Map(current.map((view) => [view.id, view]))
-  const incomingIds = new Set(incoming.map((view) => view.id))
-  const now = Date.now()
-
-  const merged = incoming
-    .filter((view) => !removed.has(view.id))
-    .map((view) => {
-      const local = localById.get(view.id)
-
-      if (!local) {
-        return view
-      }
-
-      return Date.parse(local.updatedAt) > Date.parse(view.updatedAt) ? local : view
-    })
-
-  for (const view of current) {
-    if (incomingIds.has(view.id) || removed.has(view.id)) {
-      continue
-    }
-
-    if (now - Date.parse(view.createdAt) > 30_000) {
-      continue
-    }
-
-    merged.push(view)
-  }
-
-  return merged
-}
-
 function useReportRowCount(onRowCountChange: ((count: number) => void) | undefined, count: number): void {
   useEffect(() => {
     onRowCountChange?.(count)
@@ -1756,7 +1711,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
 
   if (viewsProp !== viewsSource) {
     setViewsSource(viewsProp)
-    setViews((current) => mergeContactViews(current, viewsProp ?? [], removedViewIdsRef.current))
+    setViews((current) => mergeSavedViews(current, viewsProp ?? [], removedViewIdsRef.current))
   }
 
   const activeViewId = searchParams.get("view")
@@ -1809,7 +1764,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
    */
   const saveViewConfig = useCallback(async (viewId: string, config: GridViewConfig) => {
     try {
-      const updated = await updateContactViewRequest(viewId, { config })
+      const updated = await updateSavedViewRequest(CONTACTS_VIEWS_ENDPOINT, viewId, { config })
 
       setViews((current) => current.map((view) => (view.id === updated.id ? updated : view)))
       setSaveState("saved")
@@ -1925,7 +1880,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
       setSelectedViewId(view.id)
       setDensity(view.config.density)
       setSaveState("saved")
-      markContactViewUsed(view.id)
+      markSavedViewUsed(CONTACTS_VIEWS_ENDPOINT, view.id)
 
       if (mode === "push") {
         router.push(viewHref(view), { scroll: false })
@@ -1958,7 +1913,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
     setSelectedViewId(view.id)
     setDensity(view.config.density)
     setSaveState("saved")
-    markContactViewUsed(view.id)
+    markSavedViewUsed(CONTACTS_VIEWS_ENDPOINT, view.id)
 
     if (landingHadGridKeysRef.current) {
       landingHadGridKeysRef.current = false
@@ -2005,7 +1960,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
 
   const createView = useCallback(
     async (name: string, visibility: ContactViewVisibility) => {
-      const created = await createContactViewRequest({ name, config: currentConfig, visibility })
+      const created = await createSavedViewRequest(CONTACTS_VIEWS_ENDPOINT, { name, config: currentConfig, visibility })
 
       setViews((current) => [...current, created])
       activateView(created)
@@ -2015,7 +1970,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
 
   const renameView = useCallback(
     async (viewId: string, name: string) => {
-      const updated = await updateContactViewRequest(viewId, { name })
+      const updated = await updateSavedViewRequest(CONTACTS_VIEWS_ENDPOINT, viewId, { name })
 
       setViews((current) => current.map((view) => (view.id === updated.id ? updated : view)))
       setSaveState("saved")
@@ -2031,7 +1986,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
         return
       }
 
-      const created = await createContactViewRequest({
+      const created = await createSavedViewRequest(CONTACTS_VIEWS_ENDPOINT, {
         name: `${source.name} copy`,
         config: currentConfig,
         // A copy belongs to whoever made it, even when the source is shared.
@@ -2054,7 +2009,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
         saveTimerRef.current = null
       }
 
-      await deleteContactViewRequest(viewId)
+      await deleteSavedViewRequest(CONTACTS_VIEWS_ENDPOINT, viewId)
       removedViewIdsRef.current.add(viewId)
 
       const remaining = views.filter((view) => view.id !== viewId)
@@ -2119,7 +2074,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
       pendingSaveRef.current = null
 
       if (pending) {
-        void updateContactViewRequest(pending.viewId, { config: pending.config }).catch(() => {})
+        void updateSavedViewRequest(CONTACTS_VIEWS_ENDPOINT, pending.viewId, { config: pending.config }).catch(() => {})
       }
     }
   }, [])
@@ -2447,7 +2402,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
   return (
     <div className="relative flex min-h-0 flex-1">
       {viewsAvailable && deviceView === "desktop" ? (
-        <ManageViewsBar
+        <SavedViewsBar
           views={views}
           activeView={activeView}
           saveState={saveState}

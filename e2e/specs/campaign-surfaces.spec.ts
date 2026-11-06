@@ -222,6 +222,9 @@ for (const role of CAMPAIGN_ADMIN_ROLES) {
 
       const newCampaign = page.getByRole("button", { name: "New campaign" })
       await expect(newCampaign).toBeVisible()
+      await newCampaign.click()
+      await expect(page.getByRole("dialog").getByLabel("Campaign name")).toBeVisible()
+      await page.keyboard.press("Escape")
 
       const nav = page.getByRole("navigation", { name: "Campaign" })
       await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page")

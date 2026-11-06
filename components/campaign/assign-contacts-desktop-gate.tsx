@@ -8,6 +8,7 @@ import type {
   AssignableContactView,
   LocationOption,
 } from "@/components/campaign/assign-contacts-types"
+import type { SavedGridView } from "@/components/grid/saved-view-types"
 
 const DESKTOP_QUERY = "(min-width: 768px)"
 
@@ -38,12 +39,18 @@ export function AssignContactsDesktopGate({
   contacts,
   callers,
   locations,
+  views,
+  lastViewId,
+  currentUserId,
 }: {
   campaignId: string
   campaignStatus: string
   contacts: AssignableContactView[]
   callers: AssignableCallerView[]
   locations: LocationOption[]
+  views: SavedGridView[]
+  lastViewId: string | null
+  currentUserId: string
 }) {
   const isDesktop = useSyncExternalStore(subscribeToViewport, isDesktopViewport, isDesktopOnServer)
 
@@ -74,6 +81,9 @@ export function AssignContactsDesktopGate({
       contacts={contacts}
       callers={callers}
       locations={locations}
+      views={views}
+      lastViewId={lastViewId}
+      currentUserId={currentUserId}
     />
   )
 }

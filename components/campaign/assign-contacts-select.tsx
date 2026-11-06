@@ -1,9 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { createColumnHelper } from "@tanstack/react-table"
-import type { RowSelectionState, Table } from "@tanstack/react-table"
+import type {
+  OnChangeFn,
+  RowSelectionState,
+  Table,
+  TableState,
+} from "@tanstack/react-table"
 import { Minus, Plus, TriangleAlert, X } from "lucide-react"
 
 import { AssignContactsAssignedBar } from "@/components/campaign/assign-contacts-assigned-bar"
@@ -22,6 +27,29 @@ import {
   type GridDensity,
   type GridFieldType,
 } from "@/components/grid"
+import {
+  createFilterGroup,
+  filterGroupToSerialized,
+  flattenConditions,
+  type GridFilterGroup,
+} from "@/components/grid/grid-filter-tree"
+import { gridViewConfigToParams, type GridViewConfig } from "@/components/grid/grid-view-config"
+import { applyGridParams, isGridParamKey } from "@/components/grid/grid-view-state"
+import { SavedViewsBar, type ViewSaveState } from "@/components/grid/saved-views-bar"
+import { useGridRowPosition } from "@/components/grid/grid-row-position"
+import {
+  CAMPAIGNS_VIEWS_ENDPOINT,
+  createSavedViewRequest,
+  deleteSavedViewRequest,
+  markSavedViewUsed,
+  updateSavedViewRequest,
+} from "@/components/grid/saved-views-client"
+import {
+  mergeSavedViews,
+  suggestSavedViewName,
+  type SavedGridView,
+  type SavedViewVisibility,
+} from "@/components/grid/saved-view-types"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -57,9 +85,9 @@ const GENDER_COLUMN_ID = "gender"
 const LANGUAGE_COLUMN_ID = "language"
 
 /**
- * Frame 324's grid: the five columns the frame draws, the campaign's latest
- * call status, then the four calling facets the assignment rules actually
- * filter on.
+ * Frame 324's grid: the five columns the frame draws, the contact's latest
+ * call status across the programme, then the four calling facets the
+ * assignment rules actually filter on.
  *
  * The facet columns ship hidden. The frame's own toolbar reports hidden fields,
  * and these are the fields this screen has that the frame's five do not: an
@@ -143,6 +171,8 @@ const MAX_WEIGHT = 10
 const PRIMARY_BUTTON_CLASS =
   "h-11 w-full rounded-lg bg-[var(--program-primary)] text-primary-foreground shadow-sm hover:bg-[var(--program-primary)]/90 focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
 
+const VIEW_SIDEBAR_STORAGE_KEY = "hkmc.campaigns.viewSidebarConfig"
+
 interface PickerEntry {
   userId: string
   name: string
@@ -182,10 +212,6 @@ function errorMessage(payload: { error?: string; code?: string } | null): string
   }
 
   return payload.error ?? payload.code ?? "The server refused the request."
-}
-
-function contactCountLabel(count: number): string {
-  return count === 1 ? "1 contact" : `${count} contacts`
 }
 
 /** The two initials the frame's avatars carry. */
@@ -253,8 +279,18 @@ function SelectAllControl({
 }
 
 /**
- * The assignment surface: the weighted caller pane on the left and the shared
- * contact grid on the right, under section one's details and survey.
+ * The gutter's serial: the row's position in the current view. Same shape as
+ * the contacts grid's, because it is the same gutter.
+ */
+function RowSerial({ fallback }: { fallback: number }) {
+  const position = useGridRowPosition()
+
+  return <>{position ?? fallback}</>
+}
+
+/**
+ * Frame 324's assign-contacts surface: the shared grid on the left, the
+ * weighted caller panel on the right, and one primary action.
  *
  * Every contact in scope is handed to the grid in one read, because the grid's
  * search, sort, filters and selection all describe the whole set — a page at a
@@ -262,7 +298,7 @@ function SelectAllControl({
  * different populations.
  *
  * The primary action assigns with `skip`: the frame states that a selected
- * contact already assigned in this campaign "will be skipped". Starting the
+ * contact already assigned in this campaign "will be skipped". Starting a DRAFT
  * campaign is the page head's action, because it is a lifecycle change, not a
  * property of the selection.
  */
@@ -272,15 +308,83 @@ export function AssignContactsSelect({
   contacts,
   callers,
   locations,
+  views: viewsProp,
+  lastViewId = null,
+  currentUserId,
 }: {
   campaignId: string
   campaignStatus: string
   contacts: AssignableContactView[]
   callers: AssignableCallerView[]
   locations: LocationOption[]
+  /** Saved views for this grid, in display order. */
+  views: SavedGridView[]
+  /** The view this person last opened, from the server. Used once, on a bare landing. */
+  lastViewId?: string | null
+  /** The signed-in operator, for "can I edit this view". */
+  currentUserId: string
 }) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
+
+  /**
+   * The view the operator is working in.
+   *
+   * Set the moment a view is chosen, not when the navigation lands: a grid edit
+   * made during that round trip still belongs to the view that was picked, and
+   * `searchParams` will not name it yet.
+   */
+  const [selectedViewId, setSelectedViewId] = useState<string | null>(() => searchParams.get("view"))
+
+  /** The view id every grid write must keep, whatever its `searchParams` snapshot says. */
+  const stickyParams = useMemo(
+    () => (selectedViewId ? { view: selectedViewId } : undefined),
+    [selectedViewId],
+  )
+
+  /**
+   * Whether the saved-views sidebar is showing. A way of looking at the grid,
+   * not part of the shareable arrangement, so it is a local preference.
+   */
+  const [viewsSidebarOpen, setViewsSidebarOpen] = useState(true)
+
+  /*
+   * Airtable persists this preference across reloads. The read runs after mount,
+   * because reading storage during the first render would make the server and
+   * client markup disagree.
+   */
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(VIEW_SIDEBAR_STORAGE_KEY)
+      if (!raw) {
+        return
+      }
+      const parsed = JSON.parse(raw) as { shouldExpandOnBaseOpen?: unknown }
+      if (typeof parsed.shouldExpandOnBaseOpen === "boolean") {
+        setViewsSidebarOpen(parsed.shouldExpandOnBaseOpen)
+      }
+    } catch {
+      // A corrupt or unavailable store falls back to the default, open.
+    }
+  }, [])
+
+  const toggleViewsSidebar = () => {
+    setViewsSidebarOpen((open) => {
+      const next = !open
+      try {
+        window.localStorage.setItem(
+          VIEW_SIDEBAR_STORAGE_KEY,
+          JSON.stringify({ version: 2, shouldExpandOnBaseOpen: next }),
+        )
+      } catch {
+        // The preference is a convenience; a blocked store must not stop the
+        // toggle from working for this visit.
+      }
+      return next
+    })
+  }
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
 
   const [picker, setPicker] = useState<PickerEntry[]>([])
@@ -294,6 +398,28 @@ export function AssignContactsSelect({
   const [isWriting, setIsWriting] = useState(false)
   const [assignDecisionOpen, setAssignDecisionOpen] = useState(false)
   const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null)
+  const surfaceRef = useRef<HTMLDivElement | null>(null)
+  const [surfaceHeight, setSurfaceHeight] = useState<number | null>(null)
+
+  // The campaign shell lets its pages grow; the assign surface is the one page
+  // that should end at the viewport instead of scrolling the whole document.
+  // Measuring the space above it is the only offset that survives the responsive
+  // header and the editable campaign title.
+  useEffect(() => {
+    const measure = () => {
+      const element = surfaceRef.current
+      if (!element) {
+        return
+      }
+
+      const top = element.getBoundingClientRect().top
+      setSurfaceHeight(Math.max(420, Math.floor(window.innerHeight - top - 24)))
+    }
+
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [])
 
   const locationNames = useMemo(
     () => new Map(locations.map((location) => [location.id, location.name])),
@@ -313,7 +439,420 @@ export function AssignContactsSelect({
     columnIds: COLUMN_IDS,
     fieldTypes: FIELD_TYPES,
     defaultHiddenColumnIds: DEFAULT_HIDDEN_COLUMNS,
+    stickyParams,
   })
+
+  /*
+   * Saved views.
+   *
+   * The URL stays the single source of truth for what the grid is showing; a
+   * saved view is a snapshot written into it. Selecting a view therefore
+   * *replaces* every grid-owned key with that view's, rather than merging: a
+   * merge would let the sort of the view you just left survive into the one you
+   * opened, which is the same as not having per-view sort at all.
+   */
+  const [views, setViews] = useState<SavedGridView[]>(() => viewsProp)
+  const [viewsSource, setViewsSource] = useState<SavedGridView[]>(viewsProp)
+  const [saveState, setSaveState] = useState<ViewSaveState>("idle")
+  /** Views deleted here, so a payload read before the delete cannot bring one back. */
+  const removedViewIdsRef = useRef<Set<string>>(new Set())
+
+  if (viewsProp !== viewsSource) {
+    setViewsSource(viewsProp)
+    setViews((current) => mergeSavedViews(current, viewsProp, removedViewIdsRef.current))
+  }
+
+  const activeViewId = searchParams.get("view")
+  const activeView = activeViewId
+    ? views.find((view) => view.id === activeViewId) ?? null
+    : null
+
+  /**
+   * Which view's configuration the URL was last seeded from.
+   *
+   * Claimed only after the effect has seen that view in `searchParams` — never
+   * when a navigation is merely requested, so a superseded push cannot re-apply
+   * the old view's arrangement over the edit the operator just made.
+   */
+  const hydratedViewRef = useRef<string | null>(null)
+  /**
+   * Whether the landing URL carried grid keys of its own.
+   *
+   * A link with `?f.status=…&view=…` is a shared arrangement of that view, and
+   * the first hydration must not overwrite it. Read once, so a later switch
+   * still replaces everything.
+   */
+  const landingHadGridKeysRef = useRef<boolean | null>(null)
+
+  if (landingHadGridKeysRef.current === null) {
+    landingHadGridKeysRef.current = [...searchParams.keys()].some(isGridParamKey)
+  }
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /**
+   * The edit the operator has made and the view it belongs to. Recorded by the
+   * edit handlers themselves, not by an effect watching the URL, because both
+   * `useSearchParams` and `window.location` lag `router.push` by a round trip.
+   */
+  const pendingSaveRef = useRef<{ viewId: string; config: GridViewConfig } | null>(null)
+
+  /** Writes a config to the view it belongs to. */
+  const saveViewConfig = useCallback(async (viewId: string, config: GridViewConfig) => {
+    try {
+      const updated = await updateSavedViewRequest(CAMPAIGNS_VIEWS_ENDPOINT, viewId, { config })
+
+      setViews((current) => current.map((view) => (view.id === updated.id ? updated : view)))
+      setSaveState("saved")
+    } catch {
+      setSaveState("error")
+    }
+  }, [])
+
+  /**
+   * Queues the arrangement the operator just produced. One entry: the newest
+   * edit replaces the one before it, because a view stores a whole
+   * configuration and only the last one is true.
+   */
+  const scheduleSave = useCallback(
+    (config: GridViewConfig, viewId: string | null = selectedViewId) => {
+      if (!viewId) {
+        return
+      }
+
+      pendingSaveRef.current = { viewId, config }
+
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current)
+      }
+
+      setSaveState("saving")
+
+      saveTimerRef.current = setTimeout(() => {
+        saveTimerRef.current = null
+        const pending = pendingSaveRef.current
+        pendingSaveRef.current = null
+
+        if (pending) {
+          void saveViewConfig(pending.viewId, pending.config)
+        }
+      }, 800)
+    },
+    [saveViewConfig, selectedViewId],
+  )
+
+  /** Writes whatever is queued, right now. Called when leaving a view. */
+  const flushPendingSave = useCallback(() => {
+    const pending = pendingSaveRef.current
+
+    pendingSaveRef.current = null
+
+    if (saveTimerRef.current !== null) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+
+    if (pending) {
+      void saveViewConfig(pending.viewId, pending.config)
+    }
+  }, [saveViewConfig])
+
+  const currentConfig = useMemo<GridViewConfig>(
+    () => ({
+      sorting: viewState.sorting ?? [],
+      globalFilter: typeof viewState.globalFilter === "string" ? viewState.globalFilter : "",
+      filter: flattenConditions(filterTree).length > 0 ? filterGroupToSerialized(filterTree) : null,
+      columnOrder: viewState.columnOrder ?? [],
+      hiddenColumnIds: Object.keys(viewState.columnVisibility ?? {}).filter(
+        (id) => viewState.columnVisibility?.[id] === false,
+      ),
+      columnSizing: viewState.columnSizing ?? {},
+      density,
+    }),
+    [density, filterTree, viewState],
+  )
+
+  const viewHref = useCallback(
+    (view: SavedGridView) => {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set("view", view.id)
+
+      const query = applyGridParams(
+        params,
+        gridViewConfigToParams(view.config, COLUMN_IDS, {
+          fieldTypes: FIELD_TYPES,
+          defaultHiddenColumnIds: DEFAULT_HIDDEN_COLUMNS,
+        }),
+      ).toString()
+
+      return query.length > 0 ? `${pathname}?${query}` : pathname
+    },
+    [pathname, searchParams],
+  )
+
+  /**
+   * Opens a view: its config replaces the grid's, and its row height its own.
+   * This writes the URL but does not mark the view as hydrated — hydration is a
+   * fact about what `searchParams` shows, and only the effect below observes it.
+   */
+  const activateView = useCallback(
+    (view: SavedGridView, mode: "push" | "replace" = "push") => {
+      // The view being left may still owe a write; flush it before its URL is
+      // replaced, or the edit dies with the timer that was going to send it.
+      flushPendingSave()
+      setSelectedViewId(view.id)
+      setDensity(view.config.density)
+      setSaveState("saved")
+      markSavedViewUsed(CAMPAIGNS_VIEWS_ENDPOINT, view.id)
+
+      if (mode === "push") {
+        router.push(viewHref(view), { scroll: false })
+      } else {
+        router.replace(viewHref(view), { scroll: false })
+      }
+    },
+    [flushPendingSave, router, viewHref],
+  )
+
+  /*
+   * Seeding the URL from the selected view. Skipped on the one landing that
+   * carried its own grid keys, and skipped once a view has already been
+   * hydrated, so this is not a second writer racing `activateView`.
+   */
+  useEffect(() => {
+    if (!activeViewId || hydratedViewRef.current === activeViewId) {
+      return
+    }
+
+    const view = views.find((entry) => entry.id === activeViewId)
+
+    if (!view) {
+      return
+    }
+
+    hydratedViewRef.current = view.id
+    setSelectedViewId(view.id)
+    setDensity(view.config.density)
+    setSaveState("saved")
+    markSavedViewUsed(CAMPAIGNS_VIEWS_ENDPOINT, view.id)
+
+    if (landingHadGridKeysRef.current) {
+      landingHadGridKeysRef.current = false
+      return
+    }
+
+    const href = viewHref(view)
+    const current = searchParams.toString()
+
+    if (href !== `${pathname}${current.length > 0 ? `?${current}` : ""}`) {
+      router.replace(href, { scroll: false })
+    }
+  }, [activeViewId, pathname, router, searchParams, viewHref, views])
+
+  const selectView = useCallback(
+    (viewId: string) => {
+      const view = views.find((entry) => entry.id === viewId)
+
+      if (view) {
+        activateView(view)
+      }
+    },
+    [activateView, views],
+  )
+
+  /** Back to the unsaved arrangement: no `view` and no grid keys at all. */
+  const selectUnsaved = useCallback(() => {
+    flushPendingSave()
+    hydratedViewRef.current = null
+    setSelectedViewId(null)
+    setSaveState("idle")
+    setDensity(GRID_DEFAULT_DENSITY)
+
+    // `view` must go with the grid keys: leaving it would keep the view
+    // selected, and the hydration effect would write its arrangement straight
+    // back over the one the operator just asked for.
+    const params = applyGridParams(new URLSearchParams(searchParams.toString()), {})
+    params.delete("view")
+    const query = params.toString()
+
+    router.push(query.length > 0 ? `${pathname}?${query}` : pathname, { scroll: false })
+  }, [flushPendingSave, pathname, router, searchParams])
+
+  const createView = useCallback(
+    async (name: string, visibility: SavedViewVisibility) => {
+      const created = await createSavedViewRequest(CAMPAIGNS_VIEWS_ENDPOINT, {
+        name,
+        config: currentConfig,
+        visibility,
+      })
+
+      setViews((current) => [...current, created])
+      activateView(created)
+    },
+    [activateView, currentConfig],
+  )
+
+  const renameView = useCallback(async (viewId: string, name: string) => {
+    const updated = await updateSavedViewRequest(CAMPAIGNS_VIEWS_ENDPOINT, viewId, { name })
+
+    setViews((current) => current.map((view) => (view.id === updated.id ? updated : view)))
+    setSaveState("saved")
+  }, [])
+
+  const duplicateView = useCallback(
+    async (viewId: string) => {
+      const source = views.find((view) => view.id === viewId)
+
+      if (!source) {
+        return
+      }
+
+      const created = await createSavedViewRequest(CAMPAIGNS_VIEWS_ENDPOINT, {
+        name: `${source.name} copy`,
+        config: currentConfig,
+        // A copy belongs to whoever made it, even when the source is shared.
+        visibility: source.visibility,
+      })
+
+      setViews((current) => [...current, created])
+      activateView(created)
+    },
+    [activateView, currentConfig, views],
+  )
+
+  const deleteView = useCallback(
+    async (viewId: string) => {
+      // Nothing to flush *to* once the view is gone; a pending write would 404.
+      pendingSaveRef.current = null
+
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+
+      await deleteSavedViewRequest(CAMPAIGNS_VIEWS_ENDPOINT, viewId)
+      removedViewIdsRef.current.add(viewId)
+
+      const remaining = views.filter((view) => view.id !== viewId)
+      setViews(remaining)
+
+      if (activeViewId === viewId) {
+        if (remaining.length > 0) {
+          activateView(remaining[0], "replace")
+        } else {
+          selectUnsaved()
+        }
+      }
+    },
+    [activateView, activeViewId, selectUnsaved, views],
+  )
+
+  /*
+   * The last view this operator opened, restored on a bare campaign landing.
+   * A landing link with grid keys is left alone: it is an arrangement, not a
+   * request for "wherever I was last". Runs once per mount.
+   */
+  const restoredLastViewRef = useRef(false)
+
+  useEffect(() => {
+    if (restoredLastViewRef.current) {
+      return
+    }
+
+    restoredLastViewRef.current = true
+
+    if (activeViewId || landingHadGridKeysRef.current) {
+      return
+    }
+
+    if (!lastViewId) {
+      return
+    }
+
+    const view = views.find((entry) => entry.id === lastViewId)
+
+    if (view) {
+      activateView(view, "replace")
+    }
+  }, [activateView, activeViewId, lastViewId, views])
+
+  /* A pending edit has to survive leaving the page, not just leaving the view. */
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current)
+      }
+
+      const pending = pendingSaveRef.current
+      pendingSaveRef.current = null
+
+      if (pending) {
+        void updateSavedViewRequest(CAMPAIGNS_VIEWS_ENDPOINT, pending.viewId, {
+          config: pending.config,
+        }).catch(() => {})
+      }
+    }
+  }, [])
+
+  /**
+   * A table state as the configuration a view stores. `currentConfig` reads the
+   * URL-derived state, which is a beat behind an edit; this builds from the
+   * state the handler was handed.
+   */
+  const configForState = useCallback(
+    (
+      state: Partial<TableState>,
+      tree: GridFilterGroup,
+      nextDensity: GridDensity = density,
+    ): GridViewConfig => ({
+      sorting: state.sorting ?? [],
+      globalFilter: typeof state.globalFilter === "string" ? state.globalFilter : "",
+      filter: flattenConditions(tree).length > 0 ? filterGroupToSerialized(tree) : null,
+      columnOrder: state.columnOrder ?? [],
+      hiddenColumnIds: Object.keys(state.columnVisibility ?? {}).filter(
+        (id) => state.columnVisibility?.[id] === false,
+      ),
+      columnSizing: state.columnSizing ?? {},
+      density: nextDensity,
+    }),
+    [density],
+  )
+
+  /** Every edit path queues its own save: sort, fields, order, width, search. */
+  const handleGridStateChange = useCallback<OnChangeFn<TableState>>(
+    (updater) => {
+      const resolved =
+        typeof updater === "function"
+          ? (updater as (previous: Partial<TableState>) => Partial<TableState>)(viewState)
+          : updater
+
+      scheduleSave(configForState(resolved, filterTree))
+      onStateChange(updater)
+    },
+    [configForState, filterTree, onStateChange, scheduleSave, viewState],
+  )
+
+  const handleDensityChange = useCallback(
+    (next: GridDensity) => {
+      scheduleSave(configForState(viewState, filterTree, next))
+      setDensity(next)
+    },
+    [configForState, filterTree, scheduleSave, viewState],
+  )
+
+  const handleFilterTreeChange = useCallback<typeof onFilterTreeChange>(
+    (next, immediate) => {
+      scheduleSave(configForState(viewState, next))
+      onFilterTreeChange(next, immediate)
+    },
+    [configForState, onFilterTreeChange, scheduleSave, viewState],
+  )
+
+  const handleClearFilters = useCallback(() => {
+    const cleared = configForState(viewState, createFilterGroup())
+
+    scheduleSave({ ...cleared, sorting: [], globalFilter: "", filter: null })
+    clearFilters()
+  }, [clearFilters, configForState, scheduleSave, viewState])
 
   const selectedIds = useMemo(
     () => Object.keys(rowSelection).filter((id) => rowSelection[id] === true),
@@ -511,23 +1050,62 @@ export function AssignContactsSelect({
     return [
       helper.display({
         id: SELECT_COLUMN_ID,
-        header: ({ table }) => <SelectAllControl table={table} onToggle={setVisibleSelection} />,
-        cell: ({ row }) => (
-          <span
-            className="flex justify-center"
-            onPointerDown={(event) => {
-              event.stopPropagation()
-            }}
-          >
-            <Checkbox
-              checked={row.getIsSelected()}
-              onCheckedChange={(checked) => {
-                row.toggleSelected(checked === true)
-              }}
-              aria-label={`Select ${row.original.name}`}
-            />
+        header: ({ table }) => (
+          <span className="flex w-full justify-center">
+            <span className="flex w-4 shrink-0 justify-center">
+              <SelectAllControl table={table} onToggle={setVisibleSelection} />
+            </span>
           </span>
         ),
+        cell: ({ row }) => {
+          const selected = row.getIsSelected()
+
+          return (
+            <span
+              className="flex items-center justify-center"
+              onPointerDown={(event) => {
+                // Without this the cell takes the pointer, the grid moves cell
+                // focus to a non-editable column, and the next double-click
+                // becomes a no-op.
+                event.stopPropagation()
+              }}
+            >
+              {/*
+                One 16px slot, not two: the row number at rest, the selection
+                checkbox once the row is hovered or selected. Both were measured
+                at the same x, as on the contacts grid.
+              */}
+              {selected ? (
+                <span className="flex w-4 shrink-0 justify-center">
+                  <Checkbox
+                    className="rounded-[3px]"
+                    checked
+                    onCheckedChange={(checked) => {
+                      row.toggleSelected(checked === true)
+                    }}
+                    aria-label={`Select ${row.original.name}`}
+                  />
+                </span>
+              ) : (
+                <>
+                  <span className="w-4 shrink-0 text-center text-[12px] tabular-nums text-[var(--grid-row-number-ink)] [tr:hover_&]:hidden">
+                    <RowSerial fallback={row.index + 1} />
+                  </span>
+                  <span className="hidden w-4 shrink-0 justify-center [tr:hover_&]:flex">
+                    <Checkbox
+                      className="rounded-[3px]"
+                      checked={false}
+                      onCheckedChange={(checked) => {
+                        row.toggleSelected(checked === true)
+                      }}
+                      aria-label={`Select ${row.original.name}`}
+                    />
+                  </span>
+                </>
+              )}
+            </span>
+          )
+        },
         size: 40,
         minSize: 40,
         maxSize: 40,
@@ -701,8 +1279,33 @@ export function AssignContactsSelect({
         return
       }
 
+      // Submitting is also the campaign's lifecycle action: a DRAFT starts on
+      // the same click that assigns its contacts, and a campaign that is
+      // already active is only assigned. Either way the operator leaves the
+      // setup surface for the Overview, where the campaign now lives.
+      if (campaignStatus === "DRAFT") {
+        const started = await fetch(`/api/dialer/admin/campaigns/${campaignId}/transition`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start" }),
+        })
+        const startPayload = (await started.json().catch(() => null)) as
+          | { error?: string }
+          | null
+
+        if (!started.ok) {
+          setWriteError(
+            `The contacts were assigned, but the campaign was not started: ${
+              startPayload?.error ?? "the server refused the transition."
+            }`,
+          )
+          setIsWriting(false)
+          return
+        }
+      }
+
       setIsWriting(false)
-      router.refresh()
+      router.push("/campaigns")
     } catch {
       setWriteError("Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.")
       setIsWriting(false)
@@ -711,7 +1314,7 @@ export function AssignContactsSelect({
 
   const primaryLabel = (() => {
     if (isWriting) {
-      return "Assigning…"
+      return "Submitting…"
     }
 
     if (selectedCount === 0) {
@@ -722,7 +1325,7 @@ export function AssignContactsSelect({
       return "Add a caller to assign"
     }
 
-    return `Assign ${contactCountLabel(selectedCount)}`
+    return "Submit"
   })()
 
   const primaryDisabled =
@@ -799,25 +1402,86 @@ export function AssignContactsSelect({
   }
 
   return (
-    <div className="grid items-stretch gap-5 lg:grid-cols-[408px_minmax(0,1fr)]">
-      <aside
-        aria-label="Assignment"
-        className="flex h-[560px] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card"
-      >
-        <div className="flex items-start justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
-          <h2
-            id="assign-contacts-callers-heading"
-            className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
-          >
-            Assign to
-          </h2>
-        </div>
+    <div
+      ref={surfaceRef}
+      className="flex min-h-0 items-stretch"
+      style={{ height: surfaceHeight ?? undefined }}
+    >
+      {/*
+        The saved-views sidebar, flush against the grid the way `/contacts`
+        mounts it: the bar's 48px header lines up with the grid's toolbar, and
+        the grid owns the rest of the height.
+      */}
+      <SavedViewsBar
+        views={views}
+        activeView={activeView}
+        saveState={saveState}
+        defaultName={suggestSavedViewName(views)}
+        onSelectView={selectView}
+        onSelectUnsaved={selectUnsaved}
+        onCreateView={createView}
+        onRenameView={renameView}
+        onDuplicateView={duplicateView}
+        onDeleteView={deleteView}
+        currentUserId={currentUserId}
+        open={viewsSidebarOpen}
+        onToggle={toggleViewsSidebar}
+      />
 
-        <section
-          aria-labelledby="assign-contacts-callers-heading"
-          className="min-h-0 flex-1 overflow-y-auto p-4"
-        >
-          <div className="flex flex-col gap-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-0">
+          <section
+            aria-label="Contacts in scope"
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+          >
+            <div className="flex h-[520px] min-h-0 flex-col lg:h-full">
+              <Grid<AssignableContactView>
+                rows={contacts}
+                columns={columns}
+                getRowId={(contact) => contact.contactId}
+                state={{ ...viewState, rowSelection }}
+                onStateChange={handleGridStateChange}
+                filterTree={filterTree}
+                onFilterTreeChange={handleFilterTreeChange}
+                onRowSelectionChange={setRowSelection}
+                ariaLabel="Contacts in scope"
+                density={density}
+                onDensityChange={handleDensityChange}
+                transient={{
+                  begin: beginTransientChange,
+                  commit: commitTransientChange,
+                  cancel: cancelTransientChange,
+                }}
+                onClearFilters={handleClearFilters}
+                className={cn(
+                  // A collapsed bar leaves its toggle floating over the grid's
+                  // leading edge; the toolbar shifts right to make room for it.
+                  viewsSidebarOpen ? undefined : "[&_[data-grid-toolbar]]:pl-[292px]",
+                )}
+              />
+            </div>
+          </section>
+
+          <aside
+            aria-label="Assignment"
+            className="flex min-h-0 w-full shrink-0 flex-col lg:w-[408px]"
+          >
+        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none border border-[var(--border)] bg-card">
+          <div aria-label="Assign contacts" className="flex h-full min-h-0 w-full flex-col">
+            <div className="border-b border-[var(--border)] px-4 py-3">
+              <h2
+                id="assign-contacts-callers-heading"
+                className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]"
+              >
+                Assign to
+              </h2>
+            </div>
+
+                <section
+                  aria-labelledby="assign-contacts-callers-heading"
+                  className="min-h-0 flex-1 overflow-y-auto p-4"
+                >
+                  <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <p className="text-[14px] font-medium text-[var(--program-text)]">Callers</p>
             <p className="text-[12px] text-[var(--muted-foreground)]">
@@ -991,59 +1655,29 @@ export function AssignContactsSelect({
         ) : null}
 
         {isPreviewing ? <p className="sr-only">Previewing the split</p> : null}
-        </section>
+                </section>
 
-        <AssignContactsAssignedBar campaignStatus={campaignStatus} contacts={contacts} />
+                <AssignContactsAssignedBar campaignStatus={campaignStatus} contacts={contacts} />
 
-        <div className="border-t border-[var(--border)] p-3">
-          <Button
-            type="button"
-            className={PRIMARY_BUTTON_CLASS}
-            disabled={primaryDisabled}
-            onClick={handleAssignClick}
-          >
-            {primaryLabel}
-          </Button>
-        </div>
-      </aside>
-
-      <section aria-label="Contacts in scope" className="min-h-0 min-w-0">
-        <div className="flex h-[520px] min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card lg:h-[560px]">
-          <Grid<AssignableContactView>
-            rows={contacts}
-            columns={columns}
-            getRowId={(contact) => contact.contactId}
-            state={{ ...viewState, rowSelection }}
-            onStateChange={onStateChange}
-            filterTree={filterTree}
-            onFilterTreeChange={onFilterTreeChange}
-            onRowSelectionChange={setRowSelection}
-            ariaLabel="Contacts in scope"
-            density={density}
-            onDensityChange={setDensity}
-            transient={{
-              begin: beginTransientChange,
-              commit: commitTransientChange,
-              cancel: cancelTransientChange,
-            }}
-            onClearFilters={clearFilters}
-            className="rounded-none border-0"
-          />
-
-          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] px-4 py-3">
-            <p className="text-[13px] font-semibold text-[var(--program-text)]">
-              {selectedCount} of {contacts.length} selected
-            </p>
-            {isPrechecking ? (
-              <p className="text-[12px] text-[var(--muted-foreground)]">Checking assignments…</p>
-            ) : conflictCount > 0 ? (
-              <p className="text-[12px] text-[var(--grid-warning-ink)]">
-                · {conflictCount} already assigned
-              </p>
-            ) : null}
+                <div className="border-t border-[var(--border)] p-3">
+                  <p className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-[var(--muted-foreground)]">
+                    <span className="font-medium text-[var(--program-text)]">
+                      {selectedCount} of {contacts.length} selected
+                    </span>
+                    {isPrechecking ? <span>Checking assignments…</span> : null}
+                  </p>
+                  <Button
+                    type="button"
+                    className={PRIMARY_BUTTON_CLASS}
+                    disabled={primaryDisabled}
+                    onClick={handleAssignClick}
+                  >
+                    {primaryLabel}
+                  </Button>
+                </div>
           </div>
         </div>
-      </section>
+      </aside>
 
       <AlertDialog
         open={assignDecisionOpen}
@@ -1141,6 +1775,8 @@ export function AssignContactsSelect({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+        </div>
+      </div>
     </div>
   )
 }

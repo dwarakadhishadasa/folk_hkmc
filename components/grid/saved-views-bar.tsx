@@ -46,29 +46,29 @@ import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { GRID_BASE_FONT_CLASS } from "@/components/grid/grid-row"
 import {
-  isContactViewVisibility,
-  CONTACT_VIEW_TYPES,
-  CONTACT_VIEW_TYPE_LABELS,
-  CONTACT_VIEW_VISIBILITIES,
-  CONTACT_VIEW_VISIBILITY_HINTS,
-  CONTACT_VIEW_VISIBILITY_LABELS,
-  canEditContactView,
-  type ContactViewVisibility,
-  type ManageContactView,
-} from "@/components/manage/manage-view-types"
+  isSavedViewVisibility,
+  SAVED_VIEW_TYPES,
+  SAVED_VIEW_TYPE_LABELS,
+  SAVED_VIEW_VISIBILITIES,
+  SAVED_VIEW_VISIBILITY_HINTS,
+  SAVED_VIEW_VISIBILITY_LABELS,
+  canEditSavedView,
+  type SavedGridView,
+  type SavedViewVisibility,
+} from "@/components/grid/saved-view-types"
 
 export type ViewSaveState = "idle" | "saving" | "saved" | "error"
 
-export interface ManageViewsBarProps {
-  views: ManageContactView[]
-  activeView: ManageContactView | null
+export interface SavedViewsBarProps {
+  views: SavedGridView[]
+  activeView: SavedGridView | null
   /** What the grid is showing right now, used to seed a create or a duplicate. */
   saveState: ViewSaveState
   defaultName: string
   onSelectView: (viewId: string) => void
   /** Clears `view` and returns the grid to its unsaved arrangement. */
   onSelectUnsaved: () => void
-  onCreateView: (name: string, visibility: ContactViewVisibility) => Promise<void>
+  onCreateView: (name: string, visibility: SavedViewVisibility) => Promise<void>
   onRenameView: (viewId: string, name: string) => Promise<void>
   onDuplicateView: (viewId: string) => Promise<void>
   onDeleteView: (viewId: string) => Promise<void>
@@ -88,12 +88,12 @@ const SAVE_LABELS: Record<ViewSaveState, string> = {
 }
 
 type NameDialog =
-  | { mode: "create"; value: string; visibility: ContactViewVisibility }
+  | { mode: "create"; value: string; visibility: SavedViewVisibility }
   | { mode: "rename"; value: string; viewId: string }
   | null
 
 /**
- * The saved-views sidebar, beside the grid on desktop.
+ * A surface's saved-views sidebar, beside its grid on desktop.
  *
  * The header names the open view and opens that view's actions (rename,
  * duplicate, copy link, delete); the list under it is the switcher, the way the
@@ -101,7 +101,7 @@ type NameDialog =
  * desktop — the phone has its own list and no views surface — so every control
  * here is desktop chrome.
  */
-export function ManageViewsBar({
+export function SavedViewsBar({
   views,
   activeView,
   saveState,
@@ -115,7 +115,7 @@ export function ManageViewsBar({
   currentUserId,
   open,
   onToggle,
-}: ManageViewsBarProps) {
+}: SavedViewsBarProps) {
   const [dialog, setDialog] = useState<NameDialog>(null)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -213,7 +213,7 @@ export function ManageViewsBar({
               <>
                 <DropdownMenuItem
                   className="h-8 gap-2 text-[13px]"
-                  disabled={!canEditContactView(activeView, currentUserId)}
+                  disabled={!canEditSavedView(activeView, currentUserId)}
                   onSelect={() => {
                     setError(null)
                     setDialog({ mode: "rename", value: activeView.name, viewId: activeView.id })
@@ -244,7 +244,7 @@ export function ManageViewsBar({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive h-8 gap-2 text-[13px]"
-                  disabled={!canEditContactView(activeView, currentUserId)}
+                  disabled={!canEditSavedView(activeView, currentUserId)}
                   onSelect={() => setConfirmDelete(true)}
                 >
                   <Trash2 aria-hidden="true" className="size-3.5" />
@@ -291,10 +291,10 @@ export function ManageViewsBar({
             <DropdownMenuSeparator />
             {/*
               One entry per renderable view type. Adding Calendar or Kanban is an
-              entry in `CONTACT_VIEW_TYPES` plus a renderer — never a second menu
+              entry in `SAVED_VIEW_TYPES` plus a renderer — never a second menu
               built here.
             */}
-            {CONTACT_VIEW_TYPES.map((viewType) => (
+            {SAVED_VIEW_TYPES.map((viewType) => (
               <DropdownMenuItem
                 key={viewType}
                 data-grid-view-type={viewType}
@@ -305,7 +305,7 @@ export function ManageViewsBar({
                 }}
               >
                 <Grid2x2 aria-hidden="true" className="text-[var(--tag-1)] size-3.5" />
-                {CONTACT_VIEW_TYPE_LABELS[viewType]}
+                {SAVED_VIEW_TYPE_LABELS[viewType]}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -410,7 +410,7 @@ export function ManageViewsBar({
                 aria-label="Who can edit"
                 className="gap-2"
                 onValueChange={(value) => {
-                  if (!isContactViewVisibility(value)) {
+                  if (!isSavedViewVisibility(value)) {
                     return
                   }
 
@@ -419,7 +419,7 @@ export function ManageViewsBar({
                   )
                 }}
               >
-                {CONTACT_VIEW_VISIBILITIES.map((visibility) => (
+                {SAVED_VIEW_VISIBILITIES.map((visibility) => (
                   <label
                     key={visibility}
                     htmlFor={`view-visibility-${visibility}`}
@@ -432,10 +432,10 @@ export function ManageViewsBar({
                     />
                     <span className="min-w-0">
                       <span className="block text-[13px] font-medium">
-                        {CONTACT_VIEW_VISIBILITY_LABELS[visibility]}
+                        {SAVED_VIEW_VISIBILITY_LABELS[visibility]}
                       </span>
                       <span className="text-muted-foreground block text-[12px] leading-snug">
-                        {CONTACT_VIEW_VISIBILITY_HINTS[visibility]}
+                        {SAVED_VIEW_VISIBILITY_HINTS[visibility]}
                       </span>
                     </span>
                   </label>
