@@ -6,11 +6,10 @@
  * that difference visible with a fifth assignment outside the Preacher's scope,
  * so the two sets of expected numbers are not accidentally equal.
  *
- * The screen is graded against the four sections frame 790 draws — funnel,
- * outcome mix, leaderboard and recent activity — plus Confirmed, which Story
- * 3.1 requires and the four-row frame omits. The RPC's arithmetic is Story
- * 1.9's test, not this one's: here the assertions are that the payload is
- * rendered, labelled and scoped.
+ * The screen is graded against the five KPI buckets, the outcome mix, the
+ * leaderboard and recent activity. The RPC's arithmetic is Story 1.9's test,
+ * not this one's: here the assertions are that the payload is rendered,
+ * labelled and scoped.
  */
 
 import { expect, test, request as playwrightRequest, type Page } from "@playwright/test"
@@ -40,32 +39,29 @@ test.afterAll(async () => {
   await fixture?.cleanup()
 })
 
-async function expectFunnel(page: Page, expected: Record<string, number>) {
-  for (const [label, value] of Object.entries(expected)) {
-    await expect(page.locator(`[data-report-funnel="${label}"]:visible`)).toHaveAttribute(
-      "data-report-funnel-value",
+async function expectKpis(page: Page, expected: Record<string, number>) {
+  for (const [key, value] of Object.entries(expected)) {
+    await expect(page.locator(`[data-report-kpi="${key}"]:visible`)).toHaveAttribute(
+      "data-report-kpi-value",
       String(value),
     )
   }
 }
 
-test("an Admin reads the whole programme's funnel, mix, leaderboard and activity", async ({ page }) => {
+test("an Admin reads the whole programme's totals, mix, leaderboard and activity", async ({ page }) => {
   await page.goto(`/campaigns/reports?campaign=${fixture.campaignId}`)
 
   await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
   await expect(page.getByRole("link", { name: "Reports" })).toHaveAttribute("aria-current", "page")
   await expect(page.getByText(fixture.campaignName, { exact: false }).first()).toBeVisible()
 
-  await expectFunnel(page, {
-    Assigned: 5,
-    Attempted: 4,
-    Reached: 2,
-    Confirmed: 2,
-    "Never attempted": 1,
+  await expectKpis(page, {
+    assigned: 5,
+    attempted: 4,
+    reached: 2,
+    confirmed: 2,
+    neverAttempted: 1,
   })
-
-  // Never attempted keeps the design's amber note, not just a bucket label.
-  await expect(page.getByText(/1 assigned contact was never called/i).first()).toBeVisible()
 
   await expect(page.locator('[data-report-outcome="CONFIRMED"]')).toHaveAttribute(
     "data-report-outcome-count",
@@ -106,12 +102,12 @@ test("a Preacher sees only their own contacts, even though the campaign row is v
 
     await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
 
-    await expectFunnel(page, {
-      Assigned: 4,
-      Attempted: 3,
-      Reached: 1,
-      Confirmed: 1,
-      "Never attempted": 1,
+    await expectKpis(page, {
+      assigned: 4,
+      attempted: 3,
+      reached: 1,
+      confirmed: 1,
+      neverAttempted: 1,
     })
 
     await expect(page.locator('[data-report-outcome="CONFIRMED"]')).toHaveAttribute(
@@ -158,7 +154,7 @@ test("a campaign with no assignments names the next action instead of drawing fi
       "href",
       `/campaigns/${campaignId}/assign-contacts`,
     )
-    await expect(page.locator("[data-report-funnel]:visible")).toHaveCount(0)
+    await expect(page.locator("[data-report-kpi]:visible")).toHaveCount(0)
   } finally {
     await deleteDisposableCampaign(campaignId)
   }

@@ -78,6 +78,7 @@ export function ReportKpis({ summary }: { summary: CampaignProgress["summary"] }
             <div
               key={tile.key}
               data-report-kpi={tile.key}
+              data-report-kpi-value={summary[tile.key]}
               className={cn(STAT_TILE_CLASS, tile.wide && "col-span-2 md:col-span-1")}
             >
               <StatTileIcon icon={Icon} />
