@@ -1,7 +1,7 @@
 import Link from "next/link"
 
 import { CampaignStatusPill } from "@/components/campaign/campaign-status-pill"
-import { formatCampaignDate } from "@/components/campaign/campaign-format"
+import { formatCampaignDate, formatCampaignTimestamp } from "@/components/campaign/campaign-format"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { CampaignOverviewEntry } from "@/lib/dialer/progress"
 
@@ -23,6 +23,7 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
         <TableHeader>
           <TableRow className="border-b border-[var(--border)] bg-[#f8fafc] hover:bg-[#f8fafc] dark:bg-[var(--secondary)] dark:hover:bg-[var(--secondary)]">
             <TableHead className={HEAD_CLASS}>Campaign</TableHead>
+            <TableHead className={HEAD_CLASS}>Start Date</TableHead>
             <TableHead className={HEAD_CLASS}>End Date</TableHead>
             <TableHead className={HEAD_CLASS}>Status</TableHead>
             <TableHead className={HEAD_CLASS}>Assigned</TableHead>
@@ -44,6 +45,9 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
                 >
                   {campaign.name}
                 </Link>
+              </TableCell>
+              <TableCell className="px-2 py-3 text-[14px] whitespace-nowrap text-[var(--muted-foreground)] sm:px-4">
+                {formatCampaignTimestamp(campaign.created_at)}
               </TableCell>
               <TableCell className="px-2 py-3 text-[14px] whitespace-nowrap text-[var(--muted-foreground)] sm:px-4">
                 {formatCampaignDate(campaign.campaign_date)}
