@@ -214,10 +214,6 @@ function errorMessage(payload: { error?: string; code?: string } | null): string
   return payload.error ?? payload.code ?? "The server refused the request."
 }
 
-function contactCountLabel(count: number): string {
-  return count === 1 ? "1 contact" : `${count} contacts`
-}
-
 /** The two initials the frame's avatars carry. */
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -1283,8 +1279,33 @@ export function AssignContactsSelect({
         return
       }
 
+      // Submitting is also the campaign's lifecycle action: a DRAFT starts on
+      // the same click that assigns its contacts, and a campaign that is
+      // already active is only assigned. Either way the operator leaves the
+      // setup surface for the Overview, where the campaign now lives.
+      if (campaignStatus === "DRAFT") {
+        const started = await fetch(`/api/dialer/admin/campaigns/${campaignId}/transition`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start" }),
+        })
+        const startPayload = (await started.json().catch(() => null)) as
+          | { error?: string }
+          | null
+
+        if (!started.ok) {
+          setWriteError(
+            `The contacts were assigned, but the campaign was not started: ${
+              startPayload?.error ?? "the server refused the transition."
+            }`,
+          )
+          setIsWriting(false)
+          return
+        }
+      }
+
       setIsWriting(false)
-      router.refresh()
+      router.push("/campaigns")
     } catch {
       setWriteError("Unable to reach the server. Nothing was assigned; your selection and callers are unchanged.")
       setIsWriting(false)
@@ -1293,7 +1314,7 @@ export function AssignContactsSelect({
 
   const primaryLabel = (() => {
     if (isWriting) {
-      return "Assigning…"
+      return "Submitting…"
     }
 
     if (selectedCount === 0) {
@@ -1304,7 +1325,7 @@ export function AssignContactsSelect({
       return "Add a caller to assign"
     }
 
-    return `Assign ${contactCountLabel(selectedCount)}`
+    return "Submit"
   })()
 
   const primaryDisabled =
