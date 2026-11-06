@@ -1337,72 +1337,64 @@ export function AssignContactsSelect({
       style={{ height: surfaceHeight ?? undefined }}
     >
       {/*
-        The saved-views sidebar. A wide-desktop surface: below `lg` the grid and
-        the assign pane need the width, and the switcher is chrome, not data.
+        The saved-views sidebar, flush against the grid the way `/contacts`
+        mounts it: the bar's 48px header lines up with the grid's toolbar, and
+        the grid owns the rest of the height.
       */}
-      <div className="hidden min-h-0 shrink-0 lg:flex">
-        <SavedViewsBar
-          views={views}
-          activeView={activeView}
-          saveState={saveState}
-          defaultName={suggestSavedViewName(views)}
-          onSelectView={selectView}
-          onSelectUnsaved={selectUnsaved}
-          onCreateView={createView}
-          onRenameView={renameView}
-          onDuplicateView={duplicateView}
-          onDeleteView={deleteView}
-          currentUserId={currentUserId}
-          open={viewsSidebarOpen}
-          onToggle={toggleViewsSidebar}
-        />
-      </div>
+      <SavedViewsBar
+        views={views}
+        activeView={activeView}
+        saveState={saveState}
+        defaultName={suggestSavedViewName(views)}
+        onSelectView={selectView}
+        onSelectUnsaved={selectUnsaved}
+        onCreateView={createView}
+        onRenameView={renameView}
+        onDuplicateView={duplicateView}
+        onDeleteView={deleteView}
+        currentUserId={currentUserId}
+        open={viewsSidebarOpen}
+        onToggle={toggleViewsSidebar}
+      />
 
-      <div className="grid min-h-0 min-w-0 flex-1 items-stretch gap-5 lg:grid-cols-[minmax(0,1fr)_408px]">
-        <section aria-label="Contacts in scope" className="min-h-0 min-w-0">
-          <div className="flex h-[520px] min-h-0 flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card lg:h-full">
-            <Grid<AssignableContactView>
-              rows={contacts}
-              columns={columns}
-              getRowId={(contact) => contact.contactId}
-              state={{ ...viewState, rowSelection }}
-              onStateChange={handleGridStateChange}
-              filterTree={filterTree}
-              onFilterTreeChange={handleFilterTreeChange}
-              onRowSelectionChange={setRowSelection}
-              ariaLabel="Contacts in scope"
-              density={density}
-              onDensityChange={handleDensityChange}
-              transient={{
-                begin: beginTransientChange,
-                commit: commitTransientChange,
-                cancel: cancelTransientChange,
-              }}
-              onClearFilters={handleClearFilters}
-              className={cn(
-                "rounded-none border-0",
-                // A collapsed bar leaves its toggle floating over the grid's
-                // leading edge; the toolbar shifts right to make room for it.
-                viewsSidebarOpen ? undefined : "[&_[data-grid-toolbar]]:pl-[292px]",
-              )}
-            />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch">
+          <section
+            aria-label="Contacts in scope"
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+          >
+            <div className="flex h-[520px] min-h-0 flex-col lg:h-full">
+              <Grid<AssignableContactView>
+                rows={contacts}
+                columns={columns}
+                getRowId={(contact) => contact.contactId}
+                state={{ ...viewState, rowSelection }}
+                onStateChange={handleGridStateChange}
+                filterTree={filterTree}
+                onFilterTreeChange={handleFilterTreeChange}
+                onRowSelectionChange={setRowSelection}
+                ariaLabel="Contacts in scope"
+                density={density}
+                onDensityChange={handleDensityChange}
+                transient={{
+                  begin: beginTransientChange,
+                  commit: commitTransientChange,
+                  cancel: cancelTransientChange,
+                }}
+                onClearFilters={handleClearFilters}
+                className={cn(
+                  // A collapsed bar leaves its toggle floating over the grid's
+                  // leading edge; the toolbar shifts right to make room for it.
+                  viewsSidebarOpen ? undefined : "[&_[data-grid-toolbar]]:pl-[292px]",
+                )}
+              />
+            </div>
+          </section>
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] px-4 py-3">
-            <p className="text-[13px] font-semibold text-[var(--program-text)]">
-              {selectedCount} of {contacts.length} selected
-            </p>
-            {isPrechecking ? (
-              <p className="text-[12px] text-[var(--muted-foreground)]">Checking assignments…</p>
-            ) : conflictCount > 0 ? (
-              <p className="text-[12px] text-[var(--grid-warning-ink)]">
-                · {conflictCount} already assigned
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <aside aria-label="Assignment" className="flex h-full min-h-0 min-w-0">
+          <aside
+            aria-label="Assignment"
+            className="flex min-h-0 w-full shrink-0 flex-col lg:w-[408px]"
+          >
         <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card">
           <div aria-label="Assign contacts" className="flex h-full min-h-0 w-full flex-col">
             <div className="border-b border-[var(--border)] px-4 py-3">
@@ -1597,6 +1589,12 @@ export function AssignContactsSelect({
                 <AssignContactsAssignedBar campaignStatus={campaignStatus} contacts={contacts} />
 
                 <div className="border-t border-[var(--border)] p-3">
+                  <p className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-[var(--muted-foreground)]">
+                    <span className="font-medium text-[var(--program-text)]">
+                      {selectedCount} of {contacts.length} selected
+                    </span>
+                    {isPrechecking ? <span>Checking assignments…</span> : null}
+                  </p>
                   <Button
                     type="button"
                     className={PRIMARY_BUTTON_CLASS}
@@ -1706,6 +1704,7 @@ export function AssignContactsSelect({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+        </div>
       </div>
     </div>
   )
