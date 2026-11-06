@@ -4,15 +4,7 @@ import type { CampaignProgress } from "@/lib/dialer/progress"
 import { REPORT_FUNNEL_BUCKETS } from "@/lib/dialer/reports"
 
 import { ReportCard } from "./report-card"
-
-/** Never attempted is the design's amber bucket; the other four are chart series. */
-const BUCKET_BARS: Record<(typeof REPORT_FUNNEL_BUCKETS)[number]["key"], string> = {
-  assigned: "bg-[var(--chart-1)]",
-  attempted: "bg-[var(--chart-2)]",
-  reached: "bg-[var(--chart-4)]",
-  confirmed: "bg-[var(--tag-9)]",
-  neverAttempted: "bg-[var(--grid-warning-ink)]",
-}
+import { REPORT_FUNNEL_COLORS } from "./report-colors"
 
 /**
  * Frame 790's Campaign funnel, plus the Confirmed bucket the four-row frame
@@ -52,8 +44,8 @@ export function ReportFunnelCard({ summary }: { summary: CampaignProgress["summa
               <span className="block h-4 overflow-hidden rounded-[3px] bg-[var(--muted)]">
                 <span
                   aria-hidden="true"
-                  className={`block h-full rounded-[3px] ${BUCKET_BARS[bucket.key]}`}
-                  style={{ width: `${percentage}%` }}
+                  className="block h-full rounded-[3px]"
+                  style={{ width: `${percentage}%`, backgroundColor: REPORT_FUNNEL_COLORS[bucket.key] }}
                 />
               </span>
               <span className="text-right text-[13px] font-semibold tabular-nums text-[var(--program-text)]">

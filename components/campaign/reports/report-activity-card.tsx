@@ -2,6 +2,7 @@ import type { CampaignProgress } from "@/lib/dialer/progress"
 import { reportGroupLabel } from "@/lib/dialer/reports"
 
 import { ReportCard } from "./report-card"
+import { REPORT_GROUP_COLORS } from "./report-colors"
 import { formatReportTime } from "./report-format"
 
 /**
@@ -18,7 +19,7 @@ export function ReportActivityCard({
   campaignName: string
 }) {
   return (
-    <ReportCard title="Recent activity">
+    <ReportCard title="Recent activity" badge="Newest first">
       {recent.length === 0 ? (
         <p className="text-[13px] text-[var(--muted-foreground)]">
           No calls have been recorded in this campaign yet.
@@ -38,8 +39,19 @@ export function ReportActivityCard({
                 />
                 <span className="truncate text-[var(--program-text)]">{call.callerName}</span>
               </span>
-              <span className="truncate text-[var(--muted-foreground)]">
-                {reportGroupLabel(call.statusGroup)} · {campaignName}
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span
+                  className="shrink-0 rounded-full px-2 py-[2px] text-[11px] font-medium"
+                  style={{
+                    backgroundColor: `color-mix(in oklab, ${
+                      REPORT_GROUP_COLORS[call.statusGroup] ?? "var(--chart-5)"
+                    } 12%, var(--card))`,
+                    color: REPORT_GROUP_COLORS[call.statusGroup] ?? "var(--chart-5)",
+                  }}
+                >
+                  {reportGroupLabel(call.statusGroup)}
+                </span>
+                <span className="truncate text-[var(--muted-foreground)]">· {campaignName}</span>
               </span>
               <time
                 dateTime={call.calledAt}

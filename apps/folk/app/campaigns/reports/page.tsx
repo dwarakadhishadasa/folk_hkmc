@@ -6,6 +6,7 @@ import { CampaignSubNav } from "@/components/campaign/campaign-sub-nav"
 import { ReportActivityCard } from "@/components/campaign/reports/report-activity-card"
 import { formatCampaignDate } from "@/components/campaign/reports/report-format"
 import { ReportFunnelCard } from "@/components/campaign/reports/report-funnel-card"
+import { ReportKpis } from "@/components/campaign/reports/report-kpis"
 import { ReportLeaderboardCard } from "@/components/campaign/reports/report-leaderboard-card"
 import { ReportOutcomeMixCard } from "@/components/campaign/reports/report-outcome-mix-card"
 import { ReportCampaignPicker, ReportExportButton } from "@/components/campaign/reports/report-toolbar"
@@ -102,6 +103,8 @@ export default async function CampaignReportsPage({
 
         {hasAssignments ? (
           <>
+            <ReportKpis summary={progress.summary} />
+
             <p className="text-xs text-[var(--muted-foreground)]">
               Queued dispositions are not counted until their replay lands.
             </p>
@@ -115,18 +118,18 @@ export default async function CampaignReportsPage({
               </p>
             ) : null}
 
-            <div className="hidden gap-4 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:items-start">
-              <div className="flex flex-col gap-4">
+            <div className="hidden gap-5 md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:items-start">
+              <div className="flex flex-col gap-5">
                 <ReportFunnelCard summary={progress.summary} />
                 <ReportOutcomeMixCard outcomes={progress.outcomes} />
               </div>
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-5">
                 <ReportLeaderboardCard callers={progress.callers} />
                 <ReportActivityCard recent={progress.recent} campaignName={campaign.name} />
               </div>
             </div>
 
-            <div className="flex flex-col gap-4 md:hidden">
+            <div className="flex flex-col gap-5 md:hidden">
               <ReportFunnelCard summary={progress.summary} />
               <ReportLeaderboardCard callers={progress.callers} />
               <p className="rounded-xl border border-[var(--border)] bg-card px-4 py-3 text-[13px] text-[var(--muted-foreground)]">
