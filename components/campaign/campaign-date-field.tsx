@@ -55,7 +55,7 @@ export function CampaignDateField({
             aria-label={label ? `${label}: ${value || "choose a date"}` : "Campaign end date"}
             className={cn(
               "relative flex items-center gap-2 rounded-lg border border-[var(--border)] bg-card px-3 text-left text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
-              compact ? "h-8 text-[12px]" : "h-10 w-full text-[13px]",
+              compact ? "h-9 text-[13px] font-semibold" : "h-10 w-full text-[13px]",
             )}
           >
             <CalendarDays

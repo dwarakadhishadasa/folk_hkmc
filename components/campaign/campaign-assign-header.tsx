@@ -113,17 +113,16 @@ export function CampaignAssignHeader({
       <Link
         href="/campaigns"
         aria-label="Back to campaigns"
-        className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-card text-[var(--program-text)] transition-colors hover:bg-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
+        className="flex size-10 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-card text-[var(--program-text)] transition-colors hover:bg-[var(--muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
       >
         <ArrowLeft className="size-[18px]" aria-hidden="true" />
       </Link>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center gap-3">
+        <div className="flex h-10 items-center gap-3">
           <input
             aria-label="Campaign name"
             value={name}
-            size={Math.min(Math.max(name.length, 8), 48)}
             onChange={(event) => setName(event.target.value)}
             onBlur={() => {
               void save(name, campaignDate)
@@ -135,35 +134,35 @@ export function CampaignAssignHeader({
             }}
             maxLength={120}
             autoComplete="off"
-            className="-ml-1 max-w-[60%] shrink truncate rounded-md bg-transparent px-1 py-0.5 font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+            className="-ml-1 min-w-0 flex-1 truncate rounded-md bg-transparent px-1 py-0.5 font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           />
 
-          <span aria-hidden="true" className="h-6 w-px shrink-0 bg-[var(--border)]" />
-
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">
-              Ends
-            </span>
-            <CampaignDateField
-              compact
-              value={campaignDate}
-              onChange={(next) => {
-                setCampaignDate(next)
-                void save(name, next)
-              }}
-            />
-            {status === "saving" ? (
-              <span className="text-[11px] text-[var(--muted-foreground)]">Saving…</span>
-            ) : status === "saved" ? (
-              <span className="text-[11px] text-[var(--chart-2)]">Saved</span>
-            ) : null}
-          </div>
+          {campaign.status === "COMPLETED" ? null : (
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <span className="text-[12px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">
+                Ends
+              </span>
+              <CampaignDateField
+                compact
+                value={campaignDate}
+                onChange={(next) => {
+                  setCampaignDate(next)
+                  void save(name, next)
+                }}
+              />
+              {status === "saving" ? (
+                <span className="text-[11px] text-[var(--muted-foreground)]">Saving…</span>
+              ) : status === "saved" ? (
+                <span className="text-[11px] text-[var(--chart-2)]">Saved</span>
+              ) : null}
+            </div>
+          )}
 
           {campaign.status === "DRAFT" ? (
             <Button
               type="button"
               size="sm"
-              className="ml-auto shrink-0"
+              className="shrink-0"
               disabled={isStarting}
               onClick={() => {
                 void startCampaign()
