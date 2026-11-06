@@ -303,7 +303,8 @@ test.describe("the new-campaign popover — an Admin", () => {
 
       const row = page.getByRole("row").filter({ hasText: renamed })
       await expect(row.getByText("DRAFT", { exact: true })).toBeVisible()
-      await row.getByRole("link", { name: `Open ${renamed}` }).click()
+      await row.getByRole("button", { name: `Actions for ${renamed}` }).click()
+      await page.getByRole("menuitem", { name: "Edit" }).click()
       await expect(page).toHaveURL(new RegExp(`/campaigns/${campaignId}/assign-contacts$`))
     } finally {
       if (campaignId) {
@@ -319,6 +320,24 @@ test.describe("the new-campaign popover — an Admin", () => {
 
 test.describe("the campaign list — an Admin with a campaign", () => {
   test.use({ storageState: storageStatePath("admin") })
+
+  test("the row's actions open the campaign's report", async ({ page }) => {
+    const name = campaignName("Progress Camp")
+    const campaignId = await createCampaignViaApi(page, "Progress Camp")
+
+    try {
+      await page.goto("/campaigns")
+
+      const row = page.getByRole("row").filter({ hasText: name })
+      await row.getByRole("button", { name: `Actions for ${name}` }).click()
+      await page.getByRole("menuitem", { name: "View progress" }).click()
+
+      await expect(page).toHaveURL(new RegExp(`/campaigns/reports\\?campaign=${campaignId}$`))
+      await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
+    } finally {
+      await deleteCampaign(campaignId)
+    }
+  })
 
   test("lists the campaign with its status and links to the edit page", async ({ page }) => {
     const name = campaignName("Listed Camp")
@@ -355,7 +374,7 @@ test.describe("the campaign list — an Admin with a campaign", () => {
       await expect(page.getByText("1 campaign · 1 draft · 0 cancelled", { exact: true })).toBeVisible()
 
       await detailLink.click()
-      await expect(page).toHaveURL(new RegExp(`/campaigns/${campaignId}$`))
+      await expect(page).toHaveURL(new RegExp(`/campaigns/${campaignId}/assign-contacts$`))
       await expect(page.getByRole("heading", { level: 1, name })).toBeVisible()
       await expect(page.getByText("DRAFT", { exact: true })).toBeVisible()
     } finally {

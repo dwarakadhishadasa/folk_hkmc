@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { CampaignListActions } from "@/components/campaign/campaign-list-actions"
 import { CampaignStatusPill } from "@/components/campaign/campaign-status-pill"
 import { formatCampaignDate, formatCampaignTimestamp } from "@/components/campaign/campaign-format"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -31,7 +32,7 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
             <TableHead className={HEAD_CLASS}>Confirmed</TableHead>
             <TableHead className={HEAD_CLASS}>Never attempted</TableHead>
             <TableHead className={HEAD_CLASS}>
-              <span className="sr-only">Open</span>
+              <span className="sr-only">Actions</span>
             </TableHead>
           </TableRow>
         </TableHeader>
@@ -68,13 +69,7 @@ export function CampaignList({ entries }: { entries: CampaignOverviewEntry[] }) 
                 {summary.neverAttempted}
               </TableCell>
               <TableCell className="px-2 py-3 text-right sm:px-4">
-                <Link
-                  href={`/campaigns/${campaign.id}/assign-contacts`}
-                  aria-label={`Open ${campaign.name}`}
-                  className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--muted-foreground)] transition-colors hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
-                >
-                  Open <span aria-hidden="true">›</span>
-                </Link>
+                <CampaignListActions campaignId={campaign.id} campaignName={campaign.name} />
               </TableCell>
             </TableRow>
           ))}
