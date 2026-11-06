@@ -15,7 +15,7 @@ const DISPLAY = "d MMM yyyy"
  * The campaign end date as a shadcn date picker: a trigger that names the day
  * and a single-month calendar in a popover.
  *
- * `compact` is the header's shape — it sits under the campaign name rather
+ * `compact` is the header's shape — it sits beside the campaign name rather
  * than in a labelled form field.
  */
 export function CampaignDateField({

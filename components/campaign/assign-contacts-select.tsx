@@ -36,6 +36,7 @@ import {
 import { gridViewConfigToParams, type GridViewConfig } from "@/components/grid/grid-view-config"
 import { applyGridParams, isGridParamKey } from "@/components/grid/grid-view-state"
 import { SavedViewsBar, type ViewSaveState } from "@/components/grid/saved-views-bar"
+import { useGridRowPosition } from "@/components/grid/grid-row-position"
 import {
   CAMPAIGNS_VIEWS_ENDPOINT,
   createSavedViewRequest,
@@ -279,6 +280,16 @@ function SelectAllControl({
       />
     </span>
   )
+}
+
+/**
+ * The gutter's serial: the row's position in the current view. Same shape as
+ * the contacts grid's, because it is the same gutter.
+ */
+function RowSerial({ fallback }: { fallback: number }) {
+  const position = useGridRowPosition()
+
+  return <>{position ?? fallback}</>
 }
 
 /**
@@ -1043,23 +1054,62 @@ export function AssignContactsSelect({
     return [
       helper.display({
         id: SELECT_COLUMN_ID,
-        header: ({ table }) => <SelectAllControl table={table} onToggle={setVisibleSelection} />,
-        cell: ({ row }) => (
-          <span
-            className="flex justify-center"
-            onPointerDown={(event) => {
-              event.stopPropagation()
-            }}
-          >
-            <Checkbox
-              checked={row.getIsSelected()}
-              onCheckedChange={(checked) => {
-                row.toggleSelected(checked === true)
-              }}
-              aria-label={`Select ${row.original.name}`}
-            />
+        header: ({ table }) => (
+          <span className="flex w-full justify-center">
+            <span className="flex w-4 shrink-0 justify-center">
+              <SelectAllControl table={table} onToggle={setVisibleSelection} />
+            </span>
           </span>
         ),
+        cell: ({ row }) => {
+          const selected = row.getIsSelected()
+
+          return (
+            <span
+              className="flex items-center justify-center"
+              onPointerDown={(event) => {
+                // Without this the cell takes the pointer, the grid moves cell
+                // focus to a non-editable column, and the next double-click
+                // becomes a no-op.
+                event.stopPropagation()
+              }}
+            >
+              {/*
+                One 16px slot, not two: the row number at rest, the selection
+                checkbox once the row is hovered or selected. Both were measured
+                at the same x, as on the contacts grid.
+              */}
+              {selected ? (
+                <span className="flex w-4 shrink-0 justify-center">
+                  <Checkbox
+                    className="rounded-[3px]"
+                    checked
+                    onCheckedChange={(checked) => {
+                      row.toggleSelected(checked === true)
+                    }}
+                    aria-label={`Select ${row.original.name}`}
+                  />
+                </span>
+              ) : (
+                <>
+                  <span className="w-4 shrink-0 text-center text-[12px] tabular-nums text-[var(--grid-row-number-ink)] [tr:hover_&]:hidden">
+                    <RowSerial fallback={row.index + 1} />
+                  </span>
+                  <span className="hidden w-4 shrink-0 justify-center [tr:hover_&]:flex">
+                    <Checkbox
+                      className="rounded-[3px]"
+                      checked={false}
+                      onCheckedChange={(checked) => {
+                        row.toggleSelected(checked === true)
+                      }}
+                      aria-label={`Select ${row.original.name}`}
+                    />
+                  </span>
+                </>
+              )}
+            </span>
+          )
+        },
         size: 40,
         minSize: 40,
         maxSize: 40,
@@ -1358,7 +1408,7 @@ export function AssignContactsSelect({
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch">
+        <div className="flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch lg:gap-0">
           <section
             aria-label="Contacts in scope"
             className="flex min-h-0 min-w-0 flex-1 flex-col"
@@ -1395,7 +1445,7 @@ export function AssignContactsSelect({
             aria-label="Assignment"
             className="flex min-h-0 w-full shrink-0 flex-col lg:w-[408px]"
           >
-        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-card">
+        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none border border-[var(--border)] bg-card">
           <div aria-label="Assign contacts" className="flex h-full min-h-0 w-full flex-col">
             <div className="border-b border-[var(--border)] px-4 py-3">
               <h2

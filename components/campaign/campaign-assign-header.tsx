@@ -10,12 +10,12 @@ import { Button } from "@/components/ui/button"
 
 /**
  * The assign-contacts header: the campaign's own name, editable in place, with
- * its end date beneath it. Both save on their own — the name when the field
- * loses focus, the date as soon as a day is picked — because this header is a
- * property sheet, not a second form with a Save button.
+ * its end date beside it on the same line. Both save on their own — the name
+ * when the field loses focus, the date as soon as a day is picked — because
+ * this header is a property sheet, not a second form with a Save button.
  *
  * Starting is the one lifecycle action a DRAFT campaign has, so it sits at the
- * right edge of the name row, at the name's height.
+ * far right of the name row, at the name's height.
  */
 export function CampaignAssignHeader({
   campaign,
@@ -123,6 +123,7 @@ export function CampaignAssignHeader({
           <input
             aria-label="Campaign name"
             value={name}
+            size={Math.min(Math.max(name.length, 8), 48)}
             onChange={(event) => setName(event.target.value)}
             onBlur={() => {
               void save(name, campaignDate)
@@ -134,14 +135,35 @@ export function CampaignAssignHeader({
             }}
             maxLength={120}
             autoComplete="off"
-            className="-ml-1 min-w-0 flex-1 truncate rounded-md bg-transparent px-1 py-0.5 font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+            className="-ml-1 max-w-[60%] shrink truncate rounded-md bg-transparent px-1 py-0.5 font-[family-name:var(--font-poppins)] text-[22px] font-semibold leading-tight tracking-tight text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           />
+
+          <span aria-hidden="true" className="h-6 w-px shrink-0 bg-[var(--border)]" />
+
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">
+              Ends
+            </span>
+            <CampaignDateField
+              compact
+              value={campaignDate}
+              onChange={(next) => {
+                setCampaignDate(next)
+                void save(name, next)
+              }}
+            />
+            {status === "saving" ? (
+              <span className="text-[11px] text-[var(--muted-foreground)]">Saving…</span>
+            ) : status === "saved" ? (
+              <span className="text-[11px] text-[var(--chart-2)]">Saved</span>
+            ) : null}
+          </div>
 
           {campaign.status === "DRAFT" ? (
             <Button
               type="button"
               size="sm"
-              className="shrink-0"
+              className="ml-auto shrink-0"
               disabled={isStarting}
               onClick={() => {
                 void startCampaign()
@@ -149,25 +171,6 @@ export function CampaignAssignHeader({
             >
               {isStarting ? "Starting…" : "Start campaign"}
             </Button>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold tracking-[0.04em] text-[var(--muted-foreground)] uppercase">
-            Ends
-          </span>
-          <CampaignDateField
-            compact
-            value={campaignDate}
-            onChange={(next) => {
-              setCampaignDate(next)
-              void save(name, next)
-            }}
-          />
-          {status === "saving" ? (
-            <span className="text-[11px] text-[var(--muted-foreground)]">Saving…</span>
-          ) : status === "saved" ? (
-            <span className="text-[11px] text-[var(--chart-2)]">Saved</span>
           ) : null}
         </div>
 
