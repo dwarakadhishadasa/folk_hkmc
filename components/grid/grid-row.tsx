@@ -224,6 +224,13 @@ export interface GridRowProps<TData> {
    */
   onCellPointerDown: (rowId: string, columnId: string, extend: boolean) => void
   /**
+   * Pointer entering one cell while a press is armed.
+   *
+   * This is what turns a click into a drag: the grid extends the range to every
+   * cell the pointer crosses, and ignores the crossing when no press is down.
+   */
+  onCellPointerEnter: (rowId: string, columnId: string) => void
+  /**
    * Double-click on one cell: opens its editor, or commits when the cell's
    * editor is already open. Read-only and checkbox columns no-op.
    */
@@ -256,6 +263,7 @@ function GridRowInner<TData>({
   rowDragId,
   rowPosition,
   onCellPointerDown,
+  onCellPointerEnter,
   onCellDoubleClick,
 }: GridRowProps<TData>) {
   /**
@@ -344,8 +352,14 @@ function GridRowInner<TData>({
         // `<td>`: the four rules above target `>td` from this row and would
         // otherwise win on specificity, and the double attribute raises this one
         // above all of them without an `!important` anywhere.
-        "[&>td[data-grid-cell-selected][data-grid-cell-selected]:not([data-grid-frozen])]:bg-accent/30",
-        "[&>td[data-grid-cell-selected][data-grid-cell-selected][data-grid-frozen]]:bg-[color-mix(in_oklab,var(--accent)_30%,var(--card))]",
+        //
+        // The tint is `--grid-selected` — the same token a selected row paints —
+        // so the range reads as selection in this product's own blue rather than
+        // as the neutral `--accent` wash it used to. A frozen cell takes the
+        // token directly too: it already sits on an opaque `bg-card`, and the
+        // row's selected state uses the same rule.
+        "[&>td[data-grid-cell-selected][data-grid-cell-selected]:not([data-grid-frozen])]:bg-[var(--grid-selected,var(--muted))]",
+        "[&>td[data-grid-cell-selected][data-grid-cell-selected][data-grid-frozen]]:bg-[var(--grid-selected,var(--muted))]",
         isEditing && "[&>td:not([data-grid-frozen])]:bg-accent/40",
         isEditing &&
           "[&>td[data-grid-frozen]]:bg-[color-mix(in_oklab,var(--accent)_40%,var(--card))]",
@@ -429,6 +443,7 @@ function GridRowInner<TData>({
 
               onCellPointerDown(row.id, cell.columnId, event.shiftKey)
             }}
+            onPointerEnter={() => onCellPointerEnter(row.id, cell.columnId)}
             // `preventDefault` is OQ-7's answer, and it is load-bearing: the
             // browser selects a word under the cursor on a double-click, before
             // any handler runs, and inside a 32px fixed-height cell a selected
@@ -460,6 +475,12 @@ function GridRowInner<TData>({
               // `pnpm test:e2e grid-cell-metrics` is what pins that, by measuring
               // the row rather than reading a class.
               "truncate px-1.5 align-middle text-[13px]",
+              // Display cells opt out of the browser's native text selection:
+              // a press that crosses cells is a range drag, and the browser's
+              // own blue highlight would paint over the rectangle. The open
+              // editor keeps selection, because selecting a word inside an
+              // input is exactly what one wants.
+              !cell.editing && "select-none",
               // The reference's active cell is a 2px blue inset; the open editor
               // narrows that to 1px and puts the 6px inset on the input itself,
               // so the editor's text starts where the display text does rather
@@ -561,6 +582,7 @@ function gridRowPropsEqual<TData>(prev: GridRowProps<TData>, next: GridRowProps<
     prev.rowDragId === next.rowDragId &&
     prev.rowPosition === next.rowPosition &&
     prev.onCellPointerDown === next.onCellPointerDown &&
+    prev.onCellPointerEnter === next.onCellPointerEnter &&
     prev.onCellDoubleClick === next.onCellDoubleClick
   )
 }

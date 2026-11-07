@@ -51,9 +51,13 @@ export interface ManageContact {
   id: string
   name: string
   phone: string
+  age: number | null
   college: string | null
   company: string | null
-  rounds: string | null
+  designation: string | null
+  year: string | null
+  address: string | null
+  rounds: number | null
   /**
    * Where the contact came from. A pre-existing `contacts` column, plumbed
    * through the manage stack so the grid's `select` editor has a real field to
@@ -85,13 +89,54 @@ export interface ManageContact {
   commentCount: number
 }
 
+/**
+ * One attendance row for a contact, as the record view lists it.
+ *
+ * The session's own name, date and location are resolved at read time: the
+ * `attendance` row stores only ids, and a record view that printed them would
+ * be a list of UUIDs.
+ */
+export interface ManageContactAttendanceEntry {
+  id: string
+  sessionId: string
+  sessionName: string | null
+  sessionDate: string | null
+  locationName: string | null
+  recordedAt: string | null
+}
+
+/**
+ * One campaign this contact was assigned to, as the record view lists it.
+ *
+ * `assignmentStatus` is the contact's own state in the campaign
+ * (`PENDING` / `COMPLETED` / `SKIPPED`); `campaignStatus` is the campaign's
+ * lifecycle (`DRAFT` / `ACTIVE` / `COMPLETED` / `CANCELLED`). Both are carried
+ * because a card that showed only one could not say whether the campaign is
+ * still running or whether this contact has been called.
+ */
+export interface ManageContactCampaignEntry {
+  id: string
+  campaignId: string
+  campaignName: string
+  campaignStatus: string
+  assignmentStatus: string
+  startDate: string | null
+  callerName: string | null
+  notes: string | null
+}
+
+/** The record view's two activity lists, plus the contact's photo URL. */
+export interface ManageContactHistory {
+  attendance: ManageContactAttendanceEntry[]
+  campaigns: ManageContactCampaignEntry[]
+  photoUrl: string | null
+}
+
 export interface ManageAttendee {
   contactId: string
   name: string
   phone: string
-}
-
-export interface ManageSession {
+}export interface ManageSession {
   id: string
   name: string
   sessionDate: string | null
@@ -218,7 +263,7 @@ export interface ManageContactWriteResult {
   phone: string
   college: string | null
   company: string | null
-  rounds: string | null
+  rounds: number | null
   source: string | null
   booksRead: string[]
   notes: string | null

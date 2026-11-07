@@ -35,6 +35,7 @@ export const CONTACT_FILTER_COLUMN_LABEL: Readonly<Record<string, string>> = {
   name: "Name",
   phone: "Phone",
   source: "Source",
+  rounds: "Rounds",
   booksRead: "Books Read",
   initialContact: "Initial Contact",
   dateOfBirth: "Date of Birth",
@@ -59,6 +60,8 @@ export function contactColumnValue(
       return contact.phone
     case "source":
       return contact.source
+    case "rounds":
+      return contact.rounds
     case "booksRead":
       return contact.booksRead
     case "initialContact":

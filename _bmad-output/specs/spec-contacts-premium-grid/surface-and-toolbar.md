@@ -39,7 +39,7 @@ One container, both axes, `max-h-[70vh]`. That is correct and must stay — a se
 
 - `[&>td]:border-b [&>td]:border-border` — the hairline. `design-constraints.md` explicitly prefers this to stripes, because stripes fight selection highlighting.
 - Sticky frozen cells get `bg-card` of their own, because they must be opaque over what scrolls beneath. Row hover and selection states are therefore driven **per cell**, not on the `<tr>`.
-- The cell-range highlight is applied via `[&>td[data-grid-cell-selected][data-grid-cell-selected]]:bg-accent/30` — the doubled attribute raises specificity above the row-level `>td` rules so no `!important` is needed. **Do not simplify this.**
+- The cell-range highlight is applied via `[&>td[data-grid-cell-selected][data-grid-cell-selected]]:bg-[var(--grid-selected,var(--muted))]` — the same tint a selected row paints. The doubled attribute raises specificity above the row-level `>td` rules so no `!important` is needed. **Do not simplify this.**
 - `border-r border-border` on the last frozen column only — one divider for the whole pinned run, not one per pinned cell.
 
 `grid.tsx` emits `<table>` directly rather than using `components/ui/table`, because that wrapper's div is a second scroll container. Keep it that way.

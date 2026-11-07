@@ -203,7 +203,7 @@ Five decisions differ from the source, and each is a decision rather than an
 oversight:
 
 1. **The grid is not replaced — it is the *other* view.** The mobile app's
-   list is two columns and the grid is thirteen; a spreadsheet that also
+   list is two columns and the grid is fourteen; a spreadsheet that also
    stacked would be neither. So the contacts tab shows one of the two, and
    the viewport chooses: the grid at 768px and above, the list below it. The
    grid is **not mounted** behind the list, so on a phone none of it reaches

@@ -1,15 +1,21 @@
 "use client"
 
 import { useEffect, useId, useState } from "react"
+import { format, isValid, parseISO } from "date-fns"
+import { CalendarDays, ChevronDown } from "lucide-react"
 
 import {
   CONTACT_FIELD_IDS,
   CONTACT_FIELD_LABEL,
+  formatContactDate,
   isContactFieldEditable,
   type ContactFieldId,
 } from "@/components/manage/manage-contact-fields"
 import type { ManageContact, ManageLocation } from "@/components/manage/manage-types"
+import { Calendar } from "@/components/ui/calendar"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -18,6 +24,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  CONTACT_FIELD_FOCUS,
+  CONTACT_FIELD_SHADOW,
+} from "@/components/manage/contact-record-styles"
+import { cn } from "@/lib/utils"
 
 /**
  * The value Radix's `Select` cannot hold.
@@ -27,6 +38,14 @@ import { Textarea } from "@/components/ui/textarea"
  * mistaken for one.
  */
 const NO_LOCATION = "__no_location__"
+
+/**
+ * The value the source picker uses for "no source".
+ *
+ * The same reason as `NO_LOCATION`: Radix refuses an empty `Select.Item`
+ * value, and a source can be cleared.
+ */
+const NO_SOURCE = "__no_source__"
 
 /**
  * One field's editor, shared by the sheet and the expanded record.
@@ -53,18 +72,26 @@ const NO_LOCATION = "__no_location__"
 /**
  * How a field's control is drawn.
  *
- * `"field"` is the ordinary editor — a bordered control under a label.
- * `"title"` is the record's **name**, which is not a field among others: it is
- * the record's own title, so it is drawn as one — large, unbordered, and in
- * the display face.
+ * `"field"` is the ordinary editor — a bordered control under a label, sized
+ * for a thumb on the phone sheet.
+ * `"record"` is the same control in the desktop record's dense frame: 32px
+ * tall on the inset-control surface, matching the source product's record.
+ * `"record-title"` is the desktop record's **name**: 40px and 23px type on the
+ * same surface.
+ * `"title"` is the phone record's name — a large, unbordered line in the
+ * display face, which is what the mobile capture showed.
  */
-export type ContactFieldAppearance = "field" | "title"
+export type ContactFieldAppearance = "field" | "record" | "record-title" | "title"
 
 export interface ManageContactFieldEditorProps {
   contact: ManageContact
   fieldId: ContactFieldId
   /** The program's locations — the options the location picker offers. */
   locations: readonly ManageLocation[]
+  /** The values the source picker offers. */
+  sourceOptions?: readonly string[]
+  /** The values the books-read picker offers. */
+  booksReadOptions?: readonly string[]
   /** Called with the new value. Only called for a field that can be written. */
   onCommit: (fieldId: ContactFieldId, value: unknown) => void
   /** Focus the control when it mounts. */
@@ -79,6 +106,8 @@ export function ManageContactFieldEditor({
   contact,
   fieldId,
   locations,
+  sourceOptions = [],
+  booksReadOptions = [],
   onCommit,
   autoFocus = false,
   inputId,
@@ -98,6 +127,57 @@ export function ManageContactFieldEditor({
         controlId={controlId}
         locations={locations}
         onCommit={onCommit}
+        appearance={appearance}
+      />
+    )
+  }
+
+  if (fieldId === CONTACT_FIELD_IDS.source) {
+    return (
+      <SourceFieldEditor
+        contact={contact}
+        controlId={controlId}
+        options={sourceOptions}
+        onCommit={onCommit}
+        appearance={appearance}
+      />
+    )
+  }
+
+  if (fieldId === CONTACT_FIELD_IDS.booksRead) {
+    return (
+      <BooksReadFieldEditor
+        contact={contact}
+        options={booksReadOptions}
+        onCommit={onCommit}
+        appearance={appearance}
+      />
+    )
+  }
+
+  if (fieldId === CONTACT_FIELD_IDS.rounds) {
+    return (
+      <NumberFieldEditor
+        contact={contact}
+        fieldId={fieldId}
+        controlId={controlId}
+        onCommit={onCommit}
+        appearance={appearance}
+      />
+    )
+  }
+
+  if (
+    fieldId === CONTACT_FIELD_IDS.initialContact ||
+    fieldId === CONTACT_FIELD_IDS.dateOfBirth
+  ) {
+    return (
+      <DateFieldEditor
+        contact={contact}
+        fieldId={fieldId}
+        controlId={controlId}
+        onCommit={onCommit}
+        appearance={appearance}
       />
     )
   }
@@ -111,6 +191,7 @@ export function ManageContactFieldEditor({
         onCommit={onCommit}
         autoFocus={autoFocus}
         multiline
+        appearance={appearance}
       />
     )
   }
@@ -195,7 +276,17 @@ function TextFieldEditor({
             setDraft(committed)
           }
         }}
-        className="min-h-24 resize-y rounded-[6px] border-border bg-card text-[13px]"
+        className={cn(
+          "resize-y rounded-[6px] text-[13px]",
+          appearance === "record"
+            ? cn(
+                "min-h-20 border-0 bg-field px-2 py-[6px] leading-[19.5px] text-foreground dark:bg-field",
+                CONTACT_FIELD_SHADOW,
+                CONTACT_FIELD_FOCUS,
+                "focus-visible:ring-0",
+              )
+            : "min-h-24 border-border bg-card",
+        )}
       />
     )
   }
@@ -221,11 +312,25 @@ function TextFieldEditor({
           setDraft(committed)
         }
       }}
-      className={
-        appearance === "title"
-          ? "h-12 border-0 bg-transparent px-0 font-[family-name:var(--font-poppins)] text-[22px] font-bold text-[var(--program-text)] shadow-none focus-visible:ring-0"
-          : "h-12 rounded-[6px] border-border bg-card text-[13px]"
-      }
+      className={cn(
+        appearance === "record-title" &&
+          cn(
+            "h-10 rounded-[6px] border-0 bg-field px-2 py-1 text-[23px] leading-8 text-foreground dark:bg-field",
+            CONTACT_FIELD_SHADOW,
+            CONTACT_FIELD_FOCUS,
+            "focus-visible:ring-0",
+          ),
+        appearance === "record" &&
+          cn(
+            "h-8 rounded-[6px] border-0 bg-field px-2 py-[6px] text-[13px] leading-[19.5px] text-foreground dark:bg-field",
+            CONTACT_FIELD_SHADOW,
+            CONTACT_FIELD_FOCUS,
+            "focus-visible:ring-0",
+          ),
+        appearance === "title" &&
+          "h-12 border-0 bg-transparent px-0 font-[family-name:var(--font-poppins)] text-[22px] font-bold text-[var(--program-text)] shadow-none focus-visible:ring-0",
+        appearance === "field" && "h-12 rounded-[6px] border-border bg-card text-[13px]",
+      )}
     />
   )
 }
@@ -243,11 +348,13 @@ function LocationFieldEditor({
   controlId,
   locations,
   onCommit,
+  appearance,
 }: {
   contact: ManageContact
   controlId: string
   locations: readonly ManageLocation[]
   onCommit: ManageContactFieldEditorProps["onCommit"]
+  appearance: ContactFieldAppearance
 }) {
   const current = contact.locationIds[0] ?? NO_LOCATION
 
@@ -264,7 +371,17 @@ function LocationFieldEditor({
       <SelectTrigger
         id={controlId}
         aria-label={CONTACT_FIELD_LABEL.location}
-        className="h-12 w-full rounded-[6px] border-border bg-card text-[13px] [&_svg:last-child]:rotate-90"
+        className={cn(
+          "w-full rounded-[6px] text-[13px] [&_svg:last-child]:rotate-90",
+          appearance === "record"
+            ? cn(
+                "h-8 border-0 bg-field px-2 py-[6px] leading-[19.5px] text-foreground dark:bg-field",
+                CONTACT_FIELD_SHADOW,
+                CONTACT_FIELD_FOCUS,
+                "focus-visible:ring-0",
+              )
+            : "h-12 border-border bg-card",
+        )}
       >
         <SelectValue placeholder="No location" />
       </SelectTrigger>
@@ -280,6 +397,265 @@ function LocationFieldEditor({
   )
 }
 
+/** The class string a value control uses in each frame. */
+function controlClass(appearance: ContactFieldAppearance): string {
+  if (appearance !== "record") {
+    return "h-12 rounded-[6px] border-border bg-card text-[13px]"
+  }
+
+  return cn(
+    "h-8 rounded-[6px] border-0 bg-field px-2 py-[6px] text-[13px] leading-[19.5px] text-foreground dark:bg-field",
+    CONTACT_FIELD_SHADOW,
+    CONTACT_FIELD_FOCUS,
+    "focus-visible:ring-0",
+  )
+}
+
+/** The source picker: a select whose options are the values the table carries. */
+function SourceFieldEditor({
+  contact,
+  controlId,
+  options,
+  onCommit,
+  appearance,
+}: {
+  contact: ManageContact
+  controlId: string
+  options: readonly string[]
+  onCommit: ManageContactFieldEditorProps["onCommit"]
+  appearance: ContactFieldAppearance
+}) {
+  const current = contact.source ?? NO_SOURCE
+  const allOptions =
+    contact.source && !options.includes(contact.source)
+      ? [contact.source, ...options]
+      : options
+
+  return (
+    <Select
+      value={current}
+      onValueChange={(next) => {
+        onCommit(CONTACT_FIELD_IDS.source, next === NO_SOURCE ? null : next)
+      }}
+    >
+      <SelectTrigger
+        id={controlId}
+        aria-label={CONTACT_FIELD_LABEL.source}
+        className={cn(
+          "w-full rounded-[6px] text-[13px] [&_svg:last-child]:rotate-90",
+          controlClass(appearance),
+        )}
+      >
+        <SelectValue placeholder="No source" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NO_SOURCE}>No source</SelectItem>
+        {allOptions.map((option) => (
+          <SelectItem key={option} value={option}>
+            {option}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+/**
+ * The books-read picker.
+ *
+ * A popover of checkboxes rather than a text field: the column is a `string[]`
+ * and the option list is the table's own, so a typed comma-separated value
+ * would let the dialog write a title the grid's picker cannot offer. Each tick
+ * commits the whole array, the same shape the grid's multiselect writes.
+ */
+function BooksReadFieldEditor({
+  contact,
+  options,
+  onCommit,
+  appearance,
+}: {
+  contact: ManageContact
+  options: readonly string[]
+  onCommit: ManageContactFieldEditorProps["onCommit"]
+  appearance: ContactFieldAppearance
+}) {
+  const selected = contact.booksRead
+  const allOptions = [...new Set([...options, ...selected])]
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={CONTACT_FIELD_LABEL.booksRead}
+          className={cn(
+            "flex w-full items-center justify-between gap-2 text-left",
+            controlClass(appearance),
+          )}
+        >
+          <span className={cn("truncate", selected.length === 0 && "text-muted-foreground")}>
+            {selected.length > 0 ? selected.join(", ") : "Select books"}
+          </span>
+          <ChevronDown aria-hidden="true" className="size-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1">
+        <div className="max-h-64 overflow-y-auto">
+          {allOptions.length === 0 ? (
+            <p className="px-2 py-1.5 text-[12px] text-muted-foreground">No books in this table.</p>
+          ) : (
+            allOptions.map((option) => (
+              <label
+                key={option}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[13px] hover:bg-secondary"
+              >
+                <Checkbox
+                  checked={selected.includes(option)}
+                  onCheckedChange={(checked) => {
+                    onCommit(
+                      CONTACT_FIELD_IDS.booksRead,
+                      checked === true
+                        ? [...selected, option]
+                        : selected.filter((value) => value !== option),
+                    )
+                  }}
+                />
+                <span>{option}</span>
+              </label>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** `contacts.rounds` is a `smallint`; an empty box writes no number at all. */
+function NumberFieldEditor({
+  contact,
+  fieldId,
+  controlId,
+  onCommit,
+  appearance,
+}: {
+  contact: ManageContact
+  fieldId: ContactFieldId
+  controlId: string
+  onCommit: ManageContactFieldEditorProps["onCommit"]
+  appearance: ContactFieldAppearance
+}) {
+  const committed = contact.rounds
+  const [draft, setDraft] = useState(committed === null ? "" : String(committed))
+
+  useEffect(() => {
+    setDraft(committed === null ? "" : String(committed))
+  }, [committed])
+
+  const commit = () => {
+    const trimmed = draft.trim()
+
+    if (trimmed === "") {
+      if (committed !== null) {
+        onCommit(fieldId, null)
+      }
+      return
+    }
+
+    const next = Number(trimmed)
+
+    if (!Number.isFinite(next) || next === committed) {
+      return
+    }
+
+    onCommit(fieldId, next)
+  }
+
+  return (
+    <Input
+      id={controlId}
+      type="number"
+      inputMode="numeric"
+      value={draft}
+      aria-label={CONTACT_FIELD_LABEL[fieldId]}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault()
+          commit()
+          return
+        }
+
+        if (event.key === "Escape") {
+          event.preventDefault()
+          setDraft(committed === null ? "" : String(committed))
+        }
+      }}
+      className={controlClass(appearance)}
+    />
+  )
+}
+
+/** A `YYYY-MM-DD` field, edited with the calendar the grid uses. */
+function DateFieldEditor({
+  contact,
+  fieldId,
+  controlId,
+  onCommit,
+  appearance,
+}: {
+  contact: ManageContact
+  fieldId: ContactFieldId
+  controlId: string
+  onCommit: ManageContactFieldEditorProps["onCommit"]
+  appearance: ContactFieldAppearance
+}) {
+  const value = readText(contact, fieldId)
+  const parsed = value ? parseISO(value) : null
+  const selected = parsed && isValid(parsed) ? parsed : undefined
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          id={controlId}
+          aria-label={CONTACT_FIELD_LABEL[fieldId]}
+          className={cn(
+            "flex w-full items-center justify-between gap-2 text-left",
+            controlClass(appearance),
+          )}
+        >
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {value ? formatContactDate(value) : "Set date"}
+          </span>
+          <CalendarDays aria-hidden="true" className="size-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-2">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(next) => {
+            if (next) {
+              onCommit(fieldId, format(next, "yyyy-MM-dd"))
+            }
+          }}
+        />
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onCommit(fieldId, null)}
+            className="mt-1 w-full rounded px-2 py-1 text-left text-[12px] text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            Clear date
+          </button>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 /** The text a field currently holds, as the string the editor works on. */
 function readText(contact: ManageContact, fieldId: ContactFieldId): string {
   switch (fieldId) {
@@ -287,8 +663,16 @@ function readText(contact: ManageContact, fieldId: ContactFieldId): string {
       return contact.name
     case CONTACT_FIELD_IDS.phone:
       return contact.phone
+    case CONTACT_FIELD_IDS.college:
+      return contact.college ?? ""
+    case CONTACT_FIELD_IDS.company:
+      return contact.company ?? ""
     case CONTACT_FIELD_IDS.notes:
       return contact.notes ?? ""
+    case CONTACT_FIELD_IDS.initialContact:
+      return contact.initialContact ?? ""
+    case CONTACT_FIELD_IDS.dateOfBirth:
+      return contact.dateOfBirth ?? ""
     default:
       return ""
   }

@@ -38,13 +38,26 @@ export const UNRESOLVED_STAFF = "Unknown staff member"
 export const CONTACT_FIELD_IDS = {
   name: "name",
   phone: "phone",
+  age: "age",
+  college: "college",
+  company: "company",
+  designation: "designation",
+  year: "year",
+  address: "address",
   location: "location",
-  notes: "notes",
+  source: "source",
+  rounds: "rounds",
+  booksRead: "booksRead",
   initialContact: "initialContact",
+  dateOfBirth: "dateOfBirth",
   totalAttendance: "totalAttendanceCount",
   past60DayAttendance: "past60DayAttendanceCount",
+  lastContactedOn: "lastContactedOn",
+  notes: "notes",
   collectedBy: "collectedBy",
+  assignedPreacher: "assignedPreacher",
   favorite: "favorite",
+  photo: "photo",
 } as const
 
 /** One of the surface's field ids. */
@@ -64,34 +77,60 @@ export type ContactFieldId = (typeof CONTACT_FIELD_IDS)[keyof typeof CONTACT_FIE
 export const CONTACT_FIELD_LABEL: Record<ContactFieldId, string> = {
   [CONTACT_FIELD_IDS.name]: "Name",
   [CONTACT_FIELD_IDS.phone]: "Phone",
+  [CONTACT_FIELD_IDS.age]: "Age",
+  [CONTACT_FIELD_IDS.college]: "College",
+  [CONTACT_FIELD_IDS.company]: "Company",
+  [CONTACT_FIELD_IDS.designation]: "Designation",
+  [CONTACT_FIELD_IDS.year]: "Year",
+  [CONTACT_FIELD_IDS.address]: "Address",
   [CONTACT_FIELD_IDS.location]: "Location",
-  [CONTACT_FIELD_IDS.notes]: "Notes",
+  [CONTACT_FIELD_IDS.source]: "Source",
+  [CONTACT_FIELD_IDS.rounds]: "Rounds",
+  [CONTACT_FIELD_IDS.booksRead]: "Books Read",
   [CONTACT_FIELD_IDS.initialContact]: "Initial Contact",
+  [CONTACT_FIELD_IDS.dateOfBirth]: "Date of Birth",
   [CONTACT_FIELD_IDS.totalAttendance]: "Total attendance",
   [CONTACT_FIELD_IDS.past60DayAttendance]: "Past 60 day attendance",
+  [CONTACT_FIELD_IDS.lastContactedOn]: "Last Contacted On",
+  [CONTACT_FIELD_IDS.notes]: "Notes",
   [CONTACT_FIELD_IDS.collectedBy]: "Collected By",
+  [CONTACT_FIELD_IDS.assignedPreacher]: "Assigned Preacher",
   [CONTACT_FIELD_IDS.favorite]: "Favorite",
+  [CONTACT_FIELD_IDS.photo]: "Photo",
 }
 
 /**
  * The order the expanded record shows its fields in.
  *
- * The writable fields come first, then the ones that are facts about the
- * contact rather than things an operator types. The Airtable record view put
- * the attendance counts directly under the phone number; this keeps them with
- * the other read-only facts instead, because the counts summarise the record
- * rather than belong to it.
+ * The record view is the whole contact, so this is the grid's column order
+ * with the fields the grid does not have columns for (`Age`, `College`,
+ * `Company`, `Designation`, `Year`, `Address`, `Assigned Preacher`, `Photo`)
+ * slotted beside their nearest relation. Nothing is hidden: every column the
+ * contact row carries is a field an operator can read here.
  */
 export const CONTACT_FIELD_ORDER: readonly ContactFieldId[] = [
   CONTACT_FIELD_IDS.name,
   CONTACT_FIELD_IDS.phone,
+  CONTACT_FIELD_IDS.age,
+  CONTACT_FIELD_IDS.college,
+  CONTACT_FIELD_IDS.company,
+  CONTACT_FIELD_IDS.designation,
+  CONTACT_FIELD_IDS.year,
   CONTACT_FIELD_IDS.location,
-  CONTACT_FIELD_IDS.notes,
+  CONTACT_FIELD_IDS.address,
+  CONTACT_FIELD_IDS.source,
+  CONTACT_FIELD_IDS.rounds,
+  CONTACT_FIELD_IDS.booksRead,
   CONTACT_FIELD_IDS.initialContact,
+  CONTACT_FIELD_IDS.dateOfBirth,
   CONTACT_FIELD_IDS.totalAttendance,
   CONTACT_FIELD_IDS.past60DayAttendance,
+  CONTACT_FIELD_IDS.lastContactedOn,
+  CONTACT_FIELD_IDS.notes,
   CONTACT_FIELD_IDS.collectedBy,
+  CONTACT_FIELD_IDS.assignedPreacher,
   CONTACT_FIELD_IDS.favorite,
+  CONTACT_FIELD_IDS.photo,
 ]
 
 /**
@@ -102,24 +141,39 @@ export const CONTACT_FIELD_ORDER: readonly ContactFieldId[] = [
  * the wire key is `locationIds`, because a contact belongs to at most one
  * location and the column stores the set.
  *
- * The attendance counts, `Initial Contact` and `Collected By` are `null`
- * because nothing in this app writes them. The counts are rollups the server
- * resolves; `Initial Contact` is set when the contact is created; and
- * `Collected By` is the staff member who collected the contact. `favorite` is
- * `null` here too, because the star toggles through its own write — the
- * server's key is `isFavorite`, which is not the column's name, and a
- * favourite is a toggle rather than a typed value.
+ * The attendance counts, `Last Contacted On`, `Collected By`, `Assigned
+ * Preacher` and `Photo` are `null` because nothing in this app writes them.
+ * The counts are rollups the server resolves; `Last Contacted On` is derived
+ * from attendance; `Collected By` is the staff member who collected the
+ * contact; `Assigned Preacher` is set from the campaign/assignment surface; and
+ * a photo is uploaded through its own endpoint. `favorite` is `null` here too,
+ * because the star toggles through its own write — the server's key is
+ * `isFavorite`, which is not the column's name, and a favourite is a toggle
+ * rather than a typed value.
  */
 export const CONTACT_FIELD_PATCH_KEY: Record<ContactFieldId, ManageContactPatchKey | null> = {
   [CONTACT_FIELD_IDS.name]: "name",
   [CONTACT_FIELD_IDS.phone]: "phone",
+  [CONTACT_FIELD_IDS.age]: null,
+  [CONTACT_FIELD_IDS.college]: "college",
+  [CONTACT_FIELD_IDS.company]: "company",
+  [CONTACT_FIELD_IDS.designation]: null,
+  [CONTACT_FIELD_IDS.year]: null,
+  [CONTACT_FIELD_IDS.address]: null,
   [CONTACT_FIELD_IDS.location]: "locationIds",
-  [CONTACT_FIELD_IDS.notes]: "notes",
-  [CONTACT_FIELD_IDS.initialContact]: null,
+  [CONTACT_FIELD_IDS.source]: "source",
+  [CONTACT_FIELD_IDS.rounds]: "rounds",
+  [CONTACT_FIELD_IDS.booksRead]: "booksRead",
+  [CONTACT_FIELD_IDS.initialContact]: "initialContact",
+  [CONTACT_FIELD_IDS.dateOfBirth]: "dateOfBirth",
   [CONTACT_FIELD_IDS.totalAttendance]: null,
   [CONTACT_FIELD_IDS.past60DayAttendance]: null,
+  [CONTACT_FIELD_IDS.lastContactedOn]: null,
+  [CONTACT_FIELD_IDS.notes]: "notes",
   [CONTACT_FIELD_IDS.collectedBy]: null,
+  [CONTACT_FIELD_IDS.assignedPreacher]: null,
   [CONTACT_FIELD_IDS.favorite]: null,
+  [CONTACT_FIELD_IDS.photo]: null,
 }
 
 /** True when the surface may write this field. */
@@ -137,13 +191,26 @@ export function isContactFieldEditable(id: ContactFieldId): boolean {
 const CONTACT_FIELD_READER: Record<ContactFieldId, (contact: ManageContact) => unknown> = {
   [CONTACT_FIELD_IDS.name]: (contact) => contact.name,
   [CONTACT_FIELD_IDS.phone]: (contact) => contact.phone,
+  [CONTACT_FIELD_IDS.age]: (contact) => contact.age,
+  [CONTACT_FIELD_IDS.college]: (contact) => contact.college,
+  [CONTACT_FIELD_IDS.company]: (contact) => contact.company,
+  [CONTACT_FIELD_IDS.designation]: (contact) => contact.designation,
+  [CONTACT_FIELD_IDS.year]: (contact) => contact.year,
+  [CONTACT_FIELD_IDS.address]: (contact) => contact.address,
   [CONTACT_FIELD_IDS.location]: (contact) => contact.locationIds,
-  [CONTACT_FIELD_IDS.notes]: (contact) => contact.notes,
+  [CONTACT_FIELD_IDS.source]: (contact) => contact.source,
+  [CONTACT_FIELD_IDS.rounds]: (contact) => contact.rounds,
+  [CONTACT_FIELD_IDS.booksRead]: (contact) => contact.booksRead,
   [CONTACT_FIELD_IDS.initialContact]: (contact) => contact.initialContact,
+  [CONTACT_FIELD_IDS.dateOfBirth]: (contact) => contact.dateOfBirth,
   [CONTACT_FIELD_IDS.totalAttendance]: (contact) => contact.totalAttendanceCount,
   [CONTACT_FIELD_IDS.past60DayAttendance]: (contact) => contact.past60DayAttendanceCount,
+  [CONTACT_FIELD_IDS.lastContactedOn]: (contact) => contact.lastContactedOn,
+  [CONTACT_FIELD_IDS.notes]: (contact) => contact.notes,
   [CONTACT_FIELD_IDS.collectedBy]: (contact) => contact.collectedById,
+  [CONTACT_FIELD_IDS.assignedPreacher]: (contact) => contact.assignedPreacherId,
   [CONTACT_FIELD_IDS.favorite]: (contact) => contact.isFavorite,
+  [CONTACT_FIELD_IDS.photo]: (contact) => contact.photoPath,
 }
 
 /** A field's raw value on a contact. */
@@ -165,6 +232,26 @@ export interface ContactFieldResolvers {
 }
 
 /**
+ * A `YYYY-MM-DD` contact date as the record shows it.
+ *
+ * Parsed at midnight UTC and formatted in UTC, so the day an operator picked
+ * is the day every machine shows; a local-zone parse would name the previous
+ * day west of Greenwich. A value the formatter cannot read is shown as stored.
+ */
+const CONTACT_DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+})
+
+export function formatContactDate(value: string): string {
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+
+  return Number.isNaN(parsed.getTime()) ? value : CONTACT_DATE_FORMATTER.format(parsed)
+}
+
+/**
  * A field's value as text.
  *
  * `location` and `Collected By` are references, so the text is the name the
@@ -182,6 +269,18 @@ export function contactFieldText(
       return contact.name
     case CONTACT_FIELD_IDS.phone:
       return contact.phone
+    case CONTACT_FIELD_IDS.age:
+      return contact.age === null ? "" : String(contact.age)
+    case CONTACT_FIELD_IDS.college:
+      return contact.college ?? ""
+    case CONTACT_FIELD_IDS.company:
+      return contact.company ?? ""
+    case CONTACT_FIELD_IDS.designation:
+      return contact.designation ?? ""
+    case CONTACT_FIELD_IDS.year:
+      return contact.year ?? ""
+    case CONTACT_FIELD_IDS.address:
+      return contact.address ?? ""
     case CONTACT_FIELD_IDS.location: {
       const names = contact.locationIds
         .map((id) => resolvers.locationNameById.get(id) ?? UNRESOLVED_LOCATION)
@@ -189,14 +288,24 @@ export function contactFieldText(
 
       return names
     }
-    case CONTACT_FIELD_IDS.notes:
-      return contact.notes ?? ""
+    case CONTACT_FIELD_IDS.source:
+      return contact.source ?? ""
+    case CONTACT_FIELD_IDS.rounds:
+      return contact.rounds === null ? "" : String(contact.rounds)
+    case CONTACT_FIELD_IDS.booksRead:
+      return contact.booksRead.join(", ")
     case CONTACT_FIELD_IDS.initialContact:
-      return contact.initialContact ?? ""
+      return contact.initialContact ? formatContactDate(contact.initialContact) : ""
+    case CONTACT_FIELD_IDS.dateOfBirth:
+      return contact.dateOfBirth ? formatContactDate(contact.dateOfBirth) : ""
     case CONTACT_FIELD_IDS.totalAttendance:
       return String(contact.totalAttendanceCount)
     case CONTACT_FIELD_IDS.past60DayAttendance:
       return String(contact.past60DayAttendanceCount)
+    case CONTACT_FIELD_IDS.lastContactedOn:
+      return contact.lastContactedOn ? formatContactDate(contact.lastContactedOn) : ""
+    case CONTACT_FIELD_IDS.notes:
+      return contact.notes ?? ""
     case CONTACT_FIELD_IDS.collectedBy: {
       if (!contact.collectedById) {
         return ""
@@ -204,7 +313,16 @@ export function contactFieldText(
 
       return resolvers.staffNameById.get(contact.collectedById) ?? UNRESOLVED_STAFF
     }
+    case CONTACT_FIELD_IDS.assignedPreacher: {
+      if (!contact.assignedPreacherId) {
+        return ""
+      }
+
+      return resolvers.staffNameById.get(contact.assignedPreacherId) ?? UNRESOLVED_STAFF
+    }
     case CONTACT_FIELD_IDS.favorite:
       return contact.isFavorite ? "Yes" : "No"
+    case CONTACT_FIELD_IDS.photo:
+      return contact.photoPath ? "Set" : ""
   }
 }

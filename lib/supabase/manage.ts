@@ -7,6 +7,7 @@ import type {
   ManageAttendee,
   ManageAttendanceRecord,
   ManageContact,
+  ManageContactHistory,
   ManageContactPatch,
   ManageContactPatchKey,
   ManageContactWriteResult,
@@ -70,8 +71,12 @@ const CONTACT_COLUMNS = [
   "id",
   "name",
   "phone",
+  "age",
   "college",
   "company",
+  "designation",
+  "year",
+  "address",
   "rounds",
   "source",
   "books_read",
@@ -111,9 +116,13 @@ type ContactRow = {
   id: string
   name: string | null
   phone: string | null
+  age: number | null
   college: string | null
   company: string | null
-  rounds: string | null
+  designation: string | null
+  year: string | null
+  address: string | null
+  rounds: number | null
   source: string | null
   books_read: string[] | null
   notes: string | null
@@ -192,6 +201,10 @@ function text(value: string | null | undefined): string | null {
 
   const trimmed = value.trim()
   return trimmed ? trimmed : null
+}
+
+function integer(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isInteger(value) ? value : null
 }
 
 function textArray(value: string[] | null | undefined): string[] {
@@ -540,9 +553,13 @@ function mapManageContact(
     id: row.id,
     name: text(row.name) ?? "Unknown",
     phone: text(row.phone) ?? "",
+    age: integer(row.age),
     college: text(row.college),
     company: text(row.company),
-    rounds: text(row.rounds),
+    designation: text(row.designation),
+    year: text(row.year),
+    address: text(row.address),
+    rounds: integer(row.rounds),
     source: text(row.source),
     booksRead: textArray(row.books_read),
     notes: text(row.notes),
@@ -1030,6 +1047,30 @@ function optionalString(value: unknown, field: string): string | null {
   return value.trim() ? value.trim() : null
 }
 
+/** `contacts.rounds` is `smallint`; these are the bounds the database enforces. */
+const SMALLINT_MIN = -32768
+const SMALLINT_MAX = 32767
+
+function optionalSmallInt(value: unknown, field: string): number | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new AuthzError(400, "invalid_patch", `${field} must be a whole number or null.`)
+  }
+
+  if (value < SMALLINT_MIN || value > SMALLINT_MAX) {
+    throw new AuthzError(
+      400,
+      "invalid_patch",
+      `${field} must be between ${SMALLINT_MIN} and ${SMALLINT_MAX}.`,
+    )
+  }
+
+  return value
+}
+
 function optionalBoolean(value: unknown, field: string): boolean {
   if (typeof value !== "boolean") {
     throw new AuthzError(400, "invalid_patch", `${field} must be a boolean.`)
@@ -1165,7 +1206,7 @@ async function buildContactWritePayload(
         payload[column] = optionalString(value, "Company")
         break
       case "rounds":
-        payload[column] = optionalString(value, "Rounds")
+        payload[column] = optionalSmallInt(value, "Rounds")
         break
       case "source":
         payload[column] = optionalString(value, "Source")
@@ -1211,7 +1252,7 @@ function toContactWriteResult(row: ContactRow): ManageContactWriteResult {
     phone: text(row.phone) ?? "",
     college: text(row.college),
     company: text(row.company),
-    rounds: text(row.rounds),
+    rounds: integer(row.rounds),
     source: text(row.source),
     booksRead: textArray(row.books_read),
     notes: text(row.notes),
@@ -1562,4 +1603,118 @@ export async function createManageContactPhotoUrl(params: {
   }
 
   return { url: signed.data.signedUrl }
+}
+/**
+ * One contact's attendance and campaign history, for the record view.
+ *
+ * The record view is the place an operator asks "what has this person done?",
+ * so the two lists are read together rather than one request per panel. Both
+ * are scoped by the same contact the caller already proved it can read; the
+ * nested session/campaign rows are still RLS-filtered, so a session outside the
+ * caller's patch arrives as a null join rather than a leak.
+ *
+ * Campaign history is the contact's five most recent assignments, ordered by
+ * when the assignment was created. The note is the latest call log's
+ * `follow_up_notes`, falling back to the campaign description — a campaign the
+ * contact has not been called on yet still has something to say about itself.
+ */
+export async function loadManageContactHistory(params: {
+  staff: StaffContext
+  contactId: string
+}): Promise<ManageContactHistory> {
+  const { staff, contactId } = params
+  await assertManageContactInScope(staff, contactId)
+  const supabase = await createSupabaseServerClient()
+  const programId = staff.programId
+
+  const [attendanceResponse, assignmentResponse] = await Promise.all([
+    supabase
+      .from("attendance")
+      .select("id, session_id, created_at, sessions(name, session_date, locations(name))")
+      .eq("program_id", programId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("dialer_assignments")
+      .select(
+        "id, status, created_at, campaign_id, dialer_campaigns(name, status, created_at, description), dialer_callers(display_name)",
+      )
+      .eq("program_id", programId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ])
+
+  if (attendanceResponse.error) {
+    throw new AuthzError(500, "contact_history_read_failed", "Unable to read attendance.")
+  }
+
+  if (assignmentResponse.error) {
+    throw new AuthzError(500, "contact_history_read_failed", "Unable to read campaign history.")
+  }
+
+  const attendance = (attendanceResponse.data ?? []).map((row) => {
+    const session = row.sessions as unknown as
+      | { name: string | null; session_date: string | null; locations: { name: string | null } | null }
+      | null
+
+    return {
+      id: row.id,
+      sessionId: row.session_id,
+      sessionName: session?.name ?? null,
+      sessionDate: session?.session_date ?? null,
+      locationName: session?.locations?.name ?? null,
+      recordedAt: row.created_at,
+    }
+  })
+
+  const assignments = assignmentResponse.data ?? []
+  const notesByAssignment = new Map<string, string>()
+
+  if (assignments.length > 0) {
+    const logs = await supabase
+      .from("dialer_call_logs")
+      .select("assignment_id, follow_up_notes, called_at")
+      .in(
+        "assignment_id",
+        assignments.map((row) => row.id),
+      )
+      .order("called_at", { ascending: false })
+
+    if (!logs.error) {
+      for (const log of logs.data ?? []) {
+        if (!notesByAssignment.has(log.assignment_id) && log.follow_up_notes) {
+          notesByAssignment.set(log.assignment_id, log.follow_up_notes)
+        }
+      }
+    }
+  }
+
+  const campaigns = assignments.map((row) => {
+    const campaign = row.dialer_campaigns as unknown as
+      | { name: string | null; status: string | null; created_at: string | null; description: string | null }
+      | null
+    const caller = row.dialer_callers as unknown as { display_name: string | null } | null
+
+    return {
+      id: row.id,
+      campaignId: row.campaign_id,
+      campaignName: campaign?.name ?? "Campaign",
+      campaignStatus: campaign?.status ?? "DRAFT",
+      assignmentStatus: row.status,
+      startDate: campaign?.created_at ?? null,
+      callerName: caller?.display_name ?? null,
+      notes: notesByAssignment.get(row.id) ?? campaign?.description ?? null,
+    }
+  })
+
+  let photoUrl: string | null = null
+
+  try {
+    photoUrl = (await createManageContactPhotoUrl({ staff, contactId })).url
+  } catch {
+    photoUrl = null
+  }
+
+  return { attendance, campaigns, photoUrl }
 }

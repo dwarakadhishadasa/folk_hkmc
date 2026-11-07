@@ -182,7 +182,7 @@ export type Database = {
           phone: string
           photo_path: string | null
           program_id: string
-          rounds: string | null
+          rounds: number | null
           source: string | null
           updated_at: string | null
           year: string | null
@@ -208,7 +208,7 @@ export type Database = {
           phone: string
           photo_path?: string | null
           program_id: string
-          rounds?: string | null
+          rounds?: number | null
           source?: string | null
           updated_at?: string | null
           year?: string | null
@@ -234,7 +234,7 @@ export type Database = {
           phone?: string
           photo_path?: string | null
           program_id?: string
-          rounds?: string | null
+          rounds?: number | null
           source?: string | null
           updated_at?: string | null
           year?: string | null

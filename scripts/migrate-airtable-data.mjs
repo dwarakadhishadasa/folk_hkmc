@@ -547,6 +547,11 @@ function integerOrNull(value) {
   return null
 }
 
+function smallintOrNull(value) {
+  const parsed = integerOrNull(value)
+  return parsed !== null && parsed >= -32768 && parsed <= 32767 ? parsed : null
+}
+
 function booleanOr(value, fallback = false) {
   if (value === true || value === "true" || value === "Yes") return true
   if (value === false || value === "false" || value === "No") return false
@@ -671,7 +676,7 @@ export function mapContactRow(programId, sourceRecordId, targetId, record, conte
       assigned_preacher_id: assignedPreacher ? context.userIdBySourceId.get(assignedPreacher) ?? null : null,
       collected_by_id: collectedBy ? context.userIdBySourceId.get(collectedBy) ?? null : null,
       source: text(record.fields?.[f.source]),
-      rounds: text(record.fields?.[f.rounds]),
+      rounds: smallintOrNull(record.fields?.[f.rounds]),
       books_read: books,
       is_favorite: booleanOr(record.fields?.[f.favorite], false),
       created_at: instantOrNull(record.createdTime),

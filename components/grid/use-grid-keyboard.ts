@@ -213,6 +213,37 @@ export interface GridKeyboardApi<TData> {
    */
   focusCell: (rowId: string, columnId: string, extend?: boolean) => void
   /**
+   * Starts a pointer-driven cell selection.
+   *
+   * A plain press re-anchors the range on the cell; `Shift` keeps the anchor,
+   * exactly like `focusCell`. The difference is that a press *arms* the drag, so
+   * the cells the pointer crosses while the button is held extend the rectangle
+   * through `extendCellSelection`. A press that never moves is just a click.
+   */
+  beginCellSelection: (rowId: string, columnId: string, extend?: boolean) => void
+  /**
+   * Extends the armed pointer selection to the cell under the pointer.
+   *
+   * No-op when no press is in progress, so a pointer crossing cells at rest does
+   * not paint a range. The window's `pointerup` disarms it.
+   */
+  extendCellSelection: (rowId: string, columnId: string) => void
+  /**
+   * Whether the cell range covers more than one cell.
+   *
+   * A single pointed cell is not a range: it is the focus, and a range has to
+   * stay distinguishable from it. Consumers that make row selection and cell
+   * selection mutually exclusive read this to know which one just became live.
+   */
+  hasRangeSelection: boolean
+  /**
+   * Drops the range and puts the focus back on its anchor.
+   *
+   * The other half of the mutual-exclusion rule: a consumer that starts a row
+   * selection calls this so the two selection surfaces never paint together.
+   */
+  collapseSelection: () => void
+  /**
    * The double-click opener: double-clicking a closed cell opens its editor;
    * double-clicking
    * the cell whose editor is already open commits that draft and closes.
@@ -329,6 +360,30 @@ export function useGridKeyboard<TData>({
    * commit path reads it. A flag on the existing single path, not a second one.
    */
   const discardRequestedRef = useRef(false)
+
+  /**
+   * Whether a pointer press has armed a cell-range drag.
+   *
+   * Set on a cell's `pointerdown`, cleared by the window's `pointerup` or
+   * `pointercancel`. A ref rather than state: `pointerenter` reads it on every
+   * cell crossing and nothing renders from it, so a state update would repaint
+   * the grid for a value no cell reads.
+   */
+  const pointerSelectionRef = useRef(false)
+
+  useEffect(() => {
+    const endPointerSelection = () => {
+      pointerSelectionRef.current = false
+    }
+
+    window.addEventListener("pointerup", endPointerSelection)
+    window.addEventListener("pointercancel", endPointerSelection)
+
+    return () => {
+      window.removeEventListener("pointerup", endPointerSelection)
+      window.removeEventListener("pointercancel", endPointerSelection)
+    }
+  }, [])
 
   const visibleRows = table.getRowModel().rows
   const clampedRowIndex =
@@ -906,7 +961,21 @@ export function useGridKeyboard<TData>({
    * than an error, and `false` is what proves `meta.grid.editable` is the guard.
    */
   const openEditor = useCallback(
-    (rowIndex: number, columnId: string, seed?: string): boolean => {
+    (
+      rowIndex: number,
+      columnId: string,
+      seed?: string,
+      /**
+       * Leave the focus where it is.
+       *
+       * A range edit opens the editor on the range's first editable cell while
+       * the range's far corner keeps the focus, so moving the focus here would
+       * collapse the rectangle the edit is about to fill. The editor renders on
+       * the editing cell; the range is derived from the anchor and the focus,
+       * and those are not the same cell.
+       */
+      keepFocus = false,
+    ): boolean => {
       const row = visibleRows[rowIndex]
 
       if (!row) {
@@ -921,8 +990,10 @@ export function useGridKeyboard<TData>({
         return false
       }
 
-      setFocusedRowIndex(rowIndex)
-      setFocusedColumnId(columnId)
+      if (!keepFocus) {
+        setFocusedRowIndex(rowIndex)
+        setFocusedColumnId(columnId)
+      }
 
       const definition = resolveGridEditor(cell.column.columnDef.meta?.grid?.editor)
 
@@ -960,6 +1031,58 @@ export function useGridKeyboard<TData>({
     },
     [displayCellText, runCommit, setEditorDraft, visibleRows],
   )
+
+  /**
+   * The first editable cell in the live rectangle, in reading order.
+   *
+   * A range edit opens its editor here rather than on the focused corner: the
+   * corner is where the drag ended, which may be a read-only column the operator
+   * crossed, and the rectangle's own top-left is where the editor belongs.
+   * `null` when the rectangle contains nothing writable.
+   */
+  const firstEditableCellInRange = useCallback((): {
+    rowIndex: number
+    columnId: string
+  } | null => {
+    const bounds = selectionBounds
+
+    if (bounds === null) {
+      return null
+    }
+
+    for (let rowIndex = bounds.firstRow; rowIndex <= bounds.lastRow; rowIndex += 1) {
+      const row = visibleRows[rowIndex]
+
+      if (!row) {
+        continue
+      }
+
+      const cells = row.getVisibleCells()
+
+      for (let columnIndex = bounds.firstColumn; columnIndex <= bounds.lastColumn; columnIndex += 1) {
+        const columnId = visibleColumnIds[columnIndex]
+        const cell = columnId
+          ? cells.find((candidate) => candidate.column.id === columnId)
+          : undefined
+        const meta = cell?.column.columnDef.meta?.grid
+
+        if (
+          !cell ||
+          !columnId ||
+          meta?.editable !== true ||
+          meta.selectable === true ||
+          meta.editor === CHECKBOX_EDITOR ||
+          (meta.editor === undefined && consumerRenderedCells.has(columnId))
+        ) {
+          continue
+        }
+
+        return { rowIndex, columnId }
+      }
+    }
+
+    return null
+  }, [consumerRenderedCells, selectionBounds, visibleColumnIds, visibleRows])
 
   const cancelEditing = useCallback(() => {
     if (!editing) {
@@ -1095,6 +1218,116 @@ export function useGridKeyboard<TData>({
     [buildEditorContext, displayCellText, runCommit],
   )
 
+  /**
+   * The range edition of `commitEditing`: one draft, every editable cell in the
+   * rectangle.
+   *
+   * Each cell parses the draft with **its own** column editor, so a number
+   * column reads `"3"` as `3`, a select column refuses an option it does not
+   * offer, and a text column takes the text verbatim. Every cell is parsed
+   * before the first write: one invalid cell rejects the whole edit rather than
+   * leaving half the rectangle written. Read-only cells are skipped, not
+   * refused — a rectangle that includes a rollup column still fills the columns
+   * around it.
+   *
+   * Returns false when there is no live rectangle, which sends the caller back
+   * to the single-cell path.
+   */
+  const commitRangeEditing = useCallback(
+    (anchor: GridCellCoordinate, anchorCell: Cell<TData, unknown>): boolean => {
+      const bounds = selectionBounds
+
+      if (bounds === null) {
+        return false
+      }
+
+      const anchorKey = gridCellKey(anchor.rowId, anchor.columnId)
+      const anchorText = displayCellText(anchor.rowId, anchorCell)
+
+      const reject = (cause: unknown) => {
+        restoreFocusRef.current = anchorKey
+        exitEditing()
+        revertCommit(anchorKey, anchor, anchorText, draft, cause)
+      }
+
+      const targets: Array<{
+        target: GridCellCoordinate
+        value: unknown
+        previousText: string
+      }> = []
+
+      try {
+        for (let rowIndex = bounds.firstRow; rowIndex <= bounds.lastRow; rowIndex += 1) {
+          const row = visibleRows[rowIndex]
+
+          if (!row) {
+            continue
+          }
+
+          const cells = row.getVisibleCells()
+
+          for (let columnIndex = bounds.firstColumn; columnIndex <= bounds.lastColumn; columnIndex += 1) {
+            const columnId = visibleColumnIds[columnIndex]
+            const cell = columnId
+              ? cells.find((candidate) => candidate.column.id === columnId)
+              : undefined
+            const meta = cell?.column.columnDef.meta?.grid
+
+            if (
+              !cell ||
+              !columnId ||
+              meta?.editable !== true ||
+              meta.selectable === true ||
+              meta.editor === CHECKBOX_EDITOR ||
+              (meta.editor === undefined && consumerRenderedCells.has(columnId))
+            ) {
+              continue
+            }
+
+            const definition = resolveGridEditor(meta.editor)
+            const value = definition
+              ? definition.parse(draft, buildEditorContext(cell, definition, draft))
+              : draft
+
+            targets.push({
+              target: { rowId: row.id, columnId },
+              value,
+              previousText: displayCellText(row.id, cell),
+            })
+          }
+        }
+      } catch (cause) {
+        // Nothing has been written yet, so the rectangle is rejected as a whole.
+        reject(cause)
+        return true
+      }
+
+      restoreFocusRef.current = anchorKey
+      exitEditing()
+
+      for (const entry of targets) {
+        runCommit(entry.target, entry.value, entry.previousText)
+      }
+
+      // `runCommit` points focus at the cell it wrote; the operator typed into
+      // the range, so focus returns to the anchor once the loop is done.
+      restoreFocusRef.current = anchorKey
+      return true
+    },
+    [
+      buildEditorContext,
+      consumerRenderedCells,
+      displayCellText,
+      draft,
+      exitEditing,
+      revertCommit,
+      runCommit,
+      selectionBounds,
+      visibleColumnIds,
+      visibleRows,
+    ],
+  )
+
   const commitEditing = useCallback(() => {
     if (!editing) {
       return
@@ -1119,8 +1352,20 @@ export function useGridKeyboard<TData>({
       return
     }
 
+    if (hasRangeSelection && commitRangeEditing(target, cell)) {
+      return
+    }
+
     commitCellInput(target, cell, { kind: "draft", draft })
-  }, [commitCellInput, draft, editing, exitEditing, visibleRows])
+  }, [
+    commitCellInput,
+    commitRangeEditing,
+    draft,
+    editing,
+    exitEditing,
+    hasRangeSelection,
+    visibleRows,
+  ])
 
   /**
    * The blur half of the commit path, for one cell.
@@ -1249,6 +1494,58 @@ export function useGridKeyboard<TData>({
   )
 
   /**
+   * Clears every editable cell in the live rectangle.
+   *
+   * The same guards as `clearCell` apply per cell, and the same commit path is
+   * used, so a `select` that refuses an empty value rejects exactly the cell it
+   * cannot clear instead of taking the rest of the range down with it. Returns
+   * whether any cell was clearable; false falls back to the single-cell clear.
+   */
+  const clearRange = useCallback((): boolean => {
+    const bounds = selectionBounds
+
+    if (bounds === null) {
+      return false
+    }
+
+    let cleared = 0
+
+    for (let rowIndex = bounds.firstRow; rowIndex <= bounds.lastRow; rowIndex += 1) {
+      const row = visibleRows[rowIndex]
+
+      if (!row) {
+        continue
+      }
+
+      const cells = row.getVisibleCells()
+
+      for (let columnIndex = bounds.firstColumn; columnIndex <= bounds.lastColumn; columnIndex += 1) {
+        const columnId = visibleColumnIds[columnIndex]
+        const cell = columnId
+          ? cells.find((candidate) => candidate.column.id === columnId)
+          : undefined
+        const meta = cell?.column.columnDef.meta?.grid
+
+        if (
+          !cell ||
+          !columnId ||
+          meta?.editable !== true ||
+          meta.selectable === true ||
+          meta.editor === CHECKBOX_EDITOR ||
+          (meta.editor === undefined && consumerRenderedCells.has(columnId))
+        ) {
+          continue
+        }
+
+        commitCellInput({ rowId: row.id, columnId }, cell, { kind: "draft", draft: "" })
+        cleared += 1
+      }
+    }
+
+    return cleared > 0
+  }, [commitCellInput, consumerRenderedCells, selectionBounds, visibleColumnIds, visibleRows])
+
+  /**
    * Toggles a checkbox cell. The only editor that commits on interaction;
    * everything else commits on `Enter`, an explicit pick or an explicit close.
    */
@@ -1371,9 +1668,13 @@ export function useGridKeyboard<TData>({
         return false
       }
 
-      const startColumnIndex = focusedColumnId
-        ? (columnIndexById.get(focusedColumnId) ?? -1)
-        : -1
+      const rangeAnchor = hasRangeSelection ? (selection?.anchor ?? null) : null
+      const startRowIndex = rangeAnchor?.rowIndex ?? clampedRowIndex
+      const startColumnIndex = rangeAnchor
+        ? (columnIndexById.get(rangeAnchor.columnId) ?? -1)
+        : focusedColumnId
+          ? (columnIndexById.get(focusedColumnId) ?? -1)
+          : -1
 
       if (startColumnIndex === -1) {
         return false
@@ -1387,11 +1688,64 @@ export function useGridKeyboard<TData>({
         rows.pop()
       }
 
+      // One pasted value over a live rectangle fills the rectangle, which is
+      // what pasting into a selection means in a spreadsheet: the selection is
+      // the destination, not merely the place the paste starts.
+      const singleValue = rows.length === 1 && !rows[0].includes("\t") ? rows[0] : null
+
+      if (singleValue !== null && selectionBounds !== null) {
+        let committed = 0
+        let skipped = 0
+
+        for (let rowIndex = selectionBounds.firstRow; rowIndex <= selectionBounds.lastRow; rowIndex += 1) {
+          const row = visibleRows[rowIndex]
+
+          if (!row) {
+            continue
+          }
+
+          const cells = row.getVisibleCells()
+
+          for (
+            let columnIndex = selectionBounds.firstColumn;
+            columnIndex <= selectionBounds.lastColumn;
+            columnIndex += 1
+          ) {
+            const columnId = visibleColumnIds[columnIndex]
+            const cell = columnId
+              ? cells.find((candidate) => candidate.column.id === columnId)
+              : undefined
+            const meta = cell?.column.columnDef.meta?.grid
+
+            if (
+              !cell ||
+              !columnId ||
+              meta?.editable !== true ||
+              meta.selectable === true ||
+              meta.editor === CHECKBOX_EDITOR ||
+              (meta.editor === undefined && consumerRenderedCells.has(columnId))
+            ) {
+              skipped += 1
+              continue
+            }
+
+            commitCellInput({ rowId: row.id, columnId }, cell, { kind: "draft", draft: singleValue })
+            committed += 1
+          }
+        }
+
+        if (skipped > 0) {
+          onNotice?.(`Skipped ${skipped} read-only cell${skipped === 1 ? "" : "s"}; ${committed} pasted.`)
+        }
+
+        return committed > 0 || skipped > 0
+      }
+
       let committed = 0
       let skipped = 0
 
       rows.forEach((line, rowOffset) => {
-        const row = visibleRows[clampedRowIndex + rowOffset]
+        const row = visibleRows[startRowIndex + rowOffset]
 
         if (!row) {
           return
@@ -1439,7 +1793,10 @@ export function useGridKeyboard<TData>({
       commitCellInput,
       consumerRenderedCells,
       focusedColumnId,
+      hasRangeSelection,
       onNotice,
+      selection,
+      selectionBounds,
       visibleColumnIds,
       visibleRows,
     ],
@@ -1615,6 +1972,17 @@ export function useGridKeyboard<TData>({
       // The reference grid opens the editor on `Enter` from a selected cell.
       if (!editing && event.key === "Enter") {
         event.preventDefault()
+
+        // A live range opens its editor on the rectangle's first editable cell
+        // and keeps the focus on the far corner, so the rectangle survives the
+        // edit it is about to receive.
+        const rangeCell = hasRangeSelection ? firstEditableCellInRange() : null
+
+        if (rangeCell) {
+          openEditor(rangeCell.rowIndex, rangeCell.columnId, undefined, true)
+          return
+        }
+
         if (focusedColumnId) {
           openEditor(clampedRowIndex, focusedColumnId)
         }
@@ -1632,6 +2000,14 @@ export function useGridKeyboard<TData>({
       // through to the toggle below; a printable character on a checkbox does
       // nothing, and a read-only cell never claims the key.
       if (!editing && !event.nativeEvent.isComposing && event.key.length === 1) {
+        const rangeCell = hasRangeSelection ? firstEditableCellInRange() : null
+
+        if (rangeCell) {
+          event.preventDefault()
+          openEditor(rangeCell.rowIndex, rangeCell.columnId, event.key, true)
+          return
+        }
+
         const row = visibleRows[clampedRowIndex]
         const cell = row?.getVisibleCells().find((candidate) => candidate.column.id === focusedColumnId)
         const meta = cell?.column.columnDef.meta?.grid
@@ -1676,6 +2052,10 @@ export function useGridKeyboard<TData>({
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault()
 
+        if (hasRangeSelection && clearRange()) {
+          return
+        }
+
         if (focusedColumnId) {
           clearCell(clampedRowIndex, focusedColumnId)
         }
@@ -1684,11 +2064,13 @@ export function useGridKeyboard<TData>({
     [
       cancelEditing,
       clearCell,
+      clearRange,
       clampedRowIndex,
       collapseSelection,
       commitEditing,
       copySelection,
       editing,
+      firstEditableCellInRange,
       focusedColumnId,
       hasRangeSelection,
       moveTab,
@@ -1919,6 +2301,49 @@ export function useGridKeyboard<TData>({
     [visibleRows],
   )
 
+  /**
+   * Arms a pointer selection and moves the range onto the pressed cell.
+   *
+   * The press itself is the same move `focusCell` makes; the ref is the only
+   * addition, and it is what turns a click into a drag. The window's
+   * `pointerup`/`pointercancel` listener disarms it, so a press that leaves the
+   * grid cannot keep extending the range on the next unrelated pointer crossing.
+   */
+  const beginCellSelection = useCallback(
+    (rowId: string, columnId: string, extend = false) => {
+      pointerSelectionRef.current = true
+      focusCell(rowId, columnId, extend)
+    },
+    [focusCell],
+  )
+
+  /**
+   * Grows the armed range to the cell the pointer is over.
+   *
+   * `scrollToIndex` runs before the focus move so a drag that reaches the last
+   * rendered row pulls the next row into the virtual window; without it the
+   * rectangle would stop at the edge of the viewport even though the row model
+   * continues. The extension reuses `focusCell(..., extend = true)`, so the
+   * anchor stays where the press put it and only the far corner travels.
+   */
+  const extendCellSelection = useCallback(
+    (rowId: string, columnId: string) => {
+      if (!pointerSelectionRef.current) {
+        return
+      }
+
+      const index = visibleRows.findIndex((row) => row.id === rowId)
+
+      if (index === -1) {
+        return
+      }
+
+      scrollToIndex(index)
+      focusCell(rowId, columnId, true)
+    },
+    [focusCell, scrollToIndex, visibleRows],
+  )
+
   const isRowFocused = useCallback(
     (row: Row<TData>) => clampedRowIndex >= 0 && visibleRows[clampedRowIndex]?.id === row.id,
     [clampedRowIndex, visibleRows],
@@ -2006,6 +2431,10 @@ export function useGridKeyboard<TData>({
   return {
     focusedRowIndex: clampedRowIndex,
     focusCell,
+    beginCellSelection,
+    extendCellSelection,
+    hasRangeSelection,
+    collapseSelection,
     onCellDoubleClick,
     focusRow,
     focusRowCell,

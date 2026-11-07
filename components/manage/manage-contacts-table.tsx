@@ -24,6 +24,7 @@ import type {
 } from "@/components/manage/manage-types"
 import {
   CONTACT_FIELD_IDS,
+  CONTACT_FIELD_PATCH_KEY,
   contactFieldValue,
   UNRESOLVED_LOCATION,
   UNRESOLVED_STAFF,
@@ -110,6 +111,7 @@ const NAME_COLUMN_ID = CONTACT_FIELD_IDS.name
 const PHONE_COLUMN_ID = CONTACT_FIELD_IDS.phone
 const LOCATION_COLUMN_ID = CONTACT_FIELD_IDS.location
 const SOURCE_COLUMN_ID = "source"
+const ROUNDS_COLUMN_ID = "rounds"
 const BOOKS_READ_COLUMN_ID = "booksRead"
 const INITIAL_CONTACT_COLUMN_ID = CONTACT_FIELD_IDS.initialContact
 const DATE_OF_BIRTH_COLUMN_ID = "dateOfBirth"
@@ -168,6 +170,7 @@ const COLUMN_IDS: readonly string[] = [
   PHONE_COLUMN_ID,
   LOCATION_COLUMN_ID,
   SOURCE_COLUMN_ID,
+  ROUNDS_COLUMN_ID,
   BOOKS_READ_COLUMN_ID,
   INITIAL_CONTACT_COLUMN_ID,
   DATE_OF_BIRTH_COLUMN_ID,
@@ -180,7 +183,7 @@ const COLUMN_IDS: readonly string[] = [
 ]
 
 /**
- * CAP-18's default field set: eight of the thirteen data fields, with these five
+ * CAP-18's default field set: nine of the fourteen data fields, with these five
  * off until asked for.
  *
  * A **contacts** decision, so it lives here and not in `components/grid/` — the
@@ -215,6 +218,7 @@ const COLUMN_LABELS: Record<string, string> = {
   [PHONE_COLUMN_ID]: "Phone",
   [LOCATION_COLUMN_ID]: "Location",
   [SOURCE_COLUMN_ID]: "Source",
+  [ROUNDS_COLUMN_ID]: "Rounds",
   [BOOKS_READ_COLUMN_ID]: "Books Read",
   [INITIAL_CONTACT_COLUMN_ID]: "Initial Contact",
   [DATE_OF_BIRTH_COLUMN_ID]: "Date of Birth",
@@ -256,6 +260,7 @@ const PATCH_KEY_BY_COLUMN: Partial<Record<string, ManageContactPatchKey>> = {
   [NAME_COLUMN_ID]: "name",
   [PHONE_COLUMN_ID]: "phone",
   [SOURCE_COLUMN_ID]: "source",
+  [ROUNDS_COLUMN_ID]: "rounds",
   [BOOKS_READ_COLUMN_ID]: "booksRead",
   [INITIAL_CONTACT_COLUMN_ID]: "initialContact",
   [DATE_OF_BIRTH_COLUMN_ID]: "dateOfBirth",
@@ -266,7 +271,7 @@ const PATCH_KEY_BY_COLUMN: Partial<Record<string, ManageContactPatchKey>> = {
   [LOCATION_COLUMN_ID]: "locationIds",
 }
 
-/** The same eight columns, in the order they are offered to the create write. */
+/** The same nine columns, in the order they are offered to the create write. */
 const WRITABLE_COLUMN_IDS = Object.keys(PATCH_KEY_BY_COLUMN)
 
 /**
@@ -300,8 +305,12 @@ function createDraftContact(assignedPreacherId: string, collectedById: string): 
     id: `${DRAFT_ROW_ID_PREFIX}${draftSequence}`,
     name: "",
     phone: "",
+    age: null,
     college: null,
     company: null,
+    designation: null,
+    year: null,
+    address: null,
     rounds: null,
     source: null,
     booksRead: [],
@@ -333,7 +342,7 @@ function isDraftRowId(rowId: string): boolean {
  *
  * An explicit switch rather than an index signature so the compiler knows which
  * fields a create can carry. `default: undefined` is unreachable — the column
- * list and this switch are the same eight columns — and returning `undefined`
+ * list and this switch are the same nine columns — and returning `undefined`
  * rather than throwing keeps a future column from failing the whole create.
  */
 function draftValueForColumn(contact: ManageContact, columnId: string): unknown {
@@ -344,6 +353,8 @@ function draftValueForColumn(contact: ManageContact, columnId: string): unknown 
       return contact.phone
     case SOURCE_COLUMN_ID:
       return contact.source
+    case ROUNDS_COLUMN_ID:
+      return contact.rounds
     case BOOKS_READ_COLUMN_ID:
       return contact.booksRead
     case INITIAL_CONTACT_COLUMN_ID:
@@ -829,7 +840,7 @@ export function ManageContactsTable({
    * Which of the two contacts views this device takes.
    *
    * The viewport decides, and the decision is made *before* any of this
-   * component's state: the grid is a spreadsheet of thirteen columns and the
+   * component's state: the grid is a spreadsheet of fourteen columns and the
    * contact list is a phone-shaped two-column stack, and only one of them can
    * be the right thing on a given screen. A phone cannot use the grid, and a
    * desktop does not want the list, so the operator is not asked to choose —
@@ -1260,19 +1271,28 @@ export function ManageContactsTable({
   const handleListCommit = useCallback(
     async (contactId: string, fieldId: ContactFieldId, value: unknown) => {
       const contact = contacts.find((row) => row.id === contactId)
+      const patchKey = CONTACT_FIELD_PATCH_KEY[fieldId]
 
-      if (!contact) {
+      if (!contact || !patchKey) {
         return
       }
 
       try {
-        await handleCellCommit({
-          rowId: contactId,
-          columnId: fieldId,
-          row: contact,
-          previousValue: contactFieldValue(contact, fieldId),
-          value,
-        })
+        if (PATCH_KEY_BY_COLUMN[fieldId]) {
+          await handleCellCommit({
+            rowId: contactId,
+            columnId: fieldId,
+            row: contact,
+            previousValue: contactFieldValue(contact, fieldId),
+            value,
+          })
+          return
+        }
+
+        // The record view shows fields the grid has no column for (College,
+        // Company). They end at the same patch function the grid's own commits
+        // end at, so the write is still one write with one rejection path.
+        applyWrite(await patchContact(contactId, { [patchKey]: value }))
       } catch (cause) {
         // The grid's own commits report a refusal through `onEditError`, which
         // the grid turns into a cell revert and a status line. The list is
@@ -1284,7 +1304,7 @@ export function ManageContactsTable({
         })
       }
     },
-    [contacts, handleCellCommit],
+    [applyWrite, contacts, handleCellCommit, patchContact],
   )
 
   const toggleFavorite = useCallback(
@@ -1493,6 +1513,23 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
             editor: "select",
             fieldType: "select",
             editorOptions: { options: sourceOptions },
+          },
+        },
+      }),
+
+      // `number`: `contacts.rounds` is `smallint`, so the cell edits and filters
+      // numerically and the commit is the number the column stores.
+      columnHelper.accessor("rounds", {
+        id: ROUNDS_COLUMN_ID,
+        header: COLUMN_LABELS[ROUNDS_COLUMN_ID],
+        size: 110,
+        meta: {
+          grid: {
+            editable: true,
+            editor: "number",
+            fieldType: "number",
+            align: "right",
+            tabular: true,
           },
         },
       }),
@@ -2491,6 +2528,8 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
             contact={expandedContact}
             locations={payload.locationOptions ?? payload.locations}
             resolvers={{ locationNameById, staffNameById }}
+            sourceOptions={sourceOptions}
+            booksReadOptions={payload.booksReadOptions}
             onCommit={(fieldId, value) => {
               void handleListCommit(expandedContact.id, fieldId, value)
             }}

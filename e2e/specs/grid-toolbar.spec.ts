@@ -5,12 +5,12 @@
  * Two decisions in this file are Dwaraka's and are load-bearing enough to say so
  * at the top, because a later reader would otherwise "fix" them:
  *
- * 1. **Eight columns is eight *fields*.** `COLUMN_IDS` is fourteen entries and one
+ * 1. **Nine columns is nine *fields*.** `COLUMN_IDS` is fifteen entries and one
  *    of them is `select`, which is a control rather than a field, so the frame
- *    renders **nine** headers: `select` plus CAP-18's eight visible fields. The
- *    acceptance criterion says "exactly eight columns render"; the assertion below
- *    names all nine ids, because an exact list is the only form of that claim
- *    which cannot be satisfied by the wrong nine.
+ *    renders **ten** headers: `select` plus the nine visible fields. The
+ *    acceptance criterion says "exactly nine columns render"; the assertion below
+ *    names all ten ids, because an exact list is the only form of that claim
+ *    which cannot be satisfied by the wrong ten.
  * 2. **An empty selection reads the record count.** The selection readout lives
  *    in the status row below the grid, which is always in the frame — so at
  *    rest it carries the record count, and a selection swaps that same spot to
@@ -52,7 +52,7 @@ import {
 const DEFAULT_HIDDEN = ["source", "booksRead", "dateOfBirth", "lastContactedOn", "favorite"]
 
 /**
- * The same thirteen data fields by **display label**, in the same order.
+ * The same fourteen data fields by **display label**, in the same order.
  *
  * `*Hide fields*` rows are asserted on labels, not ids, because the label is
  * what the operator reads and what CAP-18 is written in ("Visible: Name, Phone,
@@ -65,6 +65,7 @@ const ALL_FIELD_LABELS = [
   "Phone",
   "Location",
   "Source",
+  "Rounds",
   "Books Read",
   "Initial Contact",
   "Date of Birth",
@@ -76,11 +77,12 @@ const ALL_FIELD_LABELS = [
   "Favorite",
 ]
 
-/** CAP-18's eight visible fields, by label — the rows shown ticked by default. */
+/** CAP-18's nine visible fields, by label — the rows shown ticked by default. */
 const DEFAULT_VISIBLE_LABELS = [
   "Name",
   "Phone",
   "Location",
+  "Rounds",
   "Initial Contact",
   "Total Attendance",
   "Past 60 Days",
@@ -88,11 +90,12 @@ const DEFAULT_VISIBLE_LABELS = [
   "Collected By",
 ]
 
-/** The eight fields a default load shows, in column-definition order. */
+/** The nine fields a default load shows, in column-definition order. */
 const DEFAULT_VISIBLE_FIELDS = [
   "name",
   "phone",
   "location",
+  "rounds",
   "initialContact",
   "totalAttendanceCount",
   "past60DayAttendanceCount",
@@ -101,7 +104,7 @@ const DEFAULT_VISIBLE_FIELDS = [
 ]
 
 /**
- * The thirteen data fields, in column-definition order, excluding `select`.
+ * The fourteen data fields, in column-definition order, excluding `select`.
  *
  * This is also the order *Hide fields* must list them in: a visibility list
  * ordered by anything else (alphabetically, by whether the column is currently
@@ -112,6 +115,7 @@ const ALL_FIELDS = [
   "phone",
   "location",
   "source",
+  "rounds",
   "booksRead",
   "initialContact",
   "dateOfBirth",
@@ -143,7 +147,7 @@ async function openHideFields(page: Page): Promise<void> {
  * The labels *Hide fields* lists, top to bottom.
  *
  * Read from the checkbox names rather than from the row text, so the assertion is
- * about the thirteen *fields* and cannot be satisfied by thirteen rows of chrome.
+ * about the fourteen *fields* and cannot be satisfied by fourteen rows of chrome.
  *
  * `[role="checkbox"]`, not `input[type="checkbox"]`: `components/ui/checkbox.tsx`
  * is Radix, and Radix renders a `<button role="checkbox">` — there is no input
@@ -172,22 +176,22 @@ async function tickedHideFields(page: Page): Promise<string[]> {
 }
 
 test.describe("story 7 — the contacts toolbar", () => {
-  test("default field set — no `hide` param renders CAP-18's eight, and the five stay reachable", async ({
+  test("default field set — no `hide` param renders CAP-18's nine, and the five stay reachable", async ({
     page,
   }) => {
     await openContactsGrid(page)
 
-    expect(await headerColumnIds(page), "a default load renders select plus the eight visible fields").toEqual(
+    expect(await headerColumnIds(page), "a default load renders select plus the nine visible fields").toEqual(
       toHeaderIds(DEFAULT_VISIBLE_FIELDS),
     )
 
     // Reachable, not deleted: every one of the five is still offered by
     // *Hide fields*, just unticked.
     await openHideFields(page)
-    expect(await hideFieldLabels(page), "thirteen data fields, in column-definition order").toEqual(
+    expect(await hideFieldLabels(page), "fourteen data fields, in column-definition order").toEqual(
       ALL_FIELD_LABELS,
     )
-    expect(await tickedHideFields(page), "the eight checked fields").toEqual(DEFAULT_VISIBLE_LABELS)
+    expect(await tickedHideFields(page), "the nine checked fields").toEqual(DEFAULT_VISIBLE_LABELS)
   })
 
   test("existing shared link — `hide=notes` still means only Notes hidden", async ({ page }) => {
@@ -219,6 +223,7 @@ test.describe("story 7 — the contacts toolbar", () => {
         "phone",
         "location",
         "source",
+        "rounds",
         "initialContact",
         "totalAttendanceCount",
         "past60DayAttendanceCount",
@@ -228,7 +233,7 @@ test.describe("story 7 — the contacts toolbar", () => {
     )
 
     await openHideFields(page)
-    // Ticked means VISIBLE, so this is the eight plus the un-hidden `Source` —
+    // Ticked means VISIBLE, so this is the nine plus the un-hidden `Source` —
     // and `Source` sits fourth, in column order, not appended. The four that
     // remain hidden are the ones *absent* from this list, which the header
     // assertion above already proved by naming them.
@@ -237,6 +242,7 @@ test.describe("story 7 — the contacts toolbar", () => {
       "Phone",
       "Location",
       "Source",
+      "Rounds",
       "Initial Contact",
       "Total Attendance",
       "Past 60 Days",
@@ -250,7 +256,7 @@ test.describe("story 7 — the contacts toolbar", () => {
   }) => {
     await openContactsGrid(page, { params: { hide: "" } })
 
-    expect(await headerColumnIds(page), "all thirteen fields are visible").toEqual(toHeaderIds(ALL_FIELDS))
+    expect(await headerColumnIds(page), "all fourteen fields are visible").toEqual(toHeaderIds(ALL_FIELDS))
 
     // The whole point of keying on presence: `hide=` is the ONLY encoding that can
     // say "hide nothing". A key that were deleted here would restore the five
@@ -282,7 +288,7 @@ test.describe("story 7 — the contacts toolbar", () => {
     )
   })
 
-  test("Hide fields list — thirteen rows, `select` absent, Name locked", async ({ page }) => {
+  test("Hide fields list — fourteen rows, `select` absent, Name locked", async ({ page }) => {
     await openContactsGrid(page)
     await openHideFields(page)
 
@@ -302,7 +308,7 @@ test.describe("story 7 — the contacts toolbar", () => {
       "the lock marker renders once per locked field, and only per locked field",
     ).toHaveCount(1)
 
-    // The twelve unlocked fields are genuinely unlocked — a list where every row
+    // The thirteen unlocked fields are genuinely unlocked — a list where every row
     // is disabled would satisfy the three assertions above.
     await expect(hideFieldToggle(page, "Phone")).toBeEnabled()
     await expect(hideFieldToggle(page, "Notes")).toBeEnabled()
@@ -348,13 +354,14 @@ test.describe("story 7 — the contacts toolbar", () => {
     // state would show `notes` still ticked here, which is exactly the bug the
     // "one state, two routes" claim exists to prevent.
     await openHideFields(page)
-    // Ticked means VISIBLE: the eight defaults with `Notes` now gone, because the
+    // Ticked means VISIBLE: the nine defaults with `Notes` now gone, because the
     // header menu hid it. `Notes` being absent from this list is the same fact
     // as the header assertion above, read through the other route.
     expect(await tickedHideFields(page)).toEqual([
       "Name",
       "Phone",
       "Location",
+      "Rounds",
       "Initial Contact",
       "Total Attendance",
       "Past 60 Days",

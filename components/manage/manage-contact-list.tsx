@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input"
  * opens the whole record over it. This component is that stack.
  *
  * The list is deliberately not the contacts grid, and it is not a rendering of
- * the grid either. The grid is a spreadsheet: thirteen columns, a toolbar, a
+ * the grid either. The grid is a spreadsheet: fourteen columns, a toolbar, a
  * column manager, a keyboard model. The Airtable page is a phone-shaped
  * surface with two columns and a stack, and mixing the two — a spreadsheet
  * that also stacked — would give the operator neither. So the grid stays the

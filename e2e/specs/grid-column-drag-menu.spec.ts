@@ -43,6 +43,7 @@ const DEFAULT_ORDER = [
   "phone",
   "location",
   "source",
+  "rounds",
   "booksRead",
   "initialContact",
   "dateOfBirth",

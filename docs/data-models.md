@@ -52,7 +52,7 @@ Source types: `ContactFields`, `ContactRecord`. Table `public.contacts`.
 | `assigned_preacher_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL` |
 | `collected_by_id` | uuid | FK → `public.users(id)`, `ON DELETE SET NULL` |
 | `photo_path` | text | Storage object path in the private `contact-photos` bucket |
-| `rounds` | text | Rounds completed |
+| `rounds` | smallint | Rounds completed |
 | `books_read` | text[] | Books distributed/read |
 | `is_favorite` | boolean | Drives the favorites view in `/manage` |
 | `created_at` | timestamptz | Default `now()` |

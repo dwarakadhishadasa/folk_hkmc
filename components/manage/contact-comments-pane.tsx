@@ -3,18 +3,24 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { formatDistanceToNow } from "date-fns"
 import {
+  ArrowUp,
   ChevronDown,
   ChevronRight,
   CornerUpLeft,
   Loader2,
-  MessageSquare,
+  MessageCircle,
   Pencil,
+  Search,
   SmilePlus,
   Trash2,
   X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  CONTACT_FIELD_SHADOW,
+} from "@/components/manage/contact-record-styles"
+import { cn } from "@/lib/utils"
 import {
   CONTACT_COMMENT_MAX_LENGTH,
   CONTACT_REACTION_EMOJIS,
@@ -118,29 +124,52 @@ function Composer({
       <label htmlFor={id} className="sr-only">
         {placeholder}
       </label>
-      <textarea
-        ref={ref}
-        id={id}
-        value={value}
-        rows={2}
-        maxLength={CONTACT_COMMENT_MAX_LENGTH}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault()
-            onSubmit()
-          }
+      <div
+        className={cn(
+          "relative rounded-[6px] bg-field",
+          CONTACT_FIELD_SHADOW,
+          "focus-within:shadow-[inset_0_0_0_1px_var(--ring),0_0_0_1px_var(--ring)]",
+        )}
+      >
+        <textarea
+          ref={ref}
+          id={id}
+          value={value}
+          rows={1}
+          maxLength={CONTACT_COMMENT_MAX_LENGTH}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault()
+              onSubmit()
+            }
 
-          if (event.key === "Escape" && onCancel) {
-            event.preventDefault()
-            onCancel()
-          }
-        }}
-        className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-2 text-[13px] leading-snug outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-      />
-      <div className="mt-1.5 flex items-center justify-end gap-1.5">
-        {onCancel ? (
+            if (event.key === "Escape" && onCancel) {
+              event.preventDefault()
+              onCancel()
+            }
+          }}
+          className="max-h-32 min-h-10 w-full resize-none bg-transparent px-2 py-2.5 pr-10 text-[13px] leading-[19px] text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        />
+        {value.trim().length > 0 ? (
+          <button
+            type="button"
+            aria-label={submitLabel}
+            disabled={sending}
+            onClick={onSubmit}
+            className="absolute bottom-1.5 right-1.5 flex size-7 items-center justify-center rounded-[4px] bg-primary text-primary-foreground disabled:opacity-60"
+          >
+            {sending ? (
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+            ) : (
+              <ArrowUp aria-hidden="true" className="size-4" />
+            )}
+          </button>
+        ) : null}
+      </div>
+      {onCancel ? (
+        <div className="mt-1.5 flex items-center justify-end">
           <Button
             type="button"
             variant="ghost"
@@ -150,18 +179,8 @@ function Composer({
           >
             Cancel
           </Button>
-        ) : null}
-        <Button
-          type="button"
-          size="sm"
-          disabled={value.trim().length === 0 || sending}
-          onClick={onSubmit}
-          className="h-7 text-[12px]"
-        >
-          {sending ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> : null}
-          {submitLabel}
-        </Button>
-      </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -216,6 +235,8 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState("")
 
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyDraft, setReplyDraft] = useState("")
@@ -300,8 +321,26 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
     }
   }, [state])
 
-  const scrollToEnd = useCallback(() => {
-    const node = listRef.current
+  /**
+   * The thread list after the search box, if one is open.
+   *
+   * Filtering the roots rather than every comment keeps a reply attached to a
+   * root that matched; a reply that matched on its own would otherwise appear
+   * without the question it answers.
+   */
+  const shownRoots = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+
+    if (!needle) {
+      return roots
+    }
+
+    return roots.filter((comment) =>
+      `${authorLabel(comment)} ${comment.body}`.toLowerCase().includes(needle),
+    )
+  }, [query, roots])
+
+  const scrollToEnd = useCallback(() => {    const node = listRef.current
     if (node) {
       node.scrollTop = node.scrollHeight
     }
@@ -821,44 +860,106 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
       className="flex h-full min-h-0 w-full flex-col border-l border-border"
       data-contact-comments=""
     >
-      <header className="flex h-11 shrink-0 items-center border-b border-border px-4">
-        <span className="text-[13px] font-medium text-[var(--program-text)]">Comments</span>
+      {/*
+        The pane header is two rows in the source product: the "All comments"
+        selector with the search control, then the followers line. This app has
+        no follow/subscribe model, so the second row is not drawn — a count of
+        people who are not actually following would be a lie. Search is real:
+        it filters the loaded threads.
+      */}
+      <header className="flex shrink-0 flex-col gap-2 px-4 py-3">
+        <div className="flex h-7 items-center justify-between">
+          <span className="-ml-2 flex items-center rounded-[3px] px-2 py-1 text-[13px] leading-[19.5px] text-muted-foreground">
+            All comments
+          </span>
+          <button
+            type="button"
+            aria-label="Search comments"
+            aria-pressed={searchOpen}
+            onClick={() => {
+              setSearchOpen((open) => !open)
+              setQuery("")
+            }}
+            className={cn(
+              "flex size-7 items-center justify-center rounded-[6px] text-foreground opacity-75 outline-none hover:bg-secondary hover:opacity-100 focus-visible:ring-1 focus-visible:ring-ring dark:hover:bg-field",
+              searchOpen && "bg-secondary opacity-75 dark:bg-field",
+            )}
+          >
+            <Search aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+
+        {searchOpen ? (
+          <input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search comments"
+            aria-label="Search comments"
+            className={cn(
+              "h-8 w-full rounded-[6px] bg-field px-2 text-[13px] leading-[19.5px] text-foreground outline-none placeholder:text-muted-foreground",
+              CONTACT_FIELD_SHADOW,
+              "focus-visible:shadow-[inset_0_0_0_1px_var(--ring),0_0_0_1px_var(--ring)]",
+            )}
+          />
+        ) : null}
       </header>
 
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {state.kind === "loading" ? (
-          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+          <div className="flex items-center gap-2 px-2 text-[12px] text-muted-foreground">
             <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
             Loading comments
           </div>
         ) : null}
 
         {state.kind === "error" ? (
-          <p role="alert" className="text-[12px] text-destructive">
+          <p role="alert" className="px-2 text-[12px] text-destructive">
             {state.message}
           </p>
         ) : null}
 
         {state.kind === "ready" && roots.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-center">
-            <MessageSquare aria-hidden="true" className="mb-2 size-6 text-muted-foreground" />
-            <p className="text-[13px] font-medium text-[var(--program-text)]">Start a conversation</p>
-            <p className="mt-1 max-w-[22ch] text-[12px] leading-snug text-muted-foreground">
-              Leave a note about {contactName} for the rest of the patch.
+          <div className="flex h-full flex-col items-center justify-center px-2 text-center">
+            {/*
+              Two overlapping speech bubbles, as in the source product's empty
+              state: the front one white, the one behind it a step quieter.
+            */}
+            <span aria-hidden="true" className="relative mb-4 block size-10">
+              <MessageCircle
+                strokeWidth={0}
+                className="absolute bottom-0 right-0 size-7 fill-foreground/20 dark:fill-white/75"
+              />
+              <MessageCircle
+                strokeWidth={0}
+                className="absolute left-0 top-0 size-7 fill-foreground/15 dark:fill-white"
+              />
+            </span>
+            <p className="text-[13px] leading-[16.25px] text-foreground">
+              Start a conversation
+            </p>
+            <p className="mt-1 max-w-[270px] text-[11px] leading-[16.5px] text-muted-foreground">
+              Leave a note about {contactName} for the rest of the team.
             </p>
           </div>
         ) : null}
 
-        {state.kind === "ready" && roots.length > 0 ? (
+        {state.kind === "ready" && roots.length > 0 && shownRoots.length === 0 ? (
+          <p className="px-2 py-1 text-[12px] text-muted-foreground">
+            No comments match “{query.trim()}”.
+          </p>
+        ) : null}
+
+        {state.kind === "ready" && shownRoots.length > 0 ? (
           <ul className="flex flex-col gap-3">
-            {roots.map((comment) => (
+            {shownRoots.map((comment) => (
               <li key={comment.id}>{renderRow(comment, false)}</li>
             ))}
           </ul>
         ) : null}
       </div>
 
-      <div className="shrink-0 border-t border-border p-3">
+      <div className="shrink-0 border-t border-border p-4">
         {notice ? (
           <div className="mb-2 flex items-start justify-between gap-2">
             <p role="alert" className="text-[12px] text-destructive">

@@ -33,6 +33,9 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const MAX_TEXT_LENGTH = 2000
 const MAX_PHONE_LENGTH = 20
 const MAX_NAME_LENGTH = 120
+/** `contacts.rounds` is `smallint`; these are the bounds the database enforces. */
+const SMALLINT_MIN = -32768
+const SMALLINT_MAX = 32767
 
 /**
  * Rows one bulk request may carry.
@@ -81,6 +84,22 @@ function boundedText(value: unknown, field: string, maxLength: number): string |
   }
 
   return trimmed || null
+}
+
+function optionalSmallInteger(value: unknown, field: string): number | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new AuthzBadRequest(`${field} must be a whole number or null.`)
+  }
+
+  if (value < SMALLINT_MIN || value > SMALLINT_MAX) {
+    throw new AuthzBadRequest(`${field} must be between ${SMALLINT_MIN} and ${SMALLINT_MAX}.`)
+  }
+
+  return value
 }
 
 /**
@@ -188,7 +207,7 @@ function parseContactPatch(payload: unknown): ManageContactPatch {
         patch.company = boundedText(value, "Company", MAX_TEXT_LENGTH)
         break
       case "rounds":
-        patch.rounds = boundedText(value, "Rounds", MAX_TEXT_LENGTH)
+        patch.rounds = optionalSmallInteger(value, "Rounds")
         break
       // Bounded like `notes` rather than pattern-matched: `source` is free text
       // in the database, and the grid's `select` editor already refuses to

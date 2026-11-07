@@ -30,12 +30,13 @@
  *
  * ## Why the range's surface is compared rather than named
  *
- * The selected surface is `bg-accent/30`, which resolves through the theme
- * tokens to a different computed colour in light and dark. Rather than pin a
- * value the theme story will legitimately change, range 1 asserts that a
- * selected cell and an unselected one *differ* in computed background — which is
- * what "the range is distinguishable from the single focused cell" actually
- * claims, in both themes, without naming a colour.
+ * The selected surface is `--grid-selected`, the same tint a selected row
+ * paints, which resolves through the theme tokens to a different computed
+ * colour in light and dark. Rather than pin a value the theme story will
+ * legitimately change, range 1 asserts that a selected cell and an unselected
+ * one *differ* in computed background — which is what "the range is
+ * distinguishable from the single focused cell" actually claims, in both
+ * themes, without naming a colour.
  */
 
 import { expect, test, type Page } from "@playwright/test"

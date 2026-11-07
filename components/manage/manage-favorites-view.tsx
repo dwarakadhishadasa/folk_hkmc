@@ -51,7 +51,7 @@ function toDraft(contact: ManageContact): ContactDraft {
     phone: contact.phone,
     college: contact.college ?? "",
     company: contact.company ?? "",
-    rounds: contact.rounds ?? "",
+    rounds: contact.rounds === null ? "" : String(contact.rounds),
     booksRead: contact.booksRead,
     dateOfBirth: contact.dateOfBirth ?? "",
     notes: contact.notes ?? "",
@@ -238,13 +238,23 @@ export function ManageFavoritesView({ payload }: { payload: ManagePortalPayload 
       return
     }
 
+    // The input holds text so the field can be empty; the column is `smallint`,
+    // so a value is only sent when it is a whole number in range.
+    const roundsText = draft.rounds.trim()
+    const rounds = roundsText === "" ? null : Number(roundsText)
+
+    if (rounds !== null && (!Number.isInteger(rounds) || rounds < -32768 || rounds > 32767)) {
+      setStatus({ kind: "error", message: "Rounds must be a whole number between -32,768 and 32,767." })
+      return
+    }
+
     setStatus({ kind: "busy", message: "Saving changes…" })
 
     try {
       const response = await fetch("/api/manage/contacts", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactId: selectedContact.id, ...draft }),
+        body: JSON.stringify({ contactId: selectedContact.id, ...draft, rounds }),
       })
 
       const body: unknown = await response.json()
@@ -454,6 +464,11 @@ export function ManageFavoritesView({ payload }: { payload: ManagePortalPayload 
                 <Field label="Rounds" id="manage-rounds">
                   <Input
                     id="manage-rounds"
+                    type="number"
+                    inputMode="numeric"
+                    min={-32768}
+                    max={32767}
+                    step={1}
                     value={draft.rounds}
                     onChange={(event) => updateDraft("rounds", event.target.value)}
                   />

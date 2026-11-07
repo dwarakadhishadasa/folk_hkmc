@@ -730,6 +730,7 @@ interface GridVirtualRowsProps<TData extends RowData> {
   isRowEditing: (row: Row<TData>) => boolean
   focusedRowDomId: string | undefined
   onCellPointerDown: (rowId: string, columnId: string, extend: boolean) => void
+  onCellPointerEnter: (rowId: string, columnId: string) => void
   onCellDoubleClick: (rowId: string, columnId: string) => void
   focusRow: (rowId: string) => boolean
   focusRowCell: (rowId: string) => boolean
@@ -767,6 +768,7 @@ function GridVirtualRows<TData extends RowData>({
   isRowEditing,
   focusedRowDomId,
   onCellPointerDown,
+  onCellPointerEnter,
   onCellDoubleClick,
   focusRow,
   focusRowCell,
@@ -927,6 +929,7 @@ function GridVirtualRows<TData extends RowData>({
             rowPosition={virtualRow.index + 1}
             domId={focused ? focusedRowDomId : undefined}
             onCellPointerDown={onCellPointerDown}
+            onCellPointerEnter={onCellPointerEnter}
             onCellDoubleClick={onCellDoubleClick}
           />
         )
@@ -1698,6 +1701,36 @@ export function Grid<TData extends RowData>({
     onNotice,
   })
 
+  /**
+   * Row selection and cell-range selection are mutually exclusive.
+   *
+   * They are two different answers to "what will the next action apply to", and
+   * a grid that paints both leaves the operator unable to tell which one an
+   * action would use. The direction is read from what just changed rather than
+   * from which is non-empty: a range that starts while rows are selected clears
+   * the rows, and a row that becomes selected while a range is live collapses
+   * the range. Both effects in one place so the rule cannot be applied from one
+   * side only.
+   */
+  const selectedRowCount = Object.keys(state.rowSelection ?? {}).length
+  const { hasRangeSelection, collapseSelection } = keyboard
+  const rangeWasLiveRef = useRef(false)
+  const selectedRowCountRef = useRef(0)
+
+  useEffect(() => {
+    const rangeJustBecameLive = hasRangeSelection && !rangeWasLiveRef.current
+    const rowsJustBecameSelected = selectedRowCount > 0 && selectedRowCountRef.current === 0
+
+    if (rangeJustBecameLive && selectedRowCount > 0) {
+      onRowSelectionChange?.({})
+    } else if (rowsJustBecameSelected && hasRangeSelection) {
+      collapseSelection()
+    }
+
+    rangeWasLiveRef.current = hasRangeSelection
+    selectedRowCountRef.current = selectedRowCount
+  }, [collapseSelection, hasRangeSelection, onRowSelectionChange, selectedRowCount])
+
   useEffect(() => {
     const onWindowBlur = () => {
       if (!resizeRef.current.active) {
@@ -2096,7 +2129,8 @@ export function Grid<TData extends RowData>({
             isRowFocused={keyboard.isRowFocused}
             isRowEditing={keyboard.isRowEditing}
             focusedRowDomId={keyboard.focusedRowDomId}
-            onCellPointerDown={keyboard.focusCell}
+            onCellPointerDown={keyboard.beginCellSelection}
+            onCellPointerEnter={keyboard.extendCellSelection}
             onCellDoubleClick={keyboard.onCellDoubleClick}
             focusRow={keyboard.focusRow}
             focusRowCell={keyboard.focusRowCell}
