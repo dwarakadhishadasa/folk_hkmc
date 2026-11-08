@@ -60,7 +60,7 @@ export function ManageContactSheet({
         data-contact-sheet=""
         aria-describedby={undefined}
         aria-label={`Edit ${label}`}
-        className="!inset-x-0 !bottom-0 !top-auto !left-0 !right-0 !translate-x-0 !translate-y-0 flex max-h-[85dvh] w-full max-w-none flex-col gap-0 overflow-y-auto rounded-t-xl rounded-b-none border-0 bg-card p-0 shadow-[0_8px_32px_rgba(0,0,0,0.18)] sm:max-w-none"
+        className="!inset-x-0 !bottom-[calc(100dvh_-_var(--app-viewport-height,100dvh))] !top-auto !left-0 !right-0 !translate-x-0 !translate-y-0 flex max-h-[calc(var(--app-viewport-height,100dvh)_-_4rem)] w-full max-w-none flex-col gap-0 overflow-y-auto rounded-t-xl rounded-b-none border-0 bg-card p-0 shadow-[0_8px_32px_rgba(0,0,0,0.18)] sm:max-w-none"
       >
         <DialogTitle className="sr-only">Edit {label}</DialogTitle>
         <DialogDescription className="sr-only">

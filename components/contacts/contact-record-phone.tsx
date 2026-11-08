@@ -9,6 +9,7 @@ import {
   type CommentActions,
   type ContactRecordState,
 } from "@/components/contacts/contact-record-types"
+import { ContactCommentsPane } from "@/components/manage/contact-comments-pane"
 import type { ContactFieldId } from "@/components/manage/manage-contact-fields"
 import {
   Dialog,
@@ -16,6 +17,12 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -104,7 +111,7 @@ export function ContactRecordPhoneFrame({
           }
         }}
         onCloseAutoFocus={handleCloseAutoFocus}
-        className="!inset-0 !left-0 !top-0 !bottom-0 !translate-x-0 !translate-y-0 flex h-[100dvh] max-h-none w-full max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 bg-card p-0 text-[13px] text-foreground outline-none sm:max-w-none"
+        className="!left-0 !right-0 !top-[var(--app-viewport-offset-top,0px)] !bottom-auto !translate-x-0 !translate-y-0 flex h-[var(--app-viewport-height,100dvh)] max-h-none w-full max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 bg-card p-0 text-[13px] text-foreground outline-none sm:max-w-none"
       >
         <DialogTitle className="sr-only">
           {name ? `Contact record: ${name}` : "Contact record"}
@@ -138,6 +145,7 @@ export function ContactRecordPhoneFrame({
               size="icon"
               aria-label={commentsOpen ? "Hide comments" : "Show comments"}
               aria-pressed={commentsOpen}
+              disabled={!ready}
               onClick={() => setCommentsOpen((open) => !open)}
               className={cn(
                 "mr-1 size-9 p-0 text-[var(--program-text)]",
@@ -178,13 +186,39 @@ export function ContactRecordPhoneFrame({
         ) : null}
 
         {ready ? (
-          <ContactRecordBody
-            state={state}
-            onCommit={onCommit}
-            commentActions={commentActions}
-            showComments={commentsOpen}
-            layout="phone"
-          />
+          <>
+            <ContactRecordBody
+              state={state}
+              onCommit={onCommit}
+              commentActions={commentActions}
+              showComments={false}
+              layout="phone"
+            />
+
+            <Sheet open={commentsOpen} onOpenChange={setCommentsOpen}>
+              <SheetContent
+                side="bottom"
+                className="!bottom-[calc(100dvh_-_var(--app-viewport-height,100dvh))] !h-[var(--app-viewport-height,100dvh)] !max-h-none w-full max-w-none gap-0 rounded-none border-0 bg-card p-0 shadow-none"
+              >
+                <div className="flex h-12 shrink-0 items-center border-b border-border px-4">
+                  <SheetTitle className="text-[15px] font-semibold text-[var(--program-text)]">
+                    Comments
+                  </SheetTitle>
+                </div>
+                <SheetDescription className="sr-only">
+                  Comments for {state.contact.name}
+                </SheetDescription>
+                <div className="flex min-h-0 flex-1 flex-col [&>section]:border-l-0">
+                  <ContactCommentsPane
+                    contactName={state.contact.name}
+                    comments={state.comments}
+                    canComment={state.capabilities.canComment}
+                    actions={commentActions}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </>
         ) : (
           <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-[13px] text-muted-foreground">
             {state.status === "loading" ? "Loading contact…" : state.message}

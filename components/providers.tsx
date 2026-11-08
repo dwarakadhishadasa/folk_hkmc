@@ -9,6 +9,7 @@ import { ServiceWorkerRegister } from "@/components/service-worker-register"
 import { OfflineIndicator } from "@/components/offline-indicator"
 import { PageTransitionController } from "@/components/page-transition-controller"
 import { ThemeProvider } from "@/components/theme-provider"
+import { VisualViewportHeight } from "@/components/visual-viewport-height"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Outermost by contract: `next-themes` sets the class on `<html>` during
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <AuthHashCallback />
           <ServiceWorkerRegister />
           <OfflineIndicator />
+          <VisualViewportHeight />
           {children}
           <PageTransitionController />
         </AuthProvider>

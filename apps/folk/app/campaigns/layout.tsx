@@ -47,7 +47,7 @@ export default async function CampaignsLayout({ children }: { children: ReactNod
         element ends underneath the nav. `--mobile-app-nav-inset` is that
         reservation, and it is `0` on a desktop, where there is no nav.
       */}
-      <div className="flex min-h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
+      <div className="flex min-h-[calc(var(--app-viewport-height,100dvh)_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
         <Header />
         <main className="flex w-full flex-1 flex-col gap-5 p-6">
           {children}

@@ -109,7 +109,7 @@ export function QueueDrawer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="fixed inset-0 top-0 left-0 flex h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 bg-background p-0 shadow-none"
+        className="fixed inset-0 top-0 left-0 flex h-[var(--app-viewport-height,100dvh)] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 bg-background p-0 shadow-none"
       >
         <div className="flex h-16 shrink-0 items-center gap-3 px-4">
           <DialogTitle className="font-[family-name:var(--font-poppins)] text-[22px] leading-tight font-semibold text-[var(--program-text)]">

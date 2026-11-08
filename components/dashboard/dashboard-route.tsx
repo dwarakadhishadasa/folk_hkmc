@@ -86,7 +86,7 @@ export async function DashboardRoute({ searchParams }: { searchParams: Dashboard
 
 function DashboardShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
+    <div className="flex min-h-[calc(var(--app-viewport-height,100dvh)_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
       <Header />
       <main className="relative flex w-full flex-1 flex-col gap-5 px-4 py-6 sm:px-6">
         <div

@@ -103,7 +103,7 @@ export function CampaignMenu({ subtitle }: { subtitle: string }) {
 
       <DialogContent
         showCloseButton={false}
-        className="fixed inset-0 top-0 left-0 flex h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 p-0 shadow-none"
+        className="fixed inset-0 top-0 left-0 flex h-[var(--app-viewport-height,100dvh)] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 p-0 shadow-none"
       >
         <div className="flex shrink-0 flex-col gap-1 px-4 pt-5 pb-4">
           <div className="flex h-10 items-center justify-between gap-3">

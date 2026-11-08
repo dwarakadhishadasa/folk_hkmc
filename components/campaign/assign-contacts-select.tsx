@@ -1784,7 +1784,7 @@ export function AssignContactsSelect({
           }
         }}
       >
-        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-x-hidden overflow-y-auto sm:w-fit sm:min-w-[30rem] sm:max-w-[min(42rem,calc(100vw-2rem))]">
+        <AlertDialogContent className="max-h-[calc(var(--app-viewport-height,100dvh)_-_2rem)] w-[calc(100%-2rem)] overflow-x-hidden overflow-y-auto sm:w-fit sm:min-w-[30rem] sm:max-w-[min(42rem,calc(100vw-2rem))]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base">
               {decisionAssignableCount > 0

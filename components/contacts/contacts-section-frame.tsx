@@ -35,7 +35,7 @@ export function ContactsSectionFrame({
 
   return (
     <StaffAuthShell staff={toClientStaff(staff)}>
-      <div className="flex h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col overflow-hidden bg-background">
+      <div className="flex h-[calc(var(--app-viewport-height,100dvh)_-_var(--mobile-app-nav-inset,0px))] flex-col overflow-hidden bg-background">
         <Header />
         <main className="flex min-h-0 w-full flex-1 flex-col px-4 py-6 sm:px-6">
           <ContactsSectionShell

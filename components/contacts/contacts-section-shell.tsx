@@ -88,17 +88,20 @@ export function ContactsSectionShell({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-1">
-                <h1 className={cn(SECTION_TITLE_CLASS, "truncate")}>{title}</h1>
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen(true)}
-                  aria-haspopup="dialog"
-                  aria-expanded={menuOpen}
-                  aria-label="Open contacts menu"
-                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] md:hidden"
-                >
-                  <ChevronDown aria-hidden="true" className="size-4" />
-                </button>
+                <h1 className={cn(SECTION_TITLE_CLASS, "min-w-0 truncate")}>
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen(true)}
+                    aria-haspopup="dialog"
+                    aria-expanded={menuOpen}
+                    aria-label={`Open ${title} menu`}
+                    className="-ml-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)] md:hidden"
+                  >
+                    <span className="truncate">{title}</span>
+                    <ChevronDown aria-hidden="true" className="size-4 shrink-0" />
+                  </button>
+                  <span className="hidden md:inline">{title}</span>
+                </h1>
                 {phoneAction ? <span className="ml-auto md:hidden">{phoneAction}</span> : null}
               </div>
               <p className={SECTION_SUBTITLE_CLASS}>{scopeLine}</p>

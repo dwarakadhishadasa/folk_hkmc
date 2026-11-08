@@ -101,7 +101,7 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
           it. `--mobile-app-nav-inset` is that reservation, and it is `0` on a
           desktop, where there is no nav.
         */}
-        <div className="flex h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col overflow-hidden bg-background">
+        <div className="flex h-[calc(var(--app-viewport-height,100dvh)_-_var(--mobile-app-nav-inset,0px))] flex-col overflow-hidden bg-background">
           <Header />
           {/*
              * `sm:px-6`, matching the app header's own gutter at the same

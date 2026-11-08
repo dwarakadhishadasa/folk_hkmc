@@ -31,7 +31,7 @@ export default async function SessionsLayout({ children }: { children: ReactNode
 
   return (
     <StaffAuthShell staff={toClientStaff(staff)}>
-      <div className="flex min-h-[calc(100dvh_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
+      <div className="flex min-h-[calc(var(--app-viewport-height,100dvh)_-_var(--mobile-app-nav-inset,0px))] flex-col bg-background">
         <Header />
         <main className="flex w-full flex-1 flex-col gap-5 p-6">{children}</main>
       </div>
