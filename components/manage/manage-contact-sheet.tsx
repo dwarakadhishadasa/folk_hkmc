@@ -1,7 +1,5 @@
 "use client"
 
-import { useEffect } from "react"
-
 import { ManageContactFieldEditor } from "@/components/manage/manage-contact-field-editor"
 import {
   CONTACT_FIELD_LABEL,
@@ -9,26 +7,24 @@ import {
 } from "@/components/manage/manage-contact-fields"
 import type { ManageContact, ManageLocation } from "@/components/manage/manage-types"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 /**
  * The field sheet: one field, in a frame that rises from the bottom of the
  * contact surface.
  *
- * This is the Airtable mobile interface's cell editor, reproduced. The Airtable
- * app opened a sheet when a cell was tapped, and the sheet held two things: an
- * **"Expand contact"** action at the top, and the tapped cell's own editor
- * under it. The first is the way out to the whole record; the second is the
- * reason the operator came.
+ * It is a Radix Dialog, not a hand-rolled overlay: the sheet and the record are
+ * two layers of the same primitive, so the background is inert, the topmost
+ * layer owns Escape, and one Escape never closes both. The sheet's own document
+ * keydown is gone with the old frame.
  *
- * The sheet is the *only* place in this app where a single field is edited
- * outside a grid cell, and that is deliberate rather than accidental: the grid
- * remains the place a contact is edited, and the sheet is one field of it
- * brought to the front for a tap-sized edit.
- *
- * What the sheet does not do is own the value. It writes through the grid's
- * commit path, so the optimistic update, the request and the rejection are
- * the grid's — and a rejected write is reported where every other rejected
- * write is reported.
+ * "Expand contact" opens the whole record through the list's one record host;
+ * the sheet stays mounted underneath, which is what makes the step reversible.
  */
 export interface ManageContactSheetProps {
   contact: ManageContact
@@ -37,9 +33,11 @@ export interface ManageContactSheetProps {
   /** The program's locations — the options the location picker offers. */
   locations: readonly ManageLocation[]
   /** Called with the new value, for a field that can be written. */
-  onCommit: (fieldId: ContactFieldId, value: unknown) => void
+  onCommit: (fieldId: ContactFieldId, value: unknown) => void | Promise<void>
+  /** A rejected write's server message, shown inside the modal. */
+  notice?: string | null
   /** Open the whole record. The sheet's "Expand contact". */
-  onExpand: () => void
+  onExpand: (trigger: HTMLElement | null) => void
   /** Close the sheet. */
   onClose: () => void
 }
@@ -49,54 +47,29 @@ export function ManageContactSheet({
   fieldId,
   locations,
   onCommit,
+  notice = null,
   onExpand,
   onClose,
 }: ManageContactSheetProps) {
   const label = CONTACT_FIELD_LABEL[fieldId]
 
-  /**
-   * `Escape` closes the sheet.
-   *
-   * The sheet is a modal frame over the list, and a modal frame that ignores
-   * `Escape` is a frame an operator has to find the close button for. The
-   * editor's own `Escape` handling runs first — it is bound to the input — and
-   * only an `Escape` that reaches the frame closes the sheet.
-   */
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation()
-        onClose()
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown)
-
-    return () => document.removeEventListener("keydown", onKeyDown)
-  }, [onClose])
-
   return (
-    <div className="absolute inset-0 z-40" data-contact-sheet="">
-      {/*
-        The scrim is a button, not a click handler on a div: it is the control
-        that dismisses the sheet, and a control is what a keyboard can reach.
-      */}
-      <button
-        type="button"
-        aria-label="Close sheet"
-        onClick={onClose}
-        className="absolute inset-0 h-full w-full cursor-default bg-black/40"
-      />
-
-      <div
-        role="dialog"
-        aria-modal="true"
+    <Dialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
+      <DialogContent
+        showCloseButton={false}
+        data-contact-sheet=""
+        aria-describedby={undefined}
         aria-label={`Edit ${label}`}
-        className="absolute inset-x-0 bottom-0 flex flex-col rounded-t-xl bg-card shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
+        className="!inset-x-0 !bottom-0 !top-auto !left-0 !right-0 !translate-x-0 !translate-y-0 flex max-h-[85dvh] w-full max-w-none flex-col gap-0 overflow-y-auto rounded-t-xl rounded-b-none border-0 bg-card p-0 shadow-[0_8px_32px_rgba(0,0,0,0.18)] sm:max-w-none"
       >
+        <DialogTitle className="sr-only">Edit {label}</DialogTitle>
+        <DialogDescription className="sr-only">
+          One field of {contact.name}&apos;s record, with the way to the whole record above it.
+        </DialogDescription>
+
         {/*
           The drag handle. It is a picture of a handle rather than a handle:
-          the sheet is dismissed by its scrim, its `Escape` or the list behind
+          the sheet is dismissed by its scrim, its Escape or the list behind
           it, and a grab bar that does not move would be a control that lies.
         */}
         <div aria-hidden="true" className="flex shrink-0 justify-center pt-3">
@@ -116,7 +89,7 @@ export function ManageContactSheet({
           <Button
             type="button"
             variant="ghost"
-            onClick={onExpand}
+            onClick={(event) => onExpand(event.currentTarget)}
             className="h-12 p-0 font-[family-name:var(--font-poppins)] text-[13px] font-semibold text-[var(--program-primary)] hover:bg-transparent hover:text-[var(--program-primary)] hover:opacity-80"
           >
             Expand contact
@@ -124,6 +97,11 @@ export function ManageContactSheet({
         </div>
 
         <div className="flex min-h-0 flex-col gap-2.5 px-4 pb-5 pt-4">
+          {notice ? (
+            <p role="alert" className="text-[12px] text-red-700">
+              {notice}
+            </p>
+          ) : null}
           <label
             htmlFor={`contact-sheet-${fieldId}`}
             className="text-[13px] font-medium text-[var(--program-text)]"
@@ -139,7 +117,7 @@ export function ManageContactSheet({
             inputId={`contact-sheet-${fieldId}`}
           />
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

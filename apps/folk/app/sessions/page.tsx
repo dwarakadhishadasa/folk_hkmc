@@ -12,6 +12,7 @@ import { SessionOverviewTable } from "@/components/sessions/session-overview-tab
 import { SessionPageHeader } from "@/components/sessions/session-page-header"
 import { SessionsAutoRefresh } from "@/components/sessions/session-auto-refresh"
 import { AuthzError, requireRole, type StaffContext } from "@/lib/authz"
+import { loadContactRecordAvailability } from "@/lib/contacts/record"
 import { listCampaigns } from "@/lib/dialer/campaigns"
 import {
   getSessionsOverviewStats,
@@ -106,6 +107,18 @@ export default async function SessionsOverviewPage({
     ])
     const locations = locationOptions.filter
 
+    // The Top 5's names are triggers only where the record gateway would
+    // authorize them. The same RLS read decides both, so a rendered trigger
+    // cannot 403; an unavailable name stays plain text.
+    const topAvailability = await loadContactRecordAvailability({
+      staff,
+      contactIds: topAttendees.map((attendee) => attendee.contactId),
+    })
+    const topAttendeesWithAvailability = topAttendees.map((attendee) => ({
+      ...attendee,
+      recordAvailable: topAvailability.has(attendee.contactId),
+    }))
+
     const visible = locationFilter === "all" ? rows : rows.filter((row) => row.locationId === locationFilter)
     const boundaries = JSON.stringify(rows.map(({ opensAt, closesAt }) => ({ opensAt, closesAt })))
     const subtitle = `${pluralise(stats.sessionsCount, "session")} · folk programme`
@@ -146,7 +159,7 @@ export default async function SessionsOverviewPage({
             <SessionOverviewCharts
               rows={visible}
               report={report}
-              topAttendees={topAttendees}
+              topAttendees={topAttendeesWithAvailability}
               rangeLabel={rangeLabel}
             />
 

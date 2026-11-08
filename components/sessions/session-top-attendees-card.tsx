@@ -1,3 +1,4 @@
+import { ContactRecordTrigger } from "@/components/contacts/contact-record-trigger"
 import { SectionCard } from "@/components/section-card"
 import type { SessionTopAttendee } from "@/lib/sessions/data"
 
@@ -19,6 +20,9 @@ export function SessionTopAttendeesCard({
   rangeLabel: string
 }) {
   const max = attendees[0]?.attendanceCount ?? 0
+  const recordSequence = attendees
+    .filter((attendee) => attendee.recordAvailable)
+    .map((attendee) => attendee.contactId)
 
   return (
     <SectionCard
@@ -48,7 +52,17 @@ export function SessionTopAttendeesCard({
                     {index + 1}
                   </span>
                   <span className="truncate text-[13px] font-medium text-[var(--program-text)]">
-                    {attendee.name}
+                    {attendee.recordAvailable ? (
+                      <ContactRecordTrigger
+                        contactId={attendee.contactId}
+                        name={attendee.name}
+                        sequence={recordSequence}
+                      >
+                        {attendee.name}
+                      </ContactRecordTrigger>
+                    ) : (
+                      attendee.name
+                    )}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-baseline gap-1.5">

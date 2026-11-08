@@ -87,7 +87,11 @@ const CENTRE_TOLERANCE_PX = 1
 
 /** Click the checkbox on the nth rendered row, in viewport order. */
 async function selectRenderedRow(page: Page, index: number): Promise<void> {
-  await renderedRows(page).nth(index).getByRole("checkbox").click()
+  // The row's selection checkbox is revealed on hover — the serial number owns
+  // the slot at rest — so the row is hovered before its checkbox is resolved.
+  const row = renderedRows(page).nth(index)
+  await row.hover()
+  await row.getByRole("checkbox").click()
 }
 
 /** Every rendered row's selection state, in DOM order. */

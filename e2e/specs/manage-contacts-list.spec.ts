@@ -38,11 +38,12 @@ import {
   openContactsGrid,
   readContactColumn,
   restoreContactColumn,
+  rowById,
   SINGLE_CONTACT_ROUTE,
 } from "../fixtures/manage-grid"
 import { storageStatePath } from "../fixtures/roles"
 
-test.use({ storageState: storageStatePath("preacher") })
+test.use({ storageState: storageStatePath("preacher"), serviceWorkers: "block" })
 
 /**
  * A phone-shaped viewport — narrower than the repository's `MOBILE_BREAKPOINT`.
@@ -75,7 +76,7 @@ function sheet(page: Page): Locator {
 
 /** The expanded record. */
 function record(page: Page): Locator {
-  return page.locator("[data-contact-record]")
+  return page.locator("[data-contact-record-phone]")
 }
 
 /** One cell of the list, addressed by the contact's row id. */
@@ -91,7 +92,7 @@ function listCell(page: Page, contactId: string, fieldId: string): Locator {
  * on the page.
  */
 function notice(page: Page, message: string): Locator {
-  return page.getByRole("status").filter({ hasText: message })
+  return page.getByRole("alert").filter({ hasText: message })
 }
 
 /**
@@ -228,7 +229,7 @@ test.describe("the contact list", () => {
     await listCell(page, contact.id, "phone").click()
 
     await expect(sheet(page)).toBeVisible()
-    await expect(sheet(page).getByRole("dialog")).toHaveAttribute("aria-label", "Edit Phone")
+    await expect(sheet(page)).toHaveAccessibleName("Edit Phone")
     await expect(sheet(page).getByRole("textbox", { name: "Phone", exact: true })).toHaveValue(
       contact.phone,
     )
@@ -248,7 +249,7 @@ test.describe("the contact list", () => {
     await sheet(page).getByRole("button", { name: "Expand contact" }).click()
 
     await expect(record(page)).toBeVisible()
-    await expect(record(page)).toHaveAttribute("aria-label", `Contact: ${contact.name}`)
+    await expect(record(page)).toHaveAccessibleName(`Contact record: ${contact.name}`)
 
     // The record carries the nine fields the list shows, each under its own
     // label. The seam carries the **column id** — `totalAttendanceCount`,
@@ -275,6 +276,221 @@ test.describe("the contact list", () => {
 
     await expect(record(page)).toBeHidden()
     await expect(sheet(page)).toBeVisible()
+    // Focus returns to the control that opened the record, not to the page.
+    await expect(sheet(page).getByRole("button", { name: "Expand contact" })).toBeFocused()
+  })
+
+  test("Escape in an inline editor discards the draft and keeps the record open", async ({
+    page,
+  }) => {
+    const [contact] = await inScopeContacts()
+
+    if (!contact) {
+      throw new Error("No in-scope contact; the suite needs generated fixtures.")
+    }
+
+    await openListFor(page, contact.id, contact.name)
+    await listCell(page, contact.id, "name").click()
+    await sheet(page).getByRole("button", { name: "Expand contact" }).click()
+    await expect(record(page)).toBeVisible()
+
+    const name = record(page).getByLabel("Name")
+    await name.click()
+    await name.fill(`${contact.name}-Draft`)
+    await name.press("Escape")
+
+    // The editor discarded the draft; the record did not close.
+    await expect(record(page)).toBeVisible()
+    await expect(name).toHaveValue(contact.name)
+  })
+
+  test("the grid's gutter opens the shared record and mirrors its write", async ({ page }) => {
+    const [contact] = await inScopeContacts()
+
+    if (!contact) {
+      throw new Error("No in-scope contact; the suite needs generated fixtures.")
+    }
+
+    const previous = await readContactColumn<string>([contact.id], "notes")
+    const edited = `record-${contact.id.slice(0, 8)}`
+
+    try {
+      await page.setViewportSize(DESKTOP_VIEWPORT)
+      await openContactsGrid(page, { params: { q: contact.phone } })
+
+      const row = rowById(page, contact.id)
+      await row.hover()
+      await row.locator("[data-grid-row-expand]").click()
+
+      const dialog = page.locator("[data-contact-record-dialog]")
+      await expect(dialog).toBeVisible()
+      await expect(dialog.getByLabel("Phone")).toHaveValue(contact.phone)
+
+      const notes = dialog.getByLabel("Notes")
+      await notes.fill(edited)
+      await notes.press("Tab")
+
+      // The record's commit and the grid's mirror are one write: the cell
+      // behind the dialog must carry the new value before a reload.
+      await expect
+        .poll(async () => (await readContactColumn<string>([contact.id], "notes")).get(contact.id))
+        .toBe(edited)
+
+      await page.getByRole("button", { name: "Close dialog" }).click()
+      await expect(dialog).toBeHidden()
+      await expect(rowById(page, contact.id)).toContainText(edited)
+    } finally {
+      await restoreContactColumn(previous, "notes")
+    }
+  })
+
+  test("a refused record write re-reads, reports the message, and keeps the original value", async ({
+    page,
+  }) => {
+    const [contact] = await inScopeContacts()
+
+    if (!contact) {
+      throw new Error("No in-scope contact; the suite needs generated fixtures.")
+    }
+
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    await openContactsGrid(page, { params: { q: contact.phone } })
+
+    const recordReads: string[] = []
+
+    await page.route(SINGLE_CONTACT_ROUTE, async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.continue()
+        return
+      }
+
+      await route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Name is required." }),
+      })
+    })
+    await page.route(/\/api\/manage\/contacts\/[^/]+\/record$/, async (route) => {
+      if (route.request().method() === "GET") {
+        recordReads.push(route.request().url())
+      }
+
+      await route.continue()
+    })
+
+    const row = rowById(page, contact.id)
+    await row.hover()
+    await row.locator("[data-grid-row-expand]").click()
+
+    const dialog = page.locator("[data-contact-record-dialog]")
+    await expect(dialog).toBeVisible()
+
+    const readsAfterOpen = recordReads.length
+
+    try {
+      const name = dialog.getByLabel("Name")
+      await name.click()
+      await name.press("ControlOrMeta+a")
+      await name.press("Backspace")
+      await name.pressSequentially(`${contact.name}-Refused`)
+      await name.press("Enter")
+
+      // The frame owns the message; the field editor reverts the rejected
+      // draft because the commit rejected, not because the row changed.
+      await expect(notice(page, "Name is required.")).toBeVisible()
+      await expect(name).toHaveValue(contact.name)
+
+      // The rejected write re-read the record rather than leaving the draft.
+      await expect
+        .poll(() => recordReads.length, { message: "the rejected write must re-read the record" })
+        .toBeGreaterThan(readsAfterOpen)
+
+      // Nothing was written.
+      expect((await readContactColumn<string>([contact.id], "name")).get(contact.id)).toBe(contact.name)
+    } finally {
+      await page.unroute(SINGLE_CONTACT_ROUTE)
+      await page.unroute(/\/api\/manage\/contacts\/[^/]+\/record$/)
+    }
+
+    await page.getByRole("button", { name: "Close dialog" }).click()
+    await expect(dialog).toBeHidden()
+
+    // The grid row behind the record still carries the stored value.
+    await expect(
+      rowById(page, contact.id).getByRole("cell", { name: contact.name, exact: true }),
+    ).toBeVisible()
+  })
+
+  test("the grid's row context menu opens the record from the keyboard", async ({ page }) => {
+    const [contact] = await inScopeContacts()
+
+    if (!contact) {
+      throw new Error("No in-scope contact; the suite needs generated fixtures.")
+    }
+
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    await openContactsGrid(page, { params: { q: contact.phone } })
+
+    const row = rowById(page, contact.id)
+    await row.getByRole("cell", { name: contact.name, exact: true }).click()
+    await page.keyboard.press("Shift+F10")
+
+    await page.getByRole("menuitem", { name: "Expand record" }).click()
+
+    const dialog = page.locator("[data-contact-record-dialog]")
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByLabel("Phone")).toHaveValue(contact.phone)
+
+    await page.getByRole("button", { name: "Close dialog" }).click()
+    await expect(dialog).toBeHidden()
+  })
+
+  test("Previous and Next step through the grid's visible order", async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    await openContactsGrid(page)
+
+    const rows = page.locator("tr[data-grid-row]")
+    let firstIndex = -1
+    let secondIndex = -1
+    let firstPhone = ""
+    let secondPhone = ""
+
+    for (let index = 0; index < (await rows.count()); index += 1) {
+      const phone = (await rows.nth(index).locator("td").nth(2).innerText()).trim()
+
+      if (!phone) {
+        continue
+      }
+
+      if (firstIndex < 0) {
+        firstIndex = index
+        firstPhone = phone
+      } else {
+        secondIndex = index
+        secondPhone = phone
+        break
+      }
+    }
+
+    expect(firstIndex, "the grid needs two rows with a phone").toBeGreaterThanOrEqual(0)
+    expect(secondIndex, "the grid needs two rows with a phone").toBeGreaterThan(firstIndex)
+
+    const firstRow = rows.nth(firstIndex)
+    await firstRow.hover()
+    await firstRow.locator("[data-grid-row-expand]").click()
+
+    const dialog = page.locator("[data-contact-record-dialog]")
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByLabel("Phone")).toHaveValue(firstPhone)
+
+    await dialog.getByRole("button", { name: "Next contact" }).click()
+    await expect(dialog.getByLabel("Phone")).toHaveValue(secondPhone)
+
+    await dialog.getByRole("button", { name: "Previous contact" }).click()
+    await expect(dialog.getByLabel("Phone")).toHaveValue(firstPhone)
+
+    await page.getByRole("button", { name: "Close dialog" }).click()
+    await expect(dialog).toBeHidden()
   })
 
   test("the read-only fields are values, and the writable ones are controls", async ({ page }) => {
@@ -289,16 +505,15 @@ test.describe("the contact list", () => {
     await sheet(page).getByRole("button", { name: "Expand contact" }).click()
     await expect(record(page)).toBeVisible()
 
-    // Writable: name, phone, location, notes.
+    // Writable: name, phone, location, notes, initial contact.
     await expect(record(page).locator('[data-contact-field="phone"] input')).toBeVisible()
     await expect(record(page).locator('[data-contact-field="notes"] textarea')).toBeVisible()
     await expect(record(page).locator('[data-contact-field="location"] button')).toBeVisible()
+    await expect(record(page).locator('[data-contact-field="initialContact"] button')).toBeVisible()
 
-    // Read-only: the attendance rollups, the initial contact, the collector
-    // and the favourite. A control on any of them would invite a write the
-    // server would refuse.
+    // Read-only: the attendance rollups, the collector and the favourite. A
+    // control on any of them would invite a write the server would refuse.
     for (const fieldId of [
-      "initialContact",
       "totalAttendanceCount",
       "past60DayAttendanceCount",
       "collectedBy",
@@ -344,62 +559,6 @@ test.describe("the contact list", () => {
         .toBe(edited)
     } finally {
       await restoreContactColumn(previous, "notes")
-    }
-  })
-
-  test("a refused write is reported on the notice line, and the value reverts", async ({ page }) => {
-    const [contact] = await inScopeContacts()
-
-    if (!contact) {
-      throw new Error("No in-scope contact; the suite needs generated fixtures.")
-    }
-
-    // The server's own refusal, forced: the list is not a grid, so it cannot
-    // mark a cell — the refusal rides the one notice line, above the list.
-    await page.route(SINGLE_CONTACT_ROUTE, async (route) => {
-      if (route.request().method() !== "PATCH") {
-        await route.continue()
-        return
-      }
-
-      await route.fulfill({
-        status: 400,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "Name is required." }),
-      })
-    })
-
-    try {
-      await openListFor(page, contact.id, contact.name)
-      await listCell(page, contact.id, "name").click()
-      await expect(sheet(page)).toBeVisible()
-
-      const name = sheet(page).getByRole("textbox", { name: "Name", exact: true })
-      await name.click()
-      await name.press("ControlOrMeta+a")
-      await name.press("Backspace")
-      await name.pressSequentially(`${contact.name}-Refused`)
-
-      // `Enter` commits the field — the same gesture the grid's own editors
-      // use — and the write goes through the grid's one write path.
-      await name.press("Enter")
-
-      await expect(notice(page, "Name is required.")).toBeVisible()
-
-      // Nothing was written.
-      expect((await readContactColumn<string>([contact.id], "name")).get(contact.id)).toBe(contact.name)
-
-      // And the field shows the value it held: `Escape` puts the draft back,
-      // and the reopened sheet starts from the stored value.
-      await name.press("Escape")
-      await expect(sheet(page)).toBeHidden()
-
-      await listCell(page, contact.id, "name").click()
-      await expect(sheet(page).getByRole("textbox", { name: "Name", exact: true })).toHaveValue(
-        contact.name,
-      )
-    } finally {
-      await page.unroute(SINGLE_CONTACT_ROUTE)
     }
   })
 })

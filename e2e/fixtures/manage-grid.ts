@@ -75,7 +75,16 @@ export interface ManageContactsUrlOptions {
  * honour.
  */
 export function manageContactsUrl({ params = {} }: ManageContactsUrlOptions = {}): string {
-  const search = new URLSearchParams(params).toString()
+  /*
+   * A bare landing restores the operator's last saved view, which — after a
+   * spec that filtered the grid — can carry that spec's `q`. The restore is the
+   * product's behaviour, so the fixture bypasses it instead of asserting
+   * against whatever the previous run left behind: `q=` is a grid key, so the
+   * landing keeps its own (unfiltered) arrangement and the hydration effect
+   * does not replace the URL.
+   */
+  const withLandingKeys = Object.keys(params).length > 0 ? params : { ...params, q: "" }
+  const search = new URLSearchParams(withLandingKeys).toString()
 
   return search.length > 0 ? `/contacts/grid?${search}` : "/contacts/grid"
 }

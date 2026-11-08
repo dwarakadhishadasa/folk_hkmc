@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { ContactRecordTrigger } from "@/components/contacts/contact-record-trigger"
 import type { ManagePortalPayload, ManageSession } from "@/components/manage/manage-types"
 import { Badge } from "@/components/ui/badge"
 
@@ -10,7 +11,22 @@ function groupKey(session: ManageSession): string {
   return session.locationId ?? UNGROUPED_LOCATION
 }
 
-export function ManageSessionsView({ payload }: { payload: ManagePortalPayload }) {
+export function ManageSessionsView({
+  payload,
+  recordAvailableContactIds = [],
+}: {
+  payload: ManagePortalPayload
+  /**
+   * The attendee ids the server's availability read returned. The page
+   * computes this once over the current sessions' attendees; a pill outside
+   * the set stays plain text, so a trigger never 403s.
+   */
+  recordAvailableContactIds?: readonly string[]
+}) {
+  const recordAvailable = useMemo(
+    () => new Set(recordAvailableContactIds),
+    [recordAvailableContactIds],
+  )
   const groups = useMemo(() => {
     const byLocation = new Map<string, { key: string; label: string; sessions: ManageSession[] }>()
 
@@ -86,14 +102,31 @@ export function ManageSessionsView({ payload }: { payload: ManagePortalPayload }
                     <p className="mt-2 text-sm text-[var(--muted-foreground)]">No attendance recorded.</p>
                   ) : (
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {session.attendees.map((attendee) => (
-                        <span
-                          key={`${session.id}-${attendee.contactId}`}
-                          className="rounded-full bg-foreground/5 px-3 py-1 text-xs font-medium text-[var(--program-text)]"
-                        >
-                          {attendee.name}
-                        </span>
-                      ))}
+                      {session.attendees.map((attendee) => {
+                        const available = recordAvailable.has(attendee.contactId)
+                        const sequence = session.attendees
+                          .filter((entry) => recordAvailable.has(entry.contactId))
+                          .map((entry) => entry.contactId)
+
+                        return available ? (
+                          <ContactRecordTrigger
+                            key={`${session.id}-${attendee.contactId}`}
+                            contactId={attendee.contactId}
+                            name={attendee.name}
+                            sequence={sequence}
+                            className="rounded-full bg-foreground/5 px-3 py-1 text-xs font-medium text-[var(--program-text)] hover:bg-foreground/10"
+                          >
+                            {attendee.name}
+                          </ContactRecordTrigger>
+                        ) : (
+                          <span
+                            key={`${session.id}-${attendee.contactId}`}
+                            className="rounded-full bg-foreground/5 px-3 py-1 text-xs font-medium text-[var(--program-text)]"
+                          >
+                            {attendee.name}
+                          </span>
+                        )
+                      })}
                     </div>
                   )}
                 </li>

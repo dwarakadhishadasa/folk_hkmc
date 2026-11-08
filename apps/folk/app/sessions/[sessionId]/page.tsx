@@ -6,6 +6,7 @@ import { SessionAttendees } from "@/components/sessions/session-attendees"
 import { SessionDetailStats } from "@/components/sessions/session-detail-stats"
 import { SessionStatusPill } from "@/components/sessions/session-status-pill"
 import { AuthzError, requireRole } from "@/lib/authz"
+import { loadContactRecordAvailability } from "@/lib/contacts/record"
 import { getCampaign } from "@/lib/dialer/campaigns"
 import { getSessionAttendees, isSessionId, listSessionsOverview } from "@/lib/sessions/data"
 import { formatSessionDate, formatSessionTime, programDateOf } from "@/lib/sessions/format"
@@ -75,9 +76,20 @@ export default async function SessionDetailPage({
     }
 
     const attendees = await getSessionAttendees(scope, session.id)
+    // The trigger and the gateway must agree on scope. This is the same RLS
+    // client the record read uses, so an attendee it returns here cannot 403
+    // when the record opens; an attendee it omits keeps the summary fallback.
+    const recordAvailability = await loadContactRecordAvailability({
+      staff,
+      contactIds: attendees.map((attendee) => attendee.contactId),
+    })
+    const attendeesWithAvailability = attendees.map((attendee) => ({
+      ...attendee,
+      recordAvailable: recordAvailability.has(attendee.contactId),
+    }))
     const sorted = sortByName
-      ? [...attendees].sort((left, right) => left.name.localeCompare(right.name))
-      : attendees
+      ? [...attendeesWithAvailability].sort((left, right) => left.name.localeCompare(right.name))
+      : attendeesWithAvailability
 
     const sessionStartDate = programDateOf(session.opensAt) ?? session.sessionDate
     const firstTimers = attendees.filter(

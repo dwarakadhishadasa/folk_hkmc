@@ -290,6 +290,13 @@ function contactRow(page: Page, phone: string) {
     .filter({ has: page.getByRole("cell", { name: phone, exact: true }) })
 }
 
+/** Select one row: the checkbox is revealed by hovering the gutter's slot. */
+async function selectContactRow(page: Page, phone: string): Promise<void> {
+  const row = contactRow(page, phone)
+  await row.hover()
+  await row.getByRole("checkbox").click()
+}
+
 /** Bring one contact into the grid's rendered window by searching its phone. */
 async function showContact(page: Page, phone: string): Promise<void> {
   await page.getByLabel("Search every column").fill(phone)
@@ -504,7 +511,7 @@ test.describe("the assign-contacts screen — an Admin", () => {
 
       for (const target of targets) {
         await showContact(page, target.phone)
-        await contactRow(page, target.phone).getByRole("checkbox").click()
+        await selectContactRow(page, target.phone)
       }
 
       await expect(page.getByText(selectedLine(2, page1.total), { exact: true })).toBeVisible()
@@ -517,7 +524,7 @@ test.describe("the assign-contacts screen — an Admin", () => {
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
       await page.getByRole("menuitem", { name: caller.name, exact: true }).click()
 
-      const assign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
+      const assign = page.getByRole("button", { name: "Submit", exact: true })
       await expect(assign).toBeEnabled()
       await assign.click()
 
@@ -602,7 +609,7 @@ test.describe("the assign-contacts screen — an Admin", () => {
 
       for (const target of [conflicted, unassigned]) {
         await showContact(page, target.phone)
-        await contactRow(page, target.phone).getByRole("checkbox").click()
+        await selectContactRow(page, target.phone)
       }
 
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
@@ -613,7 +620,7 @@ test.describe("the assign-contacts screen — an Admin", () => {
         page.getByText("1 selected contact is already assigned in this campaign.", { exact: true }),
       ).toBeVisible()
 
-      const assign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
+      const assign = page.getByRole("button", { name: "Submit", exact: true })
       await expect(assign).toBeEnabled()
       await assign.click()
 
@@ -678,13 +685,13 @@ test.describe("the assign-contacts screen — an Admin", () => {
 
       for (const target of [conflicted, unassigned]) {
         await showContact(page, target.phone)
-        await contactRow(page, target.phone).getByRole("checkbox").click()
+        await selectContactRow(page, target.phone)
       }
 
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
       await page.getByRole("menuitem", { name: replacement.name, exact: true }).click()
 
-      const assign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
+      const assign = page.getByRole("button", { name: "Submit", exact: true })
       await expect(assign).toBeEnabled()
       await assign.click()
 
@@ -732,7 +739,7 @@ test.describe("the assign-contacts screen — an Admin", () => {
 
       for (const target of [first, second]) {
         await showContact(page, target.phone)
-        await contactRow(page, target.phone).getByRole("checkbox").click()
+        await selectContactRow(page, target.phone)
       }
 
       await page.getByRole("button", { name: "Add caller", exact: true }).click()
@@ -741,7 +748,7 @@ test.describe("the assign-contacts screen — an Admin", () => {
       // The dead end this replaces answered 409 nothing_to_assign. The label
       // now offers the only action that can succeed, and the dialog has no
       // skip button when there is nothing left to skip.
-      const reassign = page.getByRole("button", { name: "Assign 2 contacts", exact: true })
+      const reassign = page.getByRole("button", { name: "Submit", exact: true })
       await expect(reassign).toBeEnabled()
       await reassign.click()
 

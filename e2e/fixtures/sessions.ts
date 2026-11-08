@@ -249,6 +249,56 @@ export async function deleteSessionFixtures(client: SupabaseClient, ids: string[
   }
 }
 
+/**
+ * The out-of-patch Preacher fallback: an Admin-assigned contact attending a
+ * Preacher-owned session.
+ *
+ * The Preacher can see the session (they own it) and the attendee row (the
+ * session RPC reads attendance), but not the contact (`contacts` RLS scopes to
+ * `assigned_preacher_id = self`). That is exactly the state `recordAvailable`
+ * must report as false, so the session detail keeps its read-only summary
+ * instead of opening the premium record.
+ */
+export async function createOutOfPatchSessionFixture(
+  client: SupabaseClient,
+  input: {
+    name: string
+    phone: string
+    sessionName: string
+    sessionDate: string
+    opensAt: string
+    closesAt: string
+    locationId: string
+    adminId: string
+    preacherId: string
+  },
+): Promise<{ contact: FixtureContact; session: FixtureSession }> {
+  const contact = await createContactFixture(client, {
+    name: input.name,
+    phone: input.phone,
+    locationId: input.locationId,
+    assignedPreacherId: input.adminId,
+  })
+
+  const session = await createSessionFixture(client, {
+    name: input.sessionName,
+    sessionDate: input.sessionDate,
+    opensAt: input.opensAt,
+    closesAt: input.closesAt,
+    locationId: input.locationId,
+    preacherId: input.preacherId,
+    createdBy: input.preacherId,
+  })
+
+  await addAttendanceFixture(client, {
+    sessionId: session.id,
+    contact,
+    createdAt: input.opensAt,
+  })
+
+  return { contact, session }
+}
+
 export function isoDaysFromNow(days: number, now = new Date()): string {
   return new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString()
 }

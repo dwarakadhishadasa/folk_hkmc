@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 
+import { ContactRecordTrigger } from "@/components/contacts/contact-record-trigger"
 import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
@@ -180,6 +181,8 @@ function CandidateList({
   total: number
   offset: number
 }) {
+  const sequence = rows.map((row) => row.contactId)
+
   return (
     <div className="flex flex-col gap-2">
       <p className="text-[11px] text-[var(--muted-foreground)]">
@@ -193,7 +196,11 @@ function CandidateList({
             className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
           >
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-[var(--program-text)]">{row.name}</p>
+              <p className="text-sm font-semibold text-[var(--program-text)]">
+                <ContactRecordTrigger contactId={row.contactId} name={row.name} sequence={sequence}>
+                  {row.name}
+                </ContactRecordTrigger>
+              </p>
               <p className="mt-0.5 text-[12px] leading-4 text-[var(--muted-foreground)]">{row.reason}</p>
               <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">
                 {[row.preacherName, row.locationName].filter(Boolean).join(" · ") || "No preacher or location"}

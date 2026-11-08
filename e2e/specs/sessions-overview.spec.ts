@@ -266,6 +266,38 @@ test.describe("sessions overview", () => {
     expect(counts).toEqual(expected.top)
   })
 
+  test("opens a Top 5 attendee's contact record in place", async ({ page }) => {
+    await page.goto("/sessions")
+
+    const trigger = page
+      .locator("[data-session-top-attendee] [data-contact-record-trigger]")
+      .first()
+    await expect(trigger).toBeVisible()
+    await trigger.click()
+
+    const dialog = page.locator("[data-contact-record-dialog]")
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole("heading", { name: "Attendance", level: 2 })).toBeVisible()
+
+    await page.getByRole("button", { name: "Close dialog" }).click()
+    await expect(dialog).toBeHidden()
+  })
+
+  test("opens a manage Sessions attendee pill's contact record", async ({ page }) => {
+    await page.goto("/manage?view=sessions")
+
+    const trigger = page.locator("[data-contact-record-trigger]").first()
+    await expect(trigger).toBeVisible()
+    await trigger.click()
+
+    const dialog = page.locator("[data-contact-record-dialog]")
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole("heading", { name: "Attendance", level: 2 })).toBeVisible()
+
+    await page.getByRole("button", { name: "Close dialog" }).click()
+    await expect(dialog).toBeHidden()
+  })
+
   test("narrows the list by location on desktop", async ({ page }) => {
     await page.goto("/sessions")
 

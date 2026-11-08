@@ -182,6 +182,19 @@ function contactRow(page: Page, phone: string) {
     .filter({ has: page.getByRole("cell", { name: phone, exact: true }) })
 }
 
+/**
+ * Select one row.
+ *
+ * The gutter shows the serial number at rest and the checkbox on hover, so the
+ * row is hovered before its checkbox is resolved — the same reveal the Contacts
+ * grid uses.
+ */
+async function selectContactRow(page: Page, phone: string): Promise<void> {
+  const row = contactRow(page, phone)
+  await row.hover()
+  await row.getByRole("checkbox").click()
+}
+
 /** The caller panel, scoped so a caller name that is also a contact name cannot collide. */
 function pickerSection(page: Page) {
   return page.getByRole("region", { name: "Assign to" })
@@ -253,6 +266,80 @@ test.describe("the assign-contacts surface — an Admin", () => {
       await expect(page.getByText(selectedLine(0, firstPage.total), { exact: true })).toBeVisible()
       await expect(page.getByRole("button", { name: "Next", exact: true })).toHaveCount(0)
       await expect(page.getByRole("button", { name: "Previous", exact: true })).toHaveCount(0)
+    } finally {
+      await deleteDisposableCampaign(campaignId)
+    }
+  })
+
+  test("opens a record from the gutter expand control without toggling selection", async ({
+    page,
+  }) => {
+    const campaignId = await createDisposableCampaign(page.request, "assign record expand")
+
+    try {
+      const firstPage = await readContactPage(page.request, campaignId)
+      const contact = firstPage.rows.find((row) => row.phone.length > 0)
+
+      if (!contact) {
+        throw new Error("The assign grid has no contact with a phone to search for.")
+      }
+
+      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+      await showContact(page, contact.phone)
+
+      const row = contactRow(page, contact.phone)
+      const expand = row.locator("[data-grid-row-expand]")
+      await expect(expand).toHaveCount(1)
+      await expect(expand).toHaveAttribute("data-grid-row-expand", "")
+
+      await expand.click()
+
+      const dialog = page.locator("[data-contact-record-dialog]")
+      await expect(dialog).toBeVisible()
+      await expect(dialog.getByLabel("Phone")).toHaveValue(contact.phone)
+
+      // The expand control is an action, not a selection: the footer still
+      // reports zero selected.
+      await expect(
+        page.getByText(selectedLine(0, firstPage.total), { exact: true }),
+      ).toBeVisible()
+
+      await page.getByRole("button", { name: "Close dialog" }).click()
+      await expect(dialog).toBeHidden()
+    } finally {
+      await deleteDisposableCampaign(campaignId)
+    }
+  })
+
+  test("offers Expand record from the row context menu's keyboard route", async ({ page }) => {
+    const campaignId = await createDisposableCampaign(page.request, "assign record menu")
+
+    try {
+      const firstPage = await readContactPage(page.request, campaignId)
+      const contact = firstPage.rows.find((row) => row.phone.length > 0)
+
+      if (!contact) {
+        throw new Error("The assign grid has no contact with a phone to search for.")
+      }
+
+      await page.goto(`/campaigns/${campaignId}/assign-contacts`)
+      await showContact(page, contact.phone)
+
+      // The in-cell expand control is pointer-only; Shift+F10 is the required
+      // keyboard route to the same record.
+      await contactRow(page, contact.phone)
+        .getByRole("cell", { name: contact.name, exact: true })
+        .click()
+      await page.keyboard.press("Shift+F10")
+
+      await page.getByRole("menuitem", { name: "Expand record" }).click()
+
+      const dialog = page.locator("[data-contact-record-dialog]")
+      await expect(dialog).toBeVisible()
+      await expect(dialog.getByLabel("Phone")).toHaveValue(contact.phone)
+
+      await page.getByRole("button", { name: "Close dialog" }).click()
+      await expect(dialog).toBeHidden()
     } finally {
       await deleteDisposableCampaign(campaignId)
     }
@@ -338,11 +425,11 @@ test.describe("the assign-contacts surface — an Admin", () => {
       await expect(page.getByText(selectedLine(0, total), { exact: true })).toBeVisible()
 
       await showContact(page, first.phone)
-      await contactRow(page, first.phone).getByRole("checkbox").click()
+      await selectContactRow(page, first.phone)
       await expect(page.getByText(selectedLine(1, total), { exact: true })).toBeVisible()
 
       await showContact(page, second.phone)
-      await contactRow(page, second.phone).getByRole("checkbox").click()
+      await selectContactRow(page, second.phone)
       await expect(page.getByText(selectedLine(2, total), { exact: true })).toBeVisible()
 
       await clearSearch(page)
@@ -375,7 +462,7 @@ test.describe("the assign-contacts surface — an Admin", () => {
 
       for (const row of firstPage.rows.slice(0, 6)) {
         await showContact(page, row.phone)
-        await contactRow(page, row.phone).getByRole("checkbox").click()
+        await selectContactRow(page, row.phone)
       }
 
       await expect(page.getByText(selectedLine(6, firstPage.total), { exact: true })).toBeVisible()
@@ -392,7 +479,7 @@ test.describe("the assign-contacts surface — an Admin", () => {
       await expect(pickerRow(page, callers[0].name).getByRole("cell", { name: "4", exact: true })).toBeVisible()
       await expect(pickerRow(page, callers[1].name).getByRole("cell", { name: "2", exact: true })).toBeVisible()
 
-      await expect(page.getByRole("button", { name: "Assign 6 contacts", exact: true })).toBeEnabled()
+      await expect(page.getByRole("button", { name: "Submit", exact: true })).toBeEnabled()
     } finally {
       await deleteDisposableCampaign(campaignId)
     }

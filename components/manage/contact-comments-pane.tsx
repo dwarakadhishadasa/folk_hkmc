@@ -17,52 +17,42 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  CONTACT_FIELD_SHADOW,
-} from "@/components/manage/contact-record-styles"
+import { CONTACT_FIELD_SHADOW } from "@/components/manage/contact-record-styles"
 import { cn } from "@/lib/utils"
 import {
   CONTACT_COMMENT_MAX_LENGTH,
   CONTACT_REACTION_EMOJIS,
-  type ManageCommentReaction,
   type ManageContactComment,
-  type ManageContactCommentList,
 } from "@/components/manage/manage-comment-types"
+import type {
+  CommentActions,
+  ContactRecordLoad,
+} from "@/components/contacts/contact-record-types"
+import type { ManageContactCommentList } from "@/components/manage/manage-comment-types"
 
 /**
- * The expanded record's activity pane.
+ * The record's activity pane.
  *
- * The source product put a comment list beside the field column, with replies
- * grouped under their thread, emoji reactions on each comment, inline editing,
- * and a composer at the bottom. This is that pane, backed by
- * `public.contact_comments` and `public.contact_comment_reactions`.
+ * It is **presentational**: the comments arrive as a load state, the
+ * capabilities arrive from the server, and every write is a callback supplied
+ * by the hook that owns the record's view state. It never reads on mount and
+ * never fetches. When the server did not read the comments — because the
+ * contact is outside the reader's patch — it says why rather than rendering an
+ * empty thread.
  *
- * **Threads are one level deep.** A reply stores the id of the thread's first
- * comment, so the pane groups with one pass and "N replies" is a count rather
- * than a tree walk. Replying to a reply targets the same root, which is what
- * keeps the depth at one.
- *
- * **Optimism is scoped.** A sent comment and a reaction both render before the
- * request resolves and roll back on failure; an edit does not, because a
- * half-typed correction appearing as fact is worse than a spinner.
- *
- * What is deliberately absent: resolvable threads, attachment uploads, mentions
- * and the AI composer. Each is its own feature behind a button, and a button
- * that opens nothing is worse than a frame that was never drawn.
+ * The source product's structure is kept: replies grouped one level under their
+ * thread, emoji reactions, inline editing, search and a composer. Optimism for
+ * a *new* comment is deliberately not kept: the pane is one render of a state
+ * another component owns, and a second local list would be a second source of
+ * truth for what a thread contains. The reaction pill still moves immediately
+ * because the hook owns that optimistic patch and rolls it back on failure.
  */
 export interface ContactCommentsPaneProps {
-  contactId: string
-  /** Rendered in the empty state so an operator knows whose record this is. */
   contactName: string
+  comments: ContactRecordLoad<ManageContactCommentList> | null
+  canComment: boolean
+  actions: CommentActions | null
 }
-
-type LoadState =
-  | { kind: "loading" }
-  | { kind: "ready"; comments: ManageContactComment[]; readerUserId: string; readerName: string }
-  | { kind: "error"; message: string }
-
-const COMMENT_ENDPOINT = "/api/manage/contacts/comments"
-const REACTION_ENDPOINT = "/api/manage/contacts/comment-reactions"
 
 function initials(name: string | null): string {
   if (!name) {
@@ -113,12 +103,6 @@ function Composer({
   const id = useId()
   const ref = useRef<HTMLTextAreaElement | null>(null)
 
-  useEffect(() => {
-    if (autoFocus) {
-      ref.current?.focus()
-    }
-  }, [autoFocus])
-
   return (
     <div>
       <label htmlFor={id} className="sr-only">
@@ -138,6 +122,7 @@ function Composer({
           rows={1}
           maxLength={CONTACT_COMMENT_MAX_LENGTH}
           placeholder={placeholder}
+          autoFocus={autoFocus}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
@@ -195,17 +180,18 @@ function ReactionPicker({
 }) {
   const ref = useRef<HTMLDivElement | null>(null)
 
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
+  const onPointerDown = useCallback(
+    (event: PointerEvent) => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
         onClose()
       }
-    }
+    },
+    [onClose],
+  )
 
-    document.addEventListener("pointerdown", onPointerDown)
-
-    return () => document.removeEventListener("pointerdown", onPointerDown)
-  }, [onClose])
+  // Bound only while the picker is open, and removed with it: an always-on
+  // document listener per reaction button would be one listener per comment.
+  useDocumentPointerDown(onPointerDown)
 
   return (
     <div
@@ -230,8 +216,29 @@ function ReactionPicker({
   )
 }
 
-export function ContactCommentsPane({ contactId, contactName }: ContactCommentsPaneProps) {
-  const [state, setState] = useState<LoadState>({ kind: "loading" })
+function useDocumentPointerDown(handler: (event: PointerEvent) => void): void {
+  const ref = useRef(handler)
+
+  useEffect(() => {
+    ref.current = handler
+  }, [handler])
+
+  // A small effect rather than a raw addEventListener in render: the listener
+  // is installed once per mount and always calls the latest handler.
+  useEffect(() => {
+    const listener = (event: PointerEvent) => ref.current(event)
+    document.addEventListener("pointerdown", listener)
+
+    return () => document.removeEventListener("pointerdown", listener)
+  }, [])
+}
+
+export function ContactCommentsPane({
+  contactName,
+  comments,
+  canComment,
+  actions,
+}: ContactCommentsPaneProps) {
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -250,64 +257,20 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set())
 
   const listRef = useRef<HTMLDivElement | null>(null)
-  const cancelled = useRef(false)
 
-  useEffect(() => {
-    cancelled.current = false
-    setState({ kind: "loading" })
-
-    const controller = new AbortController()
-
-    async function load() {
-      try {
-        const response = await fetch(
-          `${COMMENT_ENDPOINT}?contactId=${encodeURIComponent(contactId)}`,
-          { signal: controller.signal, headers: { accept: "application/json" } },
-        )
-
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as { error?: string } | null
-          throw new Error(body?.error ?? "Unable to load the comments.")
-        }
-
-        const payload = (await response.json()) as ManageContactCommentList
-
-        if (!cancelled.current) {
-          setState({
-            kind: "ready",
-            comments: payload.comments,
-            readerUserId: payload.readerUserId,
-            readerName: payload.readerName,
-          })
-        }
-      } catch (error) {
-        if (cancelled.current || controller.signal.aborted) {
-          return
-        }
-
-        setState({
-          kind: "error",
-          message: error instanceof Error ? error.message : "Unable to load the comments.",
-        })
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled.current = true
-      controller.abort()
-    }
-  }, [contactId])
+  const ready = comments?.status === "ready" ? comments.value : null
 
   const { roots, repliesByRoot } = useMemo(() => {
-    if (state.kind !== "ready") {
-      return { roots: [] as ManageContactComment[], repliesByRoot: new Map<string, ManageContactComment[]>() }
+    if (!ready) {
+      return {
+        roots: [] as ManageContactComment[],
+        repliesByRoot: new Map<string, ManageContactComment[]>(),
+      }
     }
 
     const grouped = new Map<string, ManageContactComment[]>()
 
-    for (const comment of state.comments) {
+    for (const comment of ready.comments) {
       if (comment.rootCommentId) {
         const list = grouped.get(comment.rootCommentId) ?? []
         list.push(comment)
@@ -316,10 +279,10 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
     }
 
     return {
-      roots: state.comments.filter((comment) => comment.rootCommentId === null),
+      roots: ready.comments.filter((comment) => comment.rootCommentId === null),
       repliesByRoot: grouped,
     }
-  }, [state])
+  }, [ready])
 
   /**
    * The thread list after the search box, if one is open.
@@ -340,122 +303,41 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
     )
   }, [query, roots])
 
-  const scrollToEnd = useCallback(() => {    const node = listRef.current
+  const scrollToEnd = useCallback(() => {
+    const node = listRef.current
     if (node) {
       node.scrollTop = node.scrollHeight
     }
   }, [])
 
-  const patchComment = useCallback((commentId: string, next: ManageContactComment) => {
-    setState((current) => {
-      if (current.kind !== "ready") {
-        return current
-      }
-
-      return {
-        ...current,
-        comments: current.comments.map((comment) => (comment.id === commentId ? next : comment)),
-      }
-    })
-  }, [])
-
   const send = useCallback(async () => {
     const body = draft.trim()
 
-    if (body.length === 0 || sending || state.kind !== "ready") {
+    if (body.length === 0 || sending || !actions) {
       return
-    }
-
-    const tempId = `temp-${Date.now()}`
-    const optimistic: ManageContactComment = {
-      id: tempId,
-      contactId,
-      authorUserId: state.readerUserId,
-      authorName: state.readerName,
-      body,
-      cellFieldId: null,
-      rootCommentId: null,
-      editedAt: null,
-      resolvedAt: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      reactions: [],
-      isOwn: true,
     }
 
     setSending(true)
     setNotice(null)
     setDraft("")
-    setState({ ...state, comments: [...state.comments, optimistic] })
 
     try {
-      const response = await fetch(COMMENT_ENDPOINT, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ contactId, body }),
-      })
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null
-        throw new Error(payload?.error ?? "Unable to save the comment.")
-      }
-
-      const payload = (await response.json()) as { comment: ManageContactComment }
-
-      setState((current) => {
-        if (current.kind !== "ready") {
-          return current
-        }
-
-        return {
-          ...current,
-          comments: current.comments.map((comment) =>
-            comment.id === tempId ? payload.comment : comment,
-          ),
-        }
-      })
+      await actions.create(body)
       scrollToEnd()
     } catch (error) {
-      setState((current) => {
-        if (current.kind !== "ready") {
-          return current
-        }
-
-        return {
-          ...current,
-          comments: current.comments.filter((comment) => comment.id !== tempId),
-        }
-      })
       setDraft(body)
       setNotice(error instanceof Error ? error.message : "Unable to save the comment.")
     } finally {
       setSending(false)
     }
-  }, [contactId, draft, scrollToEnd, sending, state])
+  }, [actions, draft, scrollToEnd, sending])
 
   const sendReply = useCallback(
     async (rootId: string) => {
       const body = replyDraft.trim()
 
-      if (body.length === 0 || replySending || state.kind !== "ready") {
+      if (body.length === 0 || replySending || !actions) {
         return
-      }
-
-      const tempId = `temp-${Date.now()}`
-      const optimistic: ManageContactComment = {
-        id: tempId,
-        contactId,
-        authorUserId: state.readerUserId,
-        authorName: state.readerName,
-        body,
-        cellFieldId: null,
-        rootCommentId: rootId,
-        editedAt: null,
-        resolvedAt: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        reactions: [],
-        isOwn: true,
       }
 
       setReplySending(true)
@@ -463,45 +345,10 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
       setReplyDraft("")
       setReplyingTo(null)
       setExpandedThreads((current) => new Set(current).add(rootId))
-      setState({ ...state, comments: [...state.comments, optimistic] })
 
       try {
-        const response = await fetch(COMMENT_ENDPOINT, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ contactId, body, rootCommentId: rootId }),
-        })
-
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null
-          throw new Error(payload?.error ?? "Unable to save the reply.")
-        }
-
-        const payload = (await response.json()) as { comment: ManageContactComment }
-
-        setState((current) => {
-          if (current.kind !== "ready") {
-            return current
-          }
-
-          return {
-            ...current,
-            comments: current.comments.map((comment) =>
-              comment.id === tempId ? payload.comment : comment,
-            ),
-          }
-        })
+        await actions.create(body, rootId)
       } catch (error) {
-        setState((current) => {
-          if (current.kind !== "ready") {
-            return current
-          }
-
-          return {
-            ...current,
-            comments: current.comments.filter((comment) => comment.id !== tempId),
-          }
-        })
         setReplyDraft(body)
         setReplyingTo(rootId)
         setNotice(error instanceof Error ? error.message : "Unable to save the reply.")
@@ -509,14 +356,14 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
         setReplySending(false)
       }
     },
-    [contactId, replyDraft, replySending, state],
+    [actions, replyDraft, replySending],
   )
 
   const saveEdit = useCallback(
     async (commentId: string) => {
       const body = editDraft.trim()
 
-      if (body.length === 0 || editSending) {
+      if (body.length === 0 || editSending || !actions) {
         return
       }
 
@@ -524,19 +371,7 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
       setNotice(null)
 
       try {
-        const response = await fetch(COMMENT_ENDPOINT, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ contactId, commentId, body }),
-        })
-
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null
-          throw new Error(payload?.error ?? "Unable to save the comment.")
-        }
-
-        const payload = (await response.json()) as { comment: ManageContactComment }
-        patchComment(commentId, payload.comment)
+        await actions.update(commentId, body)
         setEditing(null)
         setEditDraft("")
       } catch (error) {
@@ -545,110 +380,43 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
         setEditSending(false)
       }
     },
-    [contactId, editDraft, editSending, patchComment],
+    [actions, editDraft, editSending],
   )
 
   const remove = useCallback(
     async (commentId: string) => {
+      if (!actions) {
+        return
+      }
+
       setNotice(null)
 
-      const removed =
-        state.kind === "ready"
-          ? (state.comments.find((comment) => comment.id === commentId) ?? null)
-          : null
-
-      setState((current) => {
-        if (current.kind !== "ready") {
-          return current
-        }
-
-        return {
-          ...current,
-          comments: current.comments.filter((comment) => comment.id !== commentId),
-        }
-      })
-
       try {
-        const response = await fetch(COMMENT_ENDPOINT, {
-          method: "DELETE",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ contactId, commentId }),
-        })
-
-        if (!response.ok && response.status !== 204) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null
-          throw new Error(payload?.error ?? "Unable to delete the comment.")
-        }
+        await actions.remove(commentId)
       } catch (error) {
-        if (removed) {
-          const restore = removed
-          setState((current) => {
-            if (current.kind !== "ready") {
-              return current
-            }
-
-            const next = [...current.comments, restore].sort((a, b) =>
-              a.createdAt.localeCompare(b.createdAt),
-            )
-
-            return { ...current, comments: next }
-          })
-        }
-
         setNotice(error instanceof Error ? error.message : "Unable to delete the comment.")
       }
     },
-    [contactId, state],
+    [actions],
   )
 
-  /**
-   * A reaction is optimistic in both directions: the pill moves on click and
-   * the request carries the desired state, so a retry cannot double-count. On
-   * failure the previous reaction list is restored exactly.
-   */
   const react = useCallback(
     async (comment: ManageContactComment, emoji: string) => {
       setPickerFor(null)
 
+      if (!actions) {
+        return
+      }
+
       const existing = comment.reactions.find((reaction) => reaction.emoji === emoji)
-      const active = !existing?.mine
-      const previous = comment.reactions
-
-      const next: ManageCommentReaction[] = active
-        ? existing
-          ? previous.map((reaction) =>
-              reaction.emoji === emoji
-                ? { ...reaction, count: reaction.count + 1, mine: true }
-                : reaction,
-            )
-          : [...previous, { emoji, count: 1, mine: true }]
-        : previous
-            .map((reaction) =>
-              reaction.emoji === emoji
-                ? { ...reaction, count: reaction.count - 1, mine: false }
-                : reaction,
-            )
-            .filter((reaction) => reaction.count > 0)
-
-      patchComment(comment.id, { ...comment, reactions: next })
 
       try {
-        const response = await fetch(REACTION_ENDPOINT, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ contactId, commentId: comment.id, emoji, active }),
-        })
-
-        if (!response.ok && response.status !== 204) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null
-          throw new Error(payload?.error ?? "Unable to save the reaction.")
-        }
+        await actions.react(comment.id, emoji, !existing?.mine)
       } catch (error) {
-        patchComment(comment.id, { ...comment, reactions: previous })
         setNotice(error instanceof Error ? error.message : "Unable to save the reaction.")
       }
     },
-    [contactId, patchComment],
+    [actions],
   )
 
   const renderRow = (comment: ManageContactComment, isReply: boolean) => {
@@ -709,6 +477,7 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
                     type="button"
                     aria-label={`${reaction.mine ? "Remove your" : "Add"} ${reaction.emoji} reaction`}
                     aria-pressed={reaction.mine}
+                    disabled={!actions}
                     onClick={() => void react(comment, reaction.emoji)}
                     className={
                       reaction.mine
@@ -765,6 +534,7 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
                 aria-label="Add reaction"
                 title="Add reaction"
                 aria-expanded={pickerFor === comment.id}
+                disabled={!actions}
                 onClick={() => setPickerFor(pickerFor === comment.id ? null : comment.id)}
                 className="size-6"
               >
@@ -776,6 +546,7 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
                 size="icon"
                 aria-label="Reply to thread"
                 title="Reply to thread"
+                disabled={!actions}
                 onClick={() => {
                   setReplyingTo(threadRootId)
                   setReplyDraft("")
@@ -793,6 +564,7 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
                     size="icon"
                     aria-label="Edit comment"
                     title="Edit comment"
+                    disabled={!actions}
                     onClick={() => {
                       setEditing(comment.id)
                       setEditDraft(comment.body)
@@ -807,6 +579,7 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
                     size="icon"
                     aria-label="Delete comment"
                     title="Delete comment"
+                    disabled={!actions}
                     onClick={() => void remove(comment.id)}
                     className="size-6"
                   >
@@ -860,14 +633,8 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
       className="flex h-full min-h-0 w-full flex-col border-l border-border"
       data-contact-comments=""
     >
-      {/*
-        The pane header is two rows in the source product: the "All comments"
-        selector with the search control, then the followers line. This app has
-        no follow/subscribe model, so the second row is not drawn — a count of
-        people who are not actually following would be a lie. Search is real:
-        it filters the loaded threads.
-      */}
-      <header className="flex shrink-0 flex-col gap-2 px-4 py-3">
+      {canComment ? (
+        <header className="flex shrink-0 flex-col gap-2 px-4 py-3">
         <div className="flex h-7 items-center justify-between">
           <span className="-ml-2 flex items-center rounded-[3px] px-2 py-1 text-[13px] leading-[19.5px] text-muted-foreground">
             All comments
@@ -904,27 +671,28 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
           />
         ) : null}
       </header>
+      ) : null}
 
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {state.kind === "loading" ? (
+        {!canComment ? (
+          <div className="px-2 py-3" data-contact-comments-unavailable="">
+            <p className="text-[13px] leading-5 text-foreground">Comments are not available.</p>
+            <p className="mt-1 text-[12px] leading-[18px] text-muted-foreground">
+              This contact is outside your patch. You can read and edit the record, but comments
+              stay with the person who owns it.
+            </p>
+          </div>
+        ) : comments === null || comments.status === "loading" ? (
           <div className="flex items-center gap-2 px-2 text-[12px] text-muted-foreground">
             <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
             Loading comments
           </div>
-        ) : null}
-
-        {state.kind === "error" ? (
+        ) : comments.status === "error" ? (
           <p role="alert" className="px-2 text-[12px] text-destructive">
-            {state.message}
+            {comments.message}
           </p>
-        ) : null}
-
-        {state.kind === "ready" && roots.length === 0 ? (
+        ) : roots.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center px-2 text-center">
-            {/*
-              Two overlapping speech bubbles, as in the source product's empty
-              state: the front one white, the one behind it a step quieter.
-            */}
             <span aria-hidden="true" className="relative mb-4 block size-10">
               <MessageCircle
                 strokeWidth={0}
@@ -935,55 +703,51 @@ export function ContactCommentsPane({ contactId, contactName }: ContactCommentsP
                 className="absolute left-0 top-0 size-7 fill-foreground/15 dark:fill-white"
               />
             </span>
-            <p className="text-[13px] leading-[16.25px] text-foreground">
-              Start a conversation
-            </p>
+            <p className="text-[13px] leading-[16.25px] text-foreground">Start a conversation</p>
             <p className="mt-1 max-w-[270px] text-[11px] leading-[16.5px] text-muted-foreground">
               Leave a note about {contactName} for the rest of the team.
             </p>
           </div>
-        ) : null}
-
-        {state.kind === "ready" && roots.length > 0 && shownRoots.length === 0 ? (
+        ) : shownRoots.length === 0 ? (
           <p className="px-2 py-1 text-[12px] text-muted-foreground">
             No comments match “{query.trim()}”.
           </p>
-        ) : null}
-
-        {state.kind === "ready" && shownRoots.length > 0 ? (
+        ) : (
           <ul className="flex flex-col gap-3">
             {shownRoots.map((comment) => (
               <li key={comment.id}>{renderRow(comment, false)}</li>
             ))}
           </ul>
-        ) : null}
+        )}
       </div>
 
-      <div className="shrink-0 border-t border-border p-4">
-        {notice ? (
-          <div className="mb-2 flex items-start justify-between gap-2">
-            <p role="alert" className="text-[12px] text-destructive">
-              {notice}
-            </p>
-            <button
-              type="button"
-              aria-label="Dismiss error"
-              onClick={() => setNotice(null)}
-              className="text-muted-foreground hover:text-[var(--program-text)]"
-            >
-              <X aria-hidden="true" className="size-3.5" />
-            </button>
-          </div>
-        ) : null}
-        <Composer
-          placeholder="Leave a comment"
-          value={draft}
-          onChange={setDraft}
-          onSubmit={() => void send()}
-          sending={sending}
-          submitLabel="Comment"
-        />
-      </div>
+      {canComment && actions ? (
+        <div className="shrink-0 border-t border-border p-4">
+          {notice ? (
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <p role="alert" className="text-[12px] text-destructive">
+                {notice}
+              </p>
+              <button
+                type="button"
+                aria-label="Dismiss error"
+                onClick={() => setNotice(null)}
+                className="text-muted-foreground hover:text-[var(--program-text)]"
+              >
+                <X aria-hidden="true" className="size-3.5" />
+              </button>
+            </div>
+          ) : null}
+          <Composer
+            placeholder="Leave a comment"
+            value={draft}
+            onChange={setDraft}
+            onSubmit={() => void send()}
+            sending={sending}
+            submitLabel="Comment"
+          />
+        </div>
+      ) : null}
     </section>
   )
 }

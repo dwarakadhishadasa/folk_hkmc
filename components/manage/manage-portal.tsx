@@ -35,9 +35,12 @@ function portalHref(view: ManageView, mode: string): string {
 export function ManagePortal({
   payload,
   initialView,
+  recordAvailableContactIds = [],
 }: {
   payload: ManagePortalPayload
   initialView: ManageView
+  /** The manage Sessions pills' availability set, computed by the page. */
+  recordAvailableContactIds?: readonly string[]
 }) {
   const [view, setView] = useState<ManageView>(initialView)
   const { scope } = payload
@@ -216,7 +219,10 @@ export function ManagePortal({
           <ManageDashboard payload={payload} />
         </TabsContent>
         <TabsContent value="sessions" className="min-h-0 overflow-auto">
-          <ManageSessionsView payload={payload} />
+          <ManageSessionsView
+            payload={payload}
+            recordAvailableContactIds={recordAvailableContactIds}
+          />
         </TabsContent>
         {/*
           The attendance tab is a record review: a roster of contacts beside the

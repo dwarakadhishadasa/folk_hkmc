@@ -14,7 +14,9 @@ import { createColumnHelper } from "@tanstack/react-table"
 import type { OnChangeFn, RowSelectionState, Table, TableState } from "@tanstack/react-table"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
-import { ContactRecordDialog } from "@/components/manage/contact-record-dialog"
+import { ContactRecordDialog } from "@/components/contacts/contact-record-dialog"
+import { useContactRecord } from "@/components/contacts/use-contact-record"
+import { isContactRecordReady } from "@/components/contacts/contact-record-types"
 import type {
   ManageContact,
   ManageContactPatch,
@@ -25,6 +27,7 @@ import type {
 import {
   CONTACT_FIELD_IDS,
   CONTACT_FIELD_PATCH_KEY,
+  KNOWN_SOURCE_VALUES,
   contactFieldValue,
   UNRESOLVED_LOCATION,
   UNRESOLVED_STAFF,
@@ -37,6 +40,7 @@ import {
 import { ManageContactList } from "@/components/manage/manage-contact-list"
 import {
   Grid,
+  GridRowExpandControl,
   GRID_DEFAULT_DENSITY,
   useGridRowLifecycle,
   useGridViewState,
@@ -77,7 +81,7 @@ import {
 } from "@/components/manage/manage-view-types"
 import { useDeviceView } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
-import { GripVertical, Maximize2, MessageSquareText } from "lucide-react"
+import { GripVertical } from "lucide-react"
 
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -229,25 +233,6 @@ const COLUMN_LABELS: Record<string, string> = {
   [COLLECTED_BY_COLUMN_ID]: "Collected By",
   [FAVORITE_COLUMN_ID]: "Favorite",
 }
-
-/**
- * The `source` values the local fixtures write, verbatim.
- *
- * A `select` editor rejects a value that is not one of its options, so the
- * option list has to be a superset of what the rows actually hold or every
- * existing row renders as "not an option" and a no-op commit is refused.
- * `scripts/seed-preview-fixtures.mjs` writes the first and
- * `scripts/bulk-contact-fixtures.mjs` writes the second; the values are unioned
- * with whatever the payload itself carries so a hand-written row is covered too.
- *
- * The catalog's "Pass Distribution" / "Public Registration" / "Old" were
- * Airtable-era values: no migration, seeder or fixture in this repository writes
- * them, and offering them would put three dead options in front of every
- * operator. Verified against the running local stack at this story's baseline:
- * `preview-fixture` on 4 rows and `preview-fixture-bulk` on 250, and nothing
- * else.
- */
-const KNOWN_SOURCE_VALUES = ["preview-fixture", "preview-fixture-bulk"] as const
 
 /**
  * The only columns an inline edit may write, mapped to their patch key.
@@ -592,7 +577,7 @@ function RowExpandButton({
   contactId: string
   contactName: string
   commentCount: number
-  onExpand: (contactId: string) => void
+  onExpand: (contactId: string, trigger: HTMLElement | null) => void
 }) {
   /**
    * A record with comments shows a count beside a speech bubble, permanently
@@ -600,41 +585,16 @@ function RowExpandButton({
    * plain expand arrow stayed hover-only, because a count is information you
    * scan for rather than an action you go looking for. Both open the same
    * dialog; only the label changes.
+   *
+   * The control itself is the grid primitive's, so the campaign assign grid and
+   * this one share one affordance and one `data-grid-row-expand` seam.
    */
-  const hasComments = commentCount > 0
-  const label = hasComments
-    ? `Expand to see ${commentCount} ${commentCount === 1 ? "comment" : "comments"}`
-    : `Expand ${contactName}`
-
   return (
-    <button
-      type="button"
-      // Pointer-only, like the source product's `expandRowWrapper` anchor:
-      // `tabindex="-1"`, so Tab keeps moving between cells. The keyboard route
-      // to the same dialog is the row context menu's "Expand record", which is
-      // reachable with Shift+F10 / the Menu key.
-      tabIndex={-1}
-      aria-label={label}
-      title={label}
-      onClick={() => onExpand(contactId)}
-      className={cn(
-        "flex h-6 shrink-0 items-center justify-center rounded text-muted-foreground",
-        hasComments
-          ? "gap-1 px-1 text-[11px] leading-none hover:bg-muted hover:text-[var(--program-text)]"
-          : "w-6 opacity-0 transition-opacity [tr:hover_&]:opacity-100",
-        "hover:bg-muted hover:text-[var(--program-text)]",
-        "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-      )}
-    >
-      {hasComments ? (
-        <>
-          <span className="tabular-nums">{commentCount}</span>
-          <MessageSquareText aria-hidden="true" className="size-4" />
-        </>
-      ) : (
-        <Maximize2 aria-hidden="true" className="size-3.5" strokeWidth={2} />
-      )}
-    </button>
+    <GridRowExpandControl
+      label={`Expand ${contactName}`}
+      count={commentCount}
+      onExpand={(trigger) => onExpand(contactId, trigger)}
+    />
   )
 }
 
@@ -698,7 +658,9 @@ function RowSerial({ fallback }: { fallback: number }) {
   return <>{position ?? fallback}</>
 }
 
-const ContactRecordOpenContext = createContext<((contactId: string) => void) | null>(null)
+const ContactRecordOpenContext = createContext<
+  ((contactId: string, trigger?: HTMLElement | null) => void) | null
+>(null)
 
 function ContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
   const lifecycle = useGridRowLifecycle()
@@ -715,8 +677,18 @@ function ContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
         One row only: an expanded record is a single record, so offering the verb
         over a multi-row selection would need a choice the menu cannot make.
       */}
-      {count === 1 && openRecord ? (
-        <ContextMenuItem className="text-[13px]" onSelect={() => openRecord(rowIds[0])}>
+      {count === 1 && openRecord && !isDraftRowId(rowIds[0]) ? (
+        <ContextMenuItem
+          className="text-[13px]"
+          onSelect={() => {
+            const trigger =
+              typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null
+
+            openRecord(rowIds[0], trigger)
+          }}
+        >
           Expand record
         </ContextMenuItem>
       ) : null}
@@ -828,15 +800,6 @@ export function ManageContactsTable({
     })
   }
   /**
-   * The record shown in the expanded dialog, if any.
-   *
-   * Held as an id rather than as the row, so a write that replaces the mirrored
-   * row is reflected in the open dialog instead of leaving a stale copy behind
-   * it. `null` means the grid is the whole surface.
-   */
-  const [expandedContactId, setExpandedContactId] = useState<string | null>(null)
-
-  /**
    * Which of the two contacts views this device takes.
    *
    * The viewport decides, and the decision is made *before* any of this
@@ -872,16 +835,78 @@ export function ManageContactsTable({
   const contacts = mirror.rows
 
   /**
-   * The open record, resolved from the mirror on every render.
+   * The record host.
    *
-   * `expandedIndex` is the row's position in the *current* order, which is what
-   * makes the chevrons step through "records in view order" rather than through
-   * the order the payload happened to arrive in.
+   * The hook owns the open state and the fetched record; the grid keeps its
+   * mirror and sequence. The visible ids arrive through the grid's
+   * `onVisibleRowIdsChange` and are held in a ref, so the record's chevrons step
+   * through what the operator is looking at rather than through the unfiltered
+   * mirror without re-rendering the host on every row-model change.
+   *
+   * `onCommentsChange` keeps the mirror's gutter badge true after a comment is
+   * written or deleted in the record; without it a close would leave the old
+   * count behind the record it just changed.
    */
-  const expandedIndex = expandedContactId
-    ? contacts.findIndex((contact) => contact.id === expandedContactId)
-    : -1
-  const expandedContact = expandedIndex >= 0 ? contacts[expandedIndex] : null
+  const [recordNotice, setRecordNotice] = useState<string | null>(null)
+
+  const record = useContactRecord({
+    onCommentsChange: useCallback((contactId: string, count: number) => {
+      setContacts((current) => ({
+        ...current,
+        rows: current.rows.map((contact) =>
+          contact.id === contactId ? { ...contact, commentCount: count } : contact,
+        ),
+      }))
+    }, []),
+  })
+
+  // A rejected write's message belongs to the contact it was written on;
+  // opening or stepping to another record must not carry it along.
+  const recordContactId =
+    record.state && isContactRecordReady(record.state) ? record.state.contact.id : null
+
+  useEffect(() => {
+    setRecordNotice(null)
+  }, [recordContactId])
+
+  /**
+   * The grid's visible ids, held in a ref rather than in state.
+   *
+   * A state update here would re-render the whole host every time the row model
+   * changed — including while an inline editor is open, which can reset the
+   * editor's selection and append the operator's typing to the old value. The
+   * sequence is only read when a record is opened or when an open record's list
+   * is filtered, so a ref is the whole requirement.
+   */
+  const visibleRowIdsRef = useRef<readonly string[]>([])
+  const recordRef = useRef(record)
+
+  useEffect(() => {
+    recordRef.current = record
+  }, [record])
+
+  const handleVisibleRowIdsChange = useCallback((rowIds: readonly string[]) => {
+    visibleRowIdsRef.current = rowIds
+
+    const current = recordRef.current
+
+    if (current.isOpen) {
+      // Re-anchor the open record to the survivors of a filter rather than
+      // stepping through a list the operator can no longer see.
+      current.updateSequence(rowIds.filter((rowId) => !isDraftRowId(rowId)))
+    }
+  }, [])
+
+  const openRecord = useCallback(
+    (contactId: string, trigger: HTMLElement | null = null) => {
+      record.open({
+        contactId,
+        sequence: visibleRowIdsRef.current.filter((rowId) => !isDraftRowId(rowId)),
+        trigger,
+      })
+    },
+    [record.open],
+  )
 
   /**
    * The create in flight for a draft row.
@@ -1277,6 +1302,26 @@ export function ManageContactsTable({
         return
       }
 
+      /**
+       * The open record writes through the hook that owns its view state.
+       *
+       * This is still the one mutation channel — the hook's `commit` is a
+       * `PATCH /api/manage/contacts` with a `MANAGE_CONTACT_PATCH_KEYS` key —
+       * and the mirror is updated from the same result, so the record and the
+       * grid cannot disagree after a write. It is outside the `try` below so
+       * the record's own frame can show the server's message; the list and the
+       * sheet keep the notice path.
+       */
+      if (record.state && isContactRecordReady(record.state) && record.state.contact.id === contactId) {
+        const written = await record.commit(fieldId, value)
+
+        if (written) {
+          applyWrite(written)
+        }
+
+        return
+      }
+
       try {
         if (PATCH_KEY_BY_COLUMN[fieldId]) {
           await handleCellCommit({
@@ -1297,14 +1342,41 @@ export function ManageContactsTable({
         // The grid's own commits report a refusal through `onEditError`, which
         // the grid turns into a cell revert and a status line. The list is
         // not a grid, so it reports here — on the same notice, in the same
-        // words, so there is one error story rather than two.
+        // words, so there is one error story rather than two. It rethrows
+        // because the phone sheet is a modal: the page's notice is behind the
+        // dialog's `aria-hidden`, so the sheet renders the message itself.
         setNotice({
           kind: "error",
           message: cause instanceof Error ? cause.message : "The change could not be saved.",
         })
+        throw cause
       }
     },
-    [applyWrite, contacts, handleCellCommit, patchContact],
+    [applyWrite, contacts, handleCellCommit, patchContact, record.commit, record.state],
+  )
+
+  /**
+   * The desktop frame's commit: the same `handleListCommit`, with the frame's
+   * own notice so a rejected write is visible above the record rather than on
+   * the grid behind it.
+   */
+  const commitRecord = useCallback(
+    async (fieldId: ContactFieldId, value: unknown) => {
+      if (!record.state || !isContactRecordReady(record.state)) {
+        return
+      }
+
+      try {
+        await handleListCommit(record.state.contact.id, fieldId, value)
+        setRecordNotice(null)
+      } catch (error) {
+        setRecordNotice(error instanceof Error ? error.message : "The change could not be saved.")
+        // The field editor reverts its draft on a rejected commit; the frame
+        // owns the message, so rethrow rather than swallowing the rejection.
+        throw error
+      }
+    },
+    [handleListCommit, record.state],
   )
 
   const toggleFavorite = useCallback(
@@ -1417,12 +1489,14 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
               )}
 
               <span className="flex w-8 shrink-0 justify-center">
-                <RowExpandButton
-                  contactId={row.original.id}
-                  contactName={row.original.name}
-                  commentCount={row.original.commentCount}
-                  onExpand={setExpandedContactId}
-                />
+                {isDraftRowId(row.original.id) ? null : (
+                  <RowExpandButton
+                    contactId={row.original.id}
+                    contactName={row.original.name}
+                    commentCount={row.original.commentCount}
+                    onExpand={openRecord}
+                  />
+                )}
               </span>
             </span>
           )
@@ -1660,9 +1734,9 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
   }, [
     locationNameById,
     locationRecords,
+    openRecord,
     payload.booksReadOptions,
     pendingContactId,
-    setExpandedContactId,
     setVisibleSelection,
     sourceOptions,
     staffNameById,
@@ -1963,7 +2037,16 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
     if (href !== `${pathname}${current.length > 0 ? `?${current}` : ""}`) {
       router.replace(href, { scroll: false })
     }
-  }, [activeViewId, pathname, payload.scope.programId, router, searchParams, viewHref, views, viewsAvailable])
+  }, [
+    activeViewId,
+    pathname,
+    payload.scope.programId,
+    router,
+    searchParams,
+    viewHref,
+    views,
+    viewsAvailable,
+  ])
 
   const selectView = useCallback(
     (viewId: string) => {
@@ -2482,7 +2565,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
           what the grid does.
         */}
         {deviceView === "desktop" ? (
-          <ContactRecordOpenContext.Provider value={setExpandedContactId}>
+          <ContactRecordOpenContext.Provider value={openRecord}>
             <Grid<ManageContact>
               rows={contacts}
               columns={columns}
@@ -2492,6 +2575,7 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
               filterTree={filterTree}
               onFilterTreeChange={handleFilterTreeChange}
               onRowSelectionChange={setRowSelection}
+              onVisibleRowIdsChange={handleVisibleRowIdsChange}
               ariaLabel="Contacts"
               density={density}
               onDensityChange={handleDensityChange}
@@ -2522,30 +2606,22 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
           above it, and only on desktop — the phone view has its own record frame
           in `ManageContactList`, and two of them would be two answers to one
           question.
+
+          The frame is the shared one; the state, the comments actions and the
+          sequence come from this host's one `useContactRecord` instance.
         */}
-        {deviceView === "desktop" && expandedContact ? (
+        {deviceView === "desktop" && record.state ? (
           <ContactRecordDialog
-            contact={expandedContact}
-            locations={payload.locationOptions ?? payload.locations}
-            resolvers={{ locationNameById, staffNameById }}
-            sourceOptions={sourceOptions}
-            booksReadOptions={payload.booksReadOptions}
-            onCommit={(fieldId, value) => {
-              void handleListCommit(expandedContact.id, fieldId, value)
-            }}
-            onClose={() => setExpandedContactId(null)}
-            onPrevious={() => {
-              if (expandedIndex > 0) {
-                setExpandedContactId(contacts[expandedIndex - 1].id)
-              }
-            }}
-            onNext={() => {
-              if (expandedIndex >= 0 && expandedIndex < contacts.length - 1) {
-                setExpandedContactId(contacts[expandedIndex + 1].id)
-              }
-            }}
-            canGoPrevious={expandedIndex > 0}
-            canGoNext={expandedIndex >= 0 && expandedIndex < contacts.length - 1}
+            state={record.state}
+            onCommit={commitRecord}
+            commentActions={record.comments}
+            onClose={record.close}
+            onPrevious={record.previous}
+            onNext={record.next}
+            canGoPrevious={record.canGoPrevious}
+            canGoNext={record.canGoNext}
+            returnFocusTo={record.trigger}
+            notice={recordNotice}
           />
         ) : null}
 
@@ -2568,6 +2644,8 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
               locations={payload.locationOptions ?? payload.locations}
               resolvers={{ locationNameById, staffNameById }}
               onCommit={handleListCommit}
+              record={record}
+              onRecordWrite={applyWrite}
               activeFilters={phoneFilterLabels}
               onClearFilters={handleClearFilters}
               emptyScope={contacts.length === 0}

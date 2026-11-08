@@ -48,6 +48,17 @@ const NO_LOCATION = "__no_location__"
 const NO_SOURCE = "__no_source__"
 
 /**
+ * A rejected non-text commit is reported by the host; the control itself has
+ * nothing to revert. The rejection still has to be observed or it surfaces as
+ * an unhandled promise rejection in the browser.
+ */
+function ignoreRejectedCommit(result: void | Promise<void>): void {
+  if (result && typeof result.then === "function") {
+    void result.catch(() => {})
+  }
+}
+
+/**
  * One field's editor, shared by the sheet and the expanded record.
  *
  * The Airtable sheet and the Airtable record view are the same control in two
@@ -86,14 +97,20 @@ export type ContactFieldAppearance = "field" | "record" | "record-title" | "titl
 export interface ManageContactFieldEditorProps {
   contact: ManageContact
   fieldId: ContactFieldId
-  /** The program's locations — the options the location picker offers. */
+  /** The programme's locations, used to name a current value. */
   locations: readonly ManageLocation[]
+  /**
+   * The locations the picker may offer. Defaults to `locations`; a record passes
+   * the patch owner's set here so a current out-of-patch location is named but
+   * cannot be chosen as a new selection.
+   */
+  locationOptions?: readonly ManageLocation[]
   /** The values the source picker offers. */
   sourceOptions?: readonly string[]
   /** The values the books-read picker offers. */
   booksReadOptions?: readonly string[]
   /** Called with the new value. Only called for a field that can be written. */
-  onCommit: (fieldId: ContactFieldId, value: unknown) => void
+  onCommit: (fieldId: ContactFieldId, value: unknown) => void | Promise<void>
   /** Focus the control when it mounts. */
   autoFocus?: boolean
   /** The id of the input, so a `<label htmlFor>` can name it. */
@@ -106,6 +123,7 @@ export function ManageContactFieldEditor({
   contact,
   fieldId,
   locations,
+  locationOptions,
   sourceOptions = [],
   booksReadOptions = [],
   onCommit,
@@ -126,6 +144,7 @@ export function ManageContactFieldEditor({
         contact={contact}
         controlId={controlId}
         locations={locations}
+        locationOptions={locationOptions}
         onCommit={onCommit}
         appearance={appearance}
       />
@@ -255,7 +274,16 @@ function TextFieldEditor({
       return
     }
 
-    onCommit(fieldId, draft)
+    const result = onCommit(fieldId, draft)
+
+    // A refused write is the one case where the draft must go back to the
+    // stored value without the stored value changing: the host has already
+    // reported the server's message, and leaving the rejected text in the
+    // control would make the field look saved. A successful write comes back
+    // as a new contact row, and the effect above follows it.
+    if (result && typeof result.then === "function") {
+      void result.catch(() => setDraft(committed))
+    }
   }
 
   const label = CONTACT_FIELD_LABEL[fieldId]
@@ -347,24 +375,32 @@ function LocationFieldEditor({
   contact,
   controlId,
   locations,
+  locationOptions,
   onCommit,
   appearance,
 }: {
   contact: ManageContact
   controlId: string
   locations: readonly ManageLocation[]
+  locationOptions?: readonly ManageLocation[]
   onCommit: ManageContactFieldEditorProps["onCommit"]
   appearance: ContactFieldAppearance
 }) {
   const current = contact.locationIds[0] ?? NO_LOCATION
+  const pickerLocations = locationOptions ?? locations
+  const currentLocationId = contact.locationIds[0] ?? null
+  const currentOutsidePicker =
+    currentLocationId !== null && !pickerLocations.some((location) => location.id === currentLocationId)
+  const currentLocationName = currentLocationId
+    ? (locations.find((location) => location.id === currentLocationId)?.name ?? null)
+    : null
 
   return (
     <Select
       value={current}
       onValueChange={(next) => {
-        onCommit(
-          CONTACT_FIELD_IDS.location,
-          next === NO_LOCATION ? [] : [next],
+        ignoreRejectedCommit(
+          onCommit(CONTACT_FIELD_IDS.location, next === NO_LOCATION ? [] : [next]),
         )
       }}
     >
@@ -387,11 +423,16 @@ function LocationFieldEditor({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NO_LOCATION}>No location</SelectItem>
-        {locations.map((location) => (
+        {pickerLocations.map((location) => (
           <SelectItem key={location.id} value={location.id}>
             {location.name}
           </SelectItem>
         ))}
+        {currentOutsidePicker && currentLocationId && currentLocationName ? (
+          <SelectItem value={currentLocationId} disabled>
+            {currentLocationName}
+          </SelectItem>
+        ) : null}
       </SelectContent>
     </Select>
   )
@@ -435,7 +476,7 @@ function SourceFieldEditor({
     <Select
       value={current}
       onValueChange={(next) => {
-        onCommit(CONTACT_FIELD_IDS.source, next === NO_SOURCE ? null : next)
+        ignoreRejectedCommit(onCommit(CONTACT_FIELD_IDS.source, next === NO_SOURCE ? null : next))
       }}
     >
       <SelectTrigger
@@ -512,11 +553,13 @@ function BooksReadFieldEditor({
                 <Checkbox
                   checked={selected.includes(option)}
                   onCheckedChange={(checked) => {
-                    onCommit(
-                      CONTACT_FIELD_IDS.booksRead,
-                      checked === true
-                        ? [...selected, option]
-                        : selected.filter((value) => value !== option),
+                    ignoreRejectedCommit(
+                      onCommit(
+                        CONTACT_FIELD_IDS.booksRead,
+                        checked === true
+                          ? [...selected, option]
+                          : selected.filter((value) => value !== option),
+                      ),
                     )
                   }}
                 />
@@ -554,9 +597,14 @@ function NumberFieldEditor({
   const commit = () => {
     const trimmed = draft.trim()
 
+    const revert = () => setDraft(committed === null ? "" : String(committed))
+
     if (trimmed === "") {
       if (committed !== null) {
-        onCommit(fieldId, null)
+        const result = onCommit(fieldId, null)
+        if (result && typeof result.then === "function") {
+          void result.catch(revert)
+        }
       }
       return
     }
@@ -567,7 +615,10 @@ function NumberFieldEditor({
       return
     }
 
-    onCommit(fieldId, next)
+    const result = onCommit(fieldId, next)
+    if (result && typeof result.then === "function") {
+      void result.catch(revert)
+    }
   }
 
   return (
@@ -638,14 +689,14 @@ function DateFieldEditor({
           selected={selected}
           onSelect={(next) => {
             if (next) {
-              onCommit(fieldId, format(next, "yyyy-MM-dd"))
+              ignoreRejectedCommit(onCommit(fieldId, format(next, "yyyy-MM-dd")))
             }
           }}
         />
         {value ? (
           <button
             type="button"
-            onClick={() => onCommit(fieldId, null)}
+            onClick={() => ignoreRejectedCommit(onCommit(fieldId, null))}
             className="mt-1 w-full rounded px-2 py-1 text-left text-[12px] text-muted-foreground hover:bg-secondary hover:text-foreground"
           >
             Clear date

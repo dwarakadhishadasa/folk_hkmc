@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, createContext } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { createColumnHelper } from "@tanstack/react-table"
 import type {
@@ -21,11 +21,13 @@ import {
 } from "@/components/campaign/assign-contacts-types"
 import {
   Grid,
+  GridRowExpandControl,
   GRID_DEFAULT_DENSITY,
   useGridViewState,
   type GridColumnDef,
   type GridDensity,
   type GridFieldType,
+  type GridRowContextMenuProps,
 } from "@/components/grid"
 import {
   createFilterGroup,
@@ -59,6 +61,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu"
+import { useContactRecordContext } from "@/components/contacts/contact-record-provider"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -289,6 +297,48 @@ function RowSerial({ fallback }: { fallback: number }) {
 }
 
 /**
+ * The row context menu's one record verb.
+ *
+ * The expand control in the gutter is pointer/touch, matching the Contacts
+ * grid's `tabIndex={-1}` modality; this menu is the required keyboard route,
+ * reached with Shift+F10 or the Menu key. It is offered for one row only —
+ * an expanded record is a single record, so a multi-row target would need a
+ * choice the menu cannot make.
+ */
+const AssignRecordOpenContext = createContext<
+  ((contactId: string, trigger?: HTMLElement | null) => void) | null
+>(null)
+
+function AssignContactsRowContextMenu({ rowIds }: GridRowContextMenuProps) {
+  const openRecord = useContext(AssignRecordOpenContext)
+  const count = rowIds.length
+
+  return (
+    <>
+      <ContextMenuLabel className="text-[13px]">
+        {count} selected row{count === 1 ? "" : "s"}
+      </ContextMenuLabel>
+      <ContextMenuSeparator />
+      {count === 1 && openRecord ? (
+        <ContextMenuItem
+          className="text-[13px]"
+          onSelect={() => {
+            const trigger =
+              typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null
+
+            openRecord(rowIds[0], trigger)
+          }}
+        >
+          Expand record
+        </ContextMenuItem>
+      ) : null}
+    </>
+  )
+}
+
+/**
  * Frame 324's assign-contacts surface: the shared grid on the left, the
  * weighted caller panel on the right, and one primary action.
  *
@@ -328,6 +378,30 @@ export function AssignContactsSelect({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [density, setDensity] = useState<GridDensity>(GRID_DEFAULT_DENSITY)
+
+  /**
+   * The record host mounted by the staff shell.
+   *
+   * The assign grid is contact-scoped by construction — the page read the same
+   * scope — so every row is a trigger and no extra availability read is made.
+   * The sequence is the grid's visible, filtered/sorted order, supplied by
+   * `onVisibleRowIdsChange`, never the unfiltered `contacts` prop.
+   */
+  const recordContext = useContactRecordContext()
+  const [visibleRowIds, setVisibleRowIds] = useState<readonly string[]>([])
+
+  const openRecord = useCallback(
+    (contactId: string, trigger: HTMLElement | null = null) => {
+      recordContext?.openContactRecord({ contactId, sequence: visibleRowIds, trigger })
+    },
+    [recordContext, visibleRowIds],
+  )
+
+  // The open record's chevrons follow the grid's current filtered/sorted view,
+  // including when a filter hides the record the operator is reading.
+  useEffect(() => {
+    recordContext?.updateContactRecordSequence(visibleRowIds)
+  }, [recordContext, visibleRowIds])
 
   /**
    * The view the operator is working in.
@@ -1051,10 +1125,12 @@ export function AssignContactsSelect({
       helper.display({
         id: SELECT_COLUMN_ID,
         header: ({ table }) => (
-          <span className="flex w-full justify-center">
+          <span className="flex w-full items-center gap-1 px-1">
+            <span aria-hidden="true" className="w-3 shrink-0" />
             <span className="flex w-4 shrink-0 justify-center">
               <SelectAllControl table={table} onToggle={setVisibleSelection} />
             </span>
+            <span aria-hidden="true" className="w-8 shrink-0" />
           </span>
         ),
         cell: ({ row }) => {
@@ -1062,7 +1138,7 @@ export function AssignContactsSelect({
 
           return (
             <span
-              className="flex items-center justify-center"
+              className="flex items-center gap-1"
               onPointerDown={(event) => {
                 // Without this the cell takes the pointer, the grid moves cell
                 // focus to a non-editable column, and the next double-click
@@ -1070,6 +1146,7 @@ export function AssignContactsSelect({
                 event.stopPropagation()
               }}
             >
+              <span aria-hidden="true" className="w-3 shrink-0" />
               {/*
                 One 16px slot, not two: the row number at rest, the selection
                 checkbox once the row is hovered or selected. Both were measured
@@ -1103,12 +1180,25 @@ export function AssignContactsSelect({
                   </span>
                 </>
               )}
+
+              <span className="flex w-8 shrink-0 justify-center">
+                {recordContext?.canOpenContactRecord ? (
+                  <GridRowExpandControl
+                    label={`Expand ${row.original.name}`}
+                    onExpand={(trigger) => openRecord(row.original.contactId, trigger)}
+                  />
+                ) : null}
+              </span>
             </span>
           )
         },
-        size: 40,
-        minSize: 40,
-        maxSize: 40,
+        // The contacts grid's row-actions width: padding (16) + drag-grip
+        // spacer (12) + serial/checkbox slot (16) + expand slot (32) and two
+        // 4px gaps. The grip is a spacer here because this gutter has no drag;
+        // 84 keeps the expand control on the same x as the Contacts grid.
+        size: 84,
+        minSize: 84,
+        maxSize: 84,
         enableSorting: false,
         enableHiding: false,
         meta: { grid: { selectable: true, align: "center" } },
@@ -1241,7 +1331,7 @@ export function AssignContactsSelect({
     ]
     // `locationLabel` reads the location lexicon, so the defs depend on it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setVisibleSelection, locationNames])
+  }, [setVisibleSelection, locationNames, recordContext, openRecord])
 
   const submit = async (mode: "skip" | "move", pending: PendingAssignment | null = null) => {
     const contactIds = pending?.contactIds ?? selectedIds
@@ -1435,30 +1525,36 @@ export function AssignContactsSelect({
             className="flex min-h-0 min-w-0 flex-1 flex-col"
           >
             <div className="flex h-[520px] min-h-0 flex-col lg:h-full">
-              <Grid<AssignableContactView>
-                rows={contacts}
-                columns={columns}
-                getRowId={(contact) => contact.contactId}
-                state={{ ...viewState, rowSelection }}
-                onStateChange={handleGridStateChange}
-                filterTree={filterTree}
-                onFilterTreeChange={handleFilterTreeChange}
-                onRowSelectionChange={setRowSelection}
-                ariaLabel="Contacts in scope"
-                density={density}
-                onDensityChange={handleDensityChange}
-                transient={{
-                  begin: beginTransientChange,
-                  commit: commitTransientChange,
-                  cancel: cancelTransientChange,
-                }}
-                onClearFilters={handleClearFilters}
-                className={cn(
-                  // A collapsed bar leaves its toggle floating over the grid's
-                  // leading edge; the toolbar shifts right to make room for it.
-                  viewsSidebarOpen ? undefined : "[&_[data-grid-toolbar]]:pl-[292px]",
-                )}
-              />
+              <AssignRecordOpenContext.Provider
+                value={recordContext?.canOpenContactRecord ? openRecord : null}
+              >
+                <Grid<AssignableContactView>
+                  rows={contacts}
+                  columns={columns}
+                  getRowId={(contact) => contact.contactId}
+                  state={{ ...viewState, rowSelection }}
+                  onStateChange={handleGridStateChange}
+                  filterTree={filterTree}
+                  onFilterTreeChange={handleFilterTreeChange}
+                  onRowSelectionChange={setRowSelection}
+                  onVisibleRowIdsChange={setVisibleRowIds}
+                  rowContextMenu={AssignContactsRowContextMenu}
+                  ariaLabel="Contacts in scope"
+                  density={density}
+                  onDensityChange={handleDensityChange}
+                  transient={{
+                    begin: beginTransientChange,
+                    commit: commitTransientChange,
+                    cancel: cancelTransientChange,
+                  }}
+                  onClearFilters={handleClearFilters}
+                  className={cn(
+                    // A collapsed bar leaves its toggle floating over the grid's
+                    // leading edge; the toolbar shifts right to make room for it.
+                    viewsSidebarOpen ? undefined : "[&_[data-grid-toolbar]]:pl-[292px]",
+                  )}
+                />
+              </AssignRecordOpenContext.Provider>
             </div>
           </section>
 

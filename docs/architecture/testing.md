@@ -193,7 +193,7 @@ session, 403 for a Volunteer, and that a failed sign-in provisions nothing.
 | " | `e2e/specs/manage-contacts-bulk.spec.ts` | 2 |
 | " | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
 | " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 3 — the primitive's opt-in and the two delete guarantees; the inline-create cases retired with the control |
-| `components/manage/manage-contact-list.tsx`, `manage-contact-sheet.tsx`, `manage-contact-record.tsx`, `manage-contact-field-editor.tsx`, `manage-contact-fields.ts`, `hooks/use-mobile.ts` | `e2e/specs/manage-contacts-list.spec.ts` | 11 |
+| `components/manage/manage-contact-list.tsx`, `manage-contact-sheet.tsx`, `manage-contact-field-editor.tsx`, `manage-contact-fields.ts`, `hooks/use-mobile.ts` | `e2e/specs/manage-contacts-list.spec.ts` | 19 |
 
 These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
 lives in
@@ -244,12 +244,27 @@ blast radius of a change there is this spec — but `components/grid/**`, which
 the tab's filtering leans on for the condition encoding, widens to the grid
 specs — see §5.
 
+### Contact record — cross-surface — `pnpm test:e2e:sessions`
+
+| Source | Spec | Tests |
+|---|---|---|
+| `components/contacts/contact-record-*`, `components/contacts/use-contact-record.ts`, `lib/contacts/record.ts`, `lib/contacts/record-handlers.ts`, `apps/*/app/api/manage/contacts/[contactId]/record/route.ts` | `e2e/specs/sessions-detail.spec.ts` | 7 record/gateway cases; the same file carries the 9 session-detail tests below |
+
+The detail spec owns the one record gateway and the session surfaces: an
+in-scope attendee opens the premium record on both breakpoints, the out-of-patch
+Preacher keeps the existing summary, and the gateway's `400`/`403`/`404`,
+`Cache-Control: no-store` and server-derived `canEdit`/`canComment` are asserted
+directly. The trigger on each other surface is covered by that surface's own
+spec (`dashboard-overview`, `dashboard-candidates`, `sessions-overview`,
+`campaign-assign-select`, `manage-contacts-list`). The record's sequence helpers
+are unit-tested in `components/contacts/contact-record-sequence.test.ts`.
+
 ### Sessions — overview, insights, detail and live dashboards — `pnpm test:e2e:sessions`
 
 | Source | Spec | Tests |
 |---|---|---|
 | `apps/folk/app/sessions/**`, `components/sessions/**`, `lib/sessions/**`, `supabase/migrations/20261101000000_sessions_flow.sql` | `e2e/specs/sessions-overview.spec.ts` | 11 |
-| " | `e2e/specs/sessions-detail.spec.ts` | 4 |
+| " | `e2e/specs/sessions-detail.spec.ts` | 9 |
 
 The overview spec owns why the three derived statuses are visible, why the
 location filter narrows the rows without moving the programme-wide figures, and
@@ -257,8 +272,9 @@ that a page left open flips `Live now` → `Completed` through `router.refresh()
 rather than a reload. It also asserts that the insights now on the Overview
 match a direct count of `attendance` over the fixed 90-day window: the weekly
 series sums to the total and the by-session bars are the direct top four. The
-detail spec owns the attendee rows, the contact modal on both breakpoints and
-the 404s.
+detail spec owns the attendee rows, the premium contact record on both
+breakpoints, the out-of-patch summary fallback, the record gateway's 400/403/404
+and its server-derived capabilities, and the 404s.
 
 The Reports route is retired; its two charts live on the Overview, so the
 insight assertions are part of the overview spec rather than a separate file.
@@ -360,6 +376,8 @@ not a local change — run the specs named for every consumer.
 | `components/providers.tsx` | Both root layouts — i.e. **every route** | Full `pnpm test:e2e` |
 | `components/staff-auth-shell.tsx` | `/manage`, `/sessions`, `/dashboard`, `/contact`, `/volunteers`, `/admin/invite` ×2 apps | `smoke` + `test:e2e:manage` |
 | `components/grid/**` | `manage-contacts-table.tsx`, `/dev/grid-preview` | `test:e2e:grid` **+** `test:e2e:manage` |
+| `components/contacts/contact-record-*`, `components/contacts/use-contact-record.ts`, `contact-record-trigger.tsx` | Contacts grid (desktop + phone), Sessions detail and Top 5, dashboard Focus/Candidates, campaign assign, manage Sessions | `test:e2e:sessions` + `test:e2e:dashboard` + `test:e2e:campaign` + `test:e2e:manage` |
+| `lib/contacts/record.ts`, `lib/contacts/record-handlers.ts`, `apps/*/app/api/manage/contacts/[contactId]/record/route.ts` | Every surface above; the one full-record gateway | Full `pnpm test:e2e` |
 | `components/manage/manage-types.ts` | Manage UI **and** `lib/manage/api-handlers.ts` (server) | `test:e2e:manage` |
 | `hooks/use-mobile.ts` | `manage-contacts-table.tsx` (the device detection) and `components/ui/sidebar.tsx` | `test:e2e:manage` |
 | `lib/manage/api-handlers.ts` | The three `/api/manage/contacts/*` routes ×2 apps | `test:e2e:manage` |

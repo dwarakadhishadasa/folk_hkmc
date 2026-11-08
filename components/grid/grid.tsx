@@ -621,6 +621,14 @@ export interface GridProps<TData extends RowData> {
    * intercepted here so a checkbox click never reaches the URL writer.
    */
   onRowSelectionChange?: (rowSelection: RowSelectionState) => void
+  /**
+   * Receives the row ids the grid is currently showing, in display order.
+   *
+   * This is the **filtered and sorted** row model, not the unfiltered rows
+   * prop: a record opened from the grid steps through the list the operator is
+   * looking at, and a host must not re-filter the raw rows to guess it.
+   */
+  onVisibleRowIdsChange?: (rowIds: readonly string[]) => void
   ariaLabel: string
   density: GridDensity
   onDensityChange: (density: GridDensity) => void
@@ -972,6 +980,7 @@ export function Grid<TData extends RowData>({
   filterTree,
   onFilterTreeChange,
   onRowSelectionChange,
+  onVisibleRowIdsChange,
   ariaLabel,
   density,
   onDensityChange,
@@ -1537,6 +1546,21 @@ export function Grid<TData extends RowData>({
   // `table` is a stable mutable instance, so header geometry is derived from the
   // state the table was last given rather than memoized against the instance.
   const rowModel = table.getRowModel().rows
+
+  /**
+   * The visible row ids, as one string key.
+   *
+   * The row model is a fresh array every render, so a dependency on the array
+   * itself would notify the host on every render and could loop. The ids are
+   * the fact that changed or did not; a NUL separator cannot appear in a UUID
+   * or a draft id.
+   */
+  const visibleRowIdsKey = rowModel.map((row) => row.id).join("\u0000")
+
+  useEffect(() => {
+    onVisibleRowIdsChange?.(visibleRowIdsKey.length > 0 ? visibleRowIdsKey.split("\u0000") : [])
+  }, [onVisibleRowIdsChange, visibleRowIdsKey])
+
   const headerHeaders = table.getHeaderGroups()[0]?.headers ?? []
   const visibleColumnIds = headerHeaders.map((header) => header.column.id)
   const visibleIndexById = new Map(visibleColumnIds.map((id, index) => [id, index]))

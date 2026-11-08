@@ -409,21 +409,24 @@ verdicts below are from the run recorded underneath, not a prediction.
 | S5 | A created session lands on `/sessions/<id>/live` | UI | **Covered** | `sessions-overview.spec.ts` |
 | S6 | A live row, and a live detail visit, land on that session's dashboard | UI | **Covered** | `sessions-overview.spec.ts` |
 | S7 | Overview insights use the fixed 90-day window; weekly sums to a direct `count(attendance)` and by-session is the direct top four | UI + DB | **Covered** | `sessions-overview.spec.ts` |
-| S8 | Detail attendee rows, first-timer/returning stats and the contact modal | UI | **Covered** | `sessions-detail.spec.ts` |
-| S9 | Phone attendee cards, name sort and the contact modal | UI | **Covered** | `sessions-detail.spec.ts` |
+| S8 | Detail attendee rows, first-timer/returning stats and the in-scope attendee's premium contact record (the out-of-patch Preacher keeps the summary) | UI + API | **Covered** | `sessions-detail.spec.ts` |
+| S9 | Phone attendee cards, name sort and the in-scope attendee's premium record | UI | **Covered** | `sessions-detail.spec.ts` |
 | S10 | Foreign and malformed session ids are 404 | UI | **Covered** | `sessions-detail.spec.ts` |
 
-**The recorded run.** 2026-11-01, local stack, Playwright 1.62, single worker,
-`E2E_BASE_URL=http://127.0.0.1:3001 pnpm test:e2e:sessions` — **19 passed**
-(4 setup + 15 spec) in 1.7 minutes. The port is the worktree's own dev server;
-the fixture target is loopback and the service-role URL is asserted local, as the
-fixture module requires.
+**The recorded run.** 2026-11-08, local stack, Playwright 1.62, single worker,
+`E2E_BASE_URL=http://127.0.0.1:3001 pnpm test:e2e sessions-detail` — **13 passed**
+(4 setup + 9 spec) in 0.8 minutes. The same day's `pnpm test:e2e:sessions` run
+was 25 passed (4 setup + 21 spec) in 2.1 minutes. The port is the worktree's own
+dev server; the fixture target is loopback and the service-role URL is asserted
+local, as the fixture module requires.
 
 The fixtures are disposable sessions, contacts and one location, written with
 the service role and removed in `afterAll`; the seed's open session is never
 mutated, because the attendance contract still needs it. The report expectations
 are read back from `sessions` and `attendance`, so the seed's own rows count
-without being hard-coded.
+without being hard-coded. S8/S9's premium-record and summary-fallback assertions
+are the 2026-11-08 additions; the earlier 2026-11-01 run recorded only the
+summary modal.
 
 ## Admin-supervised Assistants — `spec-admin-assistants`
 

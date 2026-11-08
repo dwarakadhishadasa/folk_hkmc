@@ -111,9 +111,23 @@ test("a segment longer than one page paginates and keeps the segment", async ({ 
   await expect(page.getByText(/Showing 1–50 of/)).toBeVisible()
 })
 
+test("opens a candidate's contact record in place", async ({ page }) => {
+  await page.goto("/dashboard/candidates?segment=new_untouched")
+
+  const trigger = page.locator("[data-dashboard-candidate] [data-contact-record-trigger]").first()
+  await expect(trigger).toBeVisible()
+  await trigger.click()
+
+  const dialog = page.locator("[data-contact-record-dialog]")
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole("heading", { name: "Attendance", level: 2 })).toBeVisible()
+
+  await page.getByRole("button", { name: "Close dialog" }).click()
+  await expect(dialog).toBeHidden()
+})
+
 test("the Focus now card's View all link keeps the segment in the URL", async ({ page }) => {
   await page.goto("/dashboard?mode=admin&period=all")
-
   const card = page.locator('[data-dashboard-focus="new_untouched"]')
   await card.getByRole("link", { name: "View all" }).click()
 

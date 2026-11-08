@@ -34,6 +34,26 @@ export const UNRESOLVED_LOCATION = "Unknown location"
  */
 export const UNRESOLVED_STAFF = "Unknown staff member"
 
+/**
+ * The `source` values the local fixtures write, verbatim.
+ *
+ * A `select` editor rejects a value that is not one of its options, so the
+ * option list has to be a superset of what the rows actually hold or every
+ * existing row renders as "not an option" and a no-op commit is refused.
+ * `scripts/seed-preview-fixtures.mjs` writes the first and
+ * `scripts/bulk-contact-fixtures.mjs` writes the second; the record gateway and
+ * the grid union these with whatever their own rows carry so a hand-written row
+ * is covered too.
+ *
+ * The catalog's "Pass Distribution" / "Public Registration" / "Old" were
+ * Airtable-era values: no migration, seeder or fixture in this repository writes
+ * them, and offering them would put three dead options in front of every
+ * operator. Verified against the running local stack at the premium-record
+ * story's baseline: `preview-fixture` on 4 rows and `preview-fixture-bulk` on
+ * 250, and nothing else.
+ */
+export const KNOWN_SOURCE_VALUES = ["preview-fixture", "preview-fixture-bulk"] as const
+
 /** The contact fields the surface shows, keyed by what they mean. */
 export const CONTACT_FIELD_IDS = {
   name: "name",

@@ -5,6 +5,7 @@ import { ManagePortal } from "@/components/manage/manage-portal"
 import { isManageView, resolveManageMode } from "@/components/manage/manage-types"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext, requireRole } from "@/lib/authz"
+import { loadContactRecordAvailability } from "@/lib/contacts/record"
 import { OPERATIONAL_ROLES } from "@/lib/staff-roles"
 import { toClientStaff } from "@/lib/staff-dto"
 import { loadManagePortalData } from "@/lib/supabase/manage"
@@ -70,6 +71,17 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
 
     const payload = await loadManagePortalData({ staff, mode })
 
+    // The manage Sessions pills are triggers only where the record gateway
+    // would authorize the contact. One availability read over this session
+    // set; the payload's contact set is not a second rule.
+    const attendeeIds = [
+      ...new Set(payload.sessions.flatMap((session) => session.attendees.map((attendee) => attendee.contactId))),
+    ]
+    const recordAvailability = await loadContactRecordAvailability({
+      staff,
+      contactIds: attendeeIds,
+    })
+
     return (
       <StaffAuthShell staff={toClientStaff(staff)}>
         {/*
@@ -100,7 +112,11 @@ export default async function ManagePage({ searchParams }: ManagePageProps) {
              * page is what moves.
              */}
           <main className="flex min-h-0 w-full flex-1 flex-col px-4 py-6 sm:px-6 sm:py-8">
-            <ManagePortal payload={payload} initialView={initialView} />
+            <ManagePortal
+              payload={payload}
+              initialView={initialView}
+              recordAvailableContactIds={[...recordAvailability]}
+            />
           </main>
         </div>
       </StaffAuthShell>

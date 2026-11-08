@@ -133,5 +133,9 @@ export {
   useGridRowLifecycle,
   type GridRowDeleteOutcome,
 } from "@/components/grid/grid-row-lifecycle"
+export {
+  GridRowExpandControl,
+  type GridRowExpandControlProps,
+} from "@/components/grid/grid-row-expand-control"
 export { GridSortPopover, type GridSortField, type GridSortPopoverProps } from "@/components/grid/grid-sort-popover"
 export { GridPreview, type GridPreviewRow } from "@/components/grid/grid-preview"

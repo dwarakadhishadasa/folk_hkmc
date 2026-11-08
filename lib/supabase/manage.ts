@@ -484,7 +484,7 @@ async function loadRollupCounts(contactIds: string[]): Promise<Map<string, Rollu
  * name in the program. The id set is narrowed first, and an absent name falls
  * back to the id rather than to `users.email`, which the browser never needs.
  */
-async function loadStaffDisplayNames(
+export async function loadStaffDisplayNames(
   programId: string,
   userIds: string[],
 ): Promise<Record<string, string>> {
@@ -517,6 +517,31 @@ async function loadStaffDisplayNames(
   }
 
   return names
+}
+
+/**
+ * The programme's location lexicon, read with the service role.
+ *
+ * This is the **naming** set, not the picker's option set: a contact can sit at
+ * a location outside the reader's manage scope, and a record that printed
+ * `Unknown location` for a real place would be indistinguishable from a deleted
+ * one. The record's location picker is narrowed separately by
+ * `locationInPatch`, exactly as the Contacts section does.
+ */
+export async function loadProgramLocations(programId: string): Promise<ManageLocation[]> {
+  const supabaseAdmin = createSupabaseAdminClient()
+  const rows = await collectPagedRows<LocationRow>(async (from, to) => {
+    const response = await supabaseAdmin
+      .from("locations")
+      .select(LOCATION_COLUMNS)
+      .eq("program_id", programId)
+      .order("id", { ascending: true })
+      .range(from, to)
+
+    return { data: response.data, error: response.error }
+  })
+
+  return rows.map((row) => ({ id: row.id, name: row.name, status: row.status }))
 }
 
 /** Active staff assigned to a Preacher, for the assistant-created sessions term. */
@@ -575,6 +600,52 @@ function mapManageContact(
     past60DayAttendanceCount: rollup?.past60 ?? 0,
     commentCount: commentCount ?? 0,
   }
+}
+
+/**
+ * One contact's full row, for the cross-surface record gateway.
+ *
+ * The full row is read through the **RLS client**, not the admin client: the
+ * caller's contact scope is the authorization boundary, and the read is what
+ * proves the contact is inside it. Only when that read returns nothing does the
+ * existing `assertManageContactInScope` probe run, purely to distinguish `403`
+ * (in this programme, out of scope) from `404` (not in this programme) — the
+ * same distinction every other manage read already makes.
+ *
+ * Rollups and the comment count are resolved for this one id. The record never
+ * asks for the grid's payload, and never reads every contact.
+ */
+export async function loadManageContactRecordRow(params: {
+  staff: StaffContext
+  contactId: string
+}): Promise<ManageContact> {
+  const { staff, contactId } = params
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from("contacts")
+    .select(CONTACT_COLUMNS)
+    .eq("id", contactId)
+    .eq("program_id", staff.programId)
+    .maybeSingle()
+
+  if (error) {
+    throw new AuthzError(500, "manage_contact_read_failed", "Unable to read the contact.")
+  }
+
+  if (!data) {
+    // Throws the named 403/404. The empty read above already ran behind RLS, so
+    // this probe can never widen what the caller is allowed to see.
+    await assertManageContactInScope(staff, contactId)
+    throw new AuthzError(404, "contact_not_found", "Contact not found in this program.")
+  }
+
+  const row = data as unknown as ContactRow
+  const [rollups, commentCounts] = await Promise.all([
+    loadRollupCounts([row.id]),
+    loadCommentCounts([row.id]),
+  ])
+
+  return mapManageContact(row, rollups.get(row.id), commentCounts.get(row.id))
 }
 
 export async function loadManagePortalData(params: {

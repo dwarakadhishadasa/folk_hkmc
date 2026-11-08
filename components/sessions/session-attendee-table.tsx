@@ -15,7 +15,7 @@ export function SessionAttendeeTable({
   onSelect,
 }: {
   attendees: SessionAttendee[]
-  onSelect: (contactId: string) => void
+  onSelect: (contactId: string, trigger: HTMLElement | null) => void
 }) {
   return (
     <div className="hidden overflow-hidden rounded-xl border border-[var(--border)] bg-card md:block">
@@ -42,7 +42,7 @@ export function SessionAttendeeTable({
               <TableCell className="px-4 py-3">
                 <button
                   type="button"
-                  onClick={() => onSelect(attendee.contactId)}
+                  onClick={(event) => onSelect(attendee.contactId, event.currentTarget)}
                   className="text-left text-[14px] font-medium text-[var(--program-text)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
                 >
                   {attendee.name}
@@ -63,7 +63,7 @@ export function SessionAttendeeTable({
               <TableCell className="px-4 py-3 text-right">
                 <button
                   type="button"
-                  onClick={() => onSelect(attendee.contactId)}
+                  onClick={(event) => onSelect(attendee.contactId, event.currentTarget)}
                   aria-label={`View ${attendee.name}`}
                   className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--muted-foreground)] transition-colors hover:text-[var(--program-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
                 >

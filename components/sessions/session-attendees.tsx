@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 
+import { useContactRecordContext } from "@/components/contacts/contact-record-provider"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { ContactAttendanceCard } from "@/components/sessions/contact-attendance-card"
 import { SessionAttendeeCards } from "@/components/sessions/session-attendee-cards"
@@ -16,11 +17,13 @@ interface ContactPayload {
 }
 
 /**
- * The attendee list and its contact modal.
+ * The attendee list and its two contact surfaces.
  *
- * One dialog serves the desktop table and the phone cards. The record is read
- * on demand from the attendee endpoint when a row is opened, so the page does
- * not fetch every contact just to render the list.
+ * An in-scope attendee opens the premium record through the staff shell's one
+ * provider; an attendee outside the caller's contact patch keeps the existing
+ * read-only summary modal and its session endpoint. The summary is the
+ * fallback, not a second record UI: it is never shown for a contact the record
+ * gateway would authorize.
  */
 export function SessionAttendees({
   sessionId,
@@ -31,6 +34,30 @@ export function SessionAttendees({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = selectedId ? attendees.find((entry) => entry.contactId === selectedId) : undefined
+  const recordContext = useContactRecordContext()
+  const recordSequence = attendees
+    .filter((attendee) => attendee.recordAvailable)
+    .map((attendee) => attendee.contactId)
+
+  /**
+   * An in-scope attendee opens the premium record; an out-of-scope attendee
+   * keeps today's summary modal. The sequence is the in-scope attendee ids in
+   * the displayed order, so the record's chevrons step through this list.
+   */
+  const handleSelect = (contactId: string, trigger: HTMLElement | null) => {
+    const attendee = attendees.find((entry) => entry.contactId === contactId)
+
+    if (attendee?.recordAvailable && recordContext?.canOpenContactRecord) {
+      recordContext.openContactRecord({
+        contactId,
+        sequence: recordSequence,
+        trigger,
+      })
+      return
+    }
+
+    setSelectedId(contactId)
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -41,8 +68,8 @@ export function SessionAttendees({
         <SessionAttendeeSort />
       </div>
 
-      <SessionAttendeeTable attendees={attendees} onSelect={setSelectedId} />
-      <SessionAttendeeCards attendees={attendees} onSelect={setSelectedId} />
+      <SessionAttendeeTable attendees={attendees} onSelect={handleSelect} />
+      <SessionAttendeeCards attendees={attendees} onSelect={handleSelect} />
 
       <div className="flex flex-col gap-1 text-[11px] text-[var(--muted-foreground)] sm:flex-row sm:items-center sm:justify-between">
         <p>{attendees.length} {attendees.length === 1 ? "attendee" : "attendees"}</p>

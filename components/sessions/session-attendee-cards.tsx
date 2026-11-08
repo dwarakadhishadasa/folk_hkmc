@@ -14,7 +14,7 @@ export function SessionAttendeeCards({
   onSelect,
 }: {
   attendees: SessionAttendee[]
-  onSelect: (contactId: string) => void
+  onSelect: (contactId: string, trigger: HTMLElement | null) => void
 }) {
   return (
     <ul className="flex flex-col gap-2 md:hidden">
@@ -22,7 +22,7 @@ export function SessionAttendeeCards({
         <li key={attendee.contactId}>
           <button
             type="button"
-            onClick={() => onSelect(attendee.contactId)}
+            onClick={(event) => onSelect(attendee.contactId, event.currentTarget)}
             data-session-attendee-card={attendee.name}
             className="flex w-full items-center gap-3 rounded-xl border border-[var(--border)] bg-card px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--program-accent)]"
           >

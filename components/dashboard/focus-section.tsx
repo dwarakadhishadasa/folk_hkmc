@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { ContactRecordTrigger } from "@/components/contacts/contact-record-trigger"
 import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import { formatCount } from "@/lib/dashboard/format"
 import {
@@ -49,7 +50,15 @@ function initials(name: string): string {
     .join("")
 }
 
-function CandidateRow({ row, accent }: { row: FocusRow; accent: string }) {
+function CandidateRow({
+  row,
+  accent,
+  sequence,
+}: {
+  row: FocusRow
+  accent: string
+  sequence: readonly string[]
+}) {
   return (
     <li
       data-dashboard-focus-row={row.contactId}
@@ -68,7 +77,16 @@ function CandidateRow({ row, accent }: { row: FocusRow; accent: string }) {
             {initials(row.name)}
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[var(--program-text)]">{row.name}</p>
+            <p className="truncate text-sm font-semibold text-[var(--program-text)]">
+              <ContactRecordTrigger
+                contactId={row.contactId}
+                name={row.name}
+                sequence={sequence}
+                className="max-w-full truncate"
+              >
+                {row.name}
+              </ContactRecordTrigger>
+            </p>
             <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted-foreground)]">{row.reason}</p>
           </div>
         </div>
@@ -107,6 +125,10 @@ export function DashboardFocusSection({
           const count = segment?.count ?? 0
           const Icon = FOCUS_ICONS[definition.key]
           const accent = FOCUS_ACCENTS[definition.key]
+          // The card renders only the first three rows; the sequence must be the
+          // same list, or Previous/Next would step to a contact the card never
+          // showed.
+          const sequence = rows.slice(0, 3).map((row) => row.contactId)
 
           return (
             <article
@@ -155,7 +177,7 @@ export function DashboardFocusSection({
               ) : (
                 <ul className="mt-3 flex flex-col">
                   {rows.slice(0, 3).map((row) => (
-                    <CandidateRow key={row.contactId} row={row} accent={accent} />
+                    <CandidateRow key={row.contactId} row={row} accent={accent} sequence={sequence} />
                   ))}
                 </ul>
               )}

@@ -59,6 +59,12 @@ export interface SessionTopAttendee {
   contactId: string
   name: string
   attendanceCount: number
+  /**
+   * Whether the caller may open the full contact record for this person.
+   * Attached by the page through `loadContactRecordAvailability`, never derived
+   * on the client. `false` renders plain text.
+   */
+  recordAvailable: boolean
 }
 
 export interface SessionAttendee {
@@ -68,6 +74,12 @@ export interface SessionAttendee {
   locationNames: string | null
   sessionsAttended: number
   firstSession: string | null
+  /**
+   * Whether the caller may open the premium record instead of the existing
+   * read-only summary. Computed by the page's availability read; `false` keeps
+   * today's summary fallback exactly as it is.
+   */
+  recordAvailable: boolean
 }
 
 export interface ContactAttendanceSummary {
@@ -294,7 +306,7 @@ export async function getSessionsTopAttendees(
       return []
     }
 
-    return [{ contactId, name, attendanceCount: readNumber(row.attendance_count) }]
+    return [{ contactId, name, attendanceCount: readNumber(row.attendance_count), recordAvailable: false }]
   })
 }
 
@@ -345,6 +357,7 @@ export async function getSessionAttendees(
     locationNames: readString(row.location_names),
     sessionsAttended: readNumber(row.sessions_attended),
     firstSession: readString(row.first_session),
+    recordAvailable: false,
   }))
 }
 

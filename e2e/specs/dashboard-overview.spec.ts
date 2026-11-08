@@ -117,6 +117,51 @@ test("puts each fixture contact in the focus segment its history defines", async
   )
 })
 
+test("opens a focus row's contact record in place", async ({ page }) => {
+  await page.goto("/dashboard?mode=admin&period=all")
+
+  const trigger = page
+    .locator('[data-dashboard-focus="ready_to_invite"] [data-contact-record-trigger]')
+    .first()
+  await expect(trigger).toBeVisible()
+  await trigger.click()
+
+  const dialog = page.locator("[data-contact-record-dialog]")
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole("heading", { name: "Attendance", level: 2 })).toBeVisible()
+  await expect(dialog.getByRole("heading", { name: "Campaign history", level: 2 })).toBeVisible()
+
+  await page.getByRole("button", { name: "Close dialog" }).click()
+  await expect(dialog).toBeHidden()
+})
+
+test("a 403 from the record gateway closes the record and names the scope", async ({ page }) => {
+  await page.route("**/api/manage/contacts/*/record", (route) =>
+    route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "This contact is outside your assigned scope." }),
+    }),
+  )
+
+  await page.goto("/dashboard?mode=admin&period=all")
+
+  const trigger = page
+    .locator('[data-dashboard-focus="ready_to_invite"] [data-contact-record-trigger]')
+    .first()
+  await expect(trigger).toBeVisible()
+  await trigger.click()
+
+  const errorDialog = page.locator("[data-contact-record-error]")
+  await expect(errorDialog).toBeVisible()
+  await expect(errorDialog).toContainText("outside your contact scope")
+  // The record frame is gone; a 403 is never rendered as an empty record.
+  await expect(page.locator("[data-contact-record-dialog]")).toHaveCount(0)
+
+  await errorDialog.getByRole("button", { name: "Close" }).click()
+  await expect(errorDialog).toBeHidden()
+})
+
 test("a campaign with no linked session is flagged rather than shown as zero conversion", async ({
   page,
 }) => {
