@@ -324,6 +324,17 @@ test.describe("the contact list", () => {
 
       const dialog = page.locator("[data-contact-record-dialog]")
       await expect(dialog).toBeVisible()
+
+      // The grid host and the provider host share one centred frame.
+      const box = await dialog.boundingBox()
+      const viewport = page.viewportSize()
+      expect(box).not.toBeNull()
+      expect(viewport).not.toBeNull()
+      expect(
+        Math.abs(box!.x + box!.width / 2 - viewport!.width / 2),
+        "the record frame is centred horizontally",
+      ).toBeLessThanOrEqual(1)
+
       await expect(dialog.getByLabel("Phone")).toHaveValue(contact.phone)
 
       const notes = dialog.getByLabel("Notes")

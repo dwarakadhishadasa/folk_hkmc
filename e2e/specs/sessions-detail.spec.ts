@@ -226,6 +226,18 @@ test.describe("session detail", () => {
 
     const dialog = page.locator("[data-contact-record-dialog]")
     await expect(dialog).toBeVisible()
+
+    // The frame is centred under the header on every surface; the old
+    // left-anchored frame is the regression this guards.
+    const box = await dialog.boundingBox()
+    const viewport = page.viewportSize()
+    expect(box).not.toBeNull()
+    expect(viewport).not.toBeNull()
+    expect(
+      Math.abs(box!.x + box!.width / 2 - viewport!.width / 2),
+      "the record frame is centred horizontally",
+    ).toBeLessThanOrEqual(1)
+
     await expect(dialog.getByRole("heading", { name: "Attendance", level: 2 })).toBeVisible()
     await expect(dialog.getByRole("heading", { name: "Campaign history", level: 2 })).toBeVisible()
     await expect(dialog.getByLabel("Phone")).toHaveValue(zulu.phone)

@@ -57,7 +57,7 @@ export function ContactRecordTrigger({
         })
       }
       className={cn(
-        "text-left underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
+        "text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
         className,
       )}
     >

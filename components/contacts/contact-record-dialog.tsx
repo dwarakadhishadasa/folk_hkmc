@@ -217,7 +217,7 @@ export function ContactRecordDialog({
         onCloseAutoFocus={handleCloseAutoFocus}
         style={{ top }}
         className={cn(
-          "!left-3 !right-3 !bottom-3 !translate-x-0 !translate-y-0 flex h-auto max-h-[800px] w-auto max-w-none flex-col gap-0 overflow-hidden rounded-[6px] border-0 bg-card p-0 text-[13px] text-foreground outline-none",
+          "!bottom-3 !translate-y-0 flex h-auto max-h-[800px] !w-[calc(100%-1.5rem)] max-w-none flex-col gap-0 overflow-hidden rounded-[6px] border-0 bg-card p-0 text-[13px] text-foreground outline-none",
           commentsOpen && contact ? "sm:max-w-[1104px]" : "sm:max-w-[800px]",
           CONTACT_DIALOG_SHADOW,
         )}

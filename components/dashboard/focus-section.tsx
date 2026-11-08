@@ -3,7 +3,6 @@ import {
   ArrowRight,
   CalendarX2,
   HeartHandshake,
-  Phone,
   Send,
   TrendingDown,
   UserPlus,
@@ -37,10 +36,6 @@ const FOCUS_ACCENTS: Record<FocusSegmentKey, string> = {
   fading: "var(--chart-4)",
 }
 
-function phoneHref(phone: string): string {
-  return `tel:${phone.replace(/[^\d+]/g, "")}`
-}
-
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -60,45 +55,33 @@ function CandidateRow({
   sequence: readonly string[]
 }) {
   return (
-    <li
-      data-dashboard-focus-row={row.contactId}
-      className="border-t border-[var(--border)] py-2.5 first:border-t-0 first:pt-0"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2">
-          <span
-            className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-            style={{
-              backgroundColor: `color-mix(in oklab, ${accent} 14%, var(--card))`,
-              color: accent,
-            }}
-            aria-hidden="true"
-          >
-            {initials(row.name)}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[var(--program-text)]">
-              <ContactRecordTrigger
-                contactId={row.contactId}
-                name={row.name}
-                sequence={sequence}
-                className="max-w-full truncate"
-              >
-                {row.name}
-              </ContactRecordTrigger>
-            </p>
-            <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted-foreground)]">{row.reason}</p>
-          </div>
-        </div>
-        <a
-          href={phoneHref(row.phone)}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-semibold text-[var(--program-primary)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-          aria-label={`Call ${row.name}`}
+    <li data-dashboard-focus-row={row.contactId} className="border-t border-[var(--border)] first:border-t-0">
+      <ContactRecordTrigger
+        contactId={row.contactId}
+        name={row.name}
+        sequence={sequence}
+        className="flex w-full items-start gap-2 rounded-md px-1 py-2.5 text-left transition-colors hover:bg-foreground/5"
+        staticClassName="flex w-full items-start gap-2 px-1 py-2.5"
+      >
+        <span
+          className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+          style={{
+            backgroundColor: `color-mix(in oklab, ${accent} 14%, var(--card))`,
+            color: accent,
+          }}
+          aria-hidden="true"
         >
-          <Phone className="size-3" aria-hidden="true" />
-          Call {row.name}
-        </a>
-      </div>
+          {initials(row.name)}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-[var(--program-text)]">
+            {row.name}
+          </span>
+          <span className="mt-0.5 block text-[11px] leading-4 text-[var(--muted-foreground)]">
+            {row.reason}
+          </span>
+        </span>
+      </ContactRecordTrigger>
     </li>
   )
 }

@@ -45,10 +45,6 @@ function candidateHref(segment: string, mode: DashboardMode, page: number): stri
   return `/dashboard/candidates?${params.toString()}`
 }
 
-function phoneHref(phone: string): string {
-  return `tel:${phone.replace(/[^\d+]/g, "")}`
-}
-
 /**
  * One focus segment's full list, 50 per page. The segment's predicate is the
  * same SQL function the dashboard's card counted, so the total here and the
@@ -190,30 +186,27 @@ function CandidateList({
       </p>
       <ul className="flex flex-col divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-card">
         {rows.map((row) => (
-          <li
-            key={`${segment}-${row.contactId}`}
-            data-dashboard-candidate={row.contactId}
-            className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-[var(--program-text)]">
-                <ContactRecordTrigger contactId={row.contactId} name={row.name} sequence={sequence}>
-                  {row.name}
-                </ContactRecordTrigger>
-              </p>
-              <p className="mt-0.5 text-[12px] leading-4 text-[var(--muted-foreground)]">{row.reason}</p>
-              <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">
-                {[row.preacherName, row.locationName].filter(Boolean).join(" · ") || "No preacher or location"}
-                {row.lastActivity ? ` · last activity ${formatDay(row.lastActivity)}` : ""}
-              </p>
-            </div>
-            <a
-              href={phoneHref(row.phone)}
-              aria-label={`Call ${row.name}`}
-              className="inline-flex h-9 w-fit shrink-0 items-center rounded-md border border-[var(--border)] px-3 text-sm font-semibold text-[var(--program-primary)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+          <li key={`${segment}-${row.contactId}`} data-dashboard-candidate={row.contactId}>
+            <ContactRecordTrigger
+              contactId={row.contactId}
+              name={row.name}
+              sequence={sequence}
+              className="flex w-full flex-col gap-2 px-4 py-3 text-left transition-colors hover:bg-foreground/5 sm:flex-row sm:items-start sm:justify-between"
+              staticClassName="flex w-full flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
             >
-              Call {row.name}
-            </a>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-[var(--program-text)]">
+                  {row.name}
+                </span>
+                <span className="mt-0.5 block text-[12px] leading-4 text-[var(--muted-foreground)]">
+                  {row.reason}
+                </span>
+                <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
+                  {[row.preacherName, row.locationName].filter(Boolean).join(" · ") || "No preacher or location"}
+                  {row.lastActivity ? ` · last activity ${formatDay(row.lastActivity)}` : ""}
+                </span>
+              </span>
+            </ContactRecordTrigger>
           </li>
         ))}
       </ul>
