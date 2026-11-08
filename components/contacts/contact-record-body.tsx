@@ -8,12 +8,14 @@ import {
   Building2,
   CalendarDays,
   Clock,
+  ExternalLink,
   GraduationCap,
   Hash,
   Image,
   Link2,
   MapPin,
   Megaphone,
+  Paperclip,
   Repeat,
   Star,
   Tag,
@@ -37,7 +39,7 @@ import {
   type ContactFieldId,
 } from "@/components/manage/manage-contact-fields"
 import type { ContactRecordViewState, CommentActions } from "@/components/contacts/contact-record-types"
-import type { ManageContactHistory } from "@/components/manage/manage-types"
+import type { ManageContactHistory, ManageContactAttachment } from "@/components/manage/manage-types"
 import { cn } from "@/lib/utils"
 
 /**
@@ -265,6 +267,78 @@ function HistoryCard({ children }: { children: React.ReactNode }) {
   )
 }
 
+function attachmentLabel(attachment: ManageContactAttachment): string {
+  if (attachment.kind === "payment_screenshot") {
+    return "Payment screenshot"
+  }
+
+  const words = attachment.kind.replace(/[_-]+/g, " ").trim()
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Attachment"
+}
+
+function attachmentMeta(attachment: ManageContactAttachment): string | null {
+  const parts: string[] = []
+  if (attachment.uploadedAt) {
+    parts.push(formatCampaignTimestamp(attachment.uploadedAt))
+  }
+  if (typeof attachment.size === "number" && attachment.size > 0) {
+    parts.push(`${Math.max(1, Math.round(attachment.size / 1024))} KB`)
+  }
+
+  const method = attachment.metadata?.paymentMethod
+  if (method) {
+    parts.push(method === "gpay" ? "GPay / UPI" : method === "neft" ? "NEFT / IMPS" : method)
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : null
+}
+
+/** Files attached to the contact, with a short-lived link when one was signed. */
+function AttachmentsSection({ attachments }: { attachments?: ManageContactAttachment[] }) {
+  const items = attachments ?? []
+  if (items.length === 0) {
+    return null
+  }
+
+  return (
+    <RecordSection id="attachments" title="Attachments" icon={Paperclip} count={items.length}>
+      {items.map((attachment) => {
+        const meta = attachmentMeta(attachment)
+        return (
+          <HistoryCard key={attachment.path}>
+            <div
+              className="flex items-center justify-between gap-3"
+              data-contact-attachment={attachment.kind}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-[13px] leading-5 text-foreground">
+                  {attachmentLabel(attachment)}
+                </p>
+                {meta ? (
+                  <p className="mt-0.5 text-[11px] leading-[16.5px] text-muted-foreground">{meta}</p>
+                ) : null}
+              </div>
+              {attachment.url ? (
+                <a
+                  href={attachment.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--program-primary)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  View
+                  <ExternalLink aria-hidden="true" className="size-3" />
+                </a>
+              ) : (
+                <span className="shrink-0 text-[11px] text-muted-foreground">Unavailable</span>
+              )}
+            </div>
+          </HistoryCard>
+        )
+      })}
+    </RecordSection>
+  )
+}
+
 /** One attendance record: session, day, location. */
 function AttendanceCard({ entry }: { entry: ManageContactHistory["attendance"][number] }) {
   return (
@@ -427,6 +501,8 @@ export function ContactRecordBody({
           ))}
         </div>
 
+        <AttachmentsSection attachments={state.contact.attachments} />
+
         <div className="mb-8 mt-8 h-px bg-border" />
         <ActivitySections state={state} />
       </div>
@@ -465,6 +541,8 @@ export function ContactRecordBody({
             />
           ))}
         </div>
+
+        <AttachmentsSection attachments={state.contact.attachments} />
 
         <ActivitySections state={state} />
       </div>

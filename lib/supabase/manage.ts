@@ -7,6 +7,7 @@ import type {
   ManageAttendee,
   ManageAttendanceRecord,
   ManageContact,
+  ManageContactAttachment,
   ManageContactHistory,
   ManageContactPatch,
   ManageContactPatchKey,
@@ -89,6 +90,7 @@ const CONTACT_COLUMNS = [
   "location_ids",
   "assigned_preacher_id",
   "collected_by_id",
+  "attachments",
 ].join(",")
 const SESSION_COLUMNS = "id,name,session_date,location_id,preacher_id,created_by"
 const ATTENDANCE_COLUMNS = "id,contact_id,session_id,created_at"
@@ -134,6 +136,7 @@ type ContactRow = {
   location_ids: string[] | null
   assigned_preacher_id: string | null
   collected_by_id: string | null
+  attachments: unknown
 }
 
 type SessionRow = {
@@ -209,6 +212,41 @@ function integer(value: number | null | undefined): number | null {
 
 function textArray(value: string[] | null | undefined): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item)) : []
+}
+
+function contactAttachments(value: unknown): ManageContactAttachment[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  const attachments: ManageContactAttachment[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue
+    const record = entry as Record<string, unknown>
+    const kind = text(typeof record.kind === "string" ? record.kind : null)
+    const path = text(typeof record.path === "string" ? record.path : null)
+    if (!kind || !path) continue
+
+    const metadata: Record<string, string> = {}
+    if (record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)) {
+      for (const [key, metadataValue] of Object.entries(record.metadata as Record<string, unknown>)) {
+        if (typeof metadataValue === "string") {
+          metadata[key] = metadataValue
+        }
+      }
+    }
+
+    attachments.push({
+      kind,
+      path,
+      contentType: text(typeof record.contentType === "string" ? record.contentType : null) ?? undefined,
+      size: typeof record.size === "number" ? record.size : undefined,
+      uploadedAt: text(typeof record.uploadedAt === "string" ? record.uploadedAt : null) ?? undefined,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    })
+  }
+
+  return attachments
 }
 
 function countOf(value: number | null | undefined): number {
@@ -599,6 +637,7 @@ function mapManageContact(
     totalAttendanceCount: rollup?.total ?? 0,
     past60DayAttendanceCount: rollup?.past60 ?? 0,
     commentCount: commentCount ?? 0,
+    attachments: contactAttachments(row.attachments),
   }
 }
 
