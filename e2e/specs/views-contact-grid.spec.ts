@@ -53,7 +53,6 @@ async function createView(
   visibility: "Personal" | "Collaborative" = "Personal",
 ): Promise<void> {
   await page.locator("[data-grid-view-create]").click()
-  await page.locator("[data-grid-view-type=grid]").click()
 
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("View name").fill(name)
@@ -105,14 +104,15 @@ async function sortBy(page: Page, field: string): Promise<void> {
 }
 
 test.describe("contacts saved views", () => {
-  test("the create-view menu offers Grid and nothing else", async ({ page }) => {
+  test("the New view button opens the create dialog directly", async ({ page }) => {
     await openContactsGrid(page)
 
     await page.locator("[data-grid-view-create]").click()
 
-    const options = page.locator("[data-grid-view-type]")
-    await expect(options).toHaveCount(1)
-    await expect(options.first()).toContainText("Grid")
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByLabel("View name")).toBeVisible()
+    await expect(page.locator("[data-grid-view-type]")).toHaveCount(0)
 
     await page.keyboard.press("Escape")
   })

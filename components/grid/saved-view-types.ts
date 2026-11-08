@@ -13,9 +13,8 @@ import type { GridViewConfig } from "@/components/grid/grid-view-config"
 /**
  * The view types this app can render.
  *
- * One entry on purpose. A create-view menu draws its options from this list,
- * so a second type is an addition here plus a renderer — not a menu built by
- * hand at the call site.
+ * One entry on purpose. Creating a view always creates the one type the app
+ * renders; a second type is an addition here plus a renderer.
  */
 export const SAVED_VIEW_TYPES = ["grid"] as const
 

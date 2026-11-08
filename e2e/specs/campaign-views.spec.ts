@@ -70,7 +70,6 @@ test("a campaign view is created and remembered, apart from contacts views", asy
 
     // Create a campaign view from the arrangement on screen.
     await page.locator("[data-grid-view-create]").click()
-    await page.locator("[data-grid-view-type=grid]").click()
 
     const dialog = page.getByRole("dialog")
     await dialog.getByLabel("View name").fill(name)
