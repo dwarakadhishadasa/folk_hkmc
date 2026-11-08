@@ -224,7 +224,10 @@ const headerThemeVars = {
   "--header-action-text": "var(--program-header-action-text, #ffffff)",
   "--header-login-bg": "var(--program-header-login-bg, var(--program-accent))",
   "--header-login-hover-bg": "var(--program-header-login-hover-bg, var(--program-accent-dark))",
-  "--header-login-text": "var(--program-header-login-text, #ffffff)",
+  // The fallback background is the neutral accent, so its text must be the
+  // accent foreground; a white fallback put white ink on a light-grey pill in
+  // the light theme. Programs that own a login colour override both tokens.
+  "--header-login-text": "var(--program-header-login-text, var(--accent-foreground))",
   "--header-focus-ring": "var(--program-header-focus-ring, var(--program-accent))",
 } as CSSProperties
 
@@ -317,14 +320,12 @@ export function Header() {
                 priority
               />
             </div>
-            {/* Staff-only: the theme control is an account affordance, so a
-                signed-out visitor never sees it and the public pages follow the
-                OS preference instead. Reading `isLoggedIn` here is safe — the
-                auth context holds no staff on the server or the first client
-                render, so both agree on rendering nothing, and the toggle
-                arrives with the session rather than as a hydration mismatch. */}
+            {/* The theme control is part of the shell on every page, including
+                the public login and register pages. `ThemeToggle` renders
+                nothing until `next-themes` has mounted, so the server and the
+                first client render still agree. */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {isLoggedIn && <ThemeToggle />}
+              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -375,7 +376,7 @@ export function Header() {
               </nav>
             )}
             <div className="flex items-center gap-2 sm:gap-3">
-              {isLoggedIn && <ThemeToggle />}
+              <ThemeToggle />
               {isLoggedIn ? (
                 <>
                   <span className="hidden text-xs capitalize text-[var(--header-muted-text)] lg:inline">

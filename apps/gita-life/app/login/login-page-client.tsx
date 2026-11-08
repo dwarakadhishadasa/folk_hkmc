@@ -4,11 +4,22 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { AlertTriangle, KeyRound, UserPlus } from "lucide-react"
+import { UserPlus } from "lucide-react"
 import { Header } from "@/components/header"
+import {
+  AUTH_ERROR_CLASS,
+  AUTH_FIELD_CLASS,
+  AUTH_LABEL_CLASS,
+  AUTH_NOTICE_CLASS,
+  AUTH_PANEL_BODY_CLASS,
+  AUTH_PANEL_CLASS,
+  AUTH_PANEL_HEADER_CLASS,
+  AUTH_PRIMARY_BUTTON_CLASS,
+} from "@/components/auth-form-styles"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/auth-context"
 import { safeStaffRedirectPath } from "@/lib/staff-routes"
+import { cn } from "@/lib/utils"
 
 let lastAuthCallbackHandoff = ""
 const MIN_EMAIL_OTP_LENGTH = 6
@@ -67,9 +78,9 @@ export function LoginPageClient() {
 
   if (!isHydrated || authCallbackCode || authCallbackTokenHash) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#FFF9F0]">
-        <div className="flex items-center gap-3 rounded-full border border-[#EA580C]/15 bg-white/90 px-5 py-3 text-sm font-semibold text-[#2D0A0A] shadow-lg shadow-[#2D0A0A]/5">
-          <Spinner className="h-4 w-4 text-[#EA580C]" aria-hidden="true" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex items-center gap-3 rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground shadow-overlay">
+          <Spinner className="h-4 w-4 text-[var(--program-accent)]" aria-hidden="true" />
           Loading...
         </div>
       </div>
@@ -116,30 +127,30 @@ export function LoginPageClient() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFF9F0]">
+    <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto max-w-md px-4 py-8 sm:py-12">
-        <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-card shadow-[0_18px_50px_rgba(45,10,10,0.08)]">
-          <div className="bg-[#2D0A0A] px-6 py-8 text-center text-white">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
-              <KeyRound className="h-8 w-8 text-[#FFB81C]" aria-hidden="true" />
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-poppins)]">Staff Portal</h2>
-            <p className="text-white/70 mt-2 text-sm">For invited coordinators and volunteers only</p>
+        <div className={AUTH_PANEL_CLASS}>
+          <div className={AUTH_PANEL_HEADER_CLASS}>
+            <h2 className="font-[family-name:var(--font-poppins)] text-xl font-bold">Staff Portal</h2>
+            <p className="mt-1 text-sm text-white/75">For invited coordinators and volunteers only</p>
           </div>
 
-          <div className="p-5 sm:p-8">
-            <div className="mb-6 rounded-lg border border-[#EA580C]/15 bg-[#FFF3DF] p-4">
+          <div className={AUTH_PANEL_BODY_CLASS}>
+            <div className={cn(AUTH_NOTICE_CLASS, "mb-6")}>
               <div className="flex items-start gap-3">
-                <UserPlus className="mt-0.5 h-4 w-4 shrink-0 text-[#EA580C]" aria-hidden="true" />
+                <UserPlus
+                  className="mt-0.5 size-4 shrink-0 text-[var(--program-accent)]"
+                  aria-hidden="true"
+                />
                 <div>
-                  <p className="text-sm font-semibold text-[#2D0A0A]">Joining as a participant?</p>
-                  <p className="mt-1 text-sm leading-6 text-[#5F3B2E]">
+                  <p className="text-sm font-semibold text-foreground">Joining as a participant?</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     Please register instead. Staff login works only for invited team members.
                   </p>
                   <Link
                     href="/register"
-                    className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-[#EA580C] px-4 text-xs font-semibold text-white transition-colors hover:bg-[#D97706] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D0A0A]"
+                    className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-[var(--program-accent)] px-4 text-xs font-semibold text-[var(--accent-foreground)] transition-colors hover:bg-[var(--program-accent-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Register Now
                   </Link>
@@ -148,16 +159,15 @@ export function LoginPageClient() {
             </div>
 
             {!isCodeStep && (
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 {error && (
-                  <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
-                    <p className="text-sm text-red-700">{error}</p>
+                  <div className={AUTH_ERROR_CLASS} role="alert">
+                    {error}
                   </div>
                 )}
 
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-[#2D0A0A] mb-2">
+                <div className="space-y-2">
+                  <label htmlFor="email" className={AUTH_LABEL_CLASS}>
                     Email
                   </label>
                   <input
@@ -167,30 +177,25 @@ export function LoginPageClient() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+                    className={AUTH_FIELD_CLASS}
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#EA580C] px-5 text-sm font-semibold text-white shadow-lg shadow-[#EA580C]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[#D97706] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D0A0A] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
-                >
+                <button type="submit" disabled={isLoading} className={AUTH_PRIMARY_BUTTON_CLASS}>
                   {isLoading ? "Sending code..." : "Send Code"}
                 </button>
               </form>
             )}
 
             {isCodeStep && (
-              <form onSubmit={handleVerifyCode} className="space-y-5">
+              <form onSubmit={handleVerifyCode} className="space-y-6">
                 {error && (
-                  <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
-                    <p className="text-sm text-red-700">{error}</p>
+                  <div className={AUTH_ERROR_CLASS} role="alert">
+                    {error}
                   </div>
                 )}
-                <div>
-                  <label htmlFor="verification-code" className="block text-sm font-medium text-[#2D0A0A] mb-2">
+                <div className="space-y-2">
+                  <label htmlFor="verification-code" className={AUTH_LABEL_CLASS}>
                     Email code
                   </label>
                   <input
@@ -205,14 +210,14 @@ export function LoginPageClient() {
                       setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, MAX_EMAIL_OTP_LENGTH))
                     }
                     required
-                    className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-center text-2xl tracking-[0.3em] text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+                    className={cn(AUTH_FIELD_CLASS, "text-center text-2xl tracking-[0.3em]")}
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isVerifying || verificationCode.length < MIN_EMAIL_OTP_LENGTH}
-                  className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#2D0A0A] px-5 text-sm font-semibold text-white shadow-lg shadow-[#2D0A0A]/15 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[#451010] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EA580C] disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
+                  className={AUTH_PRIMARY_BUTTON_CLASS}
                 >
                   {isVerifying ? "Verifying..." : "Verify Code"}
                 </button>

@@ -4,6 +4,17 @@ import type React from "react"
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Header } from "@/components/header"
+import {
+  AUTH_ERROR_CLASS,
+  AUTH_FIELD_CLASS,
+  AUTH_LABEL_CLASS,
+  AUTH_NOTICE_CLASS,
+  AUTH_PANEL_BODY_CLASS,
+  AUTH_PANEL_CLASS,
+  AUTH_PANEL_HEADER_CLASS,
+  AUTH_PRIMARY_BUTTON_CLASS,
+} from "@/components/auth-form-styles"
+import { cn } from "@/lib/utils"
 
 interface FormData {
   name: string
@@ -115,48 +126,49 @@ function RegisterForm() {
 
   if (success) {
     return (
-      <div className="bg-white rounded-2xl shadow-xl p-8 text-center animate-fade-in-up">
-        <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4 animate-checkmark">
-          <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className={cn(AUTH_PANEL_CLASS, "animate-fade-in-up p-8 text-center")}>
+        <div className="mx-auto mb-4 flex size-20 items-center justify-center rounded-full bg-emerald-500/10">
+          <svg
+            className="size-12 text-emerald-600 dark:text-emerald-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold text-[#24324A] mb-2 font-[family-name:var(--font-poppins)]">
+        <h2 className="mb-2 font-[family-name:var(--font-poppins)] text-2xl font-bold text-foreground">
           Welcome to FOLK Chennai!
         </h2>
-        <p className="text-green-600 font-medium">{successMessage}</p>
-        <p className="text-[#24324A]/50 text-sm mt-2">Thank you for joining us.</p>
+        <p className="font-medium text-emerald-600 dark:text-emerald-400">{successMessage}</p>
+        <p className="mt-2 text-sm text-muted-foreground">Thank you for joining us.</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-      <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-6 text-white text-center">
-        <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-3">
-          <span className="text-3xl">📝</span>
-        </div>
-        <h2 className="text-xl sm:text-2xl font-bold font-[family-name:var(--font-poppins)]">Join FOLK Chennai</h2>
-        <p className="text-white/70 text-sm mt-1">Register to start your journey</p>
+    <div className={AUTH_PANEL_CLASS}>
+      <div className={AUTH_PANEL_HEADER_CLASS}>
+        <h2 className="font-[family-name:var(--font-poppins)] text-xl font-bold">Join FOLK Chennai</h2>
+        <p className="mt-1 text-sm text-white/75">Register to start your journey</p>
       </div>
 
-      <div className="p-6">
+      <div className={AUTH_PANEL_BODY_CLASS}>
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <span className="text-red-500">⚠️</span>
-            <p className="text-sm text-red-700">{error}</p>
+          <div className={cn(AUTH_ERROR_CLASS, "mb-4")} role="alert">
+            {error}
           </div>
         )}
         {sessionId && (
-          <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+          <div className={cn(AUTH_NOTICE_CLASS, "mb-4")} role="status">
             Your attendance will be completed automatically after registration.
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-[#24324A] mb-1.5">
-              Full Name <span className="text-red-500">*</span>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label htmlFor="name" className={AUTH_LABEL_CLASS}>
+              Full Name <span className="text-destructive">*</span>
             </label>
             <input
               id="name"
@@ -166,13 +178,13 @@ function RegisterForm() {
               value={formData.name}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+              className={AUTH_FIELD_CLASS}
             />
           </div>
 
-          <div>
-            <label htmlFor="mobile" className="block text-sm font-medium text-[#24324A] mb-1.5">
-              Mobile Number <span className="text-red-500">*</span>
+          <div className="space-y-2">
+            <label htmlFor="mobile" className={AUTH_LABEL_CLASS}>
+              Mobile Number <span className="text-destructive">*</span>
             </label>
             <input
               id="mobile"
@@ -187,16 +199,16 @@ function RegisterForm() {
               }}
               maxLength={10}
               required
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+              className={AUTH_FIELD_CLASS}
             />
             {formData.mobile && !isMobileValid && (
-              <p className="text-xs text-red-600 mt-1">Mobile number must be 10 digits</p>
+              <p className="text-xs text-destructive">Mobile number must be 10 digits</p>
             )}
           </div>
 
-          <div>
-            <label htmlFor="dateOfBirth" className="block text-sm font-medium text-[#24324A] mb-1.5">
-              Date of Birth <span className="text-red-500">*</span>
+          <div className="space-y-2">
+            <label htmlFor="dateOfBirth" className={AUTH_LABEL_CLASS}>
+              Date of Birth <span className="text-destructive">*</span>
             </label>
             <input
               id="dateOfBirth"
@@ -205,13 +217,13 @@ function RegisterForm() {
               value={formData.dateOfBirth}
               onChange={handleChange}
               required
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+              className={AUTH_FIELD_CLASS}
             />
           </div>
 
-          <div>
-            <label htmlFor="occupation" className="block text-sm font-medium text-[#24324A] mb-1.5">
-              Occupation <span className="text-red-500">*</span>
+          <div className="space-y-2">
+            <label htmlFor="occupation" className={AUTH_LABEL_CLASS}>
+              Occupation <span className="text-destructive">*</span>
             </label>
             <select
               id="occupation"
@@ -219,7 +231,7 @@ function RegisterForm() {
               value={formData.occupation}
               onChange={handleOccupationChange}
               required
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all bg-white"
+              className={AUTH_FIELD_CLASS}
             >
               <option value="">Select occupation</option>
               <option value="Studying">Student</option>
@@ -228,8 +240,8 @@ function RegisterForm() {
           </div>
 
           {formData.occupation === "Studying" && (
-            <div>
-              <label htmlFor="college" className="block text-sm font-medium text-[#24324A] mb-1.5">
+            <div className="space-y-2">
+              <label htmlFor="college" className={AUTH_LABEL_CLASS}>
                 College
               </label>
               <input
@@ -239,14 +251,14 @@ function RegisterForm() {
                 placeholder="Enter college name"
                 value={formData.college}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all bg-white"
+                className={AUTH_FIELD_CLASS}
               />
             </div>
           )}
 
           {formData.occupation === "Working" && (
-            <div>
-              <label htmlFor="company" className="block text-sm font-medium text-[#24324A] mb-1.5">
+            <div className="space-y-2">
+              <label htmlFor="company" className={AUTH_LABEL_CLASS}>
                 Company
               </label>
               <input
@@ -256,14 +268,14 @@ function RegisterForm() {
                 placeholder="Enter company name"
                 value={formData.company}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all bg-white"
+                className={AUTH_FIELD_CLASS}
               />
             </div>
           )}
 
           {!sessionId && (
-            <div>
-              <label htmlFor="address" className="block text-sm font-medium text-[#24324A] mb-1.5">
+            <div className="space-y-2">
+              <label htmlFor="address" className={AUTH_LABEL_CLASS}>
                 Address
               </label>
               <input
@@ -273,7 +285,7 @@ function RegisterForm() {
                 placeholder="Enter your address"
                 value={formData.address}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+                className={AUTH_FIELD_CLASS}
               />
             </div>
           )}
@@ -281,7 +293,7 @@ function RegisterForm() {
           <button
             type="submit"
             disabled={isLoading || !isMobileValid}
-            className="w-full py-4 bg-[#F98B1C] hover:bg-[#e07a10] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-[#F98B1C]/30 disabled:shadow-none mt-6"
+            className={AUTH_PRIMARY_BUTTON_CLASS}
           >
             {isLoading ? "Registering..." : "Register"}
           </button>
@@ -293,10 +305,12 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen bg-[#FFF9F0]">
+    <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto px-4 py-6 sm:py-10 max-w-lg">
-        <Suspense fallback={<div className="text-center py-8">Loading...</div>}>
+      <main className="container mx-auto max-w-lg px-4 py-6 sm:py-10">
+        <Suspense
+          fallback={<div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>}
+        >
           <RegisterForm />
         </Suspense>
       </main>

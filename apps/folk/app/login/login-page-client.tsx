@@ -4,8 +4,18 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { Header } from "@/components/header"
+import {
+  AUTH_ERROR_CLASS,
+  AUTH_FIELD_CLASS,
+  AUTH_LABEL_CLASS,
+  AUTH_PANEL_BODY_CLASS,
+  AUTH_PANEL_CLASS,
+  AUTH_PANEL_HEADER_CLASS,
+  AUTH_PRIMARY_BUTTON_CLASS,
+} from "@/components/auth-form-styles"
 import { useAuth } from "@/lib/auth-context"
 import { safeStaffRedirectPath } from "@/lib/staff-routes"
+import { cn } from "@/lib/utils"
 
 let lastAuthCallbackHandoff = ""
 const MIN_EMAIL_OTP_LENGTH = 6
@@ -64,8 +74,8 @@ export function LoginPageClient() {
 
   if (!isHydrated || authCallbackCode || authCallbackTokenHash) {
     return (
-      <div className="min-h-screen bg-[#FFF9F0] flex items-center justify-center">
-        <div className="text-center text-[#24324A]">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+        <div className="text-center text-sm font-semibold text-muted-foreground">Loading...</div>
       </div>
     )
   }
@@ -110,30 +120,30 @@ export function LoginPageClient() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFF9F0]">
+    <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto px-4 py-8 sm:py-12 max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-[#0F1E54] to-[#1a2d6d] px-6 py-8 text-white text-center">
-            <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-4xl">🔑</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-bold font-[family-name:var(--font-poppins)]">Welcome Back</h2>
-            <p className="text-white/70 mt-2 text-sm">Use your invited staff email to enter the portal</p>
+      <main className="container mx-auto max-w-md px-4 py-8 sm:py-12">
+        <div className={AUTH_PANEL_CLASS}>
+          <div className={AUTH_PANEL_HEADER_CLASS}>
+            <h2 className="font-[family-name:var(--font-poppins)] text-xl font-bold">
+              Welcome Back
+            </h2>
+            <p className="mt-1 text-sm text-white/75">
+              Use your invited staff email to enter the portal
+            </p>
           </div>
 
-          <div className="p-6 sm:p-8">
+          <div className={AUTH_PANEL_BODY_CLASS}>
             {!isCodeStep && (
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 {error && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-                    <span className="text-red-500">⚠️</span>
-                    <p className="text-sm text-red-700">{error}</p>
+                  <div className={AUTH_ERROR_CLASS} role="alert">
+                    {error}
                   </div>
                 )}
 
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-[#24324A] mb-2">
+                <div className="space-y-2">
+                  <label htmlFor="email" className={AUTH_LABEL_CLASS}>
                     Email
                   </label>
                   <input
@@ -143,30 +153,25 @@ export function LoginPageClient() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+                    className={AUTH_FIELD_CLASS}
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-4 bg-[#F98B1C] hover:bg-[#e07a10] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg shadow-lg shadow-[#F98B1C]/30 disabled:shadow-none"
-                >
+                <button type="submit" disabled={isLoading} className={AUTH_PRIMARY_BUTTON_CLASS}>
                   {isLoading ? "Sending code..." : "Send Code"}
                 </button>
               </form>
             )}
 
             {isCodeStep && (
-              <form onSubmit={handleVerifyCode} className="space-y-5">
+              <form onSubmit={handleVerifyCode} className="space-y-6">
                 {error && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-                    <span className="text-red-500">⚠️</span>
-                    <p className="text-sm text-red-700">{error}</p>
+                  <div className={AUTH_ERROR_CLASS} role="alert">
+                    {error}
                   </div>
                 )}
-                <div>
-                  <label htmlFor="verification-code" className="block text-sm font-medium text-[#24324A] mb-2">
+                <div className="space-y-2">
+                  <label htmlFor="verification-code" className={AUTH_LABEL_CLASS}>
                     Email code
                   </label>
                   <input
@@ -181,14 +186,14 @@ export function LoginPageClient() {
                       setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, MAX_EMAIL_OTP_LENGTH))
                     }
                     required
-                    className="w-full px-4 py-3 text-center text-2xl tracking-[0.3em] border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0F1E54]/20 focus:border-[#0F1E54] transition-all"
+                    className={cn(AUTH_FIELD_CLASS, "text-center text-2xl tracking-[0.3em]")}
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isVerifying || verificationCode.length < MIN_EMAIL_OTP_LENGTH}
-                  className="w-full py-4 bg-[#0F1E54] hover:bg-[#1a2d6d] disabled:bg-gray-300 text-white font-semibold rounded-xl transition-all text-lg"
+                  className={AUTH_PRIMARY_BUTTON_CLASS}
                 >
                   {isVerifying ? "Verifying..." : "Verify Code"}
                 </button>

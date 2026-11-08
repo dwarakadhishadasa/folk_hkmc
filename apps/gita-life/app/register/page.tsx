@@ -3,8 +3,18 @@
 import type React from "react"
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { AlertTriangle, BookOpen } from "lucide-react"
 import { Header } from "@/components/header"
+import {
+  AUTH_ERROR_CLASS,
+  AUTH_FIELD_CLASS,
+  AUTH_LABEL_CLASS,
+  AUTH_NOTICE_CLASS,
+  AUTH_PANEL_BODY_CLASS,
+  AUTH_PANEL_CLASS,
+  AUTH_PANEL_HEADER_CLASS,
+  AUTH_PRIMARY_BUTTON_CLASS,
+} from "@/components/auth-form-styles"
+import { cn } from "@/lib/utils"
 
 interface FormData {
   name: string
@@ -122,22 +132,24 @@ function RegisterForm() {
 
   if (success) {
     return (
-      <div className="animate-fade-in-up rounded-lg border border-[var(--border)] bg-card p-8 text-center shadow-[0_18px_50px_rgba(45,10,10,0.08)]">
-        <div className="animate-checkmark mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-          <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className={cn(AUTH_PANEL_CLASS, "animate-fade-in-up p-8 text-center")}>
+        <div className="animate-checkmark mx-auto mb-4 flex size-20 items-center justify-center rounded-full bg-emerald-500/10">
+          <svg
+            className="size-12 text-emerald-600 dark:text-emerald-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="mb-2 font-[family-name:var(--font-poppins)] text-2xl font-bold text-[#2D0A0A]">
+        <h2 className="mb-2 font-[family-name:var(--font-poppins)] text-2xl font-bold text-foreground">
           Welcome to Gita Life!
         </h2>
-        <p className="text-green-600 font-medium">{successMessage}</p>
-        <p className="mt-2 text-sm text-[#5F3B2E]/70">Thank you for joining us.</p>
+        <p className="font-medium text-emerald-600 dark:text-emerald-400">{successMessage}</p>
+        <p className="mt-2 text-sm text-muted-foreground">Thank you for joining us.</p>
         {showHkmcReturn && (
-          <a
-            href="https://hkmchennai.org"
-            className="mt-6 inline-flex h-12 items-center justify-center rounded-full bg-[#EA580C] px-6 text-sm font-semibold text-white shadow-lg shadow-[#EA580C]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[#D97706] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D0A0A]"
-          >
+          <a href="https://hkmchennai.org" className={cn(AUTH_PRIMARY_BUTTON_CLASS, "mt-6 w-auto px-6")}>
             Visit HKM Chennai
           </a>
         )}
@@ -146,32 +158,28 @@ function RegisterForm() {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-card shadow-[0_18px_50px_rgba(45,10,10,0.08)]">
-      <div className="bg-[#2D0A0A] px-6 py-6 text-center text-white">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white/10">
-          <BookOpen className="h-7 w-7 text-[#FFB81C]" aria-hidden="true" />
-        </div>
-        <h2 className="text-xl sm:text-2xl font-bold font-[family-name:var(--font-poppins)]">Join Gita Life</h2>
-        <p className="text-white/70 text-sm mt-1">Register for the next Bhagavad Gita session</p>
+    <div className={AUTH_PANEL_CLASS}>
+      <div className={AUTH_PANEL_HEADER_CLASS}>
+        <h2 className="font-[family-name:var(--font-poppins)] text-xl font-bold">Join Gita Life</h2>
+        <p className="mt-1 text-sm text-white/75">Register for the next Bhagavad Gita session</p>
       </div>
 
-      <div className="p-5 sm:p-6">
+      <div className={AUTH_PANEL_BODY_CLASS}>
         {error && (
-          <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className={cn(AUTH_ERROR_CLASS, "mb-4")} role="alert">
+            {error}
           </div>
         )}
         {sessionId && (
-          <div className="mb-4 rounded-lg border border-[#EA580C]/20 bg-[#FFF3DF] p-4 text-sm leading-6 text-[#2D0A0A]">
+          <div className={cn(AUTH_NOTICE_CLASS, "mb-4")} role="status">
             Your attendance will be completed automatically after registration.
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
-              Full Name <span className="text-red-500">*</span>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label htmlFor="name" className={AUTH_LABEL_CLASS}>
+              Full Name <span className="text-destructive">*</span>
             </label>
             <input
               id="name"
@@ -181,13 +189,13 @@ function RegisterForm() {
               value={formData.name}
               onChange={handleChange}
               required
-              className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+              className={AUTH_FIELD_CLASS}
             />
           </div>
 
-          <div>
-            <label htmlFor="mobile" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
-              Mobile Number <span className="text-red-500">*</span>
+          <div className="space-y-2">
+            <label htmlFor="mobile" className={AUTH_LABEL_CLASS}>
+              Mobile Number <span className="text-destructive">*</span>
             </label>
             <input
               id="mobile"
@@ -202,15 +210,15 @@ function RegisterForm() {
               }}
               maxLength={10}
               required
-              className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+              className={AUTH_FIELD_CLASS}
             />
             {formData.mobile && !isMobileValid && (
-              <p className="text-xs text-red-600 mt-1">Mobile number must be 10 digits</p>
+              <p className="text-xs text-destructive">Mobile number must be 10 digits</p>
             )}
           </div>
 
-          <div>
-            <label htmlFor="dateOfBirth" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+          <div className="space-y-2">
+            <label htmlFor="dateOfBirth" className={AUTH_LABEL_CLASS}>
               Date of Birth
             </label>
             <input
@@ -219,13 +227,13 @@ function RegisterForm() {
               type="date"
               value={formData.dateOfBirth}
               onChange={handleChange}
-              className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+              className={AUTH_FIELD_CLASS}
             />
           </div>
 
-          <div>
-            <label htmlFor="occupation" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
-              Occupation <span className="text-red-500">*</span>
+          <div className="space-y-2">
+            <label htmlFor="occupation" className={AUTH_LABEL_CLASS}>
+              Occupation <span className="text-destructive">*</span>
             </label>
             <select
               id="occupation"
@@ -233,7 +241,7 @@ function RegisterForm() {
               value={formData.occupation}
               onChange={handleOccupationChange}
               required
-              className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+              className={AUTH_FIELD_CLASS}
             >
               <option value="">Select occupation</option>
               <option value="Working Professional">Working Professional</option>
@@ -243,8 +251,8 @@ function RegisterForm() {
 
           {isWorkingProfessional(formData.occupation) && (
             <>
-              <div>
-                <label htmlFor="company" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+              <div className="space-y-2">
+                <label htmlFor="company" className={AUTH_LABEL_CLASS}>
                   Company
                 </label>
                 <input
@@ -254,12 +262,12 @@ function RegisterForm() {
                   placeholder="Enter company name"
                   value={formData.company}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+                  className={AUTH_FIELD_CLASS}
                 />
               </div>
 
-              <div>
-                <label htmlFor="designation" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+              <div className="space-y-2">
+                <label htmlFor="designation" className={AUTH_LABEL_CLASS}>
                   Designation
                 </label>
                 <input
@@ -269,15 +277,15 @@ function RegisterForm() {
                   placeholder="Enter designation"
                   value={formData.designation}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+                  className={AUTH_FIELD_CLASS}
                 />
               </div>
             </>
           )}
 
           {!sessionId && (
-            <div>
-              <label htmlFor="address" className="mb-1.5 block text-sm font-semibold text-[#2D0A0A]">
+            <div className="space-y-2">
+              <label htmlFor="address" className={AUTH_LABEL_CLASS}>
                 Address
               </label>
               <input
@@ -287,7 +295,7 @@ function RegisterForm() {
                 placeholder="Enter your address"
                 value={formData.address}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-[var(--input)] bg-white px-4 py-3 text-sm text-[#2D0A0A] shadow-sm transition-all placeholder:text-[#6B4C3F]/60 focus:border-[#EA580C] focus:outline-none focus:ring-4 focus:ring-[#EA580C]/15"
+                className={AUTH_FIELD_CLASS}
               />
             </div>
           )}
@@ -295,7 +303,7 @@ function RegisterForm() {
           <button
             type="submit"
             disabled={isLoading || !isMobileValid}
-            className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-full bg-[#EA580C] px-5 text-sm font-semibold text-white shadow-lg shadow-[#EA580C]/20 transition-[background-color,box-shadow,transform] hover:-translate-y-0.5 hover:bg-[#D97706] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2D0A0A] disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none disabled:hover:translate-y-0"
+            className={AUTH_PRIMARY_BUTTON_CLASS}
           >
             {isLoading ? "Registering..." : "Submit Registration"}
           </button>
@@ -307,10 +315,12 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen bg-[#FFF9F0]">
+    <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto max-w-lg px-4 py-6 sm:py-10">
-        <Suspense fallback={<div className="py-8 text-center text-sm font-semibold text-[#2D0A0A]">Loading...</div>}>
+        <Suspense
+          fallback={<div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>}
+        >
           <RegisterForm />
         </Suspense>
       </main>
