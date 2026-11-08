@@ -193,9 +193,8 @@ view the `/manage` contacts tab shows on a phone.
 
 | Source (mobile app) | Here |
 |---|---|
-| Two-column list, every cell tappable | `components/manage/manage-contact-list.tsx` |
-| Field sheet with `Expand contact` | `components/manage/manage-contact-sheet.tsx` |
-| Expanded record, label over value | `components/manage/manage-contact-record.tsx` |
+| Two-column list, every row tappable | `components/manage/manage-contact-list.tsx` |
+| Row tap opens the expanded record | `components/contacts/contact-record-phone.tsx` |
 | Shared field vocabulary | `components/manage/manage-contact-fields.ts` |
 | Per-field editor | `components/manage/manage-contact-field-editor.tsx` |
 

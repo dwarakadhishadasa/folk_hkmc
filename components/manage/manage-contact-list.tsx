@@ -5,7 +5,6 @@ import { Search } from "lucide-react"
 
 import { ContactRecordPhoneFrame } from "@/components/contacts/contact-record-phone"
 import type { UseContactRecordResult } from "@/components/contacts/contact-record-types"
-import { ManageContactSheet } from "@/components/manage/manage-contact-sheet"
 import {
   CONTACT_FIELD_IDS,
   CONTACT_FIELD_LABEL,
@@ -13,22 +12,17 @@ import {
   type ContactFieldId,
   type ContactFieldResolvers,
 } from "@/components/manage/manage-contact-fields"
-import type {
-  ManageContact,
-  ManageContactWriteResult,
-  ManageLocation,
-} from "@/components/manage/manage-types"
+import type { ManageContact, ManageContactWriteResult } from "@/components/manage/manage-types"
 import { Input } from "@/components/ui/input"
 
 /**
  * The contact list: the Airtable mobile interface's Contacts page, brought
  * into this app.
  *
- * The list stacks: a cell opens the field sheet, the sheet's "Expand contact"
- * opens the whole record over it. The record is the **shared phone frame** —
- * the same body, attendance, campaign history and comments the desktop dialog
- * shows — not a reduced copy. Both the sheet and the record are Radix layers,
- * so one Escape unwinds the top one.
+ * A row is one target: tapping anywhere on it opens the shared phone record
+ * directly. The record is the same body, attendance, campaign history and
+ * comments the desktop dialog shows — not a reduced copy, and no intermediate
+ * field sheet.
  *
  * The record's sequence is this list's own `visible` order: the search-filtered
  * rows the operator is looking at, never the unfiltered mirror.
@@ -42,12 +36,8 @@ const LIST_COLUMN_TEMPLATE = "grid-cols-[3fr_2fr]"
 
 export interface ManageContactListProps {
   contacts: readonly ManageContact[]
-  /** The program's locations — the options the location picker offers. */
-  locations: readonly ManageLocation[]
   /** The names the two reference fields resolve against. */
   resolvers: ContactFieldResolvers
-  /** Called with the new value, for a field that can be written. */
-  onCommit: (contactId: string, fieldId: ContactFieldId, value: unknown) => void | Promise<void>
   /** The list's record host: one hook instance for the phone's stack. */
   record: UseContactRecordResult
   /** Mirrors a successful record write into the parent's grid mirror. */
@@ -59,9 +49,7 @@ export interface ManageContactListProps {
 
 export function ManageContactList({
   contacts,
-  locations,
   resolvers,
-  onCommit,
   record,
   onRecordWrite,
   activeFilters = [],
@@ -69,7 +57,6 @@ export function ManageContactList({
   emptyScope = false,
 }: ManageContactListProps) {
   const [query, setQuery] = useState("")
-  const [sheet, setSheet] = useState<{ contactId: string; fieldId: ContactFieldId } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   const visible = useMemo(() => filterContacts(contacts, query), [contacts, query])
@@ -90,10 +77,6 @@ export function ManageContactList({
       record.updateSequence(visibleKey.length > 0 ? visibleKey.split("\u0000") : [])
     }
   }, [record.isOpen, record.updateSequence, visibleKey])
-
-  const sheetContact = sheet
-    ? (contacts.find((contact) => contact.id === sheet.contactId) ?? null)
-    : null
 
   const commitRecord = async (fieldId: ContactFieldId, value: unknown) => {
     try {
@@ -181,26 +164,30 @@ export function ManageContactList({
           </p>
         ) : (
           visible.map((contact) => (
-            <div
+            <button
               key={contact.id}
+              type="button"
               data-contact-row={contact.id}
-              className={`grid ${LIST_COLUMN_TEMPLATE} border-b border-border`}
+              onClick={(event) => {
+                setNotice(null)
+                record.open({
+                  contactId: contact.id,
+                  sequence: visibleIds,
+                  trigger: event.currentTarget,
+                })
+              }}
+              className={`grid ${LIST_COLUMN_TEMPLATE} h-11 w-full items-center border-b border-border text-left hover:bg-muted/60 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--program-accent)]`}
             >
               {LIST_COLUMNS.map((fieldId) => (
-                <button
+                <span
                   key={fieldId}
-                  type="button"
                   data-contact-cell={fieldId}
-                  onClick={() => {
-                    setNotice(null)
-                    setSheet({ contactId: contact.id, fieldId })
-                  }}
-                  className="flex h-11 items-center truncate px-4 text-left text-[13px] text-[var(--program-text)] hover:bg-muted/60 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--program-accent)]"
+                  className="truncate px-4 text-[13px] text-[var(--program-text)]"
                 >
                   {contactFieldText(contact, fieldId, resolvers) || "—"}
-                </button>
+                </span>
               ))}
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -213,34 +200,6 @@ export function ManageContactList({
           {visible.length.toLocaleString("en-IN")} records
         </span>
       </div>
-
-      {sheetContact && sheet ? (
-        <ManageContactSheet
-          contact={sheetContact}
-          fieldId={sheet.fieldId}
-          locations={locations}
-          notice={notice}
-          onCommit={async (fieldId, value) => {
-            try {
-              await onCommit(sheetContact.id, fieldId, value)
-              setNotice(null)
-            } catch (error) {
-              setNotice(error instanceof Error ? error.message : "The change could not be saved.")
-              // The sheet's editor reverts its draft on a rejected commit.
-              throw error
-            }
-          }}
-          onExpand={(trigger) => {
-            setNotice(null)
-            record.open({
-              contactId: sheetContact.id,
-              sequence: visibleIds,
-              trigger,
-            })
-          }}
-          onClose={() => setSheet(null)}
-        />
-      ) : null}
 
       {record.state ? (
         <ContactRecordPhoneFrame

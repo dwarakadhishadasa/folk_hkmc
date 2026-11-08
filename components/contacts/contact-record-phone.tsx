@@ -34,9 +34,8 @@ import { cn } from "@/lib/utils"
  * pane. The phone record is no longer a reduced copy — it shows the same
  * record the desktop does.
  *
- * The phone sheet (`manage-contact-sheet.tsx`) and this frame are two Radix
- * layers, so one Escape closes only the topmost: the record first, the sheet
- * second.
+ * The record is a full-screen Radix Dialog: the comments panel is a second
+ * layer, so one Escape closes the comments first and the record second.
  */
 export interface ContactRecordPhoneFrameProps {
   state: ContactRecordState

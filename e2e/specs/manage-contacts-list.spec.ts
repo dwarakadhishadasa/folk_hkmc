@@ -69,11 +69,6 @@ function listSearch(page: Page): Locator {
   return page.getByRole("searchbox", { name: "Search contacts" })
 }
 
-/** The field sheet. */
-function sheet(page: Page): Locator {
-  return page.locator("[data-contact-sheet]")
-}
-
 /** The expanded record. */
 function record(page: Page): Locator {
   return page.locator("[data-contact-record-phone]")
@@ -208,7 +203,7 @@ test.describe("the device-detected contacts view", () => {
 })
 
 test.describe("the contact list", () => {
-  test("the list shows the contact's name and phone, and a tapped cell opens that field's sheet", async ({
+  test("the list shows the contact's name and phone, and a tapped row opens the record", async ({
     page,
   }) => {
     const [contact] = await inScopeContacts()
@@ -224,18 +219,17 @@ test.describe("the contact list", () => {
     await expect(listCell(page, contact.id, "name")).toHaveText(contact.name)
     await expect(listCell(page, contact.id, "phone")).toHaveText(contact.phone)
 
-    // A tapped cell opens THAT cell's field — the phone sheet, not the name
-    // sheet.
+    // The row is one target: tapping either column opens the whole record.
     await listCell(page, contact.id, "phone").click()
 
-    await expect(sheet(page)).toBeVisible()
-    await expect(sheet(page)).toHaveAccessibleName("Edit Phone")
-    await expect(sheet(page).getByRole("textbox", { name: "Phone", exact: true })).toHaveValue(
-      contact.phone,
-    )
+    await expect(record(page)).toBeVisible()
+    await expect(record(page)).toHaveAccessibleName(`Contact record: ${contact.name}`)
+    await expect(record(page).getByLabel("Phone")).toHaveValue(contact.phone)
   })
 
-  test("'Expand contact' opens the whole record, and closing it returns to the sheet", async ({ page }) => {
+  test("a tapped row opens the whole record, and closing it returns to the list", async ({
+    page,
+  }) => {
     const [contact] = await inScopeContacts()
 
     if (!contact) {
@@ -244,9 +238,6 @@ test.describe("the contact list", () => {
 
     await openListFor(page, contact.id, contact.name)
     await listCell(page, contact.id, "name").click()
-    await expect(sheet(page)).toBeVisible()
-
-    await sheet(page).getByRole("button", { name: "Expand contact" }).click()
 
     await expect(record(page)).toBeVisible()
     await expect(record(page)).toHaveAccessibleName(`Contact record: ${contact.name}`)
@@ -269,15 +260,12 @@ test.describe("the contact list", () => {
       await expect(record(page).locator(`[data-contact-field="${fieldId}"]`)).toBeVisible()
     }
 
-    // Closing the record reveals the SHEET it came from, not the list: the
-    // sheet is a step out of the list and the record is a step out of the
-    // sheet, so unwinding one step lands on the sheet.
+    // Closing the record returns to the list, and focus returns to the row
+    // that opened it.
     await record(page).getByRole("button", { name: "Close" }).click()
 
     await expect(record(page)).toBeHidden()
-    await expect(sheet(page)).toBeVisible()
-    // Focus returns to the control that opened the record, not to the page.
-    await expect(sheet(page).getByRole("button", { name: "Expand contact" })).toBeFocused()
+    await expect(contactList(page).locator(`[data-contact-row="${contact.id}"]`)).toBeFocused()
   })
 
   test("Escape in an inline editor discards the draft and keeps the record open", async ({
@@ -291,7 +279,6 @@ test.describe("the contact list", () => {
 
     await openListFor(page, contact.id, contact.name)
     await listCell(page, contact.id, "name").click()
-    await sheet(page).getByRole("button", { name: "Expand contact" }).click()
     await expect(record(page)).toBeVisible()
 
     const name = record(page).getByLabel("Name")
@@ -513,7 +500,6 @@ test.describe("the contact list", () => {
 
     await openListFor(page, contact.id, contact.name)
     await listCell(page, contact.id, "name").click()
-    await sheet(page).getByRole("button", { name: "Expand contact" }).click()
     await expect(record(page)).toBeVisible()
 
     // Writable: name, phone, location, notes, initial contact.
@@ -536,7 +522,9 @@ test.describe("the contact list", () => {
     }
   })
 
-  test("an edit in the sheet reaches the database through the grid's write path", async ({ page }) => {
+  test("an edit in the record reaches the database through the grid's write path", async ({
+    page,
+  }) => {
     const [contact] = await inScopeContacts()
 
     if (!contact) {
@@ -544,14 +532,11 @@ test.describe("the contact list", () => {
     }
 
     const previous = await readContactColumn<string>([contact.id], "notes")
-    const edited = `sheet-edit-${contact.id.slice(0, 8)}`
+    const edited = `record-edit-${contact.id.slice(0, 8)}`
 
     try {
       await openListFor(page, contact.id, contact.name)
       await listCell(page, contact.id, "name").click()
-      await expect(sheet(page)).toBeVisible()
-
-      await sheet(page).getByRole("button", { name: "Expand contact" }).click()
       await expect(record(page)).toBeVisible()
 
       const notes = record(page).locator('[data-contact-field="notes"] textarea')

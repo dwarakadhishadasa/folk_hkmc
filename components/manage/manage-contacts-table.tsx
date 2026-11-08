@@ -2633,17 +2633,14 @@ const columns = useMemo<GridColumnDef<ManageContact>[]>(() => {
           reaches the accessibility tree or the tab order behind the list.
 
           The wrapper is `relative flex-1` so the list's `absolute inset-0` root
-          fills the space under the notice line, and so the sheet and the record
-          — both positioned against the list's own frame — still resolve
-          against it.
+          fills the space under the notice line, and so the record — positioned
+          against the list's own frame — still resolves against it.
         */}
         {deviceView === "mobile" ? (
           <div className="relative flex min-h-0 flex-1 flex-col">
             <ManageContactList
               contacts={phoneRows}
-              locations={payload.locationOptions ?? payload.locations}
               resolvers={{ locationNameById, staffNameById }}
-              onCommit={handleListCommit}
               record={record}
               onRecordWrite={applyWrite}
               activeFilters={phoneFilterLabels}

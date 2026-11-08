@@ -193,7 +193,7 @@ session, 403 for a Volunteer, and that a failed sign-in provisions nothing.
 | " | `e2e/specs/manage-contacts-bulk.spec.ts` | 2 |
 | " | `e2e/specs/manage-contacts-selection.spec.ts` | 6 |
 | " | `e2e/specs/manage-contacts-row-lifecycle.spec.ts` | 3 — the primitive's opt-in and the two delete guarantees; the inline-create cases retired with the control |
-| `components/manage/manage-contact-list.tsx`, `manage-contact-sheet.tsx`, `manage-contact-field-editor.tsx`, `manage-contact-fields.ts`, `hooks/use-mobile.ts` | `e2e/specs/manage-contacts-list.spec.ts` | 19 |
+| `components/manage/manage-contact-list.tsx`, `components/contacts/contact-record-phone.tsx`, `manage-contact-field-editor.tsx`, `manage-contact-fields.ts`, `hooks/use-mobile.ts` | `e2e/specs/manage-contacts-list.spec.ts` | 19 |
 
 These six are the specs for story 2's 19-row matrix; the row-to-verdict mapping
 lives in
