@@ -41,6 +41,9 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   viewportFit: "cover",
+  // Chrome Android resizes the layout viewport when the on-screen keyboard
+  // opens, so a fixed-height sheet does not put its fields under the keyboard.
+  interactiveWidget: "resizes-content",
 }
 
 export default function RootLayout({

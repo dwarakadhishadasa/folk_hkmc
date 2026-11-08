@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { MessageSquare, X } from "lucide-react"
 
 import { ContactRecordBody } from "@/components/contacts/contact-record-body"
 import {
@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 /**
  * The phone record frame.
@@ -70,6 +71,7 @@ export function ContactRecordPhoneFrame({
   const ready = isContactRecordReady(state)
   const name = ready ? state.contact.name : null
   const triggerRef = useRef<HTMLElement | null>(returnFocusTo)
+  const [commentsOpen, setCommentsOpen] = useState(false)
 
   useEffect(() => {
     if (returnFocusTo) {
@@ -133,6 +135,20 @@ export function ContactRecordPhoneFrame({
             <Button
               type="button"
               variant="ghost"
+              size="icon"
+              aria-label={commentsOpen ? "Hide comments" : "Show comments"}
+              aria-pressed={commentsOpen}
+              onClick={() => setCommentsOpen((open) => !open)}
+              className={cn(
+                "mr-1 size-9 p-0 text-[var(--program-text)]",
+                commentsOpen && "bg-secondary",
+              )}
+            >
+              <MessageSquare aria-hidden="true" className="size-[18px]" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
               size="sm"
               aria-label="Previous contact"
               disabled={!canGoPrevious}
@@ -166,7 +182,7 @@ export function ContactRecordPhoneFrame({
             state={state}
             onCommit={onCommit}
             commentActions={commentActions}
-            showComments
+            showComments={commentsOpen}
             layout="phone"
           />
         ) : (

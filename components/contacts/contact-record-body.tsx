@@ -191,18 +191,22 @@ function PhoneFieldRow({
 }) {
   const inputId = useId()
   const editable = isContactFieldEditable(fieldId) && state.capabilities.canEdit
+  const Icon = FIELD_ICON[fieldId]
 
   return (
     <div className="flex flex-col gap-1.5" data-contact-field={fieldId}>
-      {editable ? (
-        <label htmlFor={inputId} className="text-[13px] font-medium text-[var(--program-text)]">
-          {CONTACT_FIELD_LABEL[fieldId]}
-        </label>
-      ) : (
-        <span className="text-[13px] font-medium text-[var(--program-text)]">
-          {CONTACT_FIELD_LABEL[fieldId]}
-        </span>
-      )}
+      <div className="flex items-center gap-1.5">
+        <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+        {editable ? (
+          <label htmlFor={inputId} className="text-[13px] font-medium text-[var(--program-text)]">
+            {CONTACT_FIELD_LABEL[fieldId]}
+          </label>
+        ) : (
+          <span className="text-[13px] font-medium text-[var(--program-text)]">
+            {CONTACT_FIELD_LABEL[fieldId]}
+          </span>
+        )}
+      </div>
       <div className="min-w-0">
         {fieldId === CONTACT_FIELD_IDS.photo ? (
           <PhotoValue contactName={state.contact.name} photoUrl={photoUrl} />
