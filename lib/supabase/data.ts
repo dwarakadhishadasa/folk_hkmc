@@ -95,6 +95,15 @@ export interface StaffUser {
   assignedPreacherUserId?: string
 }
 
+export interface ContactAttachment {
+  kind: string
+  path: string
+  contentType?: string
+  size?: number
+  uploadedAt?: string
+  metadata?: Record<string, string>
+}
+
 export interface ContactRecord {
   id: string
   name: string
@@ -113,6 +122,7 @@ export interface ContactRecord {
   assignedPreacherIds: string[]
   collectedByIds: string[]
   analyticsIds: string[]
+  attachments: ContactAttachment[]
 }
 
 export interface SessionRecord {
@@ -189,6 +199,7 @@ type ContactRow = {
   assigned_preacher_id: string | null
   collected_by_id: string | null
   source: string | null
+  attachments: unknown
 }
 type UsersRow = {
   id: string
@@ -387,6 +398,35 @@ export async function listActivePreachers(): Promise<StaffUser[]> {
     .filter((user): user is StaffUser => Boolean(user))
 }
 
+/**
+ * The active Preacher who owns a location, used to route a public registration
+ * to the staff member who runs that centre. Several preachers may share a
+ * location; the first by name is taken so repeated registrations for the same
+ * area route to the same person rather than to whichever row Postgres returns.
+ */
+export async function findActivePreacherForLocation(locationId: string): Promise<StaffUser | null> {
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id,program_id,email,name,role,status,location_ids,invited_by,assigned_preacher_id")
+    .eq("program_id", programScopedFilter())
+    .eq("role", "Preacher")
+    .eq("status", "Active")
+    .contains("location_ids", [locationId])
+    .order("name", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return null
+    }
+    throw error
+  }
+
+  return data ? mapStaffUser(data as UsersRow) : null
+}
+
 export const listCachedActivePreachers = unstable_cache(
   async () => listActivePreachers(),
   [SUPABASE_ACTIVE_PREACHERS_CACHE_TAG],
@@ -550,6 +590,41 @@ export async function upsertStaffUser(data: {
   return mapped
 }
 
+function mapAttachments(value: unknown): ContactAttachment[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  const attachments: ContactAttachment[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue
+    const record = entry as Record<string, unknown>
+    const kind = normalizeString(record.kind)
+    const path = normalizeString(record.path)
+    if (!kind || !path) continue
+
+    const metadata: Record<string, string> = {}
+    if (record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)) {
+      for (const [key, metadataValue] of Object.entries(record.metadata as Record<string, unknown>)) {
+        if (typeof metadataValue === "string") {
+          metadata[key] = metadataValue
+        }
+      }
+    }
+
+    attachments.push({
+      kind,
+      path,
+      contentType: normalizeString(record.contentType),
+      size: typeof record.size === "number" ? record.size : undefined,
+      uploadedAt: normalizeString(record.uploadedAt),
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    })
+  }
+
+  return attachments
+}
+
 function mapContact(row: ContactRow): ContactRecord {
   const phone = normalizeMobile(row.phone) || row.phone || ""
 
@@ -571,6 +646,7 @@ function mapContact(row: ContactRow): ContactRecord {
     assignedPreacherIds: row.assigned_preacher_id ? [row.assigned_preacher_id] : [],
     collectedByIds: row.collected_by_id ? [row.collected_by_id] : [],
     analyticsIds: [],
+    attachments: mapAttachments(row.attachments),
   }
 }
 
@@ -644,6 +720,7 @@ export async function createContact(data: {
   location?: string
   collectedByUserId?: string
   assignedPreacherUserId?: string
+  attachments?: ContactAttachment[]
 }): Promise<ContactRecord> {
   const normalizedPhone = normalizeMobile(data.phone)
   if (!normalizedPhone) {
@@ -698,13 +775,16 @@ export async function createContact(data: {
   if (collectorId) {
     insertPayload.collected_by_id = collectorId
   }
+  if (data.attachments && data.attachments.length > 0) {
+    insertPayload.attachments = data.attachments
+  }
 
   const supabaseAdmin = createSupabaseAdminClient()
   const { data: inserted, error } = await supabaseAdmin
     .from("contacts")
     .insert(insertPayload)
     .select(
-      "id,program_id,name,phone,age,date_of_birth,year,college,company,designation,notes,initial_contact,last_contacted_on,address,location_ids,assigned_preacher_id,collected_by_id,source",
+      "id,program_id,name,phone,age,date_of_birth,year,college,company,designation,notes,initial_contact,last_contacted_on,address,location_ids,assigned_preacher_id,collected_by_id,source,attachments",
     )
     .single()
 
@@ -830,6 +910,61 @@ export async function findLocationByName(name: string): Promise<LocationRecord |
   }
 
   const row = data as LocationsRow
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status ?? undefined,
+  }
+}
+
+/**
+ * Resolve the "Area You Want to Attend" choice to a location. The public form
+ * uses bare area names ("Karapakkam") while a location row may carry a suffix
+ * ("Karapakkam Temple"), so an exact match wins and a contains-match is the
+ * fallback. Returns null when the programme has no location for that area.
+ */
+export async function findLocationByAreaName(area: string): Promise<LocationRecord | null> {
+  const normalizedArea = area.trim().replace(/\s+/g, " ")
+  if (!normalizedArea) {
+    return null
+  }
+
+  const supabaseAdmin = createSupabaseAdminClient()
+  const scopedLocations = () =>
+    supabaseAdmin
+      .from("locations")
+      .select("id,program_id,name,status")
+      .eq("program_id", programScopedFilter())
+      .eq("status", "Active")
+
+  const { data: exact, error: exactError } = await scopedLocations()
+    .eq("name", normalizedArea)
+    .maybeSingle()
+
+  if (exactError && exactError.code !== "PGRST116") {
+    throw exactError
+  }
+
+  if (exact) {
+    const row = exact as LocationsRow
+    return { id: row.id, name: row.name, status: row.status ?? undefined }
+  }
+
+  const { data: contained, error: containedError } = await scopedLocations()
+    .ilike("name", `%${normalizedArea}%`)
+    .order("name", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (containedError && containedError.code !== "PGRST116") {
+    throw containedError
+  }
+
+  if (!contained) {
+    return null
+  }
+
+  const row = contained as LocationsRow
   return {
     id: row.id,
     name: row.name,

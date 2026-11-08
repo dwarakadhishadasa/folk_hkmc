@@ -208,6 +208,7 @@ const headerThemeVars = {
   "--header-logo-height-md": "var(--program-header-logo-height-md, 3.5rem)",
   "--header-logo-width-lg": "var(--program-header-logo-width-lg, var(--header-logo-width-md))",
   "--header-logo-height-lg": "var(--program-header-logo-height-lg, var(--header-logo-height-md))",
+  "--header-logo-radius": "var(--program-header-logo-radius, 0.75rem)",
   "--header-nav-bg": "var(--program-header-nav-bg, rgb(255 255 255 / 0.1))",
   "--header-nav-ring": "var(--program-header-nav-ring, rgb(255 255 255 / 0.1))",
   "--header-nav-text": "var(--program-header-nav-text, rgb(255 255 255 / 0.8))",
@@ -243,7 +244,7 @@ export function Header() {
   const logoShellClassName = cn(
     "relative h-[var(--header-logo-height)] w-[var(--header-logo-width)] max-w-[calc(100vw-10.5rem)] flex-shrink-0 sm:h-[var(--header-logo-height-sm)] sm:w-[var(--header-logo-width-sm)] md:h-[var(--header-logo-height-md)] md:w-[var(--header-logo-width-md)] lg:h-[var(--header-logo-height-lg)] lg:w-[var(--header-logo-width-lg)]",
     !hasHeaderLogoOverride &&
-      "rounded-xl bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)]",
+      "rounded-[var(--header-logo-radius)] bg-[var(--header-logo-bg)] p-1 shadow-sm ring-1 ring-[var(--header-logo-ring)]",
   )
 
   const campaignHref = campaignHrefFor({
@@ -297,6 +298,10 @@ export function Header() {
       ]
     : []
 
+  // Folk's bar centres the pill between the logo and the account controls; a
+  // three-column grid does that without letting either side drift inward.
+  const centerNav = currentProgramProfile.id === "folk" && navItems.length > 0
+
   if (!isHydrated) {
     return (
       <header
@@ -340,7 +345,12 @@ export function Header() {
         style={headerThemeVars}
       >
         <div className="w-full px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-center justify-between gap-3">
+          <div
+            className={cn(
+              "items-center gap-3",
+              centerNav ? "grid grid-cols-[auto_1fr_auto]" : "flex justify-between",
+            )}
+          >
             <Link
               href="/"
               aria-label={`${branding.shortName} home`}
@@ -359,7 +369,12 @@ export function Header() {
               />
             </Link>
             {navItems.length > 0 && (
-              <nav className="hidden items-center gap-1 rounded-full bg-[var(--header-nav-bg)] p-1 ring-1 ring-[var(--header-nav-ring)] backdrop-blur md:flex">
+              <nav
+                className={cn(
+                  "hidden items-center gap-1 rounded-full bg-[var(--header-nav-bg)] p-1 ring-1 ring-[var(--header-nav-ring)] backdrop-blur md:flex",
+                  centerNav && "justify-self-center",
+                )}
+              >
                 {navItems.map((item) => {
                   const pending = pendingPath ? isActivePath(pendingPath, item.href) : false
 
@@ -375,7 +390,7 @@ export function Header() {
                 })}
               </nav>
             )}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className={cn("flex items-center gap-2 sm:gap-3", centerNav && "justify-self-end")}>
               <ThemeToggle />
               {isLoggedIn ? (
                 <>

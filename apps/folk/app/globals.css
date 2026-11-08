@@ -24,8 +24,8 @@
   --white: #ffffff;
 
   /* Text */
-  --charcoal: #24324a;
-  --charcoal-light: #4a5568;
+  --charcoal: #451a03;
+  --charcoal-light: #92400e;
 
   /* Supporting accent - success green. `--teal` is the historical name for
    * this slot and is kept so existing call sites keep resolving; the value is
@@ -33,9 +33,9 @@
   --teal: #15803d;
   --teal-light: #4ade80;
 
-  --program-primary: var(--royal-blue);
-  --program-primary-light: var(--royal-blue-light);
-  --program-primary-dark: var(--royal-blue-dark);
+  --program-primary: #9a3412;
+  --program-primary-light: #b45309;
+  --program-primary-dark: #78350f;
   /* The CTA ramp is the neutral accent, not saffron, so it is derived from
    * `--accent` with `color-mix` rather than fixed here: `--accent` flips in
    * `.dark`, and a fixed ramp would leave light-grey buttons in dark mode. */
@@ -44,28 +44,65 @@
   --program-accent-dark: color-mix(in oklab, var(--accent) 86%, black);
   --program-ivory: var(--ivory);
   --program-text: var(--charcoal);
+  /* App header, light. The course landing's amber bar is the light theme's
+   * chrome; `.dark` replaces this whole block with the near-black bar. */
+  --program-header-bg: #9a3412;
+  --program-header-text: #ffffff;
+  /* One logo badge on every surface: a square white chip whose padding and
+   * ring match the course header's, in both themes. */
+  --program-header-logo-bg: #ffffff;
+  --program-header-logo-ring: rgb(0 0 0 / 0.1);
+  --program-header-logo-width: 3.5rem;
+  --program-header-logo-height: 3.5rem;
+  --program-header-logo-width-sm: 4rem;
+  --program-header-logo-height-sm: 4rem;
+  --program-header-logo-width-md: 4rem;
+  --program-header-logo-height-md: 4rem;
+  --program-header-logo-width-lg: 4rem;
+  --program-header-logo-height-lg: 4rem;
+  --program-header-logo-radius: 1rem;
+  --program-header-muted-text: #fed7aa;
+  --program-header-border: rgb(255 255 255 / 0.15);
+  --program-header-nav-bg: rgb(255 255 255 / 0.1);
+  --program-header-nav-ring: rgb(255 255 255 / 0.15);
+  --program-header-nav-text: #fed7aa;
+  --program-header-nav-hover-bg: rgb(255 255 255 / 0.15);
+  --program-header-nav-hover-text: #ffffff;
+  --program-header-nav-active-bg: #ffffff;
+  --program-header-nav-active-text: #7c2d12;
+  --program-header-nav-pending-bg: rgb(255 255 255 / 0.2);
+  --program-header-nav-pending-text: #ffffff;
+  --program-header-nav-pending-ring: #fed7aa;
+  --program-header-nav-pending-spinner: #fed7aa;
+  --program-header-action-bg: rgb(255 255 255 / 0.15);
+  --program-header-action-hover-bg: rgb(255 255 255 / 0.25);
+  --program-header-action-text: #ffffff;
+  --program-header-login-bg: #ffffff;
+  --program-header-login-hover-bg: #ffedd5;
+  --program-header-login-text: #7c2d12;
+  --program-header-focus-ring: #fcd34d;
   /* Phone bottom navigation. The bar is app chrome, not a card: in light it is
    * the white bar it has always been. Every colour it paints with lives here so
    * `.dark` can restyle the one surface from one switch — including the
    * safe-area fill below the bar, in the `max-width: 767px` block. */
-  --mobile-nav-bg: rgb(255 255 255 / 0.95);
-  --mobile-nav-border: rgba(0, 0, 0, 0.1);
-  --mobile-nav-text: #616670;
-  --mobile-nav-hover-bg: rgba(0, 0, 0, 0.05);
-  --mobile-nav-hover-text: #1d1f25;
-  --mobile-nav-active-bg: #1d1f25;
+  --mobile-nav-bg: rgb(255 251 235 / 0.95);
+  --mobile-nav-border: #fde68a;
+  --mobile-nav-text: #92400e;
+  --mobile-nav-hover-bg: #fef3c7;
+  --mobile-nav-hover-text: #78350f;
+  --mobile-nav-active-bg: #b45309;
   --mobile-nav-active-text: #ffffff;
-  --mobile-nav-pending-bg: #fff6dd;
-  --mobile-nav-pending-text: #af6002;
-  --mobile-nav-accent: #166ee1;
+  --mobile-nav-pending-bg: #fef3c7;
+  --mobile-nav-pending-text: #92400e;
+  --mobile-nav-accent: #b45309;
 
   /* Surfaces, ink, borders and states follow the Airtable ramp; the brand
    * primitives above are the only colours a program owns. `--program-primary`
    * still paints the header and the panel title band. */
-  --background: #ffffff;
-  --foreground: #1d1f25;
+  --background: #fffbeb;
+  --foreground: #451a03;
   --card: #ffffff;
-  --card-foreground: #1d1f25;
+  --card-foreground: #451a03;
   /* A form control sits one elevation above the card it lives on. In light it
      is the card surface; `.dark` lifts it to a lighter graphite so a field
      reads as an input rather than a hole. */
@@ -74,28 +111,28 @@
      program's brand colour in light and goes black in `.dark`, where the
      unvarying navy read as a foreign surface. */
   --panel-header: var(--program-primary);
-  --section-header: #1d1f25;
+  --section-header: #78350f;
   --popover: #ffffff;
-  --popover-foreground: #1d1f25;
-  --primary: #166ee1;
+  --popover-foreground: #451a03;
+  --primary: #b45309;
   --primary-foreground: #ffffff;
-  --secondary: #f2f4f8;
-  --secondary-foreground: #1d1f25;
-  --muted: #f2f4f8;
-  --muted-foreground: #616670;
-  --accent: #f2f4f8;
-  --accent-foreground: #1d1f25;
+  --secondary: #fef3c7;
+  --secondary-foreground: #78350f;
+  --muted: #fef3c7;
+  --muted-foreground: #92400e;
+  --accent: #ffedd5;
+  --accent-foreground: #7c2d12;
   --destructive: #dc043b;
   --destructive-foreground: #ffffff;
   --success: #006400;
   --info: #0d52ac;
-  --border: rgba(0, 0, 0, 0.1);
-  --input: rgba(0, 0, 0, 0.1);
-  --ring: #166ee1;
+  --border: #fde68a;
+  --input: #fde68a;
+  --ring: #b45309;
   /* Selected-row surface for the shared manage grid. A token rather than a
      literal so `components/grid/` stays hex-free per harness-guards, and so
      both themes stay legible through one switch. */
-  --grid-selected: rgba(22, 110, 225, 0.05);
+  --grid-selected: rgba(180, 83, 9, 0.06);
   /* Select / multiselect label palette. Ten slots; a label's slot is a stable
    * hash of its text, so the same book or source reads the same colour on every
    * row and in every app. Only the hue lives here — the pill's own background
@@ -116,16 +153,16 @@
    * and colour-coding references would imply a category they do not have. The
    * slate is the one sampled off the reference chip, used as the *text* here
    * and as the surface in `.dark`, so the two themes share one hue. */
-  --grid-linked-bg: #f2f4f8;
-  --grid-linked-fg: #616670;
+  --grid-linked-bg: #fef3c7;
+  --grid-linked-fg: #92400e;
   /* Row hover. Neutral in both themes, per `visual-design.md:61` — never amber,
    * never saffron, because an amber hover makes a passive row read as active. */
-  --grid-row-hover: #f9fafb;
+  --grid-row-hover: #fff7ed;
   /* The accent ink the grid paints its own controls in: the control hue on the
    * light canvas, white in `.dark`, where that hue measures ~1.6:1 against a
    * dark card and a toolbar icon drawn in it disappears. One token keeps both
    * themes honest and lets `components/grid/` stay hex-free. */
-  --grid-accent-ink: #166ee1;
+  --grid-accent-ink: #b45309;
   /* Amber ink for a control that is reporting something the operator should
      notice — today that is the *Hide fields* trigger while any field is hidden,
      which is the one piece of grid state an operator can forget they set: a
@@ -139,24 +176,24 @@
   /* Tab strip. The dark half of this pair lives in `.dark`; these are the light
    * values, where the active tab keeps the brand underline rather than the
    * control hue. */
-  --tab-border: rgba(0, 0, 0, 0.1);
-  --tab-active-text: #1d1f25;
+  --tab-border: #fde68a;
+  --tab-active-text: #451a03;
   --tab-active-underline: var(--program-primary);
-  --tab-inactive-text: #616670;
-  --chart-1: #166ee1;
-  --chart-2: #006400;
-  --chart-3: #d54401;
-  --chart-4: #7c37ef;
-  --chart-5: #616670;
+  --tab-inactive-text: #92400e;
+  --chart-1: #b45309;
+  --chart-2: #15803d;
+  --chart-3: #c2410c;
+  --chart-4: #a16207;
+  --chart-5: #92400e;
   --radius: 0.75rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #1d1f25;
-  --sidebar-primary: #166ee1;
+  --sidebar-foreground: #451a03;
+  --sidebar-primary: #b45309;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f2f4f8;
-  --sidebar-accent-foreground: #1d1f25;
-  --sidebar-border: rgba(0, 0, 0, 0.1);
-  --sidebar-ring: #166ee1;
+  --sidebar-accent: #fef3c7;
+  --sidebar-accent-foreground: #78350f;
+  --sidebar-border: #fde68a;
+  --sidebar-ring: #b45309;
 }
 
 .dark {

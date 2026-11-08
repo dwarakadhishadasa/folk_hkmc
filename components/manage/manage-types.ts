@@ -47,6 +47,17 @@ export interface ManageLocation {
   status: string | null
 }
 
+export interface ManageContactAttachment {
+  kind: string
+  path: string
+  contentType?: string
+  size?: number
+  uploadedAt?: string
+  metadata?: Record<string, string>
+  /** Signed URL minted by the record gateway; null when it could not be created. */
+  url?: string | null
+}
+
 export interface ManageContact {
   id: string
   name: string
@@ -87,6 +98,11 @@ export interface ManageContact {
    * arrow instead.
    */
   commentCount: number
+  /**
+   * Files attached to the contact. Only the record gateway resolves their
+   * signed URLs; list payloads may omit the field entirely.
+   */
+  attachments?: ManageContactAttachment[]
 }
 
 /**

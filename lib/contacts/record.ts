@@ -3,8 +3,10 @@ import "server-only"
 import type { ContactRecordPayload } from "@/components/contacts/contact-record-types"
 import { KNOWN_SOURCE_VALUES } from "@/components/manage/manage-contact-fields"
 import type { ManageContactCommentList } from "@/components/manage/manage-comment-types"
+import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { contactInPatch, locationInPatch } from "@/lib/patch-scope"
 import type { StaffContext } from "@/lib/authz"
+import type { ManageContact } from "@/components/manage/manage-types"
 import { listManageContactComments } from "@/lib/supabase/contact-comments"
 import {
   loadManageContactHistory,
@@ -33,7 +35,9 @@ export async function loadContactRecord(params: {
 }): Promise<ContactRecordPayload> {
   const { staff, contactId } = params
 
-  const contact = await loadManageContactRecordRow({ staff, contactId })
+  const contact = await withSignedAttachmentUrls(
+    await loadManageContactRecordRow({ staff, contactId }),
+  )
 
   const owner = staff.patchOwner
   const ownerId = owner?.userId ?? null
@@ -173,4 +177,47 @@ export async function loadContactRecordAvailability(params: {
   }
 
   return available
+}
+
+const ATTACHMENT_BUCKET = "gita-life-payment-screenshots"
+const ATTACHMENT_URL_TTL_SECONDS = 60 * 60
+
+/**
+ * Mint a short-lived URL for each contact attachment.
+ *
+ * The bucket is private, so the record's reader cannot build a URL itself. The
+ * contact row has already been read through the RLS client by the caller, so
+ * signing here cannot widen the record's scope; a signing failure degrades to
+ * "Unavailable" on that row rather than failing the whole record.
+ */
+async function withSignedAttachmentUrls(contact: ManageContact): Promise<ManageContact> {
+  const attachments = contact.attachments ?? []
+  if (attachments.length === 0) {
+    return contact
+  }
+
+  const supabaseAdmin = createSupabaseAdminClient()
+  const { data, error } = await supabaseAdmin.storage
+    .from(ATTACHMENT_BUCKET)
+    .createSignedUrls(
+      attachments.map((attachment) => attachment.path),
+      ATTACHMENT_URL_TTL_SECONDS,
+    )
+
+  if (error) {
+    console.error("[contacts] unable to sign attachment urls", error)
+    return contact
+  }
+
+  const signedByPath = new Map(
+    (data ?? []).map((entry) => [entry.path, entry.signedUrl] as const),
+  )
+
+  return {
+    ...contact,
+    attachments: attachments.map((attachment) => ({
+      ...attachment,
+      url: signedByPath.get(attachment.path) ?? null,
+    })),
+  }
 }
