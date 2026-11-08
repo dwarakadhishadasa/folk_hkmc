@@ -11,7 +11,6 @@ import {
   LogOut,
   Megaphone,
   Send,
-  Settings2,
   UserRoundPlus,
   type LucideIcon,
 } from "lucide-react"
@@ -252,7 +251,6 @@ export function Header() {
   })
 
   const canReadContacts = staff?.canReadContacts ?? false
-  const canManage = staff?.canManage ?? false
   const canInviteVolunteers = staff?.canInviteVolunteers ?? false
   const isStaffMember = isPreacher || isAssistant
   const contactHref = canReadContacts ? "/contacts" : isVolunteer ? "/contact" : null
@@ -279,8 +277,7 @@ export function Header() {
                 icon: UserRoundPlus,
                 // The section root reads contacts, locations, staff names and
                 // rollups; prefetching it from every staff page pays for that
-                // read before the reader asks for it. `/manage` is disabled for
-                // the same reason.
+                // read before the reader asks for it.
                 prefetch: false,
               },
             ]
@@ -294,7 +291,6 @@ export function Header() {
             ? [{ href: "/volunteers", label: "Invite", icon: Send }]
             : []),
         ...(campaignHref ? [{ href: campaignHref, label: "Campaign", icon: Megaphone }] : []),
-        ...(canManage ? [{ href: "/manage", label: "Manage", icon: Settings2, prefetch: false }] : []),
       ]
     : []
 
