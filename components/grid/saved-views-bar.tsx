@@ -38,7 +38,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -47,8 +46,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { GRID_BASE_FONT_CLASS } from "@/components/grid/grid-row"
 import {
   isSavedViewVisibility,
-  SAVED_VIEW_TYPES,
-  SAVED_VIEW_TYPE_LABELS,
   SAVED_VIEW_VISIBILITIES,
   SAVED_VIEW_VISIBILITY_HINTS,
   SAVED_VIEW_VISIBILITY_LABELS,
@@ -272,44 +269,21 @@ export function SavedViewsBar({
           open ? "" : "hidden"
         }`}
       >
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              data-grid-view-create=""
-              aria-label="Create new view"
-              disabled={pending}
-              className="hover:bg-[var(--grid-control-hover)] text-[var(--grid-control-ink)] h-8 w-full justify-start gap-2 rounded-[3px] px-2 text-[13px] font-normal has-[>svg]:px-2"
-            >
-              <Plus aria-hidden="true" className="size-4 text-[var(--grid-control-icon)]" />
-              New view
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[240px] rounded-[6px] p-1">
-            <DropdownMenuLabel>Create new view</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {/*
-              One entry per renderable view type. Adding Calendar or Kanban is an
-              entry in `SAVED_VIEW_TYPES` plus a renderer — never a second menu
-              built here.
-            */}
-            {SAVED_VIEW_TYPES.map((viewType) => (
-              <DropdownMenuItem
-                key={viewType}
-                data-grid-view-type={viewType}
-                className="gap-2 text-[13px]"
-                onSelect={() => {
-                  setError(null)
-                  setDialog({ mode: "create", value: defaultName, visibility: "personal" })
-                }}
-              >
-                <Grid2x2 aria-hidden="true" className="text-[var(--tag-1)] size-3.5" />
-                {SAVED_VIEW_TYPE_LABELS[viewType]}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          type="button"
+          variant="ghost"
+          data-grid-view-create=""
+          aria-label="Create new view"
+          disabled={pending}
+          onClick={() => {
+            setError(null)
+            setDialog({ mode: "create", value: defaultName, visibility: "personal" })
+          }}
+          className="hover:bg-[var(--grid-control-hover)] text-[var(--grid-control-ink)] h-8 w-full justify-start gap-2 rounded-[3px] px-2 text-[13px] font-normal has-[>svg]:px-2"
+        >
+          <Plus aria-hidden="true" className="size-4 text-[var(--grid-control-icon)]" />
+          New view
+        </Button>
 
         <p className="text-[var(--grid-footer-ink)] px-2 pb-0.5 pt-3 text-[12px] font-medium">
           Views
