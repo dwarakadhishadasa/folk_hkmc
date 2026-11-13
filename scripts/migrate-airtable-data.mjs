@@ -1429,7 +1429,6 @@ async function loadProgram(programId, report) {
       ...contextBase,
       userIdBySourceId: resolvedUserIdBySourceId,
     })
-    contactIdBySourceId.set(record.id, row.targetId)
     // Phone first: `contacts.phone` is NOT NULL and `findContactByPhone` matches on
     // it after the same normalization, so a phone that does not normalize to ten
     // digits cannot be stored at all. A record with neither a name nor a phone is
@@ -1479,6 +1478,10 @@ async function loadProgram(programId, report) {
       continue
     }
     survivingPhones.set(row.phone, record.id)
+    // Only a surviving contact's id may be used as an attendance FK. A contact
+    // quarantined above has no target row, so its attendance rows must be
+    // quarantined too rather than inserted against a missing FK.
+    contactIdBySourceId.set(record.id, row.targetId)
     contactRows.push(row)
   }
 

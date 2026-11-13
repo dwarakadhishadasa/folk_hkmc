@@ -17,9 +17,9 @@
 -- would raise. `to_date(...) IS NULL` is NOT used: it raises instead of
 -- returning NULL, and it silently coerces values like `"35000"`.
 --
--- Per Dwaraka's 2026-10-10 park decision, `last_contacted_on` ends EMPTY:
--- its uncastable values are reported and nulled like every other column, and
--- then every remaining value is reported and nulled as well.
+-- Per Dwaraka's 2026-11-13 decision, `last_contacted_on` keeps the Airtable
+-- dates: uncastable values are reported and nulled like every other column,
+-- and every castable value survives the TEXT -> DATE conversion.
 --
 -- Per Dwaraka's 2026-10-11 scope addition, `sessions.session_date` rides this
 -- same file under the same rule. The sessions POST writes a full ISO
@@ -104,8 +104,6 @@ DECLARE
   v_dtype text;
   v_count integer;
   v_ids text;
-  v_park_count integer;
-  v_park_ids text;
 BEGIN
   SELECT data_type INTO v_dtype
   FROM information_schema.columns
@@ -122,13 +120,6 @@ BEGIN
       WHERE last_contacted_on IS NOT NULL
         AND NOT (last_contacted_on ~ '^\d{4}-\d{2}-\d{2}'
                  AND pg_input_is_valid(left(last_contacted_on, 10), 'date'));
-    -- Park decision (Dwaraka 2026-10-10): the column ends EMPTY. Report, then null.
-    SELECT count(*), coalesce(string_agg(id::text, ', ' ORDER BY id::text), '(none)')
-      INTO v_park_count, v_park_ids
-      FROM public.contacts
-      WHERE last_contacted_on IS NOT NULL;
-    RAISE NOTICE 'contacts.last_contacted_on: % parked row(s) to be emptied: %', v_park_count, v_park_ids;
-    UPDATE public.contacts SET last_contacted_on = NULL WHERE last_contacted_on IS NOT NULL;
     ALTER TABLE public.contacts ALTER COLUMN last_contacted_on TYPE date USING left(last_contacted_on, 10)::date;
   ELSE
     RAISE NOTICE 'contacts.last_contacted_on already date, skipping';
