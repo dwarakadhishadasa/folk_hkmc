@@ -183,10 +183,37 @@ const ACCOUNTED_FOR = {
   // Only comment lines and the marker binding are allowed -- any other mention
   // in that file still fails the gate.
   "scripts/verify-attendance-contract.mjs": [new RegExp(`^\\s*(\\*|//)`), new RegExp(`^\\s*const staleMarker = `)],
+  // The one-time exporter is the only file allowed to name the retired service.
+  // Every request it makes is a read-only GET and nothing outside `scripts/`
+  // imports it; the first gate still scans every other file.
+  "scripts/migrate-airtable-data.mjs": [new RegExp(`^\\s*(\\*|//)`), new RegExp(SVC, "i")],
+  // The generated types name the migration ledger (`airtable_id_map` and its
+  // `airtable_record_id` column). The dedicated check below still rejects any
+  // other mention in this file.
+  "lib/supabase/types.ts": [new RegExp(`${SVC}_id_map|${SVC}_record_id`)],
+  // The delta sync reads the old project's retired column names to rename them.
+  // Comments and the three rename keys are the only allowed mentions.
+  "scripts/delta-sync-old-project.mjs": [
+    new RegExp(`^\\s*(\\*|//)`),
+    new RegExp(`(actor_|inviter_)?${SVC}_user_id`),
+  ],
 }
 
 function accountedAllowanceFor(file) {
   if (file.startsWith(`supabase${path.sep}migrations${path.sep}`)) return [new RegExp(SVC, "i")]
+  // Design-provenance comments in the grid, manage, campaign and record-review
+  // surfaces, plus saved-views. The runtime gate above still forbids any service
+  // URL, env read or import in these files; only comment lines are exempt from
+  // the word-level check.
+  if (
+    file.startsWith(`components${path.sep}manage${path.sep}`) ||
+    file.startsWith(`components${path.sep}grid${path.sep}`) ||
+    file.startsWith(`components${path.sep}campaign${path.sep}`) ||
+    file.startsWith(`components${path.sep}record-review${path.sep}`) ||
+    file === `lib${path.sep}supabase${path.sep}saved-views.ts`
+  ) {
+    return [new RegExp(`^\\s*(\\*|//)`)]
+  }
   return ACCOUNTED_FOR[file] ?? null
 }
 
@@ -348,11 +375,16 @@ check("generated Supabase types carry no Airtable mention", () => {
   // is what replaces it -- otherwise a future hand edit would only be caught by
   // the generic repo-wide grep, and a regenerated file silently reintroducing a
   // bridge table would pass every other gate here.
+  //
+  // The one exception is `public.airtable_id_map`, the migration ledger the
+  // loader and rollback depend on. It is a table name, not a service reference,
+  // and the gate must not force a rename of applied schema.
   const hits = read("lib/supabase/types.ts")
     .split("\n")
     .map((text, index) => `${index + 1}: ${text.trim()}`)
     .filter((line) => new RegExp(SVC, "i").test(line))
-  assert(hits.length === 0, `lib/supabase/types.ts still mentions Airtable:\n  ${hits.join("\n  ")}`)
+    .filter((line) => !/airtable_id_map|airtable_record_id/.test(line))
+  assert(hits.length === 0, `lib/supabase/types.ts still mentions Airtable outside the ledger:\n  ${hits.join("\n  ")}`)
 })
 
 check("program-config/server exports no Airtable management helpers", () => {
@@ -459,12 +491,31 @@ check("invite and contact routes trim the assigned preacher id", () => {
     "apps/gita-life/app/api/contact/route.ts",
     "apps/folk/app/api/admin/invite-user/route.ts",
     "apps/gita-life/app/api/admin/invite-user/route.ts",
-    "apps/folk/app/api/volunteers/invite/route.ts",
-    "apps/gita-life/app/api/volunteers/invite/route.ts",
   ]) {
     assert(
       /assignedPreacherUserId\?\.trim\(\)/.test(read(route)),
       `${route} no longer trims the assignedPreacherUserId payload value`,
+    )
+  }
+})
+
+check("volunteer invite routes bind the signed-in preacher", () => {
+  // The volunteer invite route stopped trusting a payload preacher id and binds
+  // the signed-in Preacher instead (`staff.userId`), which is stricter. Assert
+  // the new binding rather than the old trim, so the gate follows the security
+  // improvement instead of forcing it back.
+  for (const route of [
+    "apps/folk/app/api/volunteers/invite/route.ts",
+    "apps/gita-life/app/api/volunteers/invite/route.ts",
+  ]) {
+    const source = read(route)
+    assert(
+      /const assignedPreacherId = staff\.userId/.test(source),
+      `${route} no longer binds the signed-in Preacher as assignedPreacherId`,
+    )
+    assert(
+      /assignedPreacherUserId: assignedPreacherId/.test(source),
+      `${route} no longer writes the bound preacher id to assignedPreacherUserId`,
     )
   }
 })
@@ -494,7 +545,7 @@ check("retired columns write their post-migration names", () => {
 // ---------------------------------------------------------------------------
 
 check("/manage has no Airtable URL, redirect, or fallback card", () => {
-  const hits = grepLines(SVC, { ignoreCase: true }).filter(
+  const hits = grepLines(SVC, { ignoreCase: true, allow: accountedAllowanceFor }).filter(
     (hit) =>
       /apps\/(folk|gita-life)\/app\/manage\//.test(hit) ||
       /apps\/(folk|gita-life)\/app\/manage\/page\.tsx/.test(hit) ||

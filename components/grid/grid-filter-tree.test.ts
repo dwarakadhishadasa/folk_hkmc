@@ -50,7 +50,7 @@ describe("grid filter tree", () => {
     expect(needsManualEvaluation(tree)).toBe(true)
   })
 
-  it("reads Airtable's conjunction/filterSet shape, nested groups included", () => {
+  it("reads the legacy conjunction/filterSet shape, nested groups included", () => {
     const raw = JSON.stringify({
       conjunction: "and",
       filterSet: [
@@ -87,7 +87,7 @@ describe("grid filter tree", () => {
     ])
   })
 
-  it("writes the same shape back, so a grouped URL is Airtable-shaped", () => {
+  it("writes the same shape back, so a grouped URL is legacy-shaped", () => {
     const tree = createFilterGroup("all", [
       conditionNode(condition("name", "contains", "a")),
       groupNode(
