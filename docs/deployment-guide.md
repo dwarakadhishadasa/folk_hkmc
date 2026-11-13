@@ -166,8 +166,9 @@ mv /tmp/opencode/deferred-migrations/20261019000000_contacts_single_location.sql
    supabase/migrations/
 ```
 
-The target then holds 37 of 38 migrations. Record the deferral in the release
-notes and do not report the schema as complete.
+The target then holds every migration except the deferred single-location
+CHECK. Record the deferral in the release notes and do not report the schema as
+complete.
 
 The date migration (`20261010000000_contacts_date_columns_to_date.sql`) converts
 `initial_contact`, `last_contacted_on`, `date_of_birth`, and
