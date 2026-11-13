@@ -421,10 +421,10 @@ Supabase project and both Airtable bases as the archive and fallback.
   production.
 - **Airtable is still live.** A delta load is a snapshot. After a write freeze,
   re-run the loader for a final delta; it is idempotent.
-- **Stale locations remain.** The target holds location rows that no longer
-  exist in Airtable. They are left in place because deleting them would be
-  destructive and could break historical references. The app's location picker
-  reads all rows, not only `Active` ones.
+- **Locations match the current Airtable set.** The FOLK locations table holds
+  the 10 current Airtable locations, all `Active`. Sessions and contacts that
+  referenced retired locations were remapped to the current location or
+  cleared; no stale rows remain.
 - **Quarantined source rows remain in Airtable.** Attendance rows with no
   contact link, contacts with unusable or duplicate phones, and staff users with
   no email are not loaded. Correct the source or accept the gap.
