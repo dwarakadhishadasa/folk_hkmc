@@ -1,15 +1,15 @@
+"use client"
+
 import {
   CalendarCheck2,
   CalendarDays,
-  CheckCircle2,
   ClipboardCheck,
-  PhoneCall,
-  PhoneIncoming,
   UserRoundPlus,
-  Users,
   type LucideIcon,
 } from "lucide-react"
+import { motion, useReducedMotion } from "framer-motion"
 
+import { AnimatedCount } from "@/components/dashboard/animated-count"
 import {
   StatTileIcon,
   STAT_TILE_CAPTION_CLASS,
@@ -19,7 +19,6 @@ import {
 } from "@/components/stat-tile"
 import { formatCount } from "@/lib/dashboard/format"
 import type { AttendanceTrendPoint, DashboardKpis } from "@/lib/dashboard/types"
-import { cn } from "@/lib/utils"
 
 interface KpiTile {
   key: string
@@ -29,8 +28,6 @@ interface KpiTile {
   icon: LucideIcon
   /** Only the first tile carries the previous-period delta. */
   delta?: number | null
-  /** The fifth tile spans both phone columns rather than leaving an orphan. */
-  wide?: boolean
   sparkline?: number[]
 }
 
@@ -88,117 +85,72 @@ function DeltaBadge({ delta }: { delta: number | null }) {
 /**
  * The headline counts, on the same `StatTile` ring as the Contacts and Sessions
  * Overviews: a gradient wash, an uppercase label, the Poppins figure and the
- * icon in the corner. Every value is copied from `dashboard_overview`; the
- * delta is the payload's signed difference.
+ * icon in the corner. A figure counts from its old value when the period
+ * changes; the first paint is the final value so a read never catches a zero.
  */
 export function DashboardKpiBand({
   kpis,
-  hasDialer,
   trend,
 }: {
   kpis: DashboardKpis
-  hasDialer: boolean
   trend?: AttendanceTrendPoint[]
 }) {
+  const reduceMotion = useReducedMotion()
   const attendanceSparkline = trend?.map((point) => point.attendees)
 
-  const tiles: KpiTile[] = hasDialer
-    ? [
-        {
-          key: "contacts-collected",
-          label: "Contacts collected",
-          value: kpis.contactsCollected,
-          caption: "",
-          icon: UserRoundPlus,
-          delta: kpis.contactsCollectedDelta,
-        },
-        {
-          key: "calls-made",
-          label: "Calls made",
-          value: kpis.callsMade,
-          caption: `${formatCount(kpis.contactsCalled)} contacts called`,
-          icon: PhoneCall,
-        },
-        {
-          key: "contacts-reached",
-          label: "Reached",
-          value: kpis.contactsReached,
-          caption: `${kpis.reachRate}% of contacts called`,
-          icon: PhoneIncoming,
-        },
-        {
-          key: "contacts-confirmed",
-          label: "Confirmed",
-          value: kpis.contactsConfirmed,
-          caption: `${kpis.confirmationRate}% of contacts reached`,
-          icon: CheckCircle2,
-        },
-        {
-          key: "unique-attendees",
-          label: "Attended",
-          value: kpis.uniqueAttendees,
-          caption: `${formatCount(kpis.attendanceRecords)} check-ins`,
-          icon: Users,
-          wide: true,
-          sparkline: attendanceSparkline,
-        },
-      ]
-    : [
-        {
-          key: "contacts-collected",
-          label: "Contacts collected",
-          value: kpis.contactsCollected,
-          caption: "",
-          icon: UserRoundPlus,
-          delta: kpis.contactsCollectedDelta,
-        },
-        {
-          key: "sessions-held",
-          label: "Sessions held",
-          value: kpis.sessionsHeld,
-          caption: "Sessions with a date in the period",
-          icon: CalendarDays,
-        },
-        {
-          key: "unique-attendees",
-          label: "Attended",
-          value: kpis.uniqueAttendees,
-          caption: "People who attended at least once",
-          icon: CalendarCheck2,
-          sparkline: attendanceSparkline,
-        },
-        {
-          key: "attendance-records",
-          label: "Check-ins",
-          value: kpis.attendanceRecords,
-          caption: "Attendance rows in the period",
-          icon: ClipboardCheck,
-        },
-      ]
+  const tiles: KpiTile[] = [
+    {
+      key: "contacts-collected",
+      label: "Contacts collected",
+      value: kpis.contactsCollected,
+      caption: "",
+      icon: UserRoundPlus,
+      delta: kpis.contactsCollectedDelta,
+    },
+    {
+      key: "sessions-held",
+      label: "Sessions held",
+      value: kpis.sessionsHeld,
+      caption: "Sessions with a date in the period",
+      icon: CalendarDays,
+    },
+    {
+      key: "unique-attendees",
+      label: "Attended",
+      value: kpis.uniqueAttendees,
+      caption: "People who attended at least once",
+      icon: CalendarCheck2,
+      sparkline: attendanceSparkline,
+    },
+    {
+      key: "attendance-records",
+      label: "Check-ins",
+      value: kpis.attendanceRecords,
+      caption: "Attendance rows in the period",
+      icon: ClipboardCheck,
+    },
+  ]
 
   return (
     <section aria-label="Programme totals">
-      <dl
-        className={
-          hasDialer
-            ? "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-5"
-            : "grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4"
-        }
-      >
-        {tiles.map((tile) => {
+      <dl className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        {tiles.map((tile, index) => {
           const Icon = tile.icon
 
           return (
-            <div
+            <motion.div
               key={tile.key}
               data-dashboard-kpi={tile.key}
-              className={cn(STAT_TILE_CLASS, tile.wide && "col-span-2 md:col-span-1")}
+              className={STAT_TILE_CLASS}
+              initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: index * 0.05, ease: "easeOut" }}
             >
               <StatTileIcon icon={Icon} />
               <dt className={STAT_TILE_LABEL_CLASS}>{tile.label}</dt>
 
               <dd className="flex items-end justify-between gap-2">
-                <span className={STAT_TILE_VALUE_CLASS}>{formatCount(tile.value)}</span>
+                <AnimatedCount value={tile.value} className={STAT_TILE_VALUE_CLASS} />
                 {tile.sparkline && tile.sparkline.some((value) => value > 0) ? (
                   <Sparkline values={tile.sparkline} />
                 ) : null}
@@ -207,7 +159,7 @@ export function DashboardKpiBand({
               <dd className={STAT_TILE_CAPTION_CLASS}>
                 {tile.delta !== undefined ? <DeltaBadge delta={tile.delta} /> : tile.caption}
               </dd>
-            </div>
+            </motion.div>
           )
         })}
       </dl>

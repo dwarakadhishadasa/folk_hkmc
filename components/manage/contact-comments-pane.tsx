@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { formatDistanceToNow } from "date-fns"
+import { motion, useReducedMotion } from "framer-motion"
 import {
   ArrowUp,
   ChevronDown,
@@ -78,6 +79,52 @@ function relativeTime(iso: string): string {
   } catch {
     return ""
   }
+}
+
+/**
+ * The comments skeleton. The record's fields render first and this fills the
+ * pane while the separate comment read is in flight. The sheen is one soft
+ * pass across the block, not a bouncing spinner, so it reads as a quiet placeholder
+ * in an office view; reduced motion keeps the same shapes without the sweep.
+ */
+function CommentsLoading() {
+  const reduceMotion = useReducedMotion()
+
+  return (
+    <div className="relative overflow-hidden px-2 py-1" role="status" aria-live="polite">
+      <span className="sr-only">Loading comments</span>
+      <div className="flex flex-col gap-3">
+        {[0, 1, 2].map((row) => (
+          <motion.div
+            key={row}
+            className="flex items-start gap-2"
+            initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: row * 0.07, duration: 0.28, ease: "easeOut" }}
+          >
+            <span className="size-6 shrink-0 rounded-full bg-foreground/10" />
+            <span className="flex min-w-0 flex-1 flex-col gap-1.5 pt-0.5">
+              <span className="h-2 w-20 rounded-full bg-foreground/10" />
+              <span className="h-2 w-full rounded-full bg-foreground/10" />
+              <span className="h-2 w-3/5 rounded-full bg-foreground/10" />
+            </span>
+          </motion.div>
+        ))}
+      </div>
+
+      {reduceMotion ? null : (
+        <motion.span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/10"
+          initial={{ x: "-120%" }}
+          animate={{ x: "320%" }}
+          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+        />
+      )}
+
+      <p className="pt-3 text-[11px] leading-4 text-muted-foreground">Loading conversation…</p>
+    </div>
+  )
 }
 
 /** One composer, used for a new comment and for a reply. */
@@ -683,10 +730,7 @@ export function ContactCommentsPane({
             </p>
           </div>
         ) : comments === null || comments.status === "loading" ? (
-          <div className="flex items-center gap-2 px-2 text-[12px] text-muted-foreground">
-            <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
-            Loading comments
-          </div>
+          <CommentsLoading />
         ) : comments.status === "error" ? (
           <p role="alert" className="px-2 text-[12px] text-destructive">
             {comments.message}
@@ -721,7 +765,7 @@ export function ContactCommentsPane({
         )}
       </div>
 
-      {canComment && actions ? (
+      {canComment && actions && comments?.status === "ready" ? (
         <div className="shrink-0 border-t border-border p-4">
           {notice ? (
             <div className="mb-2 flex items-start justify-between gap-2">

@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { format, parseISO } from "date-fns"
+import { motion, useReducedMotion } from "framer-motion"
 import { CalendarDays, Check, ChevronDown, ChevronLeft } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 
@@ -19,7 +20,7 @@ const ISO = "yyyy-MM-dd"
 const DISPLAY = "d MMM yyyy"
 
 const TRIGGER_CLASS =
-  "relative flex h-10 w-full items-center gap-2 rounded-lg border border-[var(--border)] bg-card px-3 text-left text-[13px] text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+  "relative flex h-10 w-full items-center gap-2 overflow-hidden rounded-lg border border-[var(--border)] bg-card px-3 text-left text-[13px] text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
 
 const ITEM_CLASS =
   "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus-visible:bg-foreground/5 focus-visible:outline-none"
@@ -43,12 +44,14 @@ export function DashboardPeriodControl({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
+  const reduceMotion = useReducedMotion()
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<"list" | "range">("list")
   const [draft, setDraft] = useState<DateRange | undefined>()
-  // The first click's day. Kept separately from `draft` because a controlled
-  // range calendar reports an existing span's next click as a completed range;
-  // this makes the first click after opening always start a new one.
+  // The first click's day. `onSelect` reports the day actually clicked as its
+  // `triggerDate`; the range value can echo an existing span's endpoint, so it
+  // is never used to decide which day the user chose.
   const [start, setStart] = useState<Date | null>(null)
 
   const apply = (next: Record<string, string | null>) => {
@@ -63,7 +66,9 @@ export function DashboardPeriodControl({
     }
 
     const query = params.toString()
-    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false })
+    const href = query ? `${pathname}?${query}` : pathname
+
+    startTransition(() => router.push(href, { scroll: false }))
   }
 
   const triggerText =
@@ -96,22 +101,14 @@ export function DashboardPeriodControl({
     apply({ period: key, from: null, to: null })
   }
 
-  const handleRangeSelect = (range: DateRange | undefined) => {
-    const day = range?.to ?? range?.from
-
-    if (!day) {
-      setStart(null)
-      setDraft(undefined)
-      return
-    }
-
+  const handleDateSelect = (_range: DateRange | undefined, triggerDay: Date) => {
     if (!start) {
-      setStart(day)
-      setDraft({ from: day, to: undefined })
+      setStart(triggerDay)
+      setDraft({ from: triggerDay, to: undefined })
       return
     }
 
-    const [lo, hi] = start <= day ? [start, day] : [day, start]
+    const [lo, hi] = start <= triggerDay ? [start, triggerDay] : [triggerDay, start]
 
     setStart(null)
     setDraft(undefined)
@@ -126,18 +123,60 @@ export function DashboardPeriodControl({
           type="button"
           data-dashboard-period
           data-period={period.key}
+          data-loading={isPending ? "true" : undefined}
           aria-label={`Period: ${triggerText}`}
-          className={cn(TRIGGER_CLASS, period.key === "custom" ? "sm:w-72" : "sm:w-44")}
+          aria-busy={isPending}
+          className={cn(
+            TRIGGER_CLASS,
+            period.key === "custom" ? "sm:w-72" : "sm:w-44",
+            isPending && "cursor-progress",
+          )}
         >
-          <CalendarDays
-            aria-hidden="true"
-            className="size-4 shrink-0 text-[var(--muted-foreground)]"
-          />
-          <span className="truncate">{triggerText}</span>
+          {isPending ? (
+            <span
+              aria-hidden="true"
+              className="relative flex size-4 shrink-0 items-center justify-center"
+            >
+              <span className="absolute inset-0 rounded-full border-2 border-[var(--border)]" />
+              <motion.span
+                className="absolute inset-0 rounded-full border-2 border-transparent border-t-[var(--program-primary)] border-r-[var(--program-primary)]"
+                animate={reduceMotion ? undefined : { rotate: 360 }}
+                transition={{ duration: 0.85, ease: "linear", repeat: Infinity }}
+              />
+            </span>
+          ) : (
+            <CalendarDays
+              aria-hidden="true"
+              className="size-4 shrink-0 text-[var(--muted-foreground)]"
+            />
+          )}
+          <span className={cn("truncate transition-opacity", isPending && "opacity-70")}>
+            {triggerText}
+          </span>
           <ChevronDown
             aria-hidden="true"
             className="ml-auto size-3.5 shrink-0 text-[var(--muted-foreground)]"
           />
+          {isPending ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-px overflow-hidden"
+            >
+              {reduceMotion ? (
+                <span className="block h-full w-full bg-[var(--program-primary)] opacity-50" />
+              ) : (
+                <motion.span
+                  className="block h-full w-1/2 bg-gradient-to-r from-transparent via-[var(--program-primary)] to-transparent"
+                  initial={{ x: "-100%" }}
+                  animate={{ x: "200%" }}
+                  transition={{ duration: 1.3, ease: "easeInOut", repeat: Infinity }}
+                />
+              )}
+            </span>
+          ) : null}
+          <span role="status" aria-live="polite" className="sr-only">
+            {isPending ? "Updating dashboard" : ""}
+          </span>
         </button>
       </PopoverTrigger>
 
@@ -186,7 +225,7 @@ export function DashboardPeriodControl({
                 period.from ? parseISO(period.from) : parseISO(today)
               }
               selected={selected}
-              onSelect={handleRangeSelect}
+              onSelect={handleDateSelect}
               disabled={{ after: parseISO(today) }}
               numberOfMonths={2}
             />

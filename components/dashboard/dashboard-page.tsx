@@ -1,26 +1,30 @@
 import Link from "next/link"
 
 import { DashboardAttendanceCard } from "@/components/dashboard/attendance-card"
-import { DashboardCampaignsCard } from "@/components/dashboard/campaigns-card"
 import { DashboardFocusSection } from "@/components/dashboard/focus-section"
 import { DashboardHeader, DashboardScopeNotice } from "@/components/dashboard/dashboard-header"
 import { DashboardKpiBand } from "@/components/dashboard/kpi-band"
 import { DashboardLiveBand } from "@/components/dashboard/live-sessions-band"
-import { DashboardPipelineCard } from "@/components/dashboard/pipeline-card"
+import { DashboardPreacherAttendeeLines } from "@/components/dashboard/preacher-attendee-lines"
+import { DashboardPreachingEfforts } from "@/components/dashboard/preaching-efforts"
 import { DashboardRecentSessionsCard } from "@/components/dashboard/recent-sessions-card"
 import { DashboardTeamTable } from "@/components/dashboard/team-table"
 import type { DashboardLiveSession } from "@/lib/dashboard/live"
 import type { DashboardPeriod } from "@/lib/dashboard/period"
-import type { DashboardOverview, DashboardScope } from "@/lib/dashboard/types"
+import type {
+  DashboardOverview,
+  DashboardPeopleSeries,
+  DashboardScope,
+} from "@/lib/dashboard/types"
 
 /**
- * The page's composition. Every figure arrives in `overview`; this file only
- * orders sections and passes values down.
+ * The page's composition. Every figure arrives in `overview` or `series`; this
+ * file only orders sections and passes values down.
  *
- * The order answers, in turn: how the period went, who carried it, where the
- * pipeline leaks, who needs action, and what is coming. The live band is the
- * one exception to the order: it is now, not the period, and an Admin reading
- * the whole programme already has the Sessions page for it.
+ * The order answers, in turn: how the period went, who carried it, where it
+ * happened, who needs action, and what is coming. Call work lives on the
+ * Campaigns and Sessions pages; this page is about preachers, sessions,
+ * attendance and contact generation.
  */
 export function DashboardPage({
   scope,
@@ -28,14 +32,17 @@ export function DashboardPage({
   today,
   overview,
   liveSessions,
+  series,
 }: {
   scope: DashboardScope
   period: DashboardPeriod
   today: string
   overview: DashboardOverview | null
   liveSessions: DashboardLiveSession[]
+  series: DashboardPeopleSeries | null
 }) {
   const unassigned = scope.assistantUnassigned || overview === null
+  const programmeScope = scope.role === "Admin" && scope.mode === "admin"
   const showLiveBand =
     liveSessions.length > 0 && !(scope.role === "Admin" && scope.mode === "admin")
 
@@ -69,38 +76,45 @@ export function DashboardPage({
         <>
           {showLiveBand ? <DashboardLiveBand sessions={liveSessions} /> : null}
 
-          <DashboardKpiBand
-            kpis={overview.kpis}
-            hasDialer={scope.hasDialer}
-            trend={overview.attendanceTrend}
-          />
+          <DashboardKpiBand kpis={overview.kpis} trend={overview.attendanceTrend} />
 
-          <DashboardAttendanceCard trend={overview.attendanceTrend} kpis={overview.kpis} />
+          {programmeScope ? (
+            <>
+              {series ? (
+                <DashboardPreachingEfforts
+                  rows={series.totals.rows}
+                  sessionsByPreacher={series.sessionsByPreacher}
+                  contactsByPreacher={series.contactsByPreacher}
+                />
+              ) : null}
 
-          <DashboardTeamTable
-            team={overview.team}
-            role={scope.role}
-            programScope={scope.programScope}
-            hasDialer={scope.hasDialer}
-          />
+              {series ? (
+                <DashboardPreacherAttendeeLines
+                  months={series.attendeesByPreacher.months}
+                  series={series.attendeesByPreacher.series}
+                  kpis={overview.kpis}
+                />
+              ) : null}
 
-          <DashboardPipelineCard
-            pipeline={overview.pipeline}
-            kpis={overview.kpis}
-            hasDialer={scope.hasDialer}
-            periodLabel={period.label.toLowerCase()}
-            campaigns={overview.campaigns}
-          />
+              <DashboardTeamTable
+                team={overview.team}
+                role={scope.role}
+                programScope={scope.programScope}
+              />
 
-          <DashboardFocusSection segments={overview.focus} hasDialer={scope.hasDialer} mode={scope.mode} />
-
-          {scope.hasDialer ? (
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-              <DashboardCampaignsCard campaigns={overview.campaigns} />
               <DashboardRecentSessionsCard sessions={overview.recentSessions} />
-            </div>
+            </>
           ) : (
-            <DashboardRecentSessionsCard sessions={overview.recentSessions} />
+            <>
+              <DashboardAttendanceCard
+                trend={overview.attendanceTrend}
+                kpis={overview.kpis}
+              />
+
+              <DashboardFocusSection segments={overview.focus} mode={scope.mode} />
+
+              <DashboardRecentSessionsCard sessions={overview.recentSessions} />
+            </>
           )}
         </>
       )}

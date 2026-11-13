@@ -48,7 +48,7 @@ export interface ContactRecordPayload {
   sourceOptions: string[]
   booksReadOptions: string[]
   history: ManageContactHistory
-  /** `null` when `canComment` is false; the loader does not read them then. */
+  /** Always `null`: the frame fetches the comment list after the fields render. */
   comments: ManageContactCommentList | null
   capabilities: ContactRecordCapabilities
 }

@@ -127,7 +127,7 @@ test("opens a candidate's contact record in place", async ({ page }) => {
 })
 
 test("the Focus now card's View all link keeps the segment in the URL", async ({ page }) => {
-  await page.goto("/dashboard?mode=admin&period=all")
+  await page.goto("/dashboard?mode=preacher&period=all")
   const card = page.locator('[data-dashboard-focus="new_untouched"]')
   await card.getByRole("link", { name: "View all" }).click()
 
