@@ -3,9 +3,8 @@
  *
  * The fixture's people are assigned to the Preacher, so the Admin's All scope
  * contains them and the Admin's Own scope does not. That difference is the
- * assertion: every section must narrow together, the programme-only sections
- * (Preaching efforts and By preacher) disappear in Own scope, Focus now is
- * Own-scope only, and the URL must reproduce the view.
+ * assertion: every section must narrow together, the team table must switch
+ * from preachers to locations, and the URL must reproduce the view.
  */
 
 import { expect, test } from "@playwright/test"
@@ -34,9 +33,10 @@ test("an Admin's All and Own scopes narrow every section and survive a reload", 
   await page.goto("/dashboard?mode=admin&period=all")
 
   const allScopeCount = await scopeCount(page)
-  await expect(page.getByRole("heading", { name: "Preaching efforts" })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "Focus now" })).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: "By preacher" })).toBeVisible()
+  await expect(page.locator('[data-dashboard-focus="new_untouched"]')).toContainText(
+    fixture.contactNames.newUntouched,
+  )
 
   await page.getByRole("link", { name: "Own scope" }).click()
   await expect(page).toHaveURL(/mode=preacher/)
@@ -44,13 +44,12 @@ test("an Admin's All and Own scopes narrow every section and survive a reload", 
 
   const ownScopeCount = await scopeCount(page)
   expect(ownScopeCount).toBeLessThan(allScopeCount)
-  await expect(page.getByRole("heading", { name: "Preaching efforts" })).toHaveCount(0)
-  await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toHaveCount(0)
-  await expect(page.getByRole("heading", { name: "By location" })).toHaveCount(0)
-  await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toHaveCount(0)
-  await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "Focus now" })).toBeVisible()
-  await expect(page.getByText(/Showing only rows scoped to your own staff account/)).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: "By location" })).toBeVisible()
+  await expect(
+    page.getByText(
+      "Showing only rows scoped to your own staff account. Switch to the program-wide scope to see every preacher.",
+    ),
+  ).toBeVisible()
   await expect(page.locator('[data-dashboard-focus-count="new_untouched"]')).toHaveText("0")
   await expect(page.locator('[data-dashboard-focus="new_untouched"]')).not.toContainText(
     fixture.contactNames.newUntouched,
@@ -59,13 +58,12 @@ test("an Admin's All and Own scopes narrow every section and survive a reload", 
   // The URL is the state: a reload reproduces the narrowed page.
   await page.reload()
   await expect(page).toHaveURL(/mode=preacher/)
-  await expect(page.getByRole("heading", { name: "Focus now" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "By location" })).toBeVisible()
   await expect(page.locator('[data-dashboard-focus-count="new_untouched"]')).toHaveText("0")
 
   await page.getByRole("link", { name: "All preachers" }).click()
   await expect(page).toHaveURL(/mode=admin/)
-  await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "Focus now" })).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: "By preacher" })).toBeVisible()
 })
 
 test.describe("a Preacher", () => {
@@ -76,15 +74,10 @@ test.describe("a Preacher", () => {
 
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible()
     await expect(page.getByRole("navigation", { name: "Data scope" })).toHaveCount(0)
-    await expect(page.getByText(/Showing only rows scoped to your own staff account/)).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "Preaching efforts" })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "By location" })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Focus now" })).toBeVisible()
-    await expect(page.locator(`[data-dashboard-focus="fading"]`)).toContainText(
-      fixture.contactNames.fading,
+    await expect(page.getByText(/Showing only rows scoped to your own staff account/)).toBeVisible()
+    await expect(page.getByRole("heading", { name: "By location" })).toBeVisible()
+    await expect(page.locator(`[data-dashboard-focus="confirmed_not_attended"]`)).toContainText(
+      fixture.contactNames.confirmedAbsent,
     )
   })
 })
@@ -97,12 +90,7 @@ test.describe("an Assistant", () => {
 
     await expect(page.getByRole("navigation", { name: "Data scope" })).toHaveCount(0)
     await expect(page.getByText(/the preacher you assist/)).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Preaching efforts" })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "By location" })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Focus now" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "By location" })).toBeVisible()
     await expect(page.locator('[data-dashboard-focus="new_untouched"]')).toContainText(
       fixture.contactNames.newUntouched,
     )

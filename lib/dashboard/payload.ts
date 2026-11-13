@@ -10,19 +10,13 @@
 import type {
   AttendanceTrendPoint,
   CandidatePage,
-  DashboardAttendeeSeries,
   DashboardCampaign,
   DashboardCoverage,
   DashboardKpis,
   DashboardOutcome,
   DashboardOverview,
-  DashboardPeopleSeries,
   DashboardPipeline,
-  DashboardPreacherBarRow,
-  DashboardPreacherBars,
-  DashboardPreacherTotalsRow,
   DashboardScopeCounts,
-  DashboardSeriesSegment,
   DashboardTeam,
   FocusRow,
   FocusSegment,
@@ -336,121 +330,6 @@ function parseFocusSegment(value: unknown, path: string): FocusSegment {
     rows: requireArray(record.rows, `${path}.rows`).map((row, index) =>
       parseFocusRow(row, `${path}.rows[${index}]`),
     ),
-  }
-}
-
-function requireTextValue(value: unknown, path: string): string {
-  if (typeof value !== "string") {
-    throw new DashboardPayloadError(path, "expected text")
-  }
-
-  return value
-}
-
-function requireIntegerValue(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value)) {
-    throw new DashboardPayloadError(path, "expected an integer")
-  }
-
-  return value
-}
-
-function parseSeriesSegment(value: unknown, path: string): DashboardSeriesSegment {
-  const record = requireRecord(value, path)
-
-  return {
-    key: requireText(record, "key", path),
-    label: requireText(record, "label", path),
-    value: requireInteger(record, "value", path),
-  }
-}
-
-function parsePreacherBarRow(value: unknown, path: string): DashboardPreacherBarRow {
-  const record = requireRecord(value, path)
-
-  return {
-    preacherId: requireText(record, "preacherId", path),
-    preacherName: requireText(record, "preacherName", path),
-    total: requireInteger(record, "total", path),
-    segments: requireArray(record.segments, `${path}.segments`).map((segment, index) =>
-      parseSeriesSegment(segment, `${path}.segments[${index}]`),
-    ),
-  }
-}
-
-function parsePreacherBars(value: unknown, path: string): DashboardPreacherBars {
-  const record = requireRecord(value, path)
-
-  return {
-    rows: requireArray(record.rows, `${path}.rows`).map((row, index) =>
-      parsePreacherBarRow(row, `${path}.rows[${index}]`),
-    ),
-  }
-}
-
-function parseAttendeeSeries(value: unknown, path: string, monthCount: number): DashboardAttendeeSeries {
-  const record = requireRecord(value, path)
-  const values = requireArray(record.values, `${path}.values`).map((entry, index) =>
-    requireIntegerValue(entry, `${path}.values[${index}]`),
-  )
-
-  if (values.length !== monthCount) {
-    throw new DashboardPayloadError(`${path}.values`, `expected ${monthCount} months`)
-  }
-
-  return {
-    preacherId: requireText(record, "preacherId", path),
-    preacherName: requireText(record, "preacherName", path),
-    values,
-  }
-}
-
-function parsePreacherTotalsRow(value: unknown, path: string): DashboardPreacherTotalsRow {
-  const record = requireRecord(value, path)
-
-  return {
-    preacherId: requireText(record, "preacherId", path),
-    preacherName: requireText(record, "preacherName", path),
-    contacts: requireInteger(record, "contacts", path),
-    sessions: requireInteger(record, "sessions", path),
-    attendees: requireInteger(record, "attendees", path),
-    repeatAttendees: requireInteger(record, "repeatAttendees", path),
-    attendeeSegments: requireArray(record.attendeeSegments, `${path}.attendeeSegments`).map(
-      (segment, index) => parseSeriesSegment(segment, `${path}.attendeeSegments[${index}]`),
-    ),
-  }
-}
-
-export function parseDashboardPeopleSeries(value: unknown): DashboardPeopleSeries {
-  const record = requireRecord(value, "series")
-  const attendees = requireRecord(record.attendeesByPreacher, "series.attendeesByPreacher")
-  const months = requireArray(attendees.months, "series.attendeesByPreacher.months").map((month, index) =>
-    requireTextValue(month, `series.attendeesByPreacher.months[${index}]`),
-  )
-
-  return {
-    sessionsByPreacher: parsePreacherBars(
-      requireRecord(record.sessionsByPreacher, "series.sessionsByPreacher"),
-      "series.sessionsByPreacher",
-    ),
-    contactsByPreacher: parsePreacherBars(
-      requireRecord(record.contactsByPreacher, "series.contactsByPreacher"),
-      "series.contactsByPreacher",
-    ),
-    totals: {
-      rows: requireArray(
-        requireRecord(record.totals, "series.totals").rows,
-        "series.totals.rows",
-      ).map((row, index) =>
-        parsePreacherTotalsRow(row, `series.totals.rows[${index}]`),
-      ),
-    },
-    attendeesByPreacher: {
-      months,
-      series: requireArray(attendees.series, "series.attendeesByPreacher.series").map((entry, index) =>
-        parseAttendeeSeries(entry, `series.attendeesByPreacher.series[${index}]`, months.length),
-      ),
-    },
   }
 }
 

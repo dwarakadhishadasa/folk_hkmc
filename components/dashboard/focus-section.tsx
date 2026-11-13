@@ -88,15 +88,15 @@ function CandidateRow({
 
 export function DashboardFocusSection({
   segments,
+  hasDialer,
   mode,
 }: {
   segments: FocusSegment[]
+  hasDialer: boolean
   mode: DashboardMode
 }) {
   const byKey = new Map(segments.map((segment) => [segment.key, segment]))
-  // Call work is not part of this dashboard any more; the two contact and
-  // attendance segments are the ones whose rules do not depend on a call log.
-  const visible = FOCUS_SEGMENTS.filter((segment) => !segment.requiresDialer)
+  const visible = FOCUS_SEGMENTS.filter((segment) => hasDialer || !segment.requiresDialer)
   const modeQuery = mode === "preacher" ? "&mode=preacher" : ""
 
   return (

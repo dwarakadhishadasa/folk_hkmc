@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  DashboardPayloadError,
-  parseCandidatePage,
-  parseDashboardOverview,
-  parseDashboardPeopleSeries,
-} from "@/lib/dashboard/payload"
+import { DashboardPayloadError, parseCandidatePage, parseDashboardOverview } from "@/lib/dashboard/payload"
 
 function completeOverview(): Record<string, unknown> {
   return {
@@ -214,88 +209,6 @@ describe("parseDashboardOverview", () => {
     delete (payload.coverage as Record<string, unknown>).withCollector
 
     expect(() => parseDashboardOverview(payload)).toThrow(DashboardPayloadError)
-  })
-})
-
-function completePeopleSeries(): Record<string, unknown> {
-  const preacherId = "11111111-1111-4111-8111-111111111111"
-
-  return {
-    sessionsByPreacher: {
-      series: [{ key: "loc-1", label: "T. Nagar" }],
-      rows: [
-        {
-          preacherId,
-          preacherName: "Anand",
-          total: 2,
-          segments: [{ key: "loc-1", label: "T. Nagar", value: 2 }],
-        },
-      ],
-    },
-    contactsByPreacher: {
-      series: [{ key: "loc-1", label: "T. Nagar" }],
-      rows: [
-        {
-          preacherId,
-          preacherName: "Anand",
-          total: 3,
-          segments: [{ key: "loc-1", label: "T. Nagar", value: 3 }],
-        },
-      ],
-    },
-    totals: {
-      rows: [
-        {
-          preacherId,
-          preacherName: "Anand",
-          contacts: 3,
-          sessions: 2,
-          attendees: 4,
-          repeatAttendees: 1,
-          attendeeSegments: [{ key: "loc-1", label: "T. Nagar", value: 4 }],
-        },
-      ],
-    },
-    attendeesByPreacher: {
-      months: ["2026-10", "2026-11"],
-      series: [{ preacherId, preacherName: "Anand", values: [1, 2] }],
-    },
-  }
-}
-
-describe("parseDashboardPeopleSeries", () => {
-  it("accepts the preacher bars and the twelve-month lines", () => {
-    const series = parseDashboardPeopleSeries(completePeopleSeries())
-
-    expect(series.sessionsByPreacher.rows[0]?.segments[0]?.value).toBe(2)
-    expect(series.contactsByPreacher.rows[0]?.total).toBe(3)
-    expect(series.totals.rows[0]).toEqual({
-      preacherId: "11111111-1111-4111-8111-111111111111",
-      preacherName: "Anand",
-      contacts: 3,
-      sessions: 2,
-      attendees: 4,
-      repeatAttendees: 1,
-      attendeeSegments: [{ key: "loc-1", label: "T. Nagar", value: 4 }],
-    })
-    expect(series.attendeesByPreacher.months).toEqual(["2026-10", "2026-11"])
-    expect(series.attendeesByPreacher.series[0]?.values).toEqual([1, 2])
-  })
-
-  it("rejects an attendee line that does not cover every month", () => {
-    const payload = completePeopleSeries()
-    const attendees = payload.attendeesByPreacher as { series: Array<Record<string, unknown>> }
-    attendees.series[0]!.values = [1]
-
-    expect(() => parseDashboardPeopleSeries(payload)).toThrow(/expected 2 months/)
-  })
-
-  it("rejects a bar segment without a count", () => {
-    const payload = completePeopleSeries()
-    const sessions = payload.sessionsByPreacher as { rows: Array<{ segments: Array<Record<string, unknown>> }> }
-    delete sessions.rows[0]!.segments[0]!.value
-
-    expect(() => parseDashboardPeopleSeries(payload)).toThrow(DashboardPayloadError)
   })
 })
 

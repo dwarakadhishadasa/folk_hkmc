@@ -91,17 +91,18 @@ export function DashboardHeader({
 }
 
 /**
- * The own-scope explanation. An Assistant is told whose patch they are
- * reading, and an Assistant with no assignment is told why the page is empty.
- * A reader in their own scope needs no notice: the scope switch already names
- * it, and a Preacher has no switch to be pointed at.
+ * The own-scope explanation. The Admin/Preacher copy is verbatim from
+ * `manage-portal.tsx`; an Assistant is told whose patch they are reading, and
+ * an Assistant with no assignment is told why the page is empty.
  */
 export function DashboardScopeNotice({ scope }: { scope: DashboardScope }) {
   const copy = scope.assistantUnassigned
     ? "No active preacher is assigned to your account, so this dashboard is empty. Ask an Admin to assign you to a preacher."
     : scope.role === "Assistant"
       ? `Showing only rows scoped to ${scope.assistantPreacherName ?? "the preacher you assist"}, the preacher you assist.`
-      : null
+      : !scope.programScope
+        ? "Showing only rows scoped to your own staff account. Switch to the program-wide scope to see every preacher."
+        : null
 
   if (!copy) {
     return null

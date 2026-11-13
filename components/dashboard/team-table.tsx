@@ -55,23 +55,29 @@ function NameCell({ name }: { name: string }) {
 
 /**
  * The team comparison: preachers in All scope, locations in Own scope, on the
- * same figures. A row with no activity stays with zeros — that is the table's
- * job.
+ * same seven figures. A row with no activity stays with zeros — that is the
+ * table's job.
  */
 export function DashboardTeamTable({
   team,
   role,
   programScope,
+  hasDialer,
 }: {
   team: DashboardTeam
   role: DashboardRole
   programScope: boolean
+  hasDialer: boolean
 }) {
   const nameHeading = team.groupBy === "preacher" ? "Preacher" : "Location"
   const title = team.groupBy === "preacher" ? "By preacher" : "By location"
-  const subtitle = team.groupBy === "preacher"
-    ? "Contacts collected, sessions and attendance for every preacher in the programme"
-    : "Contacts collected, sessions and attendance for every location in your scope"
+  const subtitle = hasDialer
+    ? team.groupBy === "preacher"
+      ? "Contacts collected, calls and attendance for every preacher in the programme"
+      : "Contacts collected, calls and attendance for every location in your scope"
+    : team.groupBy === "preacher"
+      ? "Contacts collected, sessions and attendance for every preacher in the programme"
+      : "Contacts collected, sessions and attendance for every location in your scope"
 
   return (
     <DashboardCard title={title} subtitle={subtitle}>
@@ -106,6 +112,19 @@ export function DashboardTeamTable({
                   <TableHead className={HEAD_CLASS} scope="col">
                     Collected
                   </TableHead>
+                  {hasDialer ? (
+                    <>
+                      <TableHead className={HEAD_CLASS} scope="col">
+                        Calls
+                      </TableHead>
+                      <TableHead className={HEAD_CLASS} scope="col">
+                        Reached
+                      </TableHead>
+                      <TableHead className={HEAD_CLASS} scope="col">
+                        Confirmed
+                      </TableHead>
+                    </>
+                  ) : null}
                   <TableHead className={HEAD_CLASS} scope="col">
                     Sessions
                   </TableHead>
@@ -129,6 +148,19 @@ export function DashboardTeamTable({
                     <TableCell className="px-2 py-3 text-[14px] tabular-nums text-[var(--program-text)] sm:px-4">
                       {formatCount(row.contactsCollected)}
                     </TableCell>
+                    {hasDialer ? (
+                      <>
+                        <TableCell className="px-2 py-3 text-[14px] tabular-nums text-[var(--program-text)] sm:px-4">
+                          {formatCount(row.callsMade)}
+                        </TableCell>
+                        <TableCell className="px-2 py-3 text-[14px] tabular-nums text-[var(--program-text)] sm:px-4">
+                          {formatCount(row.reached)}
+                        </TableCell>
+                        <TableCell className="px-2 py-3 text-[14px] tabular-nums text-[var(--program-text)] sm:px-4">
+                          {formatCount(row.confirmed)}
+                        </TableCell>
+                      </>
+                    ) : null}
                     <TableCell className="px-2 py-3 text-[14px] tabular-nums text-[var(--program-text)] sm:px-4">
                       {formatCount(row.sessions)}
                     </TableCell>
@@ -167,6 +199,26 @@ export function DashboardTeamTable({
                       {formatCount(row.contactsCollected)}
                     </dd>
                   </div>
+                  {hasDialer ? (
+                    <>
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-[var(--muted-foreground)]">Calls</dt>
+                        <dd className="tabular-nums text-[var(--program-text)]">
+                          {formatCount(row.callsMade)}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-[var(--muted-foreground)]">Reached</dt>
+                        <dd className="tabular-nums text-[var(--program-text)]">{formatCount(row.reached)}</dd>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <dt className="text-[var(--muted-foreground)]">Confirmed</dt>
+                        <dd className="tabular-nums text-[var(--program-text)]">
+                          {formatCount(row.confirmed)}
+                        </dd>
+                      </div>
+                    </>
+                  ) : null}
                   <div className="flex justify-between gap-2">
                     <dt className="text-[var(--muted-foreground)]">Sessions</dt>
                     <dd className="tabular-nums text-[var(--program-text)]">{formatCount(row.sessions)}</dd>

@@ -27,7 +27,7 @@ function monthTick(month: string): string {
 /**
  * Attendance health as the starter's large trend card: an area for unique
  * attendees and a line for check-ins over the twelve months ending this month.
- * The selected period's totals sit above the trend.
+ * The three figures above it are the selected period's.
  */
 export function DashboardAttendanceCard({
   trend,
@@ -45,7 +45,7 @@ export function DashboardAttendanceCard({
   return (
     <DashboardCard
       title="Attendance"
-      subtitle="Selected-period totals, with the last 12 months trend"
+      subtitle="Last 12 months, independent of the selected period"
       badge="12 months"
     >
       <div className="flex flex-col gap-3">
@@ -79,7 +79,7 @@ export function DashboardAttendanceCard({
             <span className="size-2 rounded-full bg-[var(--chart-2)]" aria-hidden="true" />
             Check-ins
           </span>
-          {empty ? <span className="text-[var(--muted-foreground)]">No attendance recorded in the last 12 months.</span> : null}
+          {empty ? <span className="text-[var(--muted-foreground)]">No attendance recorded in this period.</span> : null}
         </div>
 
         <ChartContainer config={CHART_CONFIG} className="aspect-auto h-64 w-full">
@@ -131,6 +131,12 @@ export function DashboardAttendanceCard({
             </li>
           ))}
         </ul>
+
+        <p className="text-xs text-[var(--muted-foreground)]">
+          {formatCount(kpis.newAttendees)} new · {formatCount(kpis.returningAttendees)} returning ·{" "}
+          {formatCount(kpis.invitedAttendees)} invited · {formatCount(kpis.organicAttendees)} came without an
+          invite
+        </p>
       </div>
     </DashboardCard>
   )

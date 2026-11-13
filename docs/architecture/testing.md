@@ -107,7 +107,7 @@ pnpm dev:local     # once per machine session
 | `pnpm test:e2e:guards` | `harness-guards` + `suite-determinism` + `mailpit-reader` | **21 s** (24 passed) |
 | `pnpm test:e2e:theme` | `theme-switch.spec.ts` | **38 s** (16 passed) |
 | `pnpm test:e2e:sessions` | The two `sessions-*.spec.ts` files | **1.7 min** (19 passed: 4 setup + 15 spec) |
-| `pnpm test:e2e:dashboard` | `dashboard-` files (the Gita Life file skips without its own stack) | ~2 min |
+| `pnpm test:e2e:dashboard` | `dashboard-` files (the Gita Life file skips without its own stack) | **2.2 min** (23 passed, 1 skipped) |
 | `pnpm test:e2e:manage` | The six `manage-contacts-*.spec.ts` files | **4.5 min** (35 tests: 32 spec + 3 setup) |
 | `pnpm test:e2e:grid` | The eleven `grid-*.spec.ts` files | **28 min observed** (181 tests) — green baseline 3.2 min predates the status strip; see §6 |
 | `pnpm test:e2e` | **Full suite.** 289 specs + 3 setup. | ~5–7 min |
@@ -161,7 +161,7 @@ use, each including the 3 setup tests that every run pays for:
 | `manage-contacts` | `test:e2e:manage` | 48 in 10 files |
 | `record-review-` | `test:e2e:attendance` | 9 in 4 files |
 | `theme-switch` | `test:e2e:theme` | 16 in 4 files |
-| `dashboard-` | `test:e2e:dashboard` | 6 files (the Gita Life file skips without `E2E_GITA_LIFE_URL`) |
+| `dashboard-` | `test:e2e:dashboard` | 24 in 5 files (1 skipped without `E2E_GITA_LIFE_URL`) |
 | `harness-guards suite-determinism mailpit-reader` | `test:e2e:guards` | 24 in 6 files |
 
 Multiple positional filters are **OR**-ed, which is how `test:e2e:guards`
@@ -259,13 +259,6 @@ spec (`dashboard-overview`, `dashboard-candidates`, `sessions-overview`,
 `campaign-assign-select`, `manage-contacts-list`). The record's sequence helpers
 are unit-tested in `components/contacts/contact-record-sequence.test.ts`.
 
-The record payload deliberately omits comments: `loadContactRecord` returns
-`comments: null`, the fields render, and `use-contact-record` then reads
-`/api/manage/contacts/comments?contactId=…` while the pane shows its skeleton.
-The detail spec asserts both halves — the record payload's null and the separate
-list route — so a future change that folds comments back into the slow read is
-visible.
-
 ### Sessions — overview, insights, detail and live dashboards — `pnpm test:e2e:sessions`
 
 | Source | Spec | Tests |
@@ -303,22 +296,19 @@ the sessions scope predicate, so a change to that route also runs
 
 | Source | Spec | Tests |
 |---|---|---|
-| `apps/*/app/dashboard/**`, `components/dashboard/**`, `lib/dashboard/**`, `supabase/migrations/20261102010000_dashboard_rpcs.sql`, `supabase/migrations/20261113090000_dashboard_people_series.sql` | `e2e/specs/dashboard-overview.spec.ts` | 4 |
+| `apps/*/app/dashboard/**`, `components/dashboard/**`, `lib/dashboard/**`, `supabase/migrations/20261102010000_dashboard_rpcs.sql` | `e2e/specs/dashboard-overview.spec.ts` | 3 |
 | " | `e2e/specs/dashboard-scope.spec.ts` | 4 |
-| " | `e2e/specs/dashboard-period.spec.ts` | 6 |
-| " | `e2e/specs/dashboard-candidates.spec.ts` | 5 |
-| `components/sessions/new-session-popover.tsx`, `apps/folk/app/api/sessions/route.ts`, `lib/supabase/data.ts` | `e2e/specs/dashboard-campaign-link.spec.ts` | 3 |
+| " | `e2e/specs/dashboard-period.spec.ts` | 4 |
+| " | `e2e/specs/dashboard-candidates.spec.ts` | 4 |
+| `components/sessions/new-session-popover.tsx`, `apps/folk/app/api/sessions/route.ts`, `lib/supabase/data.ts` | `e2e/specs/dashboard-campaign-link.spec.ts` | 4 |
 | `packages/program-config/src/server.ts` (`modules.dialer`) | `e2e/specs/dashboard-no-dialer.spec.ts` | 1, skipped unless `E2E_GITA_LIFE_URL` and `E2E_GITA_LIFE_STORAGE_STATE` are set |
 
-The layout is one server render with two reads: `dashboard_overview` carries the
-period figures and `dashboard_people_series` carries the preacher-by-location
-bars, the per-preacher totals and the twelve-month attendee lines.
-`components/dashboard/*` never counts a row; the bars are scaled in the
-component only for display. Call work is not part of this page.
-`dashboard-candidates.spec.ts` owns the 50-per-page drill-down and its 404.
-`dashboard-campaign-link.spec.ts` drives the real `+ New session` popover and
-reads `sessions.campaign_id` back through the service role; a foreign or
-cancelled campaign must be a named 400.
+The layout is one server render: `dashboard_overview` is the only page read,
+and `components/dashboard/*` never counts a row or derives a figure beyond the
+display percentages the spec permits. `dashboard-candidates.spec.ts` owns the
+50-per-page drill-down and its 404. `dashboard-campaign-link.spec.ts` drives the
+real `+ New session` popover and reads `sessions.campaign_id` back through the
+service role; a foreign or cancelled campaign must be a named 400.
 
 The contract gate is the non-browser half:
 `pnpm test:dashboard-contract` creates a disposable campaign slice and compares

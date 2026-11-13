@@ -8,10 +8,9 @@ import { AuthzError, getStaffContext } from "@/lib/authz"
 import { toClientStaff } from "@/lib/staff-dto"
 import { loadDashboardLiveSessions, type DashboardLiveSession } from "@/lib/dashboard/live"
 import { loadDashboardOverview } from "@/lib/dashboard/overview"
-import { loadDashboardPeopleSeries } from "@/lib/dashboard/people-series"
 import { parseDashboardPeriod, resolveDashboardWindow } from "@/lib/dashboard/period"
 import { requireDashboardRole, resolveDashboardScope } from "@/lib/dashboard/scope"
-import type { DashboardOverview, DashboardPeopleSeries } from "@/lib/dashboard/types"
+import type { DashboardOverview } from "@/lib/dashboard/types"
 import { programDay } from "@/lib/program-day"
 
 type DashboardSearchParams = Promise<Record<string, string | string[] | undefined>>
@@ -41,7 +40,6 @@ export async function DashboardRoute({ searchParams }: { searchParams: Dashboard
     const window = resolveDashboardWindow(period, today)
 
     let overview: DashboardOverview | null = null
-    let series: DashboardPeopleSeries | null = null
     let liveSessions: DashboardLiveSession[] = []
 
     if (!scope.assistantUnassigned) {
@@ -49,15 +47,13 @@ export async function DashboardRoute({ searchParams }: { searchParams: Dashboard
       // work; the dashboard skips the read rather than loading a band it hides.
       const showLive = !(scope.role === "Admin" && scope.mode === "admin")
 
-      const [loadedOverview, loadedSeries, loadedLiveSessions] = await Promise.all([
+      const [loadedOverview, loadedLiveSessions] = await Promise.all([
         loadDashboardOverview(scope, window),
-        loadDashboardPeopleSeries(scope, window),
         showLive
           ? loadDashboardLiveSessions(staff, scope)
           : Promise.resolve<DashboardLiveSession[]>([]),
       ])
       overview = loadedOverview
-      series = loadedSeries
       liveSessions = loadedLiveSessions
     }
 
@@ -70,7 +66,6 @@ export async function DashboardRoute({ searchParams }: { searchParams: Dashboard
             today={today}
             overview={overview}
             liveSessions={liveSessions}
-            series={series}
           />
         </DashboardShell>
       </StaffAuthShell>

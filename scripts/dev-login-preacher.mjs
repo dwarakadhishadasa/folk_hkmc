@@ -173,9 +173,7 @@ async function loginAttempt(page, email, timeoutMs) {
   await page.getByRole("button", { name: "Send Code" }).click()
 
   const codeField = page.getByLabel("Email code")
-  // The alert class is themeable (`AUTH_ERROR_CLASS`), so match the role the
-  // login page puts on it — scoped to the form to skip Next's route announcer.
-  const errorBox = page.locator("form [role='alert']").first()
+  const errorBox = page.locator(".text-red-700").first()
   try {
     await codeField.or(errorBox).first().waitFor({ state: "visible", timeout: 20000 })
   } catch {
@@ -189,15 +187,11 @@ async function loginAttempt(page, email, timeoutMs) {
     await page.getByRole("button", { name: "Verify Code" }).click()
 
     try {
-      // A signed-in Preacher lands on `/dashboard`, not `/` (`landingPathForRole`
-      // in lib/staff-routes.ts). Wait for the app to leave the login route rather
-      // than pinning a landing path that moves with the product.
-      await page.waitForURL((url) => !/^\/(login|auth)(\/|$)/.test(url.pathname), { timeout: timeoutMs })
+      await page.waitForURL((url) => url.pathname === "/", { timeout: timeoutMs })
       return "code"
     } catch {
       const text = ((await errorBox.textContent().catch(() => "")) ?? "").trim()
-      const where = new URL(page.url()).pathname
-      throw new Error(`Code verification failed: ${text || `no error text appeared; the app is on ${where}`}`)
+      throw new Error(`Code verification failed: ${text || "the app stayed on /login with no error text."}`)
     }
   }
 

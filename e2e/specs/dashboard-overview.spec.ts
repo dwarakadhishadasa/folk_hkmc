@@ -1,7 +1,11 @@
 /**
- * The dashboard overview: the preacher, session, attendance and contact
- * sections render, and the fixture's people land in the focus segments that do
- * not depend on a call log.
+ * The dashboard overview: every section renders, and the fixture's people
+ * land in the segment their history says they belong to.
+ *
+ * The seed holds no campaigns and no call logs, so this file owns the rows
+ * that make the pipeline and the campaign card non-zero. Assertions that name
+ * a fixture person are immune to seed changes; the campaign row's counts are
+ * exact because the fixture campaign holds only this run's assignments.
  *
  * One fixture is built in `beforeAll` and removed in `afterAll`. A failure in
  * a test does not skip the cleanup, so the next run does not inherit these
@@ -15,12 +19,6 @@ import {
   cleanupDashboardFixture,
   type DashboardFixture,
 } from "../fixtures/dashboard"
-import { storageStatePath } from "../fixtures/roles"
-
-// The app registers a service worker that can serve a previously opened
-// contact record from cache. This file asserts the gateway's behaviour, so the
-// fetch must reach the network (and this test's route interception).
-test.use({ serviceWorkers: "block" })
 
 let fixture: DashboardFixture
 
@@ -32,166 +30,145 @@ test.afterAll(async () => {
   await cleanupDashboardFixture(fixture)
 })
 
-test("renders the preacher, session, attendance and contact sections", async ({ page }) => {
+test("renders every section and the fixture's campaign arithmetic", async ({ page }) => {
   await page.goto("/dashboard?mode=admin&period=all")
 
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible()
   await expect(page.getByText(/contacts · .* locations · .* sessions/)).toBeVisible()
 
-  // KPI band: the four people-focused tiles, each with a numeric value.
+  // KPI band: five tiles with a numeric value and a caption.
   for (const key of [
     "contacts-collected",
-    "sessions-held",
+    "calls-made",
+    "contacts-reached",
+    "contacts-confirmed",
     "unique-attendees",
-    "attendance-records",
   ]) {
     const tile = page.locator(`[data-dashboard-kpi="${key}"]`)
     await expect(tile).toBeVisible()
     await expect(tile.locator("dd").first()).toHaveText(/\d[\d,]*/)
   }
 
-  // Call work is not part of this page.
-  for (const key of ["calls-made", "contacts-reached", "contacts-confirmed"]) {
-    await expect(page.locator(`[data-dashboard-kpi="${key}"]`)).toHaveCount(0)
+  // The pipeline names its five nested stages and the invite readout.
+  const pipeline = page.getByRole("heading", { name: "Preaching pipeline" })
+  await expect(pipeline).toBeVisible()
+  for (const stage of ["Collected", "Assigned", "Called", "Reached (invited)", "Confirmed"]) {
+    await expect(page.getByText(stage, { exact: true }).first()).toBeVisible()
   }
 
-  await expect(page.getByRole("heading", { name: "Preaching efforts" })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "Recent sessions" })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "Focus now" })).toHaveCount(0)
-  await expect(page.getByRole("heading", { name: "Attendance" })).toHaveCount(0)
-  await expect(page.getByRole("heading", { name: "Contact generation" })).toHaveCount(0)
-
-  await expect(page.getByRole("heading", { name: "Preaching pipeline" })).toHaveCount(0)
-  await expect(page.getByRole("heading", { name: "Active campaigns" })).toHaveCount(0)
+  // Attendance and the team table sit directly under the KPI band. Coverage,
+  // outcomes and the live band are retired from the All-preachers view.
+  await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "By preacher" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Contact coverage" })).toHaveCount(0)
   await expect(page.getByRole("heading", { name: "Call outcomes" })).toHaveCount(0)
   await expect(page.getByRole("region", { name: "Live sessions" })).toHaveCount(0)
 
-  await expect(page.locator('[data-dashboard-location-bar="sessions"]').first()).toBeVisible()
-  await expect(page.locator('[data-dashboard-location-bar="contacts"]').first()).toBeVisible()
-  await expect(page.locator('[data-dashboard-people-chart="attendees"]')).toBeVisible()
-
-  const scorecard = page
-    .locator("[data-dashboard-scorecard]")
-    .filter({ hasText: fixture.preacher.name ?? fixture.preacher.email })
-    .first()
-  await expect(scorecard).toBeVisible()
-  await expect(scorecard).toContainText("Contacts collected")
-  await expect(scorecard).toContainText(fixture.location.name)
-
   const kpiBox = await page.locator('[data-dashboard-kpi="contacts-collected"]').boundingBox()
-  const orderedHeadings = [
-    page.getByRole("heading", { name: "Preaching efforts" }),
-    page.getByRole("heading", { name: "Attendees by preacher" }),
-    page.getByRole("heading", { name: "By preacher", exact: true }),
-    page.getByRole("heading", { name: "Recent sessions" }),
-  ]
-  const positions: number[] = []
-  for (const heading of orderedHeadings) {
-    const box = await heading.boundingBox()
-    expect(box).toBeTruthy()
-    positions.push(box?.y ?? 0)
-  }
-  expect(kpiBox).toBeTruthy()
-  if (kpiBox) {
-    expect(positions[0]).toBeGreaterThan(kpiBox.y)
-  }
-  for (let index = 1; index < positions.length; index += 1) {
-    expect(positions[index]).toBeGreaterThan(positions[index - 1]!)
+  const attendanceBox = await page.getByRole("heading", { name: "Attendance" }).boundingBox()
+  const teamBox = await page.getByRole("heading", { name: "By preacher" }).boundingBox()
+  expect(kpiBox && attendanceBox && teamBox).toBeTruthy()
+  if (kpiBox && attendanceBox && teamBox) {
+    expect(attendanceBox.y).toBeGreaterThan(kpiBox.y)
+    expect(teamBox.y).toBeGreaterThan(attendanceBox.y)
   }
   await expect(page.getByText(fixture.preacher.name ?? fixture.preacher.email).first()).toBeVisible()
+
+  // The linked campaign aggregates two sessions and one invited attendee.
+  const linkedRow = page.locator(`[data-dashboard-campaign="${fixture.campaignId}"]`)
+  await expect(linkedRow).toBeVisible()
+  await expect(linkedRow).toContainText(fixture.campaignName)
+  await expect(linkedRow).toContainText("+1 more")
+  await expect(page.locator(`[data-dashboard-campaign-attended="${fixture.campaignId}"]`)).toHaveText("1")
+
+  // An unlinked campaign is a dash, never a zero conversion.
+  const unlinkedRow = page.locator(`[data-dashboard-campaign="${fixture.unlinkedCampaignId}"]`)
+  await expect(unlinkedRow).toBeVisible()
+  await expect(unlinkedRow).toContainText("No session linked")
+  await expect(page.locator(`[data-dashboard-campaign-attended="${fixture.unlinkedCampaignId}"]`)).toHaveText(
+    "—",
+  )
 })
 
-test.describe("a Preacher's own scope", () => {
-  test.use({ storageState: storageStatePath("preacher") })
+test("puts each fixture contact in the focus segment its history defines", async ({ page }) => {
+  await page.goto("/dashboard?mode=admin&period=all")
 
-  test("shows the attendee trend, Focus now, attendance and recent sessions in that order", async ({
-    page,
-  }) => {
-    await page.goto("/dashboard?period=all")
+  const expectations: Array<{ key: string; name: string }> = [
+    { key: "confirmed_not_attended", name: fixture.contactNames.confirmedAbsent },
+    { key: "ready_to_invite", name: fixture.contactNames.readyToInvite },
+    { key: "committed_not_invited", name: fixture.contactNames.committed },
+    { key: "new_untouched", name: fixture.contactNames.newUntouched },
+    { key: "fading", name: fixture.contactNames.fading },
+  ]
 
-    await expect(page.getByRole("heading", { name: "Preaching efforts" })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toHaveCount(0)
-    await expect(page.getByRole("heading", { name: "Focus now" })).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Recent sessions" })).toBeVisible()
+  for (const expectation of expectations) {
+    const card = page.locator(`[data-dashboard-focus="${expectation.key}"]`)
+    await expect(card).toBeVisible()
+    await expect(card).toContainText(expectation.name)
+  }
 
-    const expectations: Array<{ key: string; name: string }> = [
-      { key: "new_untouched", name: fixture.contactNames.newUntouched },
-      { key: "fading", name: fixture.contactNames.fading },
-    ]
+  // The contact who confirmed and then attended is not "confirmed, not attended".
+  await expect(page.locator('[data-dashboard-focus="confirmed_not_attended"]')).not.toContainText(
+    fixture.contactNames.confirmedAttended,
+  )
+  // The organic attendee was never reached in a campaign and is not ready to invite.
+  await expect(page.locator('[data-dashboard-focus="ready_to_invite"]')).not.toContainText(
+    fixture.contactNames.organic,
+  )
+})
 
-    for (const expectation of expectations) {
-      const card = page.locator(`[data-dashboard-focus="${expectation.key}"]`)
-      await expect(card).toBeVisible()
-      await expect(card).toContainText(expectation.name)
-    }
+test("opens a focus row's contact record in place", async ({ page }) => {
+  await page.goto("/dashboard?mode=admin&period=all")
 
-    // The three call-driven segments are no longer rendered.
-    for (const key of ["confirmed_not_attended", "ready_to_invite", "committed_not_invited"]) {
-      await expect(page.locator(`[data-dashboard-focus="${key}"]`)).toHaveCount(0)
-    }
+  const trigger = page
+    .locator('[data-dashboard-focus="ready_to_invite"] [data-contact-record-trigger]')
+    .first()
+  await expect(trigger).toBeVisible()
+  await trigger.click()
 
-    const orderedHeadings = [
-      page.getByRole("heading", { name: "Attendance" }),
-      page.getByRole("heading", { name: "Focus now" }),
-      page.getByRole("heading", { name: "Recent sessions" }),
-    ]
-    const positions: number[] = []
-    for (const heading of orderedHeadings) {
-      const box = await heading.boundingBox()
-      expect(box).toBeTruthy()
-      positions.push(box?.y ?? 0)
-    }
-    for (let index = 1; index < positions.length; index += 1) {
-      expect(positions[index]).toBeGreaterThan(positions[index - 1]!)
-    }
-  })
+  const dialog = page.locator("[data-contact-record-dialog]")
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole("heading", { name: "Attendance", level: 2 })).toBeVisible()
+  await expect(dialog.getByRole("heading", { name: "Campaign history", level: 2 })).toBeVisible()
 
-  test("opens a focus row's contact record in place", async ({ page }) => {
-    await page.goto("/dashboard?period=all")
+  await page.getByRole("button", { name: "Close dialog" }).click()
+  await expect(dialog).toBeHidden()
+})
 
-    const trigger = page
-      .locator('[data-dashboard-focus="new_untouched"] [data-contact-record-trigger]')
-      .first()
-    await expect(trigger).toBeVisible()
-    await trigger.click()
+test("a 403 from the record gateway closes the record and names the scope", async ({ page }) => {
+  await page.route("**/api/manage/contacts/*/record", (route) =>
+    route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "This contact is outside your assigned scope." }),
+    }),
+  )
 
-    const dialog = page.locator("[data-contact-record-dialog]")
-    await expect(dialog).toBeVisible()
-    await expect(dialog.getByRole("heading", { name: "Attendance", level: 2 })).toBeVisible()
-    await expect(dialog.getByRole("heading", { name: "Campaign history", level: 2 })).toBeVisible()
+  await page.goto("/dashboard?mode=admin&period=all")
 
-    await page.getByRole("button", { name: "Close dialog" }).click()
-    await expect(dialog).toBeHidden()
-  })
+  const trigger = page
+    .locator('[data-dashboard-focus="ready_to_invite"] [data-contact-record-trigger]')
+    .first()
+  await expect(trigger).toBeVisible()
+  await trigger.click()
 
-  test("a 403 from the record gateway closes the record and names the scope", async ({ page }) => {
-    await page.route("**/api/manage/contacts/*/record", (route) =>
-      route.fulfill({
-        status: 403,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "This contact is outside your assigned scope." }),
-      }),
-    )
+  const errorDialog = page.locator("[data-contact-record-error]")
+  await expect(errorDialog).toBeVisible()
+  await expect(errorDialog).toContainText("outside your contact scope")
+  // The record frame is gone; a 403 is never rendered as an empty record.
+  await expect(page.locator("[data-contact-record-dialog]")).toHaveCount(0)
 
-    await page.goto("/dashboard?period=all")
+  await errorDialog.getByRole("button", { name: "Close" }).click()
+  await expect(errorDialog).toBeHidden()
+})
 
-    const trigger = page
-      .locator('[data-dashboard-focus="new_untouched"] [data-contact-record-trigger]')
-      .first()
-    await expect(trigger).toBeVisible()
-    await trigger.click()
+test("a campaign with no linked session is flagged rather than shown as zero conversion", async ({
+  page,
+}) => {
+  await page.goto("/dashboard?mode=admin&period=all")
 
-    const errorDialog = page.locator("[data-contact-record-error]")
-    await expect(errorDialog).toBeVisible()
-    await expect(errorDialog).toContainText("outside your contact scope")
-    // The record frame is gone; a 403 is never rendered as an empty record.
-    await expect(page.locator("[data-contact-record-dialog]")).toHaveCount(0)
-
-    await errorDialog.getByRole("button", { name: "Close" }).click()
-    await expect(errorDialog).toBeHidden()
-  })
+  await expect(page.getByText(/reached contacts but have no linked session/)).toBeVisible()
+  await expect(
+    page.locator(`[data-dashboard-campaign-attended="${fixture.unlinkedCampaignId}"]`),
+  ).toHaveText("—")
 })

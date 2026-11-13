@@ -32,56 +32,6 @@ export interface DashboardScopeCounts {
   sessions: number
 }
 
-/** One stacked-bar segment: a location and its count for one preacher. */
-export interface DashboardSeriesSegment {
-  key: string
-  label: string
-  value: number
-}
-
-export interface DashboardPreacherBarRow {
-  preacherId: string
-  preacherName: string
-  total: number
-  segments: DashboardSeriesSegment[]
-}
-
-export interface DashboardPreacherBars {
-  rows: DashboardPreacherBarRow[]
-}
-
-export interface DashboardAttendeeSeries {
-  preacherId: string
-  preacherName: string
-  values: number[]
-}
-
-/** One preacher's selected-period totals, for the three-bar scorecard. */
-export interface DashboardPreacherTotalsRow {
-  preacherId: string
-  preacherName: string
-  contacts: number
-  sessions: number
-  attendees: number
-  /** Period attendees with two or more attendance records. */
-  repeatAttendees: number
-  /** The attendee total split by the first location each person attended. */
-  attendeeSegments: DashboardSeriesSegment[]
-}
-
-/** The people-first series the dashboard charts read. */
-export interface DashboardPeopleSeries {
-  sessionsByPreacher: DashboardPreacherBars
-  contactsByPreacher: DashboardPreacherBars
-  totals: {
-    rows: DashboardPreacherTotalsRow[]
-  }
-  attendeesByPreacher: {
-    months: string[]
-    series: DashboardAttendeeSeries[]
-  }
-}
-
 export interface DashboardKpis {
   contactsCollected: number
   contactsCollectedPrev: number
