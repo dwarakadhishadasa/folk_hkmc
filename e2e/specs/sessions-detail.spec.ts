@@ -350,10 +350,19 @@ test.describe("out-of-patch attendee", () => {
     expect(recordResponse.status()).toBe(200)
     const payload = (await recordResponse.json()) as {
       capabilities: { canComment: boolean }
-      comments: { comments: unknown[] } | null
+      comments: unknown
     }
     expect(payload.capabilities.canComment).toBe(true)
-    expect(payload.comments).not.toBeNull()
+    // Comments are no longer part of the record payload; they are read after
+    // the fields render.
+    expect(payload.comments).toBeNull()
+
+    const commentsResponse = await page.request.get(
+      `/api/manage/contacts/comments?contactId=${commentContact.id}`,
+    )
+    expect(commentsResponse.status()).toBe(200)
+    const comments = (await commentsResponse.json()) as { comments: unknown[] }
+    expect(Array.isArray(comments.comments)).toBe(true)
 
     await page.goto(`/sessions/${commentSession.id}`)
     await page.getByRole("button", { name: `View ${commentContact.name}` }).click()
@@ -392,8 +401,7 @@ test.describe("record gateway", () => {
     expect(payload.contact.name).toBe(zulu.name)
     expect(payload.history.attendance).toHaveLength(2)
     // The Admin can read every programme contact, but Zulu belongs to the
-    // Preacher's patch: editable, not commentable, and the comments read is
-    // skipped entirely rather than 403ing the record.
+    // Preacher's patch: editable, not commentable.
     expect(payload.capabilities).toEqual({ canEdit: true, canComment: false })
     expect(payload.comments).toBeNull()
     expect(payload.locations.length).toBeGreaterThan(0)

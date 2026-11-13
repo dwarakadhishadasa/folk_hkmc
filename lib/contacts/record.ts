@@ -2,12 +2,10 @@ import "server-only"
 
 import type { ContactRecordPayload } from "@/components/contacts/contact-record-types"
 import { KNOWN_SOURCE_VALUES } from "@/components/manage/manage-contact-fields"
-import type { ManageContactCommentList } from "@/components/manage/manage-comment-types"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { contactInPatch, locationInPatch } from "@/lib/patch-scope"
 import type { StaffContext } from "@/lib/authz"
 import type { ManageContact } from "@/components/manage/manage-types"
-import { listManageContactComments } from "@/lib/supabase/contact-comments"
 import {
   loadManageContactHistory,
   loadManageContactRecordRow,
@@ -19,11 +17,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 /**
  * The one full-record read model.
  *
- * A record is one contact, its rollups, its history, its comments when the
- * caller may comment, and the reference data its pickers need. It deliberately
- * does **not** call `loadContactsSectionData` or `loadManagePortalData`, and it
- * never reads the full contact set: the row and rollups are one contact, and the
- * books picker is a scoped distinct read of one column through the RLS client.
+ * A record is one contact, its rollups, its history, and the reference data its
+ * pickers need. Comments are **not** part of this read: they are the slowest
+ * section and are fetched by the record pane after the fields have rendered.
+ * It deliberately does **not** call `loadContactsSectionData` or
+ * `loadManagePortalData`, and it never reads the full contact set.
  *
  * Authorization happens before any of the reads: `loadManageContactRecordRow`
  * reads the full row through the RLS client, so the contact scope is the
@@ -48,16 +46,10 @@ export async function loadContactRecord(params: {
     (userId): userId is string => Boolean(userId),
   )
 
-  const [locations, staffNames, history, comments, scopedBooks] = await Promise.all([
+  const [locations, staffNames, history, scopedBooks] = await Promise.all([
     loadProgramLocations(staff.programId),
     loadStaffDisplayNames(staff.programId, referencedStaffIds),
     loadManageContactHistory({ staff, contactId }),
-    // The comments read is conditional: an Admin may edit a programme contact
-    // outside their patch but cannot comment on it, and a read that ran anyway
-    // would either 403 the whole record or expose comments it must not.
-    canComment
-      ? listManageContactComments({ staff, contactId })
-      : Promise.resolve<ManageContactCommentList | null>(null),
     loadScopedBooksReadOptions(staff),
   ])
 
@@ -79,7 +71,9 @@ export async function loadContactRecord(params: {
     sourceOptions,
     booksReadOptions,
     history,
-    comments,
+    // The record frame fetches the comment list after these fields render; a
+    // reader who cannot comment never asks for it.
+    comments: null,
     capabilities: {
       // Every record the gateway produces is a manage-context record. The
       // out-of-scope session summary is a different, read-only component.

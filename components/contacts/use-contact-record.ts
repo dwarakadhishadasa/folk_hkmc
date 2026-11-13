@@ -15,6 +15,7 @@ import type { ManageContactWriteResult } from "@/components/manage/manage-types"
 import {
   isContactRecordReady,
   type CommentActions,
+  type ContactRecordLoad,
   type ContactRecordPayload,
   type ContactRecordState,
   type ContactRecordViewState,
@@ -58,9 +59,21 @@ function buildViewState(payload: ContactRecordPayload): ContactRecordViewState {
     sourceOptions: payload.sourceOptions,
     booksReadOptions: payload.booksReadOptions,
     history: { status: "ready", value: payload.history },
-    comments: payload.comments ? { status: "ready", value: payload.comments } : null,
+    comments: payload.capabilities.canComment ? { status: "loading" } : null,
     capabilities: payload.capabilities,
   }
+}
+
+function withCommentsLoad(
+  state: ContactRecordState | null,
+  contactId: string,
+  load: ContactRecordLoad<ManageContactCommentList>,
+): ContactRecordState | null {
+  if (!state || !isContactRecordReady(state) || state.contact.id !== contactId) {
+    return state
+  }
+
+  return { ...state, comments: load }
 }
 
 /** A record's comments as an editable list, or `null` when the read was skipped. */
@@ -125,6 +138,53 @@ export function useContactRecord(options: {
     }
   }, [])
 
+  const loadComments = useCallback(
+    async (contactId: string, requestId: number, controller: AbortController) => {
+      try {
+        const response = await fetch(
+          `${COMMENT_ENDPOINT}?contactId=${encodeURIComponent(contactId)}`,
+          {
+            cache: "no-store",
+            headers: { accept: "application/json" },
+            signal: controller.signal,
+          },
+        )
+
+        const body: unknown = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(readError(body, "Unable to load this contact's comments."))
+        }
+
+        if (requestId !== requestRef.current) {
+          return
+        }
+
+        setState((current) =>
+          withCommentsLoad(current, contactId, {
+            status: "ready",
+            value: body as ManageContactCommentList,
+          }),
+        )
+      } catch (error) {
+        if (controller.signal.aborted || requestId !== requestRef.current) {
+          return
+        }
+
+        setState((current) =>
+          withCommentsLoad(current, contactId, {
+            status: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unable to load this contact's comments.",
+          }),
+        )
+      }
+    },
+    [],
+  )
+
   const loadRecord = useCallback(
     async (contactId: string, mode: "show-loading" | "silent"): Promise<ContactRecordViewState | null> => {
       requestRef.current += 1
@@ -164,6 +224,11 @@ export function useContactRecord(options: {
 
         const view = buildViewState(body as ContactRecordPayload)
         setState(view)
+
+        if (view.comments?.status === "loading") {
+          void loadComments(contactId, requestId, controller)
+        }
+
         return view
       } catch (error) {
         if (controller.signal.aborted || requestId !== requestRef.current) {
@@ -184,7 +249,7 @@ export function useContactRecord(options: {
         return null
       }
     },
-    [],
+    [loadComments],
   )
 
   const open = useCallback(

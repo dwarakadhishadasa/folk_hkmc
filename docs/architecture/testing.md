@@ -259,6 +259,13 @@ spec (`dashboard-overview`, `dashboard-candidates`, `sessions-overview`,
 `campaign-assign-select`, `manage-contacts-list`). The record's sequence helpers
 are unit-tested in `components/contacts/contact-record-sequence.test.ts`.
 
+The record payload deliberately omits comments: `loadContactRecord` returns
+`comments: null`, the fields render, and `use-contact-record` then reads
+`/api/manage/contacts/comments?contactId=…` while the pane shows its skeleton.
+The detail spec asserts both halves — the record payload's null and the separate
+list route — so a future change that folds comments back into the slow read is
+visible.
+
 ### Sessions — overview, insights, detail and live dashboards — `pnpm test:e2e:sessions`
 
 | Source | Spec | Tests |
