@@ -18,8 +18,11 @@ test.afterAll(async () => {
 })
 
 async function contactsCollected(page: import("@playwright/test").Page): Promise<number> {
-  const value = await page.locator('[data-dashboard-kpi="contacts-collected"] dd').first().innerText()
-  return Number(value.replace(/[^\d]/g, ""))
+  const value = await page
+    .locator('[data-dashboard-kpi="contacts-collected"] [data-value]')
+    .first()
+    .getAttribute("data-value")
+  return Number(value ?? "0")
 }
 
 test("a preset changes the figures and a reload keeps it", async ({ page }) => {
@@ -82,6 +85,23 @@ test("a custom range names itself and stays editable in the same control", async
   await expect(page).toHaveURL(/to=2026-10-15/)
 })
 
+test("a new custom range starts on the day clicked, and may run backwards", async ({ page }) => {
+  await page.goto("/dashboard?mode=admin&period=custom&from=2026-10-01&to=2026-10-31")
+
+  await page.locator("[data-dashboard-period]").click()
+  const calendar = page.locator("[data-dashboard-date-range]")
+  await expect(calendar).toBeVisible()
+
+  // The first click anchors on 15 Oct, not on the old range's 31 Oct end.
+  await calendar.locator('button[data-day="10/15/2026"]').click()
+  // A second click before the start still commits the span that was clicked.
+  await calendar.locator('button[data-day="10/10/2026"]').click()
+
+  await expect(calendar).toHaveCount(0)
+  await expect(page).toHaveURL(/from=2026-10-10/)
+  await expect(page).toHaveURL(/to=2026-10-15/)
+})
+
 test("an invalid period falls back to last90 without an error page", async ({ page }) => {
   await page.goto("/dashboard?mode=admin&period=nonsense")
   await expect(page.locator("[data-dashboard-period]")).toHaveAttribute("data-period", "last90")
@@ -98,7 +118,7 @@ test("a custom window with no activity renders zeros and empty states, never a 5
 
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible()
   await expect(page.locator('[data-dashboard-kpi="contacts-collected"] dd').first()).toHaveText("0")
-  await expect(page.getByText("No contacts were collected in this period.")).toBeVisible()
-  await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible()
-  await expect(page.getByRole("heading", { name: "By preacher" })).toBeVisible()
+  await expect(page.getByText("No preacher activity in this period.")).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toBeVisible()
 })

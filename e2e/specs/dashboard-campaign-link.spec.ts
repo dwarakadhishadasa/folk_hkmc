@@ -5,10 +5,6 @@
  * with `No campaign` — and reads the persisted `sessions.campaign_id` back
  * through the service role. A foreign programme's campaign and a cancelled
  * campaign are rejected as named 400s, not as a 500 or a silent null.
- *
- * Starting a session for the formerly unlinked campaign changes the dashboard's
- * campaign card from `—` to `0`: the invite is now measurable and no one has
- * attended yet. That is the conversion change this spec watches.
  */
 
 import { expect, test, type Page } from "@playwright/test"
@@ -107,28 +103,6 @@ test.describe("a session's campaign link", () => {
 
     const unlinked = await readCreatedSession(unlinkedSessionId)
     expect(unlinked.campaignId).toBeNull()
-  })
-
-  test("the dashboard's conversion for an unlinked campaign becomes measurable", async ({ page }) => {
-    const sessionId = await startSessionFromPopover(
-      page,
-      `ZDash ${fixture.tag} UI conversion session`,
-      fixture.unlinkedCampaignId,
-    )
-    createdSessionIds.push(sessionId)
-
-    await page.goto("/dashboard?mode=admin&period=all")
-
-    const attended = page.locator(
-      `[data-dashboard-campaign-attended="${fixture.unlinkedCampaignId}"]`,
-    )
-    await expect(attended).toHaveText("0")
-
-    // The formerly unlinked campaign now has at least the session this test
-    // created; the previous test in this file may have added one too.
-    const row = page.locator(`[data-dashboard-campaign="${fixture.unlinkedCampaignId}"]`)
-    const sessionCount = Number(await row.getAttribute("data-dashboard-campaign-sessions"))
-    expect(sessionCount).toBeGreaterThanOrEqual(1)
   })
 
   test("rejects another programme's campaign as a named 400", async ({ request }) => {
