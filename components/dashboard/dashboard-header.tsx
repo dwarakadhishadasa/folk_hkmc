@@ -1,7 +1,7 @@
-import Link from "next/link"
 import { Info } from "lucide-react"
 
 import { DashboardPeriodControl } from "@/components/dashboard/dashboard-period-control"
+import { DashboardScopeLink } from "@/components/dashboard/dashboard-scope-link"
 import { SectionPageHeader } from "@/components/section-page-header"
 import { formatCount, formatUpdated } from "@/lib/dashboard/format"
 import { dashboardPeriodQuery, type DashboardPeriod } from "@/lib/dashboard/period"
@@ -11,12 +11,6 @@ function scopeHref(mode: "admin" | "preacher", period: DashboardPeriod): string 
   const params = new URLSearchParams({ mode, ...dashboardPeriodQuery(period) })
   return `/dashboard?${params.toString()}`
 }
-
-const SCOPE_LINK_CLASS =
-  "rounded-full px-4 py-1.5 text-sm font-semibold text-[var(--muted-foreground)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-
-const SCOPE_LINK_ACTIVE_CLASS =
-  "rounded-full bg-[var(--program-primary)] px-4 py-1.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
 
 /**
  * The Admin's All/Own switch. It is the same pill on both surfaces; the header
@@ -28,22 +22,12 @@ function DashboardScopeSwitch({ mode, period }: { mode: "admin" | "preacher"; pe
       aria-label="Data scope"
       className="inline-flex w-fit items-center gap-1 rounded-full border border-[var(--border)] bg-card p-1"
     >
-      <Link
-        href={scopeHref("admin", period)}
-        scroll={false}
-        aria-current={mode === "admin" ? "page" : undefined}
-        className={mode === "admin" ? SCOPE_LINK_ACTIVE_CLASS : SCOPE_LINK_CLASS}
-      >
+      <DashboardScopeLink href={scopeHref("admin", period)} active={mode === "admin"}>
         All preachers
-      </Link>
-      <Link
-        href={scopeHref("preacher", period)}
-        scroll={false}
-        aria-current={mode === "preacher" ? "page" : undefined}
-        className={mode === "preacher" ? SCOPE_LINK_ACTIVE_CLASS : SCOPE_LINK_CLASS}
-      >
+      </DashboardScopeLink>
+      <DashboardScopeLink href={scopeHref("preacher", period)} active={mode === "preacher"}>
         Own scope
-      </Link>
+      </DashboardScopeLink>
     </nav>
   )
 }

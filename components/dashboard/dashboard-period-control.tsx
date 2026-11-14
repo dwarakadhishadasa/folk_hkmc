@@ -3,10 +3,10 @@
 import { useState, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { format, parseISO } from "date-fns"
-import { motion, useReducedMotion } from "framer-motion"
 import { CalendarDays, Check, ChevronDown, ChevronLeft } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 
+import { AuroraRing } from "@/components/dashboard/aurora-ring"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -20,7 +20,7 @@ const ISO = "yyyy-MM-dd"
 const DISPLAY = "d MMM yyyy"
 
 const TRIGGER_CLASS =
-  "relative flex h-10 w-full items-center gap-2 overflow-hidden rounded-lg border border-[var(--border)] bg-card px-3 text-left text-[13px] text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+  "relative isolate flex h-10 w-full items-center gap-2 overflow-hidden rounded-lg border border-[var(--border)] bg-card px-3 text-left text-[13px] text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
 
 const ITEM_CLASS =
   "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-[var(--program-text)] transition-colors hover:bg-foreground/5 focus-visible:bg-foreground/5 focus-visible:outline-none"
@@ -45,7 +45,6 @@ export function DashboardPeriodControl({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
-  const reduceMotion = useReducedMotion()
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<"list" | "range">("list")
   const [draft, setDraft] = useState<DateRange | undefined>()
@@ -132,48 +131,16 @@ export function DashboardPeriodControl({
             isPending && "cursor-progress",
           )}
         >
-          {isPending ? (
-            <span
-              aria-hidden="true"
-              className="relative flex size-4 shrink-0 items-center justify-center"
-            >
-              <span className="absolute inset-0 rounded-full border-2 border-[var(--border)]" />
-              <motion.span
-                className="absolute inset-0 rounded-full border-2 border-transparent border-t-[var(--program-primary)] border-r-[var(--program-primary)]"
-                animate={reduceMotion ? undefined : { rotate: 360 }}
-                transition={{ duration: 0.85, ease: "linear", repeat: Infinity }}
-              />
-            </span>
-          ) : (
-            <CalendarDays
-              aria-hidden="true"
-              className="size-4 shrink-0 text-[var(--muted-foreground)]"
-            />
-          )}
-          <span className={cn("truncate transition-opacity", isPending && "opacity-70")}>
-            {triggerText}
-          </span>
+          <AuroraRing active={isPending} />
+          <CalendarDays
+            aria-hidden="true"
+            className="size-4 shrink-0 text-[var(--muted-foreground)]"
+          />
+          <span className="truncate">{triggerText}</span>
           <ChevronDown
             aria-hidden="true"
             className="ml-auto size-3.5 shrink-0 text-[var(--muted-foreground)]"
           />
-          {isPending ? (
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-px overflow-hidden"
-            >
-              {reduceMotion ? (
-                <span className="block h-full w-full bg-[var(--program-primary)] opacity-50" />
-              ) : (
-                <motion.span
-                  className="block h-full w-1/2 bg-gradient-to-r from-transparent via-[var(--program-primary)] to-transparent"
-                  initial={{ x: "-100%" }}
-                  animate={{ x: "200%" }}
-                  transition={{ duration: 1.3, ease: "easeInOut", repeat: Infinity }}
-                />
-              )}
-            </span>
-          ) : null}
           <span role="status" aria-live="polite" className="sr-only">
             {isPending ? "Updating dashboard" : ""}
           </span>
