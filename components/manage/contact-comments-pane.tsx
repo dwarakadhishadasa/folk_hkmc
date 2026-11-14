@@ -221,9 +221,12 @@ function Composer({
 function ReactionPicker({
   onPick,
   onClose,
+  align = "right",
 }: {
   onPick: (emoji: string) => void
   onClose: () => void
+  /** The side the picker hangs from, mirroring the row it belongs to. */
+  align?: "left" | "right"
 }) {
   const ref = useRef<HTMLDivElement | null>(null)
 
@@ -245,7 +248,10 @@ function ReactionPicker({
       ref={ref}
       role="menu"
       aria-label="Add reaction"
-      className="absolute right-0 top-7 z-20 grid w-[168px] grid-cols-6 gap-0.5 rounded-md border border-border bg-popover p-1.5 shadow-lg"
+      className={cn(
+        "absolute top-7 z-20 grid w-[168px] grid-cols-6 gap-0.5 rounded-md border border-border bg-popover p-1.5 shadow-lg",
+        align === "left" ? "left-0" : "right-0",
+      )}
     >
       {CONTACT_REACTION_EMOJIS.map((emoji) => (
         <button
@@ -473,9 +479,12 @@ export function ContactCommentsPane({
     const expanded = expandedThreads.has(comment.id)
 
     return (
-      <div className={isReply ? "pl-8" : undefined}>
+      <div className={isReply ? (comment.isOwn ? "pr-8" : "pl-8") : undefined}>
         <div
-          className="group flex items-start gap-2"
+          className={cn(
+            "group flex items-start gap-2",
+            comment.isOwn && "flex-row-reverse",
+          )}
           data-contact-comment={comment.id}
           data-contact-comment-reply={isReply ? "true" : undefined}
         >
@@ -487,7 +496,12 @@ export function ContactCommentsPane({
           </span>
 
           <div className="relative min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <div
+              className={cn(
+                "flex items-center gap-1.5 text-[12px] text-muted-foreground",
+                comment.isOwn && "justify-end",
+              )}
+            >
               <span className="font-medium text-[var(--program-text)]">{authorLabel(comment)}</span>
               <span aria-hidden="true">·</span>
               <span>{relativeTime(comment.createdAt)}</span>
@@ -511,13 +525,23 @@ export function ContactCommentsPane({
                 />
               </div>
             ) : (
-              <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-snug text-[var(--program-text)]">
+              <p
+                className={cn(
+                  "mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-snug text-[var(--program-text)]",
+                  comment.isOwn && "text-right",
+                )}
+              >
                 {comment.body}
               </p>
             )}
 
             {comment.reactions.length > 0 ? (
-              <div className="mt-1 flex flex-wrap items-center gap-1">
+              <div
+                className={cn(
+                  "mt-1 flex flex-wrap items-center gap-1",
+                  comment.isOwn && "justify-end",
+                )}
+              >
                 {comment.reactions.map((reaction) => (
                   <button
                     key={reaction.emoji}
@@ -541,7 +565,12 @@ export function ContactCommentsPane({
               </div>
             ) : null}
 
-            <div className="mt-1 flex items-center gap-1">
+            <div
+              className={cn(
+                "mt-1 flex items-center gap-1",
+                comment.isOwn && "justify-end",
+              )}
+            >
               {replies.length > 0 ? (
                 <button
                   type="button"
@@ -573,7 +602,12 @@ export function ContactCommentsPane({
               mounted on hover, so hovering does not shift the row and a
               keyboard user reaches the same controls by tabbing.
             */}
-            <div className="absolute right-0 top-0 flex items-center gap-0.5 rounded-md bg-card opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+            <div
+              className={cn(
+                "absolute top-0 flex items-center gap-0.5 rounded-md bg-card opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100",
+                comment.isOwn ? "left-0" : "right-0",
+              )}
+            >
               <Button
                 type="button"
                 variant="ghost"
@@ -640,6 +674,7 @@ export function ContactCommentsPane({
               <ReactionPicker
                 onPick={(emoji) => void react(comment, emoji)}
                 onClose={() => setPickerFor(null)}
+                align={comment.isOwn ? "left" : "right"}
               />
             ) : null}
           </div>
@@ -654,7 +689,7 @@ export function ContactCommentsPane({
         ) : null}
 
         {replyingTo === comment.id ? (
-          <div className="mt-2 pl-8">
+          <div className={comment.isOwn ? "mt-2 pr-8" : "mt-2 pl-8"}>
             <Composer
               placeholder="Add a reply"
               value={replyDraft}
