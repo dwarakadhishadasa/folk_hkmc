@@ -42,7 +42,7 @@ const CHART_PALETTE = [
   "var(--chart-3)",
   "var(--chart-4)",
   "var(--chart-5)",
-  "#64748b",
+  "var(--chart-6)",
 ] as const
 
 const MONTH_NAMES = [

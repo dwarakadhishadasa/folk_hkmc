@@ -34,7 +34,7 @@ test.describe("Gita Life has no Campaign surface on the dashboard", () => {
     await page.goto("/dashboard")
 
     await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Preaching efforts" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Preaching effort" })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toBeVisible()
     await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Recent sessions" })).toBeVisible()

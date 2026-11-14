@@ -12,14 +12,14 @@ import type {
 } from "@/lib/dashboard/types"
 
 const LOCATION_PALETTE = [
-  "var(--chart-4)",
-  "var(--chart-3)",
-  "var(--chart-2)",
   "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
   "var(--chart-5)",
-  "#64748b",
-  "#0f766e",
-  "#b45309",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
 ] as const
 
 interface ColoredSegment extends DashboardSeriesSegment {
@@ -69,17 +69,22 @@ function segmentsFor(
   return coloredSegments(row?.segments ?? [], colors)
 }
 
-/** The reference card's one-bar location split: total at right, legend below. */
+/**
+ * One metric's bar: the track is the programme total, so its filled length is
+ * this preacher's share of that total, split by the locations they served.
+ */
 function LocationBreakdown({
   kind,
   title,
   total,
+  sectionTotal,
   segments,
   reduceMotion,
 }: {
   kind: "sessions" | "contacts" | "attendees"
   title: string
   total: number
+  sectionTotal: number
   segments: ColoredSegment[]
   reduceMotion: boolean | null
 }) {
@@ -100,9 +105,16 @@ function LocationBreakdown({
           {segments.map((segment) => (
             <motion.div
               key={segment.key}
-              style={{ backgroundColor: segment.color }}
+              style={{
+                backgroundColor: segment.color,
+                minWidth: segment.value > 0 ? 2 : 0,
+              }}
               initial={reduceMotion ? false : { width: 0 }}
-              animate={{ width: `${total > 0 ? (segment.value / total) * 100 : 0}%` }}
+              animate={{
+                width: `${
+                  sectionTotal > 0 ? (segment.value / sectionTotal) * 100 : 0
+                }%`,
+              }}
               transition={{ duration: 0.5, ease: "easeOut" }}
             />
           ))}
@@ -138,8 +150,9 @@ function LocationBreakdown({
  * The Kiranism-style per-preacher card. Sessions, collected contacts and
  * attendees are each one location-segmented bar, with the total at the right
  * and a colour legend below — the reference's shape. Attendees are counted at
- * the first location they attended in the period, so the three bars are
- * partitions of their own totals.
+ * the first location they attended in the period, so the segments are a
+ * partition of the preacher's own total; the bar itself is scaled against the
+ * programme total, so its length is the preacher's share.
  */
 export function DashboardPreachingEfforts({
   rows,
@@ -155,10 +168,15 @@ export function DashboardPreachingEfforts({
   // keeps an assistant who created a session on a preacher's behalf out of the
   // section when they have no contacts of their own.
   const visibleRows = rows.filter((row) => row.contacts > 0)
+  const sectionTotals = {
+    contacts: visibleRows.reduce((sum, row) => sum + row.contacts, 0),
+    sessions: visibleRows.reduce((sum, row) => sum + row.sessions, 0),
+    attendees: visibleRows.reduce((sum, row) => sum + row.attendees, 0),
+  }
   const totals = [
-    { key: "contacts", label: "Collected", value: visibleRows.reduce((sum, row) => sum + row.contacts, 0) },
-    { key: "sessions", label: "Sessions", value: visibleRows.reduce((sum, row) => sum + row.sessions, 0) },
-    { key: "attendees", label: "Attendees", value: visibleRows.reduce((sum, row) => sum + row.attendees, 0) },
+    { key: "contacts", label: "Collected", value: sectionTotals.contacts },
+    { key: "sessions", label: "Sessions", value: sectionTotals.sessions },
+    { key: "attendees", label: "Attendees", value: sectionTotals.attendees },
   ]
   const maxAttendees = Math.max(1, ...visibleRows.map((row) => row.attendees))
   const scores = visibleRows.map((row) => ({
@@ -174,7 +192,7 @@ export function DashboardPreachingEfforts({
   if (visibleRows.length === 0 || totals.every((metric) => metric.value === 0)) {
     return (
       <DashboardCard
-        title="Preaching efforts"
+        title="Preaching effort"
         subtitle="Collected, sessions and attendees for each preacher in the period"
       >
         <DashboardInlineEmpty>No preacher activity in this period.</DashboardInlineEmpty>
@@ -184,8 +202,8 @@ export function DashboardPreachingEfforts({
 
   return (
     <DashboardCard
-      title="Preaching efforts"
-      subtitle="Contacts, sessions and attendees split by the locations each preacher served"
+      title="Preaching effort"
+      subtitle="Each bar is the preacher's share of the period total for that measure; colours are the locations served"
     >
       <dl className="grid grid-cols-3 gap-3">
         {totals.map((metric) => (
@@ -205,7 +223,6 @@ export function DashboardPreachingEfforts({
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
         {visibleRows.map((row) => {
           const isTop =
-            row.preacherName !== "Unassigned" &&
             topScore > 0 &&
             scores.find((entry) => entry.id === row.preacherId)?.score === topScore
           const sessions = segmentsFor(sessionsByPreacher, row.preacherId, colors)
@@ -242,6 +259,7 @@ export function DashboardPreachingEfforts({
                   kind="sessions"
                   title="Sessions"
                   total={row.sessions}
+                  sectionTotal={sectionTotals.sessions}
                   segments={sessions}
                   reduceMotion={reduceMotion}
                 />
@@ -249,6 +267,7 @@ export function DashboardPreachingEfforts({
                   kind="contacts"
                   title="Contacts collected"
                   total={row.contacts}
+                  sectionTotal={sectionTotals.contacts}
                   segments={contacts}
                   reduceMotion={reduceMotion}
                 />
@@ -256,6 +275,7 @@ export function DashboardPreachingEfforts({
                   kind="attendees"
                   title="Attendees"
                   total={row.attendees}
+                  sectionTotal={sectionTotals.attendees}
                   segments={attendees}
                   reduceMotion={reduceMotion}
                 />
@@ -288,13 +308,13 @@ export function DashboardPreachingEfforts({
                     aria-hidden="true"
                   >
                     <motion.div
-                      style={{ backgroundColor: "var(--chart-4)" }}
+                      style={{ backgroundColor: "var(--chart-1)" }}
                       initial={reduceMotion ? false : { width: 0 }}
                       animate={{ width: `${newShare}%` }}
                       transition={{ duration: 0.5, ease: "easeOut" }}
                     />
                     <motion.div
-                      style={{ backgroundColor: "var(--chart-3)" }}
+                      style={{ backgroundColor: "var(--chart-2)" }}
                       initial={reduceMotion ? false : { width: 0 }}
                       animate={{ width: `${repeatShare}%` }}
                       transition={{ duration: 0.5, ease: "easeOut" }}
@@ -305,7 +325,7 @@ export function DashboardPreachingEfforts({
                     <span className="inline-flex items-center gap-1">
                       <span
                         className="size-2 shrink-0 rounded-[2px]"
-                        style={{ backgroundColor: "var(--chart-4)" }}
+                        style={{ backgroundColor: "var(--chart-1)" }}
                         aria-hidden="true"
                       />
                       New:
@@ -316,7 +336,7 @@ export function DashboardPreachingEfforts({
                     <span className="inline-flex items-center gap-1">
                       <span
                         className="size-2 shrink-0 rounded-[2px]"
-                        style={{ backgroundColor: "var(--chart-3)" }}
+                        style={{ backgroundColor: "var(--chart-2)" }}
                         aria-hidden="true"
                       />
                       Repeat:
