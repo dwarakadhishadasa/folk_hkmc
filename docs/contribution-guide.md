@@ -4,11 +4,12 @@
 
 This repository uses a branch-and-review workflow.
 
-- `main` is production and owner-controlled.
+- `master` is the Vercel production branch for the `folk-hkmc` project (`folk-hkmc-rho.vercel.app`). It is promoted by an owner-approved fast-forward from `dev`.
+- `main` is the production branch for the legacy `folk-hkmc-bdnv` preview project. It is not the current production branch and must not be modified.
 - `dev` is the shared development branch.
 - `preview` is retired.
-- Normal work must happen on `feature/*` branches.
-- Do not push directly to `main` or `dev`.
+- Normal work must happen on `feature/*` or `fix/*` branches.
+- Do not push directly to `main`, `dev`, or `master`.
 - Production secrets and production deploy controls are owner-only.
 
 ## Pull Requests
@@ -16,6 +17,8 @@ This repository uses a branch-and-review workflow.
 Open PRs from `feature/*` into `dev` unless Dwaraka explicitly asks for a production-review PR into `main`.
 
 PRs into `main` require Dwaraka to apply the `production-review-approved` label before the branch policy workflow passes.
+
+Production promotion is an owner-run fast-forward of `master` to the `dev` tip after the release gates in the [Deployment Guide](./deployment-guide.md) pass. Do not open a PR into `main` as the production promotion path.
 
 ## Required Review
 
@@ -27,8 +30,10 @@ PRs into `main` require Dwaraka to apply the `production-review-approved` label 
 
 - PR target must be `dev` or `main`.
 - PR source cannot be `main`, `dev`, or `preview`.
-- PR source must be `feature/*`.
+- PR source must be `feature/*` or `fix/*`.
 - `main` target requires `production-review-approved`.
+
+`master` is promoted by the owner outside the PR flow; the policy workflow does not gate it.
 
 `.github/workflows/quality-gates.yml` enforces:
 
