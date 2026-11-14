@@ -3,10 +3,10 @@
 **Type:** pnpm/Turborepo monorepo
 **Primary Language:** TypeScript
 **Architecture:** Program-scoped Next.js App Router apps with Supabase staff authentication, Supabase Postgres operational data, and PWA offline queueing
-**Last Updated:** 2026-06-13
-## Current State Check
+**Last Updated:** 2026-11-14
+## Current State
 
-The older generated docs described a single root app and no longer reflected the current codebase. The current code now includes program-scoped Next.js app workspaces, Supabase authentication, a program-scoped staff membership bridge, implemented registration/contact/session/admin APIs in each app, role-scoped staff pages, monorepo guardrails, quality gates, and additional operational scripts.
+The codebase includes program-scoped Next.js app workspaces, Supabase authentication, a program-scoped `public.users` staff table, implemented registration/contact/session/admin APIs in each app, role-scoped staff pages, monorepo guardrails, quality gates, and additional operational scripts.
 
 ## Project Overview
 
@@ -31,7 +31,7 @@ The older generated docs described a single root app and no longer reflected the
 - [Source Tree Analysis](./source-tree-analysis.md) - Annotated repository structure and critical files
 - [Component Inventory](./component-inventory.md) - Active UI surfaces, infrastructure components, and legacy leftovers
 - [Development Guide](./development-guide.md) - Local setup, commands, environment, and verification notes
-- [Deployment Guide](./deployment-guide.md) - Deployment prerequisites, secrets, Supabase, and PWA concerns
+- [Deployment Guide](./deployment-guide.md) - Production topology, Supabase target, Airtable data loader, release gates, Vercel promotion, and rollback
 - [Contribution Guide](./contribution-guide.md) - Branch, PR, owner-review, and local verification workflow
 - [API Contracts](./api-contracts.md) - Implemented route handlers, auth requirements, payloads, and responses
 - [Data Models](./data-models.md) - Supabase records and tables, RLS scoping, auth context, and offline queue shapes
@@ -87,5 +87,3 @@ Important current caveats:
 - The app configs import shared root `next.config.mjs`, which still ignores TypeScript build errors, so run `pnpm typecheck:workspace` explicitly.
 - `components/registration-form.tsx`, `components/offline-sync-provider.tsx`, `lib/offline-sync.ts`, and `lib/store.ts` are present but not part of the active mounted runtime path.
 - Staff access is not localStorage-based anymore; Supabase cookies and `public.users` are the primary source for program staff authorization. The `staff_memberships`/`staff_profiles`/`airtable_identities`/`airtable_sync_state` bridge tables have been dropped.
-
-Updated through a BMAD `document-project` documentation freshness pass on 2026-06-13.
