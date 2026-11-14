@@ -8,7 +8,7 @@ This repository uses a branch-and-review workflow.
 - `main` is the production branch for the legacy `folk-hkmc-bdnv` preview project. It is not the current production branch and must not be modified.
 - `dev` is the shared development branch.
 - `preview` is retired.
-- Normal work must happen on `feature/*` branches.
+- Normal work must happen on `feature/*` or `fix/*` branches.
 - Do not push directly to `main`, `dev`, or `master`.
 - Production secrets and production deploy controls are owner-only.
 
@@ -30,7 +30,7 @@ Production promotion is an owner-run fast-forward of `master` to the `dev` tip a
 
 - PR target must be `dev` or `main`.
 - PR source cannot be `main`, `dev`, or `preview`.
-- PR source must be `feature/*`.
+- PR source must be `feature/*` or `fix/*`.
 - `main` target requires `production-review-approved`.
 
 `master` is promoted by the owner outside the PR flow; the policy workflow does not gate it.

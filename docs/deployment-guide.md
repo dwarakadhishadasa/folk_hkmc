@@ -478,3 +478,16 @@ npx --yes vercel@54.14.0 deploy --prod \
   --project prj_WznI3QJcjHtFokLejDhIyZ6gj4Uw \
   --yes --archive=tgz
 ```
+
+## PWA And Offline
+
+Service workers require HTTPS or localhost. `public/sw.js` intentionally treats
+staff and API paths as network-only for GET requests and queues selected POST
+requests on network failure.
+
+If any route paths change, update:
+
+- `public/sw.js`
+- Client fetch calls
+- API contracts
+- Manual smoke checks
