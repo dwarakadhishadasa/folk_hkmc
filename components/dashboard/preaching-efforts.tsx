@@ -151,23 +151,27 @@ export function DashboardPreachingEfforts({
   contactsByPreacher: DashboardPreacherBars
 }) {
   const reduceMotion = useReducedMotion()
+  // A user with no collected contacts is not a preaching-effort card. This also
+  // keeps an assistant who created a session on a preacher's behalf out of the
+  // section when they have no contacts of their own.
+  const visibleRows = rows.filter((row) => row.contacts > 0)
   const totals = [
-    { key: "contacts", label: "Collected", value: rows.reduce((sum, row) => sum + row.contacts, 0) },
-    { key: "sessions", label: "Sessions", value: rows.reduce((sum, row) => sum + row.sessions, 0) },
-    { key: "attendees", label: "Attendees", value: rows.reduce((sum, row) => sum + row.attendees, 0) },
+    { key: "contacts", label: "Collected", value: visibleRows.reduce((sum, row) => sum + row.contacts, 0) },
+    { key: "sessions", label: "Sessions", value: visibleRows.reduce((sum, row) => sum + row.sessions, 0) },
+    { key: "attendees", label: "Attendees", value: visibleRows.reduce((sum, row) => sum + row.attendees, 0) },
   ]
-  const maxAttendees = Math.max(1, ...rows.map((row) => row.attendees))
-  const scores = rows.map((row) => ({
+  const maxAttendees = Math.max(1, ...visibleRows.map((row) => row.attendees))
+  const scores = visibleRows.map((row) => ({
     id: row.preacherId,
     score:
-      row.contacts / Math.max(1, ...rows.map((entry) => entry.contacts)) +
-      row.sessions / Math.max(1, ...rows.map((entry) => entry.sessions)) +
+      row.contacts / Math.max(1, ...visibleRows.map((entry) => entry.contacts)) +
+      row.sessions / Math.max(1, ...visibleRows.map((entry) => entry.sessions)) +
       row.attendees / maxAttendees,
   }))
   const topScore = Math.max(0, ...scores.map((entry) => entry.score))
-  const colors = locationColorMap(sessionsByPreacher, contactsByPreacher, rows)
+  const colors = locationColorMap(sessionsByPreacher, contactsByPreacher, visibleRows)
 
-  if (rows.length === 0 || totals.every((metric) => metric.value === 0)) {
+  if (visibleRows.length === 0 || totals.every((metric) => metric.value === 0)) {
     return (
       <DashboardCard
         title="Preaching efforts"
@@ -199,7 +203,7 @@ export function DashboardPreachingEfforts({
       </dl>
 
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {rows.map((row) => {
+        {visibleRows.map((row) => {
           const isTop =
             row.preacherName !== "Unassigned" &&
             topScore > 0 &&
