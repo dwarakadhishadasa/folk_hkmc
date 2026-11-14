@@ -2,7 +2,10 @@
 
 import { useRef, type ReactNode } from "react"
 
-import { useContactRecordContext } from "@/components/contacts/contact-record-provider"
+import {
+  preloadContactRecordFrames,
+  useContactRecordContext,
+} from "@/components/contacts/contact-record-provider"
 import { cn } from "@/lib/utils"
 
 /**
@@ -49,6 +52,8 @@ export function ContactRecordTrigger({
       data-contact-record-trigger={contactId}
       aria-label={`Open the contact record for ${name}`}
       aria-haspopup="dialog"
+      onPointerEnter={preloadContactRecordFrames}
+      onFocus={preloadContactRecordFrames}
       onClick={() =>
         context.openContactRecord({
           contactId,

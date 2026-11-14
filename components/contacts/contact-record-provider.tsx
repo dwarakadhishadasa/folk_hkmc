@@ -50,6 +50,27 @@ const ContactRecordPhoneFrame = dynamic(
   { ssr: false },
 )
 
+let framesRequested = false
+
+/**
+ * Download the record frames before the operator opens one.
+ *
+ * Both frames are lazy chunks, so the first open of a session pays for the
+ * download before it can paint "Loading contact". Hovering or focusing a
+ * trigger is the operator declaring intent, and it happens early enough to hide
+ * that cost. The import specifiers match the `dynamic()` calls above, so the
+ * bundle is reused rather than fetched twice.
+ */
+export function preloadContactRecordFrames(): void {
+  if (framesRequested) {
+    return
+  }
+
+  framesRequested = true
+  void import("@/components/contacts/contact-record-dialog")
+  void import("@/components/contacts/contact-record-phone")
+}
+
 export interface ContactRecordContextValue {
   openContactRecord: (input: OpenContactRecordInput) => void
   closeContactRecord: () => void

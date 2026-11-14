@@ -191,15 +191,21 @@ export async function listManageContactComments(params: {
   contactId: string
 }): Promise<ManageContactCommentList> {
   const { staff, contactId } = params
-  await assertCommentContactInScope(staff, contactId)
-
   const supabaseAdmin = createSupabaseAdminClient()
-  const { data, error } = await supabaseAdmin
-    .from("contact_comments")
-    .select(COMMENT_COLUMNS)
-    .eq("contact_id", contactId)
-    .eq("program_id", staff.programId)
-    .order("created_at", { ascending: true })
+
+  // The scope probe and the list are independent reads, so they travel
+  // together. `Promise.all` still rejects when the probe does, which is what
+  // keeps an out-of-patch caller from ever seeing a row: the list is discarded
+  // rather than returned.
+  const [{ data, error }] = await Promise.all([
+    supabaseAdmin
+      .from("contact_comments")
+      .select(COMMENT_COLUMNS)
+      .eq("contact_id", contactId)
+      .eq("program_id", staff.programId)
+      .order("created_at", { ascending: true }),
+    assertCommentContactInScope(staff, contactId),
+  ])
 
   if (error) {
     throw new AuthzError(500, "contact_comment_read_failed", "Unable to read the comments.")

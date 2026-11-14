@@ -89,44 +89,23 @@ const AVAILABILITY_CHUNK_SIZE = 200
  * The books the record's picker offers: every value present in the reader's
  * scoped contacts.
  *
- * A scoped distinct read, not a contact read: it selects one array column
- * through the RLS client, so it can only return values from contacts the caller
- * may already see. The record's own books are necessarily in the set because
- * the record row itself came through the same client.
+ * One query, not a paged table read: `contact_books_read_options` aggregates
+ * the distinct values in Postgres under the caller's contacts RLS, so opening a
+ * record costs one round trip rather than one per thousand contacts. The
+ * record's own books are necessarily in the set because the record row itself
+ * came through the same client.
  */
 async function loadScopedBooksReadOptions(staff: StaffContext): Promise<string[]> {
   const supabase = await createSupabaseServerClient()
-  const options = new Set<string>()
-  const pageSize = 1000
+  const { data, error } = await supabase.rpc("contact_books_read_options", {
+    p_program_id: staff.programId,
+  })
 
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase
-      .from("contacts")
-      .select("books_read")
-      .eq("program_id", staff.programId)
-      .order("id", { ascending: true })
-      .range(from, from + pageSize - 1)
-
-    if (error) {
-      throw error
-    }
-
-    const rows = (data ?? []) as Array<{ books_read: string[] | null }>
-
-    for (const row of rows) {
-      for (const book of row.books_read ?? []) {
-        if (book) {
-          options.add(book)
-        }
-      }
-    }
-
-    if (rows.length < pageSize) {
-      break
-    }
+  if (error) {
+    throw error
   }
 
-  return [...options].sort((left, right) => left.localeCompare(right))
+  return ((data ?? []) as string[]).slice().sort((left, right) => left.localeCompare(right))
 }
 
 /**

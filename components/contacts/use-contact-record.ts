@@ -28,6 +28,12 @@ const RECORD_ENDPOINT = "/api/manage/contacts"
 const COMMENT_ENDPOINT = "/api/manage/contacts/comments"
 const REACTION_ENDPOINT = "/api/manage/contacts/comment-reactions"
 
+interface PendingComments {
+  contactId: string
+  requestId: number
+  load: ContactRecordLoad<ManageContactCommentList>
+}
+
 interface OpenState {
   contactId: string
   sequence: readonly string[]
@@ -128,6 +134,14 @@ export function useContactRecord(options: {
   const openStateRef = useRef<OpenState | null>(null)
   const controllerRef = useRef<AbortController | null>(null)
   const requestRef = useRef(0)
+  /**
+   * A comment read that finished before its record did.
+   *
+   * The comment request and the record request start together, so either can
+   * land first. The hook's state only exists once the record is ready, so a
+   * comment result is parked here and merged the moment the record arrives.
+   */
+  const pendingCommentsRef = useRef<PendingComments | null>(null)
 
   // The hook can unmount while a read is in flight; abort it rather than let a
   // response land on a component that no longer exists.
@@ -160,26 +174,28 @@ export function useContactRecord(options: {
           return
         }
 
-        setState((current) =>
-          withCommentsLoad(current, contactId, {
-            status: "ready",
-            value: body as ManageContactCommentList,
-          }),
-        )
+        const load: ContactRecordLoad<ManageContactCommentList> = {
+          status: "ready",
+          value: body as ManageContactCommentList,
+        }
+
+        pendingCommentsRef.current = { contactId, requestId, load }
+        setState((current) => withCommentsLoad(current, contactId, load))
       } catch (error) {
         if (controller.signal.aborted || requestId !== requestRef.current) {
           return
         }
 
-        setState((current) =>
-          withCommentsLoad(current, contactId, {
-            status: "error",
-            message:
-              error instanceof Error
-                ? error.message
-                : "Unable to load this contact's comments.",
-          }),
-        )
+        const load: ContactRecordLoad<ManageContactCommentList> = {
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Unable to load this contact's comments.",
+        }
+
+        pendingCommentsRef.current = { contactId, requestId, load }
+        setState((current) => withCommentsLoad(current, contactId, load))
       }
     },
     [],
@@ -197,6 +213,13 @@ export function useContactRecord(options: {
       if (mode === "show-loading") {
         setState({ status: "loading" })
       }
+
+      // The comment read does not depend on this payload: its endpoint runs its
+      // own scope check and the pane decides whether to show the result. Start
+      // both together instead of chaining comments behind the record, and park
+      // an early comment result until there is a record state to attach it to.
+      pendingCommentsRef.current = null
+      const commentsRead = loadComments(contactId, requestId, controller)
 
       try {
         const response = await fetch(
@@ -226,8 +249,21 @@ export function useContactRecord(options: {
         setState(view)
 
         if (view.comments?.status === "loading") {
-          void loadComments(contactId, requestId, controller)
+          const pending = pendingCommentsRef.current as PendingComments | null
+
+          if (
+            pending &&
+            pending.contactId === contactId &&
+            pending.requestId === requestId
+          ) {
+            setState((current) => withCommentsLoad(current, contactId, pending.load))
+          }
         }
+
+        // A record the caller cannot comment on drops the speculative read;
+        // the pane renders its fixed "outside your patch" copy instead.
+        pendingCommentsRef.current = null
+        void commentsRead
 
         return view
       } catch (error) {
@@ -272,6 +308,7 @@ export function useContactRecord(options: {
     requestRef.current += 1
     controllerRef.current?.abort()
     controllerRef.current = null
+    pendingCommentsRef.current = null
     openStateRef.current = null
     setOpenState(null)
     setState(null)

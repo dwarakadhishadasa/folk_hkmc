@@ -925,6 +925,12 @@ export type Database = {
       }
     }
     Functions: {
+      contact_books_read_options: {
+        Args: {
+          p_program_id: string
+        }
+        Returns: string[]
+      }
       assign_dialer_contacts: {
         Args: {
           p_assigned_by: string
