@@ -20,9 +20,9 @@ const CHART_PALETTE = [
   "var(--chart-3)",
   "var(--chart-4)",
   "var(--chart-5)",
-  "#64748b",
-  "#0f766e",
-  "#b45309",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
 ] as const
 
 const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]

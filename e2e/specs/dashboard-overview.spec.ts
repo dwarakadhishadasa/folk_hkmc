@@ -55,7 +55,7 @@ test("renders the preacher, session, attendance and contact sections", async ({ 
     await expect(page.locator(`[data-dashboard-kpi="${key}"]`)).toHaveCount(0)
   }
 
-  await expect(page.getByRole("heading", { name: "Preaching efforts" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Preaching effort" })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toBeVisible()
   await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toBeVisible()
   await expect(page.getByRole("heading", { name: "Recent sessions" })).toBeVisible()
@@ -82,7 +82,7 @@ test("renders the preacher, session, attendance and contact sections", async ({ 
 
   const kpiBox = await page.locator('[data-dashboard-kpi="contacts-collected"]').boundingBox()
   const orderedHeadings = [
-    page.getByRole("heading", { name: "Preaching efforts" }),
+    page.getByRole("heading", { name: "Preaching effort" }),
     page.getByRole("heading", { name: "Attendees by preacher" }),
     page.getByRole("heading", { name: "By preacher", exact: true }),
     page.getByRole("heading", { name: "Recent sessions" }),
@@ -111,7 +111,7 @@ test.describe("a Preacher's own scope", () => {
   }) => {
     await page.goto("/dashboard?period=all")
 
-    await expect(page.getByRole("heading", { name: "Preaching efforts" })).toHaveCount(0)
+    await expect(page.getByRole("heading", { name: "Preaching effort" })).toHaveCount(0)
     await expect(page.getByRole("heading", { name: "By preacher", exact: true })).toHaveCount(0)
     await expect(page.getByRole("heading", { name: "Attendees by preacher" })).toHaveCount(0)
     await expect(page.getByRole("heading", { name: "Focus now" })).toBeVisible()
