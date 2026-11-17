@@ -3,9 +3,8 @@
 import type { CSSProperties } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { LogIn, LogOut, Mail, Phone } from "lucide-react"
+import { LogIn, LogOut } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { COURSE_FACTS } from "@/components/folk-home/course-data"
 import { useAuth } from "@/lib/auth-context"
 import { currentProgramProfile } from "@/lib/current-program"
 
@@ -13,13 +12,13 @@ const HKMC_HEADER_LOGO =
   "https://pub-52c246542a924673ab52ddc511394567.r2.dev/assets/iskcon-logo-updated-transparent.png"
 
 const headerThemeVars = {
-  "--header-action-bg": "rgb(255 255 255 / 0.12)",
-  "--header-action-hover-bg": "rgb(255 255 255 / 0.22)",
-  "--header-action-text": "#ffffff",
-  "--header-login-bg": "#ffffff",
-  "--header-login-hover-bg": "#ffedd5",
-  "--header-login-text": "#7c2d12",
-  "--header-focus-ring": "#fcd34d",
+  "--header-action-bg": "#f3f4f6",
+  "--header-action-hover-bg": "#e5e7eb",
+  "--header-action-text": "#374151",
+  "--header-login-bg": "#701a1a",
+  "--header-login-hover-bg": "#5a1515",
+  "--header-login-text": "#ffffff",
+  "--header-focus-ring": "#701a1a",
 } as CSSProperties
 
 export function CourseHeader() {
@@ -32,14 +31,14 @@ export function CourseHeader() {
 
   return (
     <header
-      className="sticky top-0 z-50 bg-gradient-to-r from-amber-800 to-orange-700 px-3 py-2 text-white shadow-lg shadow-black/10 sm:px-5 sm:py-3"
+      className="sticky top-0 z-50 bg-white/95 px-3 py-2 text-neutral-900 shadow-md backdrop-blur-xl sm:px-5"
       style={headerThemeVars}
     >
       <div className="flex w-full items-center justify-between gap-3">
         <Link
           href="/"
           aria-label={`${branding.shortName} home`}
-          className="relative flex h-14 w-32 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white px-1 shadow-sm ring-1 ring-black/10 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:h-16 sm:w-36"
+          className="relative flex h-12 w-40 shrink-0 items-center justify-center transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:h-14 sm:w-44"
         >
           <Image
             src={HKMC_HEADER_LOGO}
@@ -53,28 +52,12 @@ export function CourseHeader() {
         </Link>
 
         <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-          <a
-            href={`mailto:${COURSE_FACTS.email}`}
-            className="hidden items-center gap-2 text-sm text-amber-200 transition-colors hover:text-white md:flex"
-          >
-            <Mail className="h-4 w-4" aria-hidden="true" />
-            <span>{COURSE_FACTS.email}</span>
-          </a>
-          <a
-            href={COURSE_FACTS.phoneHref}
-            aria-label={`Call ${COURSE_FACTS.phone}`}
-            className="flex h-10 items-center gap-2 rounded-full bg-white/10 px-3 transition-colors hover:bg-white/20"
-          >
-            <Phone className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{COURSE_FACTS.phone}</span>
-          </a>
-
           <ThemeToggle />
 
           {isHydrated &&
             (isLoggedIn ? (
               <>
-                <span className="hidden text-xs capitalize text-amber-200 lg:inline">
+                <span className="hidden text-xs capitalize text-neutral-500 lg:inline">
                   {username} ({role})
                 </span>
                 <Link
