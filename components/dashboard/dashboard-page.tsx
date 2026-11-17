@@ -102,7 +102,7 @@ export function DashboardPage({
                 programScope={scope.programScope}
               />
 
-              <DashboardRecentSessionsCard sessions={overview.recentSessions} />
+              <DashboardRecentSessionsCard sessions={overview.recentSessions} linkable={false} />
             </>
           ) : (
             <>

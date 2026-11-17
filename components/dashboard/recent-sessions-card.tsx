@@ -29,8 +29,18 @@ function DateBlock({ value }: { value: string | null }) {
  * the card sits in the narrow column of the bottom row, and a table there
  * clipped its own columns. Each row names the session, its preacher, its
  * location and how many people attended.
+ *
+ * `linkable` is false on the Admin's All preachers dashboard. The detail route
+ * scopes sessions to the caller's own patch, so a session owned by another
+ * preacher would 404; the row still names it, it just is not a link.
  */
-export function DashboardRecentSessionsCard({ sessions }: { sessions: RecentSession[] }) {
+export function DashboardRecentSessionsCard({
+  sessions,
+  linkable = true,
+}: {
+  sessions: RecentSession[]
+  linkable?: boolean
+}) {
   return (
     <DashboardCard title="Recent sessions" subtitle="Preacher and attendance for the last five in scope">
       {sessions.length === 0 ? (
@@ -48,12 +58,18 @@ export function DashboardRecentSessionsCard({ sessions }: { sessions: RecentSess
               <DateBlock value={session.sessionDate} />
 
               <div className="min-w-0 flex-1">
-                <Link
-                  href={`/sessions/${session.id}`}
-                  className="block truncate text-sm font-semibold text-[var(--program-text)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                >
-                  {session.name}
-                </Link>
+                {linkable ? (
+                  <Link
+                    href={`/sessions/${session.id}`}
+                    className="block truncate text-sm font-semibold text-[var(--program-text)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  >
+                    {session.name}
+                  </Link>
+                ) : (
+                  <span className="block truncate text-sm font-semibold text-[var(--program-text)]">
+                    {session.name}
+                  </span>
+                )}
                 <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 text-[11px]">
                   <dt className="text-[var(--muted-foreground)]">Preacher</dt>
                   <dd className="truncate text-[var(--program-text)]">
