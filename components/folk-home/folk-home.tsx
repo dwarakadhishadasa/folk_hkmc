@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CourseLanding } from "@/components/folk-home/landing"
+import { FolkClubLanding } from "@/components/folk-home/folk-club-landing"
 import { PaymentStep } from "@/components/folk-home/payment-step"
 import { RegistrationForm } from "@/components/folk-home/registration-form"
 import { RegistrationSuccess } from "@/components/folk-home/registration-success"
@@ -57,5 +57,5 @@ export function FolkHome({ attendAreas }: { attendAreas: string[] }) {
     )
   }
 
-  return <CourseLanding onRegister={() => setView("registration")} />
+  return <FolkClubLanding onRegister={() => setView("registration")} />
 }

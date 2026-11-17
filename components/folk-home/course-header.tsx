@@ -9,6 +9,9 @@ import { COURSE_FACTS } from "@/components/folk-home/course-data"
 import { useAuth } from "@/lib/auth-context"
 import { currentProgramProfile } from "@/lib/current-program"
 
+const HKMC_HEADER_LOGO =
+  "https://pub-52c246542a924673ab52ddc511394567.r2.dev/assets/iskcon-logo-updated-transparent.png"
+
 const headerThemeVars = {
   "--header-action-bg": "rgb(255 255 255 / 0.12)",
   "--header-action-hover-bg": "rgb(255 255 255 / 0.22)",
@@ -36,15 +39,16 @@ export function CourseHeader() {
         <Link
           href="/"
           aria-label={`${branding.shortName} home`}
-          className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/10 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:h-16 sm:w-16"
+          className="relative flex h-14 w-32 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white px-1 shadow-sm ring-1 ring-black/10 transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:h-16 sm:w-36"
         >
           <Image
-            src={branding.headerLogoSrc ?? branding.logoSrc}
-            alt={branding.headerLogoAlt ?? branding.logoAlt}
-            width={900}
-            height={900}
+            src={HKMC_HEADER_LOGO}
+            alt="ISKCON Chennai logo"
+            width={1017}
+            height={385}
             className="h-full w-full object-contain"
             priority
+            unoptimized
           />
         </Link>
 

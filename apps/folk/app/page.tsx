@@ -8,9 +8,9 @@ import { listLocations } from "@/lib/supabase/data"
 export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
-  title: "Gita Life Foundation Course | FOLK Chennai",
+  title: "FOLK — Youth Empowerment Program | Hare Krishna Movement Chennai",
   description:
-    "Learn the fundamental principles of Bhagavad Gita with the Gita Life Foundation Course, a project by Hare Krishna Movement Chennai.",
+    "Join FOLK (Friends of Lord Krishna), a dynamic youth empowerment program for ages 13-30. Engage in spiritual discussions, leadership development, cultural activities, and community service.",
 }
 
 export default async function Home() {
