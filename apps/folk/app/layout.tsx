@@ -13,6 +13,7 @@ const poppins = Poppins({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://folk.hkmchennai.org"),
   title: "FOLK Portal - FOLK Chennai",
   description: "FOLK Chennai staff portal for registration, contacts, sessions, attendance, and invites.",
   manifest: "/manifest.json",
@@ -23,10 +24,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icons/icon-192x192.jpg", sizes: "192x192", type: "image/jpeg" },
-      { url: "/icons/icon-512x512.jpg", sizes: "512x512", type: "image/jpeg" },
+      { url: "/icons/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/icons/apple-touch-icon.jpg", sizes: "180x180", type: "image/jpeg" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   applicationName: "FOLK Portal",
   authors: [{ name: "HKM Chennai" }],
@@ -58,7 +61,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="FOLK Portal" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.jpg" />
       </head>
       <body className={`${inter.variable} ${poppins.variable} font-sans antialiased`}>
         <Providers>{children}</Providers>
