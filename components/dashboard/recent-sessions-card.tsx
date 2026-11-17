@@ -4,7 +4,7 @@ import { DashboardCard, DashboardInlineEmpty } from "@/components/dashboard/dash
 import { dateParts, formatCount } from "@/lib/dashboard/format"
 import type { RecentSession } from "@/lib/dashboard/types"
 
-function DateBlock({ value }: { value: string | null }) {
+export function DashboardDateBlock({ value }: { value: string | null }) {
   const parts = dateParts(value)
   if (!parts) {
     return (
@@ -55,7 +55,7 @@ export function DashboardRecentSessionsCard({
               data-dashboard-recent-session={session.id}
               className="flex items-start gap-3 py-3 transition-colors first:pt-0 last:pb-0 hover:bg-foreground/[0.02]"
             >
-              <DateBlock value={session.sessionDate} />
+              <DashboardDateBlock value={session.sessionDate} />
 
               <div className="min-w-0 flex-1">
                 {linkable ? (
