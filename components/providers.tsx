@@ -15,7 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // Outermost by contract: `next-themes` sets the class on `<html>` during
   // hydration, so anything that reads a token before it runs sees the wrong theme.
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <NavigationFeedbackProvider>
         <AuthProvider>
           <AuthHashCallback />

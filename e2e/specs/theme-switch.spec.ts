@@ -4,9 +4,9 @@
  * | Test    | Scenario                                   | Claim under test                                                     |
  * | ------- | ------------------------------------------ | -------------------------------------------------------------------- |
  * | theme 1 | a fresh context, dark system preference     | `<html>` arrives with `.dark` before the grid paints                 |
- * | theme 2 | a fresh context, light system preference    | `<html>` arrives with no `.dark`                                      |
+ * | theme 2 | a fresh context, light system preference    | the dark default still wins — no stored choice, no light fallback     |
  * | theme 3 | the toggle                                  | the class flips, `localStorage.theme` is written, the icon flips      |
- * | theme 4 | reload after an explicit toggle             | `.dark` survives — the choice outranks `system`                       |
+ * | theme 4 | reload after an explicit toggle             | an explicit light choice survives — the choice outranks the default   |
  * | theme 5 | back to the system option                   | the page follows `prefers-color-scheme` again                          |
  * | theme 6 | storage blocked                             | the app still renders and the toggle still switches the class         |
  * | theme 7 | one toggle, in the header                   | exactly one, inside `<header>`; `components/grid/` imports none       |
@@ -410,15 +410,16 @@ test.describe("CAP-7 theme switch", () => {
     await expectDark(page, true)
     expect(
       await storedTheme(page),
-      'defaultTheme="system" must not invent an explicit stored choice',
+      'defaultTheme="dark" must not invent an explicit stored choice',
     ).toBeNull()
   })
 
-  test("theme 2 — a fresh context with a light system preference arrives light", async ({ page }) => {
+  test("theme 2 — the dark default holds with a light system preference", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" })
     await openPreviewGrid(page)
 
-    await expectDark(page, false)
+    await expectDark(page, true)
+    expect(await storedTheme(page), "the default is not an explicit choice").toBeNull()
   })
 
   test("theme 3 — the toggle flips the class, the icon and the stored choice", async ({ page }) => {
@@ -427,44 +428,43 @@ test.describe("CAP-7 theme switch", () => {
     // is driven from a real app page — which is also the page the story grades.
     await page.goto("/")
     await expect(themeToggle(page)).toBeVisible()
-    await expectDark(page, false)
-    await expectToggleIcon(page, "moon")
-
-    await themeToggle(page).click()
-
     await expectDark(page, true)
-    await expect
-      .poll(() => storedTheme(page), { message: "the explicit choice was never stored" })
-      .toBe("dark")
     await expectToggleIcon(page, "sun")
 
     await themeToggle(page).click()
 
     await expectDark(page, false)
-    await expect.poll(() => storedTheme(page)).toBe("light")
+    await expect
+      .poll(() => storedTheme(page), { message: "the explicit choice was never stored" })
+      .toBe("light")
     await expectToggleIcon(page, "moon")
+
+    await themeToggle(page).click()
+
+    await expectDark(page, true)
+    await expect.poll(() => storedTheme(page)).toBe("dark")
+    await expectToggleIcon(page, "sun")
   })
 
-  test("theme 4 — an explicit dark choice survives a reload on a light system", async ({ page }) => {
+  test("theme 4 — an explicit light choice survives a reload on a dark default", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" })
     await page.goto("/")
-    await themeToggle(page).click()
     await expectDark(page, true)
+    await themeToggle(page).click()
+    await expectDark(page, false)
 
     await page.reload()
 
     // Observed through the class itself, after the reload, not through the
-    // toggle's own state: an explicit choice outranks `defaultTheme="system"`.
-    await expectDark(page, true)
-    expect(await storedTheme(page), "the choice outlived the reload").toBe("dark")
-    await expectToggleIcon(page, "sun")
+    // toggle's own state: an explicit choice outranks the dark default.
+    await expectDark(page, false)
+    expect(await storedTheme(page), "the choice outlived the reload").toBe("light")
+    await expectToggleIcon(page, "moon")
   })
 
-  test("theme 5 — the system option is honoured again once it is the stored value", async ({ page }) => {
+  test("theme 5 — the system option is honoured once it is the stored value", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" })
     await page.goto("/")
-    await themeToggle(page).click()
-    await expectDark(page, true)
 
     // Returning to the system option is what `enableSystem` exists for. The
     // toggle offers light/dark only by design, so the option is written
@@ -505,6 +505,7 @@ test.describe("CAP-7 theme switch", () => {
 
       await page.goto("/")
       await expect(themeToggle(page), "the shell renders").toBeVisible()
+      await expectDark(page, true)
 
       await page.evaluate(() => {
         const blocked = () => {
@@ -526,7 +527,7 @@ test.describe("CAP-7 theme switch", () => {
 
       await themeToggle(page).click()
 
-      await expectDark(page, true)
+      await expectDark(page, false)
       expect(
         await page.evaluate(() => window.localStorage.getItem("theme")),
         "a blocked write cannot have persisted the choice",
@@ -666,27 +667,28 @@ test.describe("CAP-7 theme switch", () => {
   test("theme 11 — the two themes render differently and the dark one is darker", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "light" })
     await openPreviewGrid(page)
+    await expectDark(page, true)
 
-    const lightCard = await tokenRgb(page, "--card")
-    const lightSample = await gridSurfaceSample(page)
-    const lightCapture = await page.screenshot()
-    const light = await analyzeScreenshot(page, lightCapture, lightSample)
+    const darkCard = await tokenRgb(page, "--card")
+    const darkSample = await gridSurfaceSample(page)
+    const darkCapture = await page.screenshot()
+    const dark = await analyzeScreenshot(page, darkCapture, darkSample)
 
     // The swap goes through the toggle, not through a poked class: the toggle is
     // the control the story ships, and using it is what proves the whole path.
     await page.goto("/")
     await themeToggle(page).click()
-    await expectDark(page, true)
+    await expectDark(page, false)
     await page.goto("/dev/grid-preview")
-    await expectDark(page, true)
+    await expectDark(page, false)
 
     // Re-measured, not carried over: the navigation above reloads the page, so
-    // the virtualized scroll container starts at the top again and the light
+    // the virtualized scroll container starts at the top again and the dark
     // capture's coordinates would be sampling whatever happens to sit there now.
-    const darkCard = await tokenRgb(page, "--card")
-    const darkSample = await gridSurfaceSample(page)
-    const darkCapture = await page.screenshot()
-    const dark = await analyzeScreenshot(page, darkCapture, darkSample)
+    const lightCard = await tokenRgb(page, "--card")
+    const lightSample = await gridSurfaceSample(page)
+    const lightCapture = await page.screenshot()
+    const light = await analyzeScreenshot(page, lightCapture, lightSample)
 
     console.log(
       `mean luminance: light ${light.meanLuminance.toFixed(1)} vs dark ${dark.meanLuminance.toFixed(1)}`,
@@ -743,7 +745,7 @@ test.describe("CAP-7 theme switch", () => {
 
     for (const { route, form } of STAFF_SURFACES) {
       await page.goto(route)
-      await expectDark(page, false)
+      await expectDark(page, true)
 
       // Set on the same render rather than through the toggle: the claim is
       // about the tokens the page resolves, and a reload would re-mount every
@@ -802,7 +804,7 @@ test.describe("CAP-7 theme switch", () => {
     expect(source, "the provider is not mounted").toContain("<ThemeProvider")
     for (const prop of [
       'attribute="class"',
-      'defaultTheme="system"',
+      'defaultTheme="dark"',
       "enableSystem",
       "disableTransitionOnChange",
     ]) {
