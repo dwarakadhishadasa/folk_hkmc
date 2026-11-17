@@ -13,6 +13,30 @@ interface BeforeInstallPromptEvent extends Event {
 
 type StandaloneNavigator = Navigator & { standalone?: boolean }
 
+const MOBILE_USER_AGENT = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i
+
+/**
+ * The install banner is a phone affordance. Chrome on desktop also fires
+ * `beforeinstallprompt`, which used to put a phone-shaped banner on a desktop
+ * window; iPadOS reports a Macintosh agent, so it is caught by touch points.
+ */
+function isMobileDevice(): boolean {
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  const userAgent = navigator.userAgent
+  if (MOBILE_USER_AGENT.test(userAgent)) {
+    return true
+  }
+
+  const touchMac = /Macintosh/.test(userAgent) && navigator.maxTouchPoints > 1
+  const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false
+  const narrowViewport = window.matchMedia?.("(max-width: 767px)").matches ?? false
+
+  return touchMac || (coarsePointer && narrowViewport)
+}
+
 export function PWAInstallPrompt() {
   const { isHydrated, isLoggedIn, staff } = useAuth()
   const { branding } = currentProgramProfile
@@ -22,6 +46,10 @@ export function PWAInstallPrompt() {
   const [isIos, setIsIos] = useState(false)
 
   useEffect(() => {
+    if (!isMobileDevice()) {
+      return
+    }
+
     // Check if already installed
     if (window.matchMedia("(display-mode: standalone)").matches) {
       console.log("[v0] App is already installed")
