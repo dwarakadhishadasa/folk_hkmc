@@ -45,7 +45,6 @@ export function DashboardBirthdaysCard({ birthdays }: { birthdays: UpcomingBirth
   return (
     <DashboardCard
       title="Upcoming birthdays"
-      subtitle="Cake days in the next 60 days, across your contacts"
       action={
         <span
           className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold tracking-wide text-white uppercase shadow-sm"

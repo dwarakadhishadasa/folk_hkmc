@@ -117,9 +117,10 @@ export function DashboardPage({
 
               <DashboardFocusSection segments={overview.focus} mode={scope.mode} />
 
-              <DashboardRecentSessionsCard sessions={overview.recentSessions} />
-
-              <DashboardBirthdaysCard birthdays={birthdays} />
+              <div className="grid items-stretch gap-5 lg:grid-cols-2">
+                <DashboardRecentSessionsCard sessions={overview.recentSessions} />
+                <DashboardBirthdaysCard birthdays={birthdays} />
+              </div>
             </>
           )}
         </>
