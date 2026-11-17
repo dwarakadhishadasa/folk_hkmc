@@ -1,3 +1,4 @@
+import { ContactRecordTrigger } from "@/components/contacts/contact-record-trigger"
 import { DashboardCard, DashboardInlineEmpty } from "@/components/dashboard/dashboard-card"
 import { DashboardDateBlock } from "@/components/dashboard/recent-sessions-card"
 import type { UpcomingBirthday } from "@/lib/dashboard/birthdays"
@@ -18,6 +19,8 @@ function countdownLabel(daysUntil: number): string {
  * right — so the two cards read as one row of the page.
  */
 export function DashboardBirthdaysCard({ birthdays }: { birthdays: UpcomingBirthday[] }) {
+  const sequence = birthdays.map((birthday) => birthday.contactId)
+
   return (
     <DashboardCard title="Upcoming birthdays">
       {birthdays.length === 0 ? (
@@ -32,7 +35,15 @@ export function DashboardBirthdaysCard({ birthdays }: { birthdays: UpcomingBirth
               <DashboardDateBlock value={birthday.date} />
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-[var(--program-text)]">{birthday.name}</p>
+                <ContactRecordTrigger
+                  contactId={birthday.contactId}
+                  name={birthday.name}
+                  sequence={sequence}
+                  className="block max-w-full truncate text-sm font-semibold text-[var(--program-text)] underline-offset-2 hover:underline"
+                  staticClassName="block max-w-full truncate text-sm font-semibold text-[var(--program-text)]"
+                >
+                  {birthday.name}
+                </ContactRecordTrigger>
                 <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">
                   {birthday.turningAge !== null ? `Turns ${birthday.turningAge}` : "Birthday"}
                 </p>
