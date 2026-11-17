@@ -404,6 +404,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  /*
+   * Native select options do not follow the field surface: Chromium paints the
+   * popup white while the option text keeps `--foreground`, which hid the
+   * Assistant option white-on-white in dark mode. Pin both halves to the
+   * popover tokens so the list stays readable in either theme.
+   */
+  select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
 }
 
 @media (max-width: 767px) {
