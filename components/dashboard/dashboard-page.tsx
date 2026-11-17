@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { DashboardAttendanceCard } from "@/components/dashboard/attendance-card"
+import { DashboardBirthdaysCard } from "@/components/dashboard/birthdays-card"
 import { DashboardFocusSection } from "@/components/dashboard/focus-section"
 import { DashboardHeader, DashboardScopeNotice } from "@/components/dashboard/dashboard-header"
 import { DashboardKpiBand } from "@/components/dashboard/kpi-band"
@@ -9,6 +10,7 @@ import { DashboardPreacherAttendeeLines } from "@/components/dashboard/preacher-
 import { DashboardPreachingEfforts } from "@/components/dashboard/preaching-efforts"
 import { DashboardRecentSessionsCard } from "@/components/dashboard/recent-sessions-card"
 import { DashboardTeamTable } from "@/components/dashboard/team-table"
+import type { UpcomingBirthday } from "@/lib/dashboard/birthdays"
 import type { DashboardLiveSession } from "@/lib/dashboard/live"
 import type { DashboardPeriod } from "@/lib/dashboard/period"
 import type {
@@ -33,6 +35,7 @@ export function DashboardPage({
   overview,
   liveSessions,
   series,
+  birthdays,
 }: {
   scope: DashboardScope
   period: DashboardPeriod
@@ -40,6 +43,7 @@ export function DashboardPage({
   overview: DashboardOverview | null
   liveSessions: DashboardLiveSession[]
   series: DashboardPeopleSeries | null
+  birthdays: UpcomingBirthday[]
 }) {
   const unassigned = scope.assistantUnassigned || overview === null
   const programmeScope = scope.role === "Admin" && scope.mode === "admin"
@@ -114,6 +118,8 @@ export function DashboardPage({
               <DashboardFocusSection segments={overview.focus} mode={scope.mode} />
 
               <DashboardRecentSessionsCard sessions={overview.recentSessions} />
+
+              <DashboardBirthdaysCard birthdays={birthdays} />
             </>
           )}
         </>

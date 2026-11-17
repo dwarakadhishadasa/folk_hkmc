@@ -6,11 +6,13 @@ import { Header } from "@/components/header"
 import { StaffAuthShell } from "@/components/staff-auth-shell"
 import { AuthzError, getStaffContext } from "@/lib/authz"
 import { toClientStaff } from "@/lib/staff-dto"
+import type { UpcomingBirthday } from "@/lib/dashboard/birthdays"
 import { loadDashboardLiveSessions, type DashboardLiveSession } from "@/lib/dashboard/live"
 import { loadDashboardOverview } from "@/lib/dashboard/overview"
 import { loadDashboardPeopleSeries } from "@/lib/dashboard/people-series"
 import { parseDashboardPeriod, resolveDashboardWindow } from "@/lib/dashboard/period"
 import { requireDashboardRole, resolveDashboardScope } from "@/lib/dashboard/scope"
+import { loadUpcomingBirthdays } from "@/lib/dashboard/upcoming-birthdays"
 import type { DashboardOverview, DashboardPeopleSeries } from "@/lib/dashboard/types"
 import { programDay } from "@/lib/program-day"
 
@@ -43,22 +45,28 @@ export async function DashboardRoute({ searchParams }: { searchParams: Dashboard
     let overview: DashboardOverview | null = null
     let series: DashboardPeopleSeries | null = null
     let liveSessions: DashboardLiveSession[] = []
+    let birthdays: UpcomingBirthday[] = []
 
     if (!scope.assistantUnassigned) {
       // An Admin reading the whole programme is on the Sessions page for live
-      // work; the dashboard skips the read rather than loading a band it hides.
-      const showLive = !(scope.role === "Admin" && scope.mode === "admin")
+      // work, and the birthday board is a patch card; both skip the read rather
+      // than load data the branch will not render.
+      const personalScope = !(scope.role === "Admin" && scope.mode === "admin")
 
-      const [loadedOverview, loadedSeries, loadedLiveSessions] = await Promise.all([
+      const [loadedOverview, loadedSeries, loadedLiveSessions, loadedBirthdays] = await Promise.all([
         loadDashboardOverview(scope, window),
         loadDashboardPeopleSeries(scope, window),
-        showLive
+        personalScope
           ? loadDashboardLiveSessions(staff, scope)
           : Promise.resolve<DashboardLiveSession[]>([]),
+        personalScope
+          ? loadUpcomingBirthdays(scope, today)
+          : Promise.resolve<UpcomingBirthday[]>([]),
       ])
       overview = loadedOverview
       series = loadedSeries
       liveSessions = loadedLiveSessions
+      birthdays = loadedBirthdays
     }
 
     return (
@@ -71,6 +79,7 @@ export async function DashboardRoute({ searchParams }: { searchParams: Dashboard
             overview={overview}
             liveSessions={liveSessions}
             series={series}
+            birthdays={birthdays}
           />
         </DashboardShell>
       </StaffAuthShell>
