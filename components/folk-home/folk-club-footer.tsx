@@ -1,65 +1,17 @@
 "use client"
 
-import { ArrowRight, Clock, Facebook, Heart, Instagram, MapPin, Phone, Twitter, Youtube } from "lucide-react"
+import { ArrowRight, Clock, Heart, Mail, MapPin, Phone } from "lucide-react"
+import { COURSE_FACTS } from "@/components/folk-home/course-data"
 
 const CDN = "https://pub-52c246542a924673ab52ddc511394567.r2.dev"
 const HKMC = "https://hkmchennai.org"
-
-const PROGRAM_LINKS = [
-  { label: "Gita Life", href: `${HKMC}/activities/gita-life` },
-  { label: "ICVK (For Kids)", href: `${HKMC}/activities/icvk` },
-  { label: "FOLK (For Youth)", href: "/" },
-  { label: "Sunday Retreats", href: `${HKMC}/activities/sunday-retreats` },
-] as const
-
-const ABOUT_LINKS = [
-  { label: "Our Mission", href: `${HKMC}/seven-purposes` },
-  { label: "Srila Prabhupada", href: `${HKMC}/srila-prabhupada` },
-  { label: "Our Team", href: `${HKMC}/about-hkm` },
-  { label: "Spiritual Guidance", href: `${HKMC}/activities/spiritual-discourses` },
-  { label: "Vaishnava Calendar", href: `${HKMC}/temple/vaishnava-calendar` },
-] as const
-
-const RESOURCE_LINKS = [
-  { label: "Help Center", href: `${HKMC}/contact-us` },
-  { label: "Contact Us", href: `${HKMC}/contact-us` },
-  { label: "FAQ", href: `${HKMC}/philosophy/ask-any-question` },
-  { label: "Privacy Policy", href: `${HKMC}/privacy-policy` },
-  { label: "Terms & Conditions", href: `${HKMC}/terms-and-conditions` },
-] as const
-
-const SOCIAL_LINKS = [
-  { label: "Facebook", href: "https://www.facebook.com/hkmcworld/", Icon: Facebook },
-  { label: "Instagram", href: "https://www.instagram.com/hkm_chennai/?hl=en", Icon: Instagram },
-  { label: "YouTube", href: "https://youtube.com/@hkmchennai?si=R9Zp5_nuV--UfX0Y", Icon: Youtube },
-  { label: "X / Twitter", href: "https://x.com/ChennaiHare", Icon: Twitter },
-] as const
-
-const FOOTER_LINK_CLASS =
-  "transition-all duration-300 flex items-center gap-2 text-sm uppercase tracking-wide text-gray-200 hover:text-[#FFB81C] hover:translate-x-1 font-medium"
+const DIRECTIONS_URL = "https://www.google.com/maps?q=Hare+Krishna+Movement+Chennai"
 
 const PILL_LINK_CLASS =
   "inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-[#FFB81C] to-[#FFD700] text-[#1a0800] font-extrabold text-xs uppercase tracking-widest shadow-[0_0_14px_rgba(255,184,28,0.35)] hover:shadow-[0_0_22px_rgba(255,215,0,0.55)] hover:scale-105 transition-all duration-300"
 
-function FooterColumn({ title, links }: { title: string; links: readonly { label: string; href: string }[] }) {
-  return (
-    <div>
-      <h3 className="mb-6 inline-block border-b border-[#FFB81C]/50 pb-2 font-serif text-base font-bold tracking-widest text-[#FFB81C]">
-        {title}
-      </h3>
-      <ul className="space-y-3">
-        {links.map((link) => (
-          <li key={link.label}>
-            <a className={FOOTER_LINK_CLASS} href={link.href}>
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FFB81C]/70" />
-              {link.label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
+const COLUMN_TITLE_CLASS =
+  "mb-6 inline-block border-b border-[#FFB81C]/50 pb-2 font-serif text-base font-bold tracking-widest text-[#FFB81C]"
 
 export function FolkClubFooter() {
   return (
@@ -111,80 +63,48 @@ export function FolkClubFooter() {
                   Dakshina Dwaraka Dham — Cultural Complex to Preserve and Promote Indian Heritage.
                 </span>
               </p>
-              <div className="mt-4 flex items-start gap-3 text-sm text-gray-300">
-                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-[#FFB81C]" />
-                <span className="cursor-pointer leading-relaxed transition-colors hover:text-[#FFB81C]">
-                  63, 1st Seaward Road, Valmiki Nagar, Thiruvanmiyur, Chennai- 600041
-                </span>
-              </div>
-              <div className="flex flex-nowrap items-center justify-center gap-3 pt-6 lg:justify-start">
-                {SOCIAL_LINKS.map(({ label, href, Icon }) => (
-                  <a
-                    key={label}
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={label}
-                    title={label}
-                    style={{ width: 42, height: 42, minWidth: 42 }}
-                    className="flex shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white/90 transition-all duration-300 hover:scale-110 hover:border-[#FFB81C] hover:bg-[#FFB81C] hover:text-[#1a0505] hover:shadow-[0_0_16px_rgba(255,184,28,0.55)] active:scale-95"
-                  >
-                    <Icon className="h-[18px] w-[18px]" />
-                  </a>
-                ))}
-                <a
-                  href="https://api.whatsapp.com/send/?phone=919789057101"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="WhatsApp"
-                  title="WhatsApp"
-                  style={{ width: 42, height: 42, minWidth: 42 }}
-                  className="flex shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white/90 transition-all duration-300 hover:scale-110 hover:border-[#FFB81C] hover:bg-[#FFB81C] hover:text-[#1a0505] hover:shadow-[0_0_16px_rgba(255,184,28,0.55)] active:scale-95"
-                >
-                  <svg className="h-[17px] w-[17px]" fill="currentColor" viewBox="0 0 448 512" aria-hidden="true">
-                    <path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.7 17.8 69.4 27.2 106.2 27.2h.1c122.3 0 222-99.6 222-222 0-59.3-23-115.1-65.1-157.1zM223.9 445.9c-33.1 0-65.7-8.9-93.9-25.7l-6.7-4-69.8 18.3 18.7-68.1-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 54 81.2 54 130.5 0 101.8-82.7 184.6-184.4 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18s-8.8-2.8-12.5 2.8-14.3 18-17.6 21.8-6.5 4.2-12 1.4c-5.5-2.8-23.2-8.5-44.2-27.2-16.3-14.5-27.3-32.5-30.5-37.9s-.3-8.4 2.4-11.1c2.4-2.4 5.5-6.5 8.2-9.7 2.8-3.3 3.7-5.5 5.5-9.2s.9-6.9-.5-9.7-12.5-30.1-17.1-41.2c-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2s-9.7 1.4-14.8 6.9-19.4 19-19.4 46.3 20 53.6 22.8 57.3c2.8 3.7 39.4 60.2 95.5 84.4 13.3 5.8 23.7 9.2 31.9 11.9 13.4 4.3 25.7 3.7 35.4 2.2 10.8-1.6 32.8-13.4 37.4-26.4s4.6-24.1 3.2-26.4c-1.3-2.5-5-3.9-10.5-6.6z" />
-                  </svg>
-                </a>
-                <a
-                  href="tel:+919789057101"
-                  aria-label="Show phone contacts"
-                  title="Call Us"
-                  style={{ width: 42, height: 42, minWidth: 42 }}
-                  className="flex shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white/90 transition-all duration-300 hover:scale-110 hover:border-[#FFB81C] hover:bg-[#FFB81C] hover:text-[#1a0505] hover:shadow-[0_0_16px_rgba(255,184,28,0.55)] active:scale-95"
-                >
-                  <Phone className="h-[18px] w-[18px]" />
-                </a>
-              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:col-span-8 lg:grid-cols-[1fr_1fr_1fr_1.25fr_1.45fr] xl:gap-10">
-            <FooterColumn title="PROGRAMS" links={PROGRAM_LINKS} />
-            <FooterColumn title="ABOUT" links={ABOUT_LINKS} />
+          <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:col-span-8 lg:grid-cols-3 xl:gap-12">
             <div>
-              <FooterColumn title="RESOURCES" links={RESOURCE_LINKS} />
-              <a className={`${PILL_LINK_CLASS} mt-1`} href={`${HKMC}/donate`}>
-                <Heart className="h-[13px] w-[13px] shrink-0 fill-[#1a0800] text-[#1a0800]" />
-                Donate
+              <h3 className={COLUMN_TITLE_CLASS}>CONTACT US</h3>
+              <ul className="space-y-4 text-sm text-gray-200">
+                <li>
+                  <a
+                    href={COURSE_FACTS.phoneHref}
+                    className="flex items-start gap-3 leading-relaxed transition-colors hover:text-[#FFB81C]"
+                  >
+                    <Phone className="mt-0.5 h-4 w-4 shrink-0 text-[#FFB81C]" />
+                    <span>Ph: {COURSE_FACTS.phone}</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href={`mailto:${COURSE_FACTS.email}`}
+                    className="flex items-start gap-3 break-all leading-relaxed transition-colors hover:text-[#FFB81C]"
+                  >
+                    <Mail className="mt-0.5 h-4 w-4 shrink-0 text-[#FFB81C]" />
+                    <span>Email: {COURSE_FACTS.email}</span>
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className={COLUMN_TITLE_CLASS}>HOW TO REACH</h3>
+              <div className="flex items-start gap-3 text-sm leading-relaxed text-gray-200">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#FFB81C]" />
+                <span>63, 1st Seaward Road, Valmiki Nagar, Thiruvanmiyur, Chennai - 600041</span>
+              </div>
+              <a className={`${PILL_LINK_CLASS} mt-6`} href={DIRECTIONS_URL} target="_blank" rel="noopener noreferrer">
+                Get Directions
                 <ArrowRight className="h-[13px] w-[13px] shrink-0" />
               </a>
             </div>
-            <div className="lg:pr-2">
-              <h3 className="mb-6 inline-block border-b border-[#FFD700]/50 pb-2 bg-gradient-to-r from-[#FFD700] via-[#FFA500] to-[#FFD700] bg-clip-text font-serif text-lg font-extrabold tracking-widest text-transparent drop-shadow-[0_0_8px_rgba(255,215,0,0.8)]">
-                PLAN YOUR VISIT
-              </h3>
-              <p className="mb-6 text-sm leading-relaxed text-gray-300">
-                Darshan timings, dress code, directions &amp; more for your visit.
-              </p>
-              <a className={PILL_LINK_CLASS} href={`${HKMC}/blog/visitor-guide`}>
-                Visitor Guide
-                <ArrowRight className="h-[13px] w-[13px] shrink-0" />
-              </a>
-            </div>
-            <div className="lg:pl-10 xl:pl-14">
-              <h3 className="mb-6 inline-block border-b border-[#FFB81C]/50 pb-2 font-serif text-base font-bold tracking-widest text-[#FFB81C]">
-                TEMPLE DARSHAN TIMINGS
-              </h3>
+
+            <div>
+              <h3 className={COLUMN_TITLE_CLASS}>TEMPLE DARSHAN TIMINGS</h3>
               <ul className="mb-5 space-y-2.5">
                 {["4:30 AM – 4:55 AM", "7:15 AM – 1:00 PM", "4:15 PM – 8:15 PM"].map((timing) => (
                   <li key={timing} className="flex items-center gap-2 text-sm">
