@@ -7,7 +7,7 @@ This repository uses a branch-and-review workflow.
 - `master` is the Vercel production branch for the `folk-hkmc` project (`folk-hkmc-rho.vercel.app`). It is promoted by an owner-approved fast-forward from `dev`.
 - `main` is the production branch for the legacy `folk-hkmc-bdnv` preview project. It is not the current production branch and must not be modified.
 - `dev` is the shared development branch.
-- `preview` is retired.
+- `preview` is deployment-only: it tracks `dev`, deploys the Vercel Preview environment, and is never a PR source or target. See [Preview Environment](./preview-environment.md).
 - Normal work must happen on `feature/*` or `fix/*` branches.
 - Do not push directly to `main`, `dev`, or `master`.
 - Production secrets and production deploy controls are owner-only.

@@ -39,6 +39,7 @@
     "test:airtable-removal": "node scripts/verify-airtable-removal.mjs",
     "configure:hosted-project": "node scripts/configure-hosted-project.mjs",
     "test:hosted-project": "node scripts/configure-hosted-project.mjs --dry-run",
+    "test:preview-environment": "node scripts/verify-preview-environment.mjs",
     "test:attendance-contract": "node scripts/verify-attendance-contract.mjs",
     "test:dashboard-contract": "node scripts/verify-dashboard-metrics.mjs",
     "test:offline-queue": "node scripts/verify-pwa-offline-queue.mjs",

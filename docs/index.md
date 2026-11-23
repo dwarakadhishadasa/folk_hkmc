@@ -3,7 +3,7 @@
 **Type:** pnpm/Turborepo monorepo
 **Primary Language:** TypeScript
 **Architecture:** Program-scoped Next.js App Router apps with Supabase staff authentication, Supabase Postgres operational data, and PWA offline queueing
-**Last Updated:** 2026-11-14
+**Last Updated:** 2026-11-23
 ## Current State
 
 The codebase includes program-scoped Next.js app workspaces, Supabase authentication, a program-scoped `public.users` staff table, implemented registration/contact/session/admin APIs in each app, role-scoped staff pages, monorepo guardrails, quality gates, and additional operational scripts.
@@ -40,6 +40,7 @@ The codebase includes program-scoped Next.js app workspaces, Supabase authentica
 
 - [Testing Architecture and Policy](./architecture/testing.md) - **Read before changing code.** What to run at each level, the feature-to-test registry, which shared files widen the regression blast radius, and how to diagnose a failure. Covers the Vitest unit layer and the Playwright e2e suite.
 - [Manage Grid Pattern](./manage-grid-pattern.md) - The contract every `/manage` table follows: column conventions, commit/rollback, selection, bulk semantics, and the URL state contract. Read it before porting a table onto `components/grid/`.
+- [Preview Environment](./preview-environment.md) - The free-plan substitute for Supabase branching: the `preview` branch, the byzantium database, the Vercel Preview wiring, fixtures, and the drift guard.
 - [Claiming a Matrix Row](./claiming-a-matrix-row.md) - How to satisfy the six rules that turn a matrix row from Manual to Covered, and what evidence to record.
 - [Airtable Legacy Base](./airtable-legacy-base.md) - Reference snapshot of the retired Airtable base: table and field identities with types, the Interface pages it served, and a field-by-field validation of the migration map in `scripts/migrate-airtable-data.mjs`
 - [Airtable Mobile Interface](./airtable-mobile-interface.md) - The Airtable Android app's rendering of the same "Admin Portal" interface: the list → field sheet → expanded record stack, and why its field labels differ from the base's field names. Read it before changing the contact surface in `components/manage/`.
