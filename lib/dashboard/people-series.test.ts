@@ -97,4 +97,30 @@ describe("loadDashboardPeopleSeries", () => {
     expect(series.attendeesByPreacher.series.map((row) => row.preacherId)).toEqual([PREACHER_ID])
     expect(series.attendeesByPreacher.months).toEqual(["2026-10", "2026-11"])
   })
+
+  it("drops attendee lines for a preacher with no sessions in the period", async () => {
+    const idleId = "33333333-3333-4333-8333-333333333333"
+    const data = payload()
+
+    data.totals.rows.push({
+      preacherId: idleId,
+      preacherName: "Idle",
+      contacts: 0,
+      sessions: 0,
+      attendees: 2,
+      repeatAttendees: 0,
+      attendeeSegments: [{ key: "loc-1", label: "T. Nagar", value: 2 }],
+    })
+    data.attendeesByPreacher.series.push({
+      preacherId: idleId,
+      preacherName: "Idle",
+      values: [1, 1],
+    })
+    rpc.mockResolvedValue({ data, error: null })
+
+    const series = await loadDashboardPeopleSeries(scope, window)
+
+    expect(series.totals.rows.map((row) => row.preacherId)).toEqual([PREACHER_ID, idleId])
+    expect(series.attendeesByPreacher.series.map((row) => row.preacherId)).toEqual([PREACHER_ID])
+  })
 })

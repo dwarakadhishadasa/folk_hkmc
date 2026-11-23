@@ -178,15 +178,6 @@ export function DashboardPreachingEfforts({
     { key: "sessions", label: "Sessions", value: sectionTotals.sessions },
     { key: "attendees", label: "Attendees", value: sectionTotals.attendees },
   ]
-  const maxAttendees = Math.max(1, ...visibleRows.map((row) => row.attendees))
-  const scores = visibleRows.map((row) => ({
-    id: row.preacherId,
-    score:
-      row.contacts / Math.max(1, ...visibleRows.map((entry) => entry.contacts)) +
-      row.sessions / Math.max(1, ...visibleRows.map((entry) => entry.sessions)) +
-      row.attendees / maxAttendees,
-  }))
-  const topScore = Math.max(0, ...scores.map((entry) => entry.score))
   const colors = locationColorMap(sessionsByPreacher, contactsByPreacher, visibleRows)
 
   if (visibleRows.length === 0 || totals.every((metric) => metric.value === 0)) {
@@ -222,9 +213,6 @@ export function DashboardPreachingEfforts({
 
       <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
         {visibleRows.map((row) => {
-          const isTop =
-            topScore > 0 &&
-            scores.find((entry) => entry.id === row.preacherId)?.score === topScore
           const sessions = segmentsFor(sessionsByPreacher, row.preacherId, colors)
           const contacts = segmentsFor(contactsByPreacher, row.preacherId, colors)
           const attendees = coloredSegments(row.attendeeSegments, colors)
@@ -243,16 +231,9 @@ export function DashboardPreachingEfforts({
               data-dashboard-scorecard={row.preacherId}
               className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/10 p-4"
             >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="font-[family-name:var(--font-poppins)] text-sm font-semibold text-[var(--program-text)]">
-                  {row.preacherName}
-                </h3>
-                {isTop ? (
-                  <span className="shrink-0 rounded-full bg-[var(--muted)] px-2.5 py-1 text-[10px] font-semibold tracking-wide text-[var(--muted-foreground)]">
-                    Higher overall volume
-                  </span>
-                ) : null}
-              </div>
+              <h3 className="font-[family-name:var(--font-poppins)] text-sm font-semibold text-[var(--program-text)]">
+                {row.preacherName}
+              </h3>
 
               <div className="mt-3 flex flex-col gap-4">
                 <LocationBreakdown

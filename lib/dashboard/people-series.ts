@@ -13,6 +13,10 @@ const UNASSIGNED_PREACHER_ID = "00000000-0000-0000-0000-000000000000"
  * no preacher is not anyone's effort, so the synthetic "Unassigned" bucket is
  * dropped before it reaches the cards or the attendee lines — and out of the
  * totals those bars divide by.
+ *
+ * The attendee lines also drop a preacher who held no session in the selected
+ * period. Their twelve-month attendance would otherwise draw a line for work
+ * the card above reports as zero.
  */
 function withoutUnassigned<T extends { preacherId: string }>(rows: T[]): T[] {
   return rows.filter((row) => row.preacherId !== UNASSIGNED_PREACHER_ID)
@@ -47,14 +51,20 @@ export async function loadDashboardPeopleSeries(
   }
 
   const series = parseDashboardPeopleSeries(data)
+  const totals = withoutUnassigned(series.totals.rows)
+  const preacherIdsWithSessions = new Set(
+    totals.filter((row) => row.sessions > 0).map((row) => row.preacherId),
+  )
 
   return {
     sessionsByPreacher: { rows: withoutUnassigned(series.sessionsByPreacher.rows) },
     contactsByPreacher: { rows: withoutUnassigned(series.contactsByPreacher.rows) },
-    totals: { rows: withoutUnassigned(series.totals.rows) },
+    totals: { rows: totals },
     attendeesByPreacher: {
       months: series.attendeesByPreacher.months,
-      series: withoutUnassigned(series.attendeesByPreacher.series),
+      series: withoutUnassigned(series.attendeesByPreacher.series).filter((row) =>
+        preacherIdsWithSessions.has(row.preacherId),
+      ),
     },
   }
 }

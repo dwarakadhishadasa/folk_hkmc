@@ -55,8 +55,8 @@ function NameCell({ name }: { name: string }) {
 
 /**
  * The team comparison: preachers in All scope, locations in Own scope, on the
- * same figures. A row with no activity stays with zeros — that is the table's
- * job.
+ * same figures. Locations keep a zero-activity row — that is the table's job —
+ * while by-preacher hides preachers who held no session in the period.
  */
 export function DashboardTeamTable({
   team,
@@ -67,22 +67,28 @@ export function DashboardTeamTable({
   role: DashboardRole
   programScope: boolean
 }) {
+  const rows = team.groupBy === "preacher"
+    ? team.rows.filter((row) => row.sessions > 0)
+    : team.rows
+  const hasPreachersWithoutSessions = team.groupBy === "preacher" && team.rows.length > rows.length
   const nameHeading = team.groupBy === "preacher" ? "Preacher" : "Location"
   const title = team.groupBy === "preacher" ? "By preacher" : "By location"
   const subtitle = team.groupBy === "preacher"
-    ? "Contacts collected, sessions and attendance for every preacher in the programme"
+    ? "Contacts collected, sessions and attendance for every preacher with a session in the period"
     : "Contacts collected, sessions and attendance for every location in your scope"
 
   return (
     <DashboardCard title={title} subtitle={subtitle}>
-      {team.rows.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="px-2 py-10 text-center">
           <p className="text-sm text-[var(--muted-foreground)]">
             {team.groupBy === "preacher"
-              ? "No preachers in this programme yet."
+              ? hasPreachersWithoutSessions
+                ? "No preacher held a session in this period."
+                : "No preachers in this programme yet."
               : "No locations in this scope yet."}
           </p>
-          {team.groupBy === "preacher" && role !== "Assistant" ? (
+          {team.groupBy === "preacher" && !hasPreachersWithoutSessions && role !== "Assistant" ? (
             <Link
               href={role === "Admin" ? "/admin/invite" : "/volunteers"}
               className="mt-3 inline-flex text-sm font-semibold text-[var(--program-primary)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
@@ -118,7 +124,7 @@ export function DashboardTeamTable({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {team.rows.map((row) => (
+                {rows.map((row) => (
                   <TableRow
                     key={row.key}
                     className="h-12 border-b border-[var(--border)] transition-colors hover:bg-foreground/[0.02]"
@@ -145,7 +151,7 @@ export function DashboardTeamTable({
           </div>
 
           <ul className="flex flex-col divide-y divide-[var(--border)] md:hidden">
-            {team.rows.map((row) => (
+            {rows.map((row) => (
               <li key={row.key} className="py-3 first:pt-0 last:pb-0">
                 <p className="flex items-center gap-2.5 text-sm font-semibold text-[var(--program-text)]">
                   <span
