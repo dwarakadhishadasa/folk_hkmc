@@ -85,7 +85,7 @@ Admins can invite Admin, Preacher, Volunteer, or Assistant users from `/admin/in
 | Workspace packages | `@hkmc/data-contracts`, `@hkmc/program-config`, `@hkmc/authz`, `@hkmc/ui` |
 | Operational API | Supabase PostgREST and Storage through the server-only Supabase clients in `lib/supabase/*` |
 | Forms | Native React forms plus installed `react-hook-form`/`zod` support |
-| Animation | GSAP, `tw-animate-css` |
+| Animation | Framer Motion, `tw-animate-css` |
 | QR | `qrcode.react` |
 | Monitoring | Vercel Speed Insights |
 

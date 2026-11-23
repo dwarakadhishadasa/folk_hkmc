@@ -23,8 +23,8 @@
 | `OfflineIndicator` | Shows offline/pending queue state and triggers service worker sync |
 | `PWAInstallPrompt` | Staff-only install banner with per-staff daily dismissal |
 | `NavigationFeedbackProvider` | Tracks pending internal navigation |
-| `RouteProgressBar` | GSAP-driven top/bottom route progress indicator in header |
-| `PageTransitionController` | GSAP page transition on route changes |
+| `RouteProgressBar` | Framer Motion route progress indicator in header |
+| `PageTransitionController` | Framer Motion page transition on route changes |
 | `ThemeProvider` | Present for `next-themes`; not mounted in current `Providers` |
 
 ## Page-Owned UI
@@ -59,7 +59,7 @@ Not all primitives are used by active product flows, but they are available and 
 - Fonts are `Inter` and `Poppins` from `next/font/google`.
 - FOLK branding uses royal blue `#0F1E54`, saffron `#F98B1C`, ivory `#FFF9F0`, and charcoal `#24324A`; Gita Life uses its program profile colors from `@hkmc/program-config`.
 - Many feature components use direct Tailwind utility classes instead of only the `components/ui` primitives.
-- GSAP is registered centrally in `lib/gsap.ts` and used for route/session loading motion.
+- Framer Motion drives the route progress bar, the page-enter transition, the session loading skeleton and the dashboard figures. Shared easing curves live in `lib/motion.ts`.
 
 ## Active Flow Map
 

@@ -1,16 +1,22 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { gsap } from "@/lib/gsap"
+import { animate, useReducedMotion } from "framer-motion"
 import { useNavigationFeedback } from "@/components/navigation-feedback-provider"
+import { EASE_IN_OUT_QUAD, EASE_IN_OUT_SINE, EASE_OUT_CUBIC, EASE_OUT_QUAD } from "@/lib/motion"
 import { cn } from "@/lib/utils"
+
+const REVEAL_DELAY_MS = 150
+
+type Animation = ReturnType<typeof animate>
 
 export function RouteProgressBar({ className }: { className?: string }) {
   const { isNavigating } = useNavigationFeedback()
+  const shouldReduceMotion = useReducedMotion() ?? false
   const trackRef = useRef<HTMLDivElement>(null)
   const fillRef = useRef<HTMLDivElement>(null)
-  const delayRef = useRef<ReturnType<typeof gsap.delayedCall> | null>(null)
-  const timelineRef = useRef<ReturnType<typeof gsap.timeline> | null>(null)
+  const animationsRef = useRef<Animation[]>([])
+  const revealTimerRef = useRef<number | null>(null)
   const hasShownRef = useRef(false)
 
   useEffect(() => {
@@ -21,59 +27,69 @@ export function RouteProgressBar({ className }: { className?: string }) {
       return
     }
 
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-
-    delayRef.current?.kill()
-    timelineRef.current?.kill()
-    gsap.killTweensOf([track, fill])
+    const play = (animation: Animation) => {
+      animationsRef.current.push(animation)
+      return animation
+    }
 
     if (!isNavigating) {
-      if (!hasShownRef.current) {
-        gsap.set(track, { autoAlpha: 0 })
-        gsap.set(fill, { scaleX: 0, transformOrigin: "left center" })
-        return
+      if (hasShownRef.current) {
+        hasShownRef.current = false
+        play(animate(fill, { scaleX: 1 }, { duration: shouldReduceMotion ? 0 : 0.16, ease: EASE_OUT_CUBIC }))
+        play(
+          animate(
+            track,
+            { opacity: 0 },
+            {
+              delay: shouldReduceMotion ? 0 : 0.12,
+              duration: shouldReduceMotion ? 0 : 0.18,
+              ease: EASE_OUT_QUAD,
+              onComplete: () => play(animate(fill, { scaleX: 0 }, { duration: 0 })),
+            },
+          ),
+        )
+      } else {
+        play(animate(track, { opacity: 0 }, { duration: 0 }))
+        play(animate(fill, { scaleX: 0 }, { duration: 0 }))
       }
+    } else {
+      play(animate(track, { opacity: 0 }, { duration: 0 }))
+      play(animate(fill, { scaleX: 0 }, { duration: 0 }))
 
-      hasShownRef.current = false
-      gsap.to(fill, {
-        scaleX: 1,
-        duration: prefersReducedMotion ? 0 : 0.16,
-        ease: "power2.out",
-      })
-      gsap.to(track, {
-        autoAlpha: 0,
-        delay: prefersReducedMotion ? 0 : 0.12,
-        duration: prefersReducedMotion ? 0 : 0.18,
-        ease: "power1.out",
-        onComplete: () => gsap.set(fill, { scaleX: 0, transformOrigin: "left center" }),
-      })
-      return
+      revealTimerRef.current = window.setTimeout(() => {
+        revealTimerRef.current = null
+        hasShownRef.current = true
+        play(animate(track, { opacity: 1 }, { duration: 0 }))
+
+        if (shouldReduceMotion) {
+          play(animate(fill, { scaleX: 1 }, { duration: 0 }))
+          return
+        }
+
+        play(
+          animate([
+            [fill, { scaleX: 0.62 }, { duration: 0.28, ease: EASE_OUT_CUBIC }],
+            [fill, { scaleX: 0.86 }, { duration: 1.15, ease: EASE_IN_OUT_QUAD }],
+            [
+              fill,
+              { scaleX: 0.94 },
+              { duration: 1.1, ease: EASE_IN_OUT_SINE, repeat: Infinity, repeatType: "reverse" },
+            ],
+          ]),
+        )
+      }, REVEAL_DELAY_MS)
     }
-
-    gsap.set(track, { autoAlpha: 0 })
-    gsap.set(fill, { scaleX: 0, transformOrigin: "left center" })
-
-    delayRef.current = gsap.delayedCall(0.15, () => {
-      hasShownRef.current = true
-      gsap.set(track, { autoAlpha: 1 })
-
-      if (prefersReducedMotion) {
-        gsap.set(fill, { scaleX: 1, transformOrigin: "left center" })
-        return
-      }
-
-      timelineRef.current = gsap
-        .timeline()
-        .to(fill, { scaleX: 0.62, duration: 0.28, ease: "power2.out" })
-        .to(fill, { scaleX: 0.86, duration: 1.15, ease: "power1.inOut" })
-        .to(fill, { scaleX: 0.94, duration: 1.1, ease: "sine.inOut", repeat: -1, yoyo: true })
-    })
 
     return () => {
-      delayRef.current?.kill()
-      timelineRef.current?.kill()
+      if (revealTimerRef.current !== null) {
+        window.clearTimeout(revealTimerRef.current)
+        revealTimerRef.current = null
+      }
+
+      animationsRef.current.forEach((animation) => animation.stop())
+      animationsRef.current = []
     }
-  }, [isNavigating])
+  }, [isNavigating, shouldReduceMotion])
 
   return (
     <div

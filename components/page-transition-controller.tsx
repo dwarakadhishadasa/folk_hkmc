@@ -1,33 +1,39 @@
 "use client"
 
+import { useEffect } from "react"
 import { usePathname } from "next/navigation"
-import { gsap, useGSAP } from "@/lib/gsap"
+import { animate, useReducedMotion } from "framer-motion"
+import { EASE_OUT_CUBIC } from "@/lib/motion"
 
 export function PageTransitionController() {
   const pathname = usePathname()
+  const shouldReduceMotion = useReducedMotion() ?? false
 
-  useGSAP(
-    () => {
-      const main = document.querySelector("main")
+  useEffect(() => {
+    const main = document.querySelector("main")
 
-      if (!main || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        return
-      }
+    if (!main || shouldReduceMotion) {
+      return
+    }
 
-      gsap.fromTo(
-        main,
-        { autoAlpha: 0.92, y: 8 },
-        {
-          autoAlpha: 1,
-          y: 0,
-          clearProps: "opacity,visibility,transform",
-          duration: 0.22,
-          ease: "power2.out",
+    const controls = animate(
+      main,
+      { opacity: [0.92, 1], y: [8, 0] },
+      {
+        duration: 0.22,
+        ease: EASE_OUT_CUBIC,
+        onComplete: () => {
+          // A leftover inline transform would make <main> the containing block for fixed-position descendants.
+          main.style.removeProperty("opacity")
+          main.style.removeProperty("transform")
         },
-      )
-    },
-    { dependencies: [pathname] },
-  )
+      },
+    )
+
+    return () => {
+      controls.stop()
+    }
+  }, [pathname, shouldReduceMotion])
 
   return null
 }
