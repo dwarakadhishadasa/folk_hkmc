@@ -421,7 +421,7 @@ export function Header() {
         {navItems.length > 0 && (
           <nav
             data-mobile-app-nav
-            className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--mobile-nav-border)] bg-[var(--mobile-nav-bg)] px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_rgba(45,10,10,0.12)] backdrop-blur md:hidden"
+            className="fixed inset-x-0 bottom-[var(--app-viewport-bottom-inset,0px)] z-50 border-t border-[var(--mobile-nav-border)] bg-[var(--mobile-nav-bg)] px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-14px_36px_rgba(45,10,10,0.12)] backdrop-blur md:hidden"
           >
             <div className="mx-auto flex max-w-md items-center gap-1">
               {navItems.map((item) => {

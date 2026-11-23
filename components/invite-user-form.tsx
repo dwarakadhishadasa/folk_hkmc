@@ -205,13 +205,13 @@ export function InviteUserForm({
   return (
     <div className="rounded-lg border border-border bg-card p-5 shadow-overlay sm:p-6">
       <h1 className="font-[family-name:var(--font-poppins)] text-2xl font-bold text-foreground">
-        {mode === "volunteer" ? "Invite Volunteer or Assistant" : "Invite Staff User"}
+        {mode === "volunteer" ? "Invite Volunteer or Assistant" : "Invite User"}
       </h1>
-      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-        {mode === "volunteer"
-          ? "People you invite are assigned to your Preacher account. Use Assistant when they should also create sessions and take attendance on your behalf."
-          : "Admins can invite Admin, Preacher, Volunteer, and Assistant users."}
-      </p>
+      {mode === "volunteer" ? (
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          People you invite are assigned to your Preacher account. Use Assistant when they should also create sessions and take attendance on your behalf.
+        </p>
+      ) : null}
 
       {message && (
         <div className={cn(noticeClass, "mt-4 border-border bg-muted/50 text-foreground")} role="status">
