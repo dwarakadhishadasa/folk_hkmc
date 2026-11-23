@@ -217,7 +217,7 @@ test.afterAll(async () => {
 test.describe("the Admin invite surface", () => {
   test("offers an Admin as an assigned Preacher and binds the Assistant to them", async ({ page }) => {
     await page.goto("/admin/invite")
-    await expect(page.getByRole("heading", { name: "Invite Staff User" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Invite User" })).toBeVisible()
 
     const roleSelect = page.locator("select").first()
     await roleSelect.selectOption("Assistant")
