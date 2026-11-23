@@ -121,7 +121,7 @@ export function NewSessionPopover({
         side="bottom"
         sideOffset={8}
         collisionPadding={16}
-        className="w-[min(92vw,380px)] p-4"
+        className="max-h-[var(--radix-popover-content-available-height)] w-[min(92vw,380px)] overflow-y-auto p-4"
       >
         <div className="mb-3">
           <h2 className="font-[family-name:var(--font-poppins)] text-[16px] font-semibold text-[var(--program-text)]">
