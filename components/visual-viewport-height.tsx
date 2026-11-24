@@ -12,9 +12,7 @@ import { useEffect } from "react"
  *
  * `offsetTop` is the visual viewport's offset from the layout viewport when the
  * page pans for a focused field; a full-screen frame uses it so it stays over
- * the visible area rather than the layout origin. `bottomInset` is the gap
- * between the layout and visual bottoms — the keyboard, or the panned edge — so
- * the fixed bottom nav can sit on the visible bottom instead of mid-page.
+ * the visible area rather than the layout origin.
  */
 export function VisualViewportHeight() {
   useEffect(() => {
@@ -26,11 +24,9 @@ export function VisualViewportHeight() {
       frame = 0
       const height = viewport?.height ?? window.innerHeight
       const offsetTop = viewport?.offsetTop ?? 0
-      const bottomInset = Math.max(0, root.clientHeight - height - offsetTop)
 
       root.style.setProperty("--app-viewport-height", `${Math.round(height)}px`)
       root.style.setProperty("--app-viewport-offset-top", `${Math.round(offsetTop)}px`)
-      root.style.setProperty("--app-viewport-bottom-inset", `${Math.round(bottomInset)}px`)
     }
 
     const schedule = () => {
@@ -56,7 +52,6 @@ export function VisualViewportHeight() {
       window.removeEventListener("orientationchange", schedule)
       root.style.removeProperty("--app-viewport-height")
       root.style.removeProperty("--app-viewport-offset-top")
-      root.style.removeProperty("--app-viewport-bottom-inset")
     }
   }, [])
 
