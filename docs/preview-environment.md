@@ -107,15 +107,18 @@ backup goes through the Management API SQL endpoint.
 5. Seed preview fixtures:
 
    ```bash
+   SITE_URL=https://folk-hkmc-preview-dwarakadhishadasa-5018s-projects.vercel.app \
    NEXT_PUBLIC_SUPABASE_URL=https://cparpinmalqsimninyfw.supabase.co \
    SUPABASE_URL=https://cparpinmalqsimninyfw.supabase.co \
    SUPABASE_SERVICE_ROLE_KEY="$PREVIEW_SERVICE_ROLE_KEY" \
    node scripts/seed-preview-fixtures.mjs --allow-non-local
    ```
 
-   The seeded staff use `@folk.fixture.test` and `@gita-life.fixture.test`
-   addresses. The shared password lives in the gitignored
-   `.env.preview-seed.local`; it is never printed or committed.
+   `SITE_URL` must be the preview origin: the seeder writes
+   `sessions.attendance_url` from it, and the production default would send QA
+   testers to production. The seeded staff use `@folk.fixture.test` and
+   `@gita-life.fixture.test` addresses. The shared password lives in the
+   gitignored `.env.preview-seed.local`; it is never printed or committed.
 
 6. Set the `folk-hkmc` Preview environment variables:
 
@@ -146,8 +149,8 @@ backup goes through the Management API SQL endpoint.
 
 8. Confirm the deployment is reachable without Vercel SSO. Project-level
    `ssoProtection` is disabled for `folk-hkmc`; staff sign in through Supabase
-   magic links, not through Vercel. Re-enable SSO only if every preview user is
-   also a Vercel team member.
+   OTP, not through Vercel. Re-enable SSO only if every preview user is also a
+   Vercel team member.
 
 ## Verify
 
@@ -156,8 +159,10 @@ pnpm test:preview-environment
 ```
 
 The verifier checks the preview URL, the served bundle's Supabase ref, the
-migration ledger, and the fixture counts. It needs
-`SUPABASE_ACCESS_TOKEN` in `.env.migration.local`.
+migration ledger, the fixture counts (including active FOLK fixture staff), the
+`/preview-login` route and its account list, and the password link on `/login`. It needs
+`SUPABASE_ACCESS_TOKEN` in `.env.migration.local`. The new route checks fail
+until the `preview` branch deployment carries this change.
 
 Manual smoke test:
 
@@ -167,9 +172,57 @@ curl -sS -o /dev/null -w "%{http_code}\n" "$BASE/login"
 curl -sS "$BASE/api/auth/me"        # {"staff":null}
 ```
 
-Sign-in: request a magic link at `/login` for a fixture account. The message is
-captured by the configured Mailtrap sandbox; the fixture password in
-`.env.preview-seed.local` is only for scripted checks, not for the UI.
+Sign-in: request an email code at `/login` for a fixture account. The message is
+captured by the configured Mailtrap sandbox. The preview branch also exposes
+password sign-in for QA; see below.
+
+## Preview QA password sign-in
+
+The `preview` branch deployment has a password page at `/preview-login`, and
+`/login` renders a "Preview QA? Sign in with a password" link only on that
+deployment. Both are gated on:
+
+- `VERCEL_ENV === "preview"`
+- `VERCEL_GIT_COMMIT_REF === "preview"`
+
+`dev`, feature branches, and production therefore keep OTP-only sign-in, and
+`/preview-login` returns 404 there. For local testing only, start the app with
+`PREVIEW_PASSWORD_LOGIN=1` in the shell (for example
+`PREVIEW_PASSWORD_LOGIN=1 pnpm dev`). `next dev` sets `NODE_ENV=development`
+itself; do not put `NODE_ENV` in `.env.local`. The local passcode is the value in
+`.env.preview-seed.local`, or the local-only `LocalDevFixture123!` when that file
+is absent and `pnpm seed:local` seeded a fresh clone.
+
+The page lists the active `*.fixture.test` accounts for the current program
+(four FOLK roles on the FOLK deployment) and accepts the shared fixture password.
+It uses Supabase's password grant, so no email is sent and neither the Mailtrap
+sandbox nor Supabase's auth email quota is consumed. `syncStaffProfileByEmail`
+still requires an active `public.users` row and role before the session is
+accepted.
+
+Share the preview URL, the account list, and the passcode through a password
+manager. Rotate the passcode by updating `PREVIEW_FIXTURE_PASSWORD` in
+`.env.preview-seed.local` and re-running the seeder with the preview `SITE_URL`.
+If you override the value in the environment instead, update or delete the file
+in the same step: the seeder does not write an env-provided value back to it, so
+a later run without the override would restore the old passcode. Never commit
+the value.
+
+The branch gate hides the form; it does not disable Supabase password auth. The
+shared passcode is the credential, and the anon key in any deployment bundle can
+call the password grant directly. Rotate the passcode if it leaks; Supabase's
+auth rate limits apply to repeated attempts.
+
+The link and page appear only on Git-triggered deployments of the `preview`
+branch. A CLI deployment without a git branch context leaves
+`VERCEL_GIT_COMMIT_REF` empty, so the route returns 404; use
+`git push origin dev:preview`.
+
+The current preview deployment is FOLK. Both apps carry the page, but there is no
+documented Gita Life preview deployment; a Gita Life `preview` branch deployment
+would enable its own page. The seeder writes both programs' `attendance_url` from
+the one `SITE_URL`, so a Gita Life preview would need its own origin if it is
+added.
 
 ## Free-plan pause and restore
 
@@ -184,9 +237,12 @@ for production, so restoring `cparpinmalqsimninyfw` requires
 
 ## Reseed and reset
 
-- Reseed: `node scripts/seed-preview-fixtures.mjs --allow-non-local` (idempotent).
-- Wipe fixtures: `node scripts/seed-preview-fixtures.mjs --wipe --allow-non-local`.
-  The wipe is tag-filtered on `preview-fixture-`; it is not a truncate.
+- Reseed (from the repository root):
+  `SITE_URL=https://folk-hkmc-preview-dwarakadhishadasa-5018s-projects.vercel.app NEXT_PUBLIC_SUPABASE_URL=https://cparpinmalqsimninyfw.supabase.co SUPABASE_URL=https://cparpinmalqsimninyfw.supabase.co SUPABASE_SERVICE_ROLE_KEY="$PREVIEW_SERVICE_ROLE_KEY" node scripts/seed-preview-fixtures.mjs --allow-non-local`
+  (idempotent). `.env.migration.local` points `NEXT_PUBLIC_SUPABASE_URL` at
+  production; always override it with the byzantium URL.
+- Wipe fixtures: the same command with `--wipe --allow-non-local`. The wipe is
+  tag-filtered on `preview-fixture-`; it is not a truncate.
 - Full schema reset: apply migrations from an empty database, then reseed. Do
   this only after taking a fresh backup.
 

@@ -12,9 +12,10 @@
  * Checks, in order:
  *   1. the Supabase project is ACTIVE_HEALTHY and is the preview ref;
  *   2. every committed migration version is recorded in the ledger;
- *   3. the fixture seed is present;
+ *   3. the fixture seed is present, including active password-sign-in staff;
  *   4. the preview origin serves /login and reports no staff to anonymous callers;
- *   5. the served client bundle contains the preview ref and not the production ref.
+ *   5. the served client bundle contains the preview ref and not the production ref;
+ *   6. /preview-login serves the QA form with FOLK fixture accounts and /login links to it.
  *
  * Usage:
  *   node scripts/verify-preview-environment.mjs
@@ -159,14 +160,16 @@ try {
       (select count(*) from public.locations)::int as locations,
       (select count(*) from public.contacts)::int as contacts,
       (select count(*) from public.sessions)::int as sessions,
-      (select count(*) from public.attendance)::int as attendance
+      (select count(*) from public.attendance)::int as attendance,
+      (select count(*) from public.users where program_id = 'folk' and status = 'Active' and email like '%.fixture.test')::int as folk_fixture_staff
   `)
-  const minimums = { users: 8, locations: 4, contacts: 4, sessions: 4, attendance: 4 }
+  const minimums = { users: 8, locations: 4, contacts: 4, sessions: 4, attendance: 4, folk_fixture_staff: 4 }
   const short = Object.entries(minimums).filter(([table, minimum]) => (counts?.[table] ?? 0) < minimum)
   if (short.length === 0) {
     pass(
-      `fixtures present: ${counts.users} users, ${counts.locations} locations, ${counts.contacts} contacts, ` +
-        `${counts.sessions} sessions, ${counts.attendance} attendance`,
+      `fixtures present: ${counts.users} users, ${counts.folk_fixture_staff} active FOLK fixture staff, ` +
+        `${counts.locations} locations, ${counts.contacts} contacts, ${counts.sessions} sessions, ` +
+        `${counts.attendance} attendance`,
     )
   } else {
     fail(
@@ -219,6 +222,32 @@ try {
   }
 } catch (error) {
   fail(`could not inspect the served bundle: ${error.message}`)
+}
+
+// 6. Preview QA password sign-in -------------------------------------------------
+try {
+  const previewLogin = await fetch(`${baseUrl}/preview-login`, { signal: AbortSignal.timeout(60_000) })
+  const previewLoginHtml = await previewLogin.text()
+  if (previewLogin.status === 200) {
+    pass("preview password sign-in page serves HTTP 200")
+  } else {
+    fail(`${baseUrl}/preview-login returned HTTP ${previewLogin.status}`)
+  }
+
+  if (previewLogin.status === 200 && previewLoginHtml.includes("@folk.fixture.test")) {
+    pass("preview password sign-in page lists FOLK fixture accounts")
+  } else {
+    fail("preview password sign-in page does not list any FOLK fixture account")
+  }
+
+  const loginHtml = await (await fetch(`${baseUrl}/login`, { signal: AbortSignal.timeout(60_000) })).text()
+  if (loginHtml.includes("/preview-login") && loginHtml.includes("Sign in with a password")) {
+    pass("preview /login links to the password sign-in page")
+  } else {
+    fail("preview /login does not link to /preview-login; the preview branch gate may not be active")
+  }
+} catch (error) {
+  fail(`could not inspect the preview password sign-in route: ${error.message}`)
 }
 
 if (failures.length > 0) {
