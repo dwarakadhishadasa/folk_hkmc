@@ -221,6 +221,7 @@ export function DashboardPreachingEfforts({
             Math.min(row.attendees, row.repeatAttendees),
           )
           const newAttendees = Math.max(0, row.attendees - repeatAttendees)
+          // `repeatAttendees` is lifetime for the preacher; `attendees` is the period cohort.
           const repeatShare =
             row.attendees > 0 ? Math.round((repeatAttendees / row.attendees) * 100) : 0
           const newShare = row.attendees > 0 ? 100 - repeatShare : 0
@@ -271,7 +272,7 @@ export function DashboardPreachingEfforts({
                         {formatCount(row.attendees)} attendees recorded
                       </p>
                       <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted-foreground)]">
-                        Repeat counts people who attended at least twice in the period
+                        Repeat counts people who have attended this preacher at least twice, across all time
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
