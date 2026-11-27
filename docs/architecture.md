@@ -190,6 +190,7 @@ Queued requests replay to the original URL on reconnect or background sync, a `4
 ## Important Constraints
 
 - Keep secrets server-only. Never move the Supabase service-role key into client code.
+- Preview deployments use `supabase-byzantium-battery` (`cparpinmalqsimninyfw`); production uses `supabase-yellow-mirror` (`etwunirahuucodcxydgs`). Never point the Vercel Preview environment at the production ref. `pnpm test:preview-environment` guards the boundary; see [Preview Environment](./preview-environment.md).
 - Keep `PROGRAM_ID` and `NEXT_PUBLIC_PROGRAM_ID` aligned with the deployed app.
 - Keep program app parity intentionally: duplicated app route files under `apps/folk` and `apps/gita-life` should remain behaviorally aligned unless a requirement says otherwise.
 - Do not restore the old localStorage demo auth model; current auth is Supabase-backed.

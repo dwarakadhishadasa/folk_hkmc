@@ -4,6 +4,8 @@ Ordered procedure for the Airtable → Supabase migration, captured so it can be
 
 **Strategy (decided 2026-10-05):** the migration targets a **new, separate Supabase project** — already provisioned as `etwunirahuucodcxydgs` (region ap-south-1) and linked to Vercel, which syncs its env vars. The existing project (`cparpinmalqsimninyfw.supabase.co`) and both Airtable bases (folk `appqea9DRLOXqErXb`, gita-life `appzbssqNK53yqjZH` — corrected 2026-10-06: two bases, not one) stay untouched throughout — they are the archive and the fallback. The app flips to the new project only after testing, with a one-shot delta sync at flip time.
 
+**Status (2026-11-27):** the migration is complete and production runs on `etwunirahuucodcxydgs`. `cparpinmalqsimninyfw` was restored on 2026-11-23 and repurposed as the **writable preview database** (`supabase-byzantium-battery`): all 41 migrations applied, Auth configured for the preview origin, preview fixtures seeded, and the `folk-hkmc` Vercel Preview environment repointed to it. The read-only constraint above applied only during the migration window. The Airtable bases remain read-only. See [`../../docs/preview-environment.md`](../../docs/preview-environment.md).
+
 **Environment workflow (decided 2026-10-05):** no local Supabase stack. All development, migration testing, and verification run directly against the hosted new project, which is disposable pre-cutover — full wipes and re-seeds are permitted. Local dev points at the hosted project via gitignored `.env` files; secrets live only in env vars (Vercel integration + local `.env`), never in the repo, and the current credential set is scheduled for rotation after setup.
 
 ## Phase 0 — Branch & baseline

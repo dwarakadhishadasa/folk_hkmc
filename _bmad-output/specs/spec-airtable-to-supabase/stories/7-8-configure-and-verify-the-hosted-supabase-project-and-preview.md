@@ -111,7 +111,7 @@ deferred:
 ## Boundaries & Constraints
 
 **Always:**
-- The hosted project `etwunirahuucodcxydgs` (ap-south-1) is **disposable pre-cutover**: wipe and re-seed freely. The old project `cparpinmalqsimninyfw` and both Airtable bases are read-only archives — never write to or delete them.
+- The hosted project `etwunirahuucodcxydgs` (ap-south-1) is **disposable pre-cutover**: wipe and re-seed freely. The old project `cparpinmalqsimninyfw` and both Airtable bases were read-only archives during the migration — never write to or delete them. **Superseded 2026-11-23:** the old project is now the writable preview database; the Airtable bases remain read-only. See `docs/preview-environment.md`.
 - Credentials are read from the gitignored `.env.migration.local` and from `--project-id`/env only. **No secret value may reach a file, a spec, a commit, or chat output** — every script redacts `smtp_pass`, `smtp_user`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ACCESS_TOKEN`, and fixture passwords from its own output.
 - `supabase config push` is **forbidden**: `supabase/config.toml`'s `[auth]` section is the discarded local-mailpit configuration. Auth site URL, redirect URLs, SMTP and templates are set field-by-field through the Management API.
 - The retirement migration is applied in the order the DDL requires: migration → `lib/supabase/types.ts` regeneration → column-key renames. Doing the TypeScript side first breaks every service-role insert with a PostgREST `42703`.
@@ -356,7 +356,7 @@ baseline, and a secret scan across every script's combined output found zero lea
     - `[false]` `reject` the migration is not wrapped in a transaction — **disproved by probe**: `POST /database/query` executes a multi-statement query atomically (a `create table` preceding a failing statement left nothing behind), and the Supabase CLI wraps each migration file in a transaction too.
     - `[medium]` `defer` the hand-written ledger insert is not idempotent and leaves `name`/`statements` null — recorded as a deferred item; the applied row is already correct, and story 9's replay must choose a DDL path.
     - `[medium]` `defer` no repo artifact captures the Management-API DDL procedure — story 9's playbook step already says to pick a path that connects; a new script is that story's deliverable, not this one.
-    - `[medium]` `defer` the four `drop table`s have no recorded pre-drop row inventory — the data is gone from this project; it survives in the read-only archive, and the spec's Code Map records the live state it did capture.
+    - `[medium]` `defer` the four `drop table`s have no recorded pre-drop row inventory — the data is gone from this project; it survives in the pre-migration backup taken before the project was repurposed as the preview database, and the spec's Code Map records the live state it did capture.
     - `[low]` `patch` G16 docs now contradict the applied schema.
     - `[low]` `patch` G14 the flipped assertions lost their `^\s*` anchors.
     - `[low]` `patch` G14 dead `legacy*` constants with a comment that misstates what the gate verifies.

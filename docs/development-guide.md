@@ -38,6 +38,22 @@ Program separation is by the `program_id` column in Postgres, not by per-program
 
 Never commit real `.env`, `.env.local`, Supabase service-role keys, or Vercel secrets.
 
+## Hosted environments
+
+There are two hosted databases:
+
+| Environment | Supabase project | Ref |
+|---|---|---|
+| Production | `supabase-yellow-mirror` | `etwunirahuucodcxydgs` |
+| Preview | `supabase-byzantium-battery` | `cparpinmalqsimninyfw` |
+
+The `preview` branch and every Vercel Preview deployment of `folk-hkmc` use the
+preview database. Production stays on yellow-mirror. The preview project is
+writable: it receives migrations, Auth configuration, and tagged
+`preview-fixture-` rows, and is seeded independently of production. See
+[Preview Environment](./preview-environment.md) for the branch, env vars,
+fixtures, and pause/restore procedure.
+
 ## Local Supabase
 
 ```bash

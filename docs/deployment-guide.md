@@ -46,14 +46,17 @@ promotion is an owner-approved fast-forward of `master` to the `dev` tip.
 | Store | Ref | Role |
 |---|---|---|
 | `supabase-yellow-mirror` | `etwunirahuucodcxydgs` (ap-south-1) | **Current production database** |
-| `supabase-byzantium-battery` | `cparpinmalqsimninyfw` (ap-south-1) | **Preview database** (repurposed 2026-11-23; pre-migration public tables backed up outside the repo) |
+| `supabase-byzantium-battery` | `cparpinmalqsimninyfw` (ap-south-1) | **Writable preview database** (repurposed 2026-11-23; pre-migration public tables backed up outside the repo) |
 | Airtable folk base | `appqea9DRLOXqErXb` | Source archive; read-only |
 | Airtable Gita Life base | `appzbssqNK53yqjZH` | Source archive; read-only |
 
 The Airtable bases are never written to, truncated, or deleted. The loader only
-sends `GET` requests to Airtable. The preview project is disposable: it is
-seeded with tagged `preview-fixture-` rows and wiped with the seeder, never with
-a truncate. Never point the Vercel Preview environment at the production ref.
+sends `GET` requests to Airtable. The preview project is **writable**: it
+receives migrations, Auth configuration, and tagged `preview-fixture-` rows
+independently of production; it is never a production fallback. Wipe it with
+the fixture seeder, never with a truncate. Never point the Vercel Preview
+environment at the production ref. See
+[Preview Environment](./preview-environment.md).
 
 ## Preconditions
 

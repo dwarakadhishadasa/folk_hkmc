@@ -6,8 +6,9 @@
 # Environment contract (2026-10-05): NO local Supabase stack. All work targets the hosted project
 # etwunirahuucodcxydgs (ap-south-1) via gitignored .env files; migrations are applied with
 # supabase db push against the linked hosted project. The hosted project is disposable
-# pre-cutover — wipe/re-seed freely. The old project (cparpinmalqsimninyfw) and the Airtable
-# base are read-only archives — never write to or delete them.
+# pre-cutover — wipe/re-seed freely. During the migration the old project (cparpinmalqsimninyfw)
+# and the Airtable base were read-only archives. Since 2026-11-23 the old project is the
+# writable preview database; the Airtable base remains read-only. See docs/preview-environment.md.
 # Credentials: the full hosted-project credential set (anon/publishable/service-role keys,
 # JWT secret, POSTGRES_* URLs and password) lives in the gitignored repo-root file
 # .env.migration.local. Agents read values from there when CLI/Postgres access is needed;
@@ -236,8 +237,10 @@
     no pre-existing test suite in the repo; verification scripts ship with this story.
     Old Supabase
     project and both Airtable bases (folk appqea9DRLOXqErXb, gita-life appzbssqNK53yqjZH)
-    are read-only archives — never write to or
-    delete them. Depends on story 7.
+    were read-only archives during the migration — never write to or
+    delete them. **Superseded 2026-11-23:** the old project is now the writable
+    preview database; the Airtable bases remain read-only. See docs/preview-environment.md.
+    Depends on story 7.
 
 - id: "9"
   title: Cutover — backfill, auth migration, delta sync, go-live
@@ -271,6 +274,5 @@
     distributing https://folk-hkmc-rho.vercel.app to users (OQ-10 resolved) — its env
     already resolves
     the new project, so there is no env flip; the old live deployment was itself a preview.
-    Smoke-test /attendance, offline replay, dashboard scoping, sign-in on the new production. The old project and both Airtable bases stay read-only and
-    preserved — no deletes. Big-bang: no dual-write. If any step lacks credentials or access,
+    Smoke-test /attendance, offline replay, dashboard scoping, sign-in on the new production. The old project and both Airtable bases were read-only archives during the migration; the old project is now the writable preview database and the Airtable bases remain read-only — no deletes. Big-bang: no dual-write. If any step lacks credentials or access,
     stop and report rather than improvising. Depends on story 8 passing all verification.

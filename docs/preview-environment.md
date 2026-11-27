@@ -14,6 +14,7 @@ deploys against a separate Supabase project instead.
 | Preview URL | `https://folk-hkmc-preview-dwarakadhishadasa-5018s-projects.vercel.app` |
 | Branch URL | `https://folk-hkmc-git-preview-dwarakadhishadasa-5018s-projects.vercel.app` |
 | Supabase project | `supabase-byzantium-battery` — `cparpinmalqsimninyfw` (ap-south-1) |
+| Postgres | `17.6.1.166` |
 | Production database | `supabase-yellow-mirror` — `etwunirahuucodcxydgs` |
 
 The preview branch is **not** a PR branch. `pr-branch-policy.yml` still rejects
@@ -23,6 +24,29 @@ fast-forward `preview` to `dev`.
 Every Vercel Preview deployment of `folk-hkmc` shares this one database,
 including feature-branch deployments. Do not run destructive fixtures or
 parallel write tests against it; reseed instead.
+
+## Current state (2026-11-27)
+
+The preview project is **active and writable**. It was the pre-cutover archive;
+on 2026-11-23 it was restored, backed up, migrated, and seeded for preview. The
+read-only archive constraint from the Airtable → Supabase migration applied only
+to the cutover window and no longer applies to this project.
+
+- All 41 committed migrations are applied; the ledger holds 46 rows (5 legacy
+  hand-applied versions plus the 41 committed versions).
+- Fixtures: 8 staff, 4 locations, 4 contacts, 4 sessions, 4 attendance rows.
+- Auth is configured for the preview origin (site URL, narrow allow list,
+  Mailtrap SMTP, repository invite and magic-link templates).
+- `/preview-login` provides QA password sign-in on the `preview` branch
+  deployment. It is gated on `VERCEL_ENV === "preview"` and
+  `VERCEL_GIT_COMMIT_REF === "preview"`, so `dev`, feature branches, and
+  production keep OTP-only sign-in.
+- The `folk-hkmc` Preview environment holds only byzantium URLs and keys; the
+  Production environment stays on `etwunirahuucodcxydgs`.
+- `origin/dev` and `origin/preview` are kept on the same commit. `preview` is
+  deployment-only and is never a PR source or merge target.
+- Vercel SSO protection is disabled for `folk-hkmc` previews so QA can reach the
+  URL without a Vercel login.
 
 ## Production boundaries
 
@@ -37,12 +61,14 @@ Never point the Preview environment at `etwunirahuucodcxydgs`. If a preview
 deployment serves that ref, stop and fix the environment variables before using
 it. Preview deletions are irreversible.
 
-## First-time bootstrap
+## Bootstrap (replay)
 
-The project was the pre-cutover archive. Before reusing it, take a logical
-backup of the archive tables. `pg_dump` does not reach this project from the
-operator host (direct DNS is IPv6-only; the pooler drops the connection), so the
-backup goes through the Management API SQL endpoint.
+The environment is already bootstrapped. Follow this section only to rebuild it
+or repeat the procedure on another free-plan project. The project was the
+pre-cutover archive; take the logical backup before the first write. `pg_dump`
+does not reach this project from the operator host (direct DNS is IPv6-only; the
+pooler drops the connection), so the backup goes through the Management API SQL
+endpoint.
 
 1. Restore the paused project:
 
