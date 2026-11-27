@@ -241,10 +241,13 @@ try {
   }
 
   const loginHtml = await (await fetch(`${baseUrl}/login`, { signal: AbortSignal.timeout(60_000) })).text()
-  if (loginHtml.includes("/preview-login") && loginHtml.includes("Sign in with a password")) {
-    pass("preview /login links to the password sign-in page")
+  // /login is a client component, so the link is not in the initial HTML. The
+  // server-rendered flight payload carries the prop that enables it.
+  const flagMatch = /previewPasswordLoginEnabled\\?":(true|false)/.exec(loginHtml)
+  if (flagMatch?.[1] === "true") {
+    pass("preview /login enables the password sign-in link")
   } else {
-    fail("preview /login does not link to /preview-login; the preview branch gate may not be active")
+    fail("preview /login does not enable the password sign-in link; the preview branch gate may not be active")
   }
 } catch (error) {
   fail(`could not inspect the preview password sign-in route: ${error.message}`)

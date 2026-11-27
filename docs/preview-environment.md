@@ -32,8 +32,8 @@ on 2026-11-23 it was restored, backed up, migrated, and seeded for preview. The
 read-only archive constraint from the Airtable → Supabase migration applied only
 to the cutover window and no longer applies to this project.
 
-- All 41 committed migrations are applied; the ledger holds 46 rows (5 legacy
-  hand-applied versions plus the 41 committed versions).
+- All 42 committed migrations are applied; the ledger holds 47 rows (5 legacy
+  hand-applied versions plus the 42 committed versions).
 - Fixtures: 8 staff, 4 locations, 4 contacts, 4 sessions, 4 attendance rows.
 - Auth is configured for the preview origin (site URL, narrow allow list,
   Mailtrap SMTP, repository invite and magic-link templates).
@@ -112,8 +112,8 @@ endpoint.
    ```
 
    The project had five hand-applied versions with different timestamps; the
-   script re-runs them (they are idempotent) and records all 41 committed
-   versions.
+   script re-runs them (they are idempotent) and records every committed
+   version (42 at the time of writing).
 
 4. Configure Auth for the preview origin (site URL, allow list, Mailtrap SMTP,
    invite and magic-link templates). The allow list is deliberately narrow:
