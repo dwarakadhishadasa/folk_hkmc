@@ -450,6 +450,7 @@ export type Database = {
           id: string
           max_attempts: number
           name: string
+          owner_preacher_id: string | null
           program_id: string
           status: string
           updated_at: string
@@ -464,6 +465,7 @@ export type Database = {
           id?: string
           max_attempts?: number
           name: string
+          owner_preacher_id?: string | null
           program_id: string
           status?: string
           updated_at?: string
@@ -478,6 +480,7 @@ export type Database = {
           id?: string
           max_attempts?: number
           name?: string
+          owner_preacher_id?: string | null
           program_id?: string
           status?: string
           updated_at?: string
@@ -486,6 +489,13 @@ export type Database = {
           {
             foreignKeyName: "dialer_campaigns_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dialer_campaigns_owner_preacher_id_fkey"
+            columns: ["owner_preacher_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  campaignInPatch,
   campaignScopeKind,
   contactInPatch,
   contactWriteAttribution,
@@ -68,6 +69,68 @@ describe("locationInPatch", () => {
   it("uses the owner's location list", () => {
     expect(locationInPatch("loc-1", ["loc-1", "loc-2"])).toBe(true)
     expect(locationInPatch("loc-3", ["loc-1", "loc-2"])).toBe(false)
+  })
+})
+
+describe("campaignInPatch", () => {
+  const preacherVector = { actorId: "preacher-1", actorRole: "Preacher" as const, ownerId: "preacher-1" }
+  const assistantVector = { actorId: "assistant-1", actorRole: "Assistant" as const, ownerId: "preacher-1" }
+
+  it("keeps an Admin's own creations only", () => {
+    const adminVector = { actorId: "admin-1", actorRole: "Admin" as const, ownerId: "admin-1" }
+    expect(campaignInPatch({ ownerPreacherId: "admin-1", createdById: "admin-1" }, adminVector)).toBe(true)
+    expect(campaignInPatch({ ownerPreacherId: "admin-1", createdById: "preacher-1" }, adminVector)).toBe(false)
+  })
+
+  it("includes the patch's campaigns and the Preacher's creations", () => {
+    expect(campaignInPatch({ ownerPreacherId: "preacher-1", createdById: "admin-1" }, preacherVector)).toBe(true)
+    expect(campaignInPatch({ ownerPreacherId: "preacher-2", createdById: "preacher-1" }, preacherVector)).toBe(true)
+  })
+
+  it("includes campaigns created by active staff assigned to the Preacher", () => {
+    expect(
+      campaignInPatch(
+        { ownerPreacherId: "preacher-2", createdById: "assistant-1" },
+        preacherVector,
+        ["assistant-1"],
+      ),
+    ).toBe(true)
+    expect(
+      campaignInPatch(
+        { ownerPreacherId: "preacher-2", createdById: "assistant-2" },
+        preacherVector,
+        ["assistant-1"],
+      ),
+    ).toBe(false)
+  })
+
+  it("gives an Assistant the preacher's campaigns and their own creations", () => {
+    expect(campaignInPatch({ ownerPreacherId: "preacher-1", createdById: "admin-1" }, assistantVector)).toBe(true)
+    expect(campaignInPatch({ ownerPreacherId: "preacher-2", createdById: "assistant-1" }, assistantVector)).toBe(
+      true,
+    )
+    expect(campaignInPatch({ ownerPreacherId: "preacher-2", createdById: "assistant-2" }, assistantVector)).toBe(
+      false,
+    )
+  })
+
+  it("does not use the assigned-staff term for an Assistant", () => {
+    expect(
+      campaignInPatch(
+        { ownerPreacherId: "preacher-2", createdById: "assistant-2" },
+        assistantVector,
+        ["assistant-1"],
+      ),
+    ).toBe(false)
+  })
+
+  it("yields nothing for a null owner", () => {
+    expect(
+      campaignInPatch(
+        { ownerPreacherId: "preacher-1", createdById: "assistant-1" },
+        { actorId: "assistant-1", actorRole: "Assistant", ownerId: null },
+      ),
+    ).toBe(false)
   })
 })
 

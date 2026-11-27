@@ -7,7 +7,7 @@ import {
   type StaffContext,
   type StaffRole,
 } from "@/lib/authz"
-import { campaignScopeKind } from "@/lib/patch-scope"
+import { campaignScopeKind, type SessionPatchVector } from "@/lib/patch-scope"
 import { CAMPAIGN_ADMIN_ROLES } from "@/lib/staff-roles"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { collectPagedRows, type PagingFailures } from "@/lib/supabase/paging"
@@ -325,6 +325,33 @@ export async function campaignScope(staff: StaffContext): Promise<CampaignScope>
       kind: "preacher",
       userId: kind.userId,
     }),
+  }
+}
+
+/**
+ * The campaign read vector: the session patch vector plus the active staff
+ * assigned to a Preacher. That set is what lets a Preacher read campaigns
+ * created by the people working their patch, exactly as `sessions_visible`
+ * does. An Assistant's branch never consults it.
+ */
+export interface CampaignPatchVector extends SessionPatchVector {
+  assignedStaffIds: string[]
+}
+
+export async function campaignPatchVector(staff: StaffContext): Promise<CampaignPatchVector> {
+  requireCampaignScopeOwner(staff)
+
+  const ownerId = staff.role === "Admin" ? staff.userId : (staff.patchOwner?.userId ?? null)
+  const assignedStaffIds =
+    ownerId && staff.role === "Preacher"
+      ? (await readActiveStaffRows(staff.programId, ownerId)).map((row) => row.id)
+      : []
+
+  return {
+    actorId: staff.userId,
+    actorRole: staff.role,
+    ownerId,
+    assignedStaffIds,
   }
 }
 

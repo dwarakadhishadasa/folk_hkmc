@@ -52,6 +52,47 @@ export function locationInPatch(locationId: string, ownerLocationIds: readonly s
   return ownerLocationIds.includes(locationId)
 }
 
+export interface CampaignPatchRow {
+  ownerPreacherId: string | null
+  createdById: string | null
+}
+
+/**
+ * Campaigns read exactly like sessions: an Admin sees only the campaigns they
+ * created; a Preacher sees the patch's campaigns, their own creations and those
+ * created by active staff assigned to them; an Assistant sees the assigned
+ * preacher's campaigns plus their own creations.
+ *
+ * `owner_preacher_id` is the campaign's `preacher_id`: the patch it belongs to.
+ */
+export function campaignInPatch(
+  row: CampaignPatchRow,
+  vector: SessionPatchVector,
+  assignedStaffIds: readonly string[] = [],
+): boolean {
+  if (!vector.ownerId) {
+    return false
+  }
+
+  if (vector.actorRole === "Admin") {
+    return row.createdById === vector.actorId
+  }
+
+  if (row.ownerPreacherId === vector.ownerId || row.createdById === vector.ownerId) {
+    return true
+  }
+
+  if (row.createdById === vector.actorId) {
+    return true
+  }
+
+  return (
+    vector.actorRole === "Preacher" &&
+    row.createdById !== null &&
+    assignedStaffIds.includes(row.createdById)
+  )
+}
+
 export type CampaignScopeKind =
   | { kind: "program" }
   | { kind: "preacher"; userId: string }

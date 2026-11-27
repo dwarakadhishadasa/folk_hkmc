@@ -66,8 +66,8 @@ export interface CampaignProgress {
 
 /**
  * A campaign and its scoped summary. A campaign stays listed when the caller's
- * scope holds none of its contacts: the row is program-level, and the summary
- * is then a true zero rather than an omission.
+ * scope holds none of its contacts: it is visible to that reader, and the
+ * summary is then a true zero rather than an omission.
  */
 export interface CampaignOverviewEntry {
   campaign: CampaignRow

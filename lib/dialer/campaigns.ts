@@ -2,7 +2,8 @@ import "server-only"
 
 import { AuthzError, type StaffContext } from "@/lib/authz"
 import { completeExpiredCampaigns } from "@/lib/dialer/expiry"
-import { requireCampaignAdmin, requireCampaignScopeOwner } from "@/lib/dialer/scope"
+import { campaignPatchVector, requireCampaignAdmin, requireCampaignScopeOwner } from "@/lib/dialer/scope"
+import { campaignInPatch } from "@/lib/patch-scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { collectPagedRows, type PagingFailures } from "@/lib/supabase/paging"
 import type { Database } from "@/lib/supabase/types"
@@ -20,7 +21,7 @@ const MAX_ATTEMPTS_MAX = 10
 const MAX_ATTEMPTS_DEFAULT = 3
 
 const CAMPAIGN_COLUMNS =
-  "id,program_id,name,description,campaign_date,campaign_time,status,max_attempts,gap_duration,created_by,created_at,updated_at"
+  "id,program_id,name,description,campaign_date,campaign_time,status,max_attempts,gap_duration,created_by,owner_preacher_id,created_at,updated_at"
 
 export type CampaignRow = Database["public"]["Tables"]["dialer_campaigns"]["Row"]
 
@@ -78,25 +79,27 @@ function assertCampaignIdShape(campaignId: string): void {
 }
 
 async function readCampaignRow(staff: StaffContext, campaignId: string): Promise<CampaignRow> {
-  requireCampaignScopeOwner(staff)
+  const vector = await campaignPatchVector(staff)
   const supabaseAdmin = createSupabaseAdminClient()
-  let query = supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("dialer_campaigns")
     .select(CAMPAIGN_COLUMNS)
     .eq("id", campaignId)
     .eq("program_id", staff.programId)
-
-  if (staff.role === "Admin") {
-    query = query.eq("created_by", staff.userId)
-  }
-
-  const { data, error } = await query.maybeSingle()
+    .maybeSingle()
 
   if (error) {
     throw new AuthzError(500, "campaign_read_failed", "Unable to read the campaign.")
   }
 
-  if (!data) {
+  if (
+    !data ||
+    !campaignInPatch(
+      { ownerPreacherId: data.owner_preacher_id, createdById: data.created_by },
+      vector,
+      vector.assignedStaffIds,
+    )
+  ) {
     throw campaignNotFound()
   }
 
@@ -195,14 +198,14 @@ function requireMaxAttempts(value: unknown): number {
 }
 
 /**
- * Campaign rows are program-level for a Preacher and an Assistant in AD-3, so
- * they read the campaigns an Admin assigned them work in. An Admin's own
- * `/campaigns` surface is creator-only: the Admin works the campaigns they
- * started, and another staff member's campaign is not theirs to manage.
+ * Campaigns read exactly like sessions. An Admin works the campaigns they
+ * started; a Preacher reads the patch's campaigns, their own creations and
+ * those created by active staff assigned to them; an Assistant reads the
+ * assigned preacher's campaigns plus their own creations.
  */
 export async function listCampaigns(staff: StaffContext): Promise<CampaignRow[]> {
   requireCampaignAdmin(staff)
-  requireCampaignScopeOwner(staff)
+  const vector = await campaignPatchVector(staff)
 
   const supabaseAdmin = createSupabaseAdminClient()
 
@@ -210,17 +213,11 @@ export async function listCampaigns(staff: StaffContext): Promise<CampaignRow[]>
   // project without pg_cron still shows the status the date implies.
   await completeExpiredCampaigns(supabaseAdmin)
 
-  return collectPagedRows<CampaignRow>(async (from, to) => {
-    let query = supabaseAdmin
+  const rows = await collectPagedRows<CampaignRow>(async (from, to) => {
+    const response = await supabaseAdmin
       .from("dialer_campaigns")
       .select(CAMPAIGN_COLUMNS)
       .eq("program_id", staff.programId)
-
-    if (staff.role === "Admin") {
-      query = query.eq("created_by", staff.userId)
-    }
-
-    const response = await query
       .order("campaign_date", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: true })
@@ -228,6 +225,14 @@ export async function listCampaigns(staff: StaffContext): Promise<CampaignRow[]>
 
     return { data: response.data, error: response.error }
   }, CAMPAIGN_LIST_PAGING_FAILURES)
+
+  return rows.filter((row) =>
+    campaignInPatch(
+      { ownerPreacherId: row.owner_preacher_id, createdById: row.created_by },
+      vector,
+      vector.assignedStaffIds,
+    ),
+  )
 }
 
 export async function getCampaign(staff: StaffContext, campaignId: string): Promise<CampaignRow> {
@@ -246,6 +251,7 @@ export async function createCampaign(staff: StaffContext, input: CreateCampaignI
   const campaignTime = optionalCampaignTime(input.campaignTime)
   const gapDuration = requireGapDuration(input.gapDuration)
   const maxAttempts = requireMaxAttempts(input.maxAttempts)
+  const ownerPreacherId = staff.role === "Assistant" ? (staff.patchOwner?.userId ?? null) : staff.userId
 
   const supabaseAdmin = createSupabaseAdminClient()
   const { data, error } = await supabaseAdmin
@@ -260,6 +266,7 @@ export async function createCampaign(staff: StaffContext, input: CreateCampaignI
       gap_duration: gapDuration,
       max_attempts: maxAttempts,
       created_by: staff.userId,
+      owner_preacher_id: ownerPreacherId,
     })
     .select(CAMPAIGN_COLUMNS)
     .single()
@@ -291,25 +298,21 @@ export async function updateCampaign(
   input: UpdateCampaignInput,
 ): Promise<CampaignRow> {
   requireCampaignAdmin(staff)
-  requireCampaignScopeOwner(staff)
   assertCampaignIdShape(campaignId)
+  await readCampaignRow(staff, campaignId)
 
   const name = requireCampaignName(input.name)
   const description = optionalCampaignDescription(input.description)
   const campaignDate = requireCampaignDate(input.campaignDate)
 
   const supabaseAdmin = createSupabaseAdminClient()
-  let update = supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("dialer_campaigns")
     .update({ name, description, campaign_date: campaignDate })
     .eq("id", campaignId)
     .eq("program_id", staff.programId)
-
-  if (staff.role === "Admin") {
-    update = update.eq("created_by", staff.userId)
-  }
-
-  const { data, error } = await update.select(CAMPAIGN_COLUMNS).maybeSingle()
+    .select(CAMPAIGN_COLUMNS)
+    .maybeSingle()
 
   if (error) {
     throw new AuthzError(500, "campaign_write_failed", "Unable to save the campaign.")
@@ -328,8 +331,8 @@ export async function transitionCampaign(
   action: CampaignTransitionAction,
 ): Promise<CampaignRow> {
   requireCampaignAdmin(staff)
-  requireCampaignScopeOwner(staff)
   assertCampaignIdShape(campaignId)
+  await readCampaignRow(staff, campaignId)
 
   if (!isCampaignTransitionAction(action)) {
     throw new AuthzError(400, "invalid_campaign_action", "Unknown campaign action.")
@@ -338,15 +341,11 @@ export async function transitionCampaign(
   const transition = CAMPAIGN_TRANSITIONS[action]
 
   const supabaseAdmin = createSupabaseAdminClient()
-  let update = supabaseAdmin
+  const update = supabaseAdmin
     .from("dialer_campaigns")
     .update({ status: transition.to })
     .eq("id", campaignId)
     .eq("program_id", staff.programId)
-
-  if (staff.role === "Admin") {
-    update = update.eq("created_by", staff.userId)
-  }
 
   // The status predicate is the race guard: a row that moved since the caller
   // read it matches nothing, so a lost race never applies a second transition.

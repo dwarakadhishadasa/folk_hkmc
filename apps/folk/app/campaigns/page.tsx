@@ -34,12 +34,13 @@ function readStatusFilter(value: string | string[] | undefined): StatusFilter | 
  * The Campaign Overview: AD-2's admin gate, then each visible campaign with its
  * scoped `campaign_progress` summary.
  *
- * Campaign rows are program-level for a Preacher and an Assistant (AD-3), so
- * they read the campaigns an Admin assigned them work in; a Preacher's rows are
- * not filtered, only their counts are narrowed, and a campaign holding none of
- * their contacts reads a true zero rather than disappearing. An Admin reads only
- * the campaigns they created. The tiles and the table are both summed from the same summaries,
- * so no number here is computed a second time.
+ * Campaign rows are scoped exactly like sessions: an Admin reads the campaigns
+ * they created; a Preacher reads the patch's campaigns, their own creations and
+ * those created by active staff assigned to them; an Assistant reads the
+ * assigned preacher's campaigns plus their own. A visible campaign holding none
+ * of the reader's contacts reads a true zero rather than disappearing. The tiles
+ * and the table are both summed from the same summaries, so no number here is
+ * computed a second time.
  *
  * Zero campaigns renders the empty state **instead of** the tiles: a screen of
  * five zeroes is not an answer, and UX-DR24's action is.
