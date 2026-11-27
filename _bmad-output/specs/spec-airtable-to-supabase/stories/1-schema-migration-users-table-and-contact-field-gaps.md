@@ -43,7 +43,7 @@ deferred:
 - Hosted project link: `etwunirahuucodcxydgs` (ap-south-1). CLI credentials live in gitignored `.env.migration.local` (read values, never copy them). Migrations apply via `supabase db push`; fallback is `--db-url $POSTGRES_URL_NON_POOLING`.
 - The hosted project is disposable pre-cutover: wipe/re-seed freely.
 - `audit_events`, `staff_memberships`, `staff_profiles`, `airtable_identities` are not modified by this migration; the bridge tables stay until the cleanup story.
-- The old Supabase project `cparpinmalqsimninyfw` and both Airtable bases are read-only archives — never touch them.
+- The old Supabase project `cparpinmalqsimninyfw` and both Airtable bases were read-only archives at story time — never touch them. **Superseded 2026-11-23:** the old project is now the writable preview database; the Airtable bases remain read-only. See `docs/preview-environment.md`.
 
 **Never:**
 - No RLS policies are added, dropped, or changed — that is story 2's job.

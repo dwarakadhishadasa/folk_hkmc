@@ -6,7 +6,7 @@ This repository uses a branch-and-review workflow for every collaborator, includ
 
 - `main` is the production branch. Production access, production secrets, production deploys, and production merges are owner-only for Dwaraka.
 - `dev` is the shared development branch. Collaborators may use the development environment, but code changes still go through pull requests.
-- `preview` is retired. If it still exists in GitHub, only Dwaraka should create `dev` from the current `preview` tip, verify both refs point to the same commit, then remove `preview`.
+- `preview` is deployment-only. It tracks `dev` and deploys the Vercel Preview environment against the byzantium database; it is never a PR source or merge target. See [`docs/preview-environment.md`](docs/preview-environment.md).
 - `feature/*` branches are the only normal working branches for collaborators.
 
 Do not push directly to `main` or `dev`. Do not request or use production credentials unless Dwaraka explicitly approves the work.
@@ -192,6 +192,6 @@ Committed files can guide collaborators and fail bad PR branches, but full enfor
 - Require the `PR Branch Policy` status check after the workflow has run at least once.
 - Create the `production-review-approved` label for exceptional owner-approved PRs targeting `main`.
 - Keep production environment secrets and deployment controls owner-only.
-- Confirm `dev` exists remotely and remove `preview` only after `dev` points to the same commit.
+- Keep `preview` fast-forwarded to `dev`; it drives the Vercel Preview environment.
 
 Never commit Supabase service-role keys, Vercel production credentials, GitHub tokens, or other secrets.

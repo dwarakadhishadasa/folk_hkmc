@@ -32,23 +32,31 @@ The Vercel organization/team is `team_VyUTSoRnf2uz8IBsMVyZhOS4`.
 | `master` | Vercel production branch for `folk-hkmc`; promoted by fast-forward from `dev` with owner approval |
 | `dev` | Shared integration branch; never push directly |
 | `main` | Production branch for the legacy `folk-hkmc-bdnv` project; do not modify |
+| `preview` | Deployment-only branch for the Vercel Preview environment; tracks `dev`, never a PR source |
 | `feature/*`, `fix/*` | Normal code review branches; PRs target `dev` |
 
-Do not push `main` or `dev`. Do not treat `main` as the current production
-branch; the Vercel production branch is `master`. Production promotion is an
-owner-approved fast-forward of `master` to the `dev` tip.
+Do not push `main` or `dev`. Preview work is merged through `feature/*` into
+`dev`, then fast-forwarded to `preview`; see
+[Preview Environment](./preview-environment.md). Do not treat `main` as the
+current production branch; the Vercel production branch is `master`. Production
+promotion is an owner-approved fast-forward of `master` to the `dev` tip.
 
 ### Data stores
 
 | Store | Ref | Role |
 |---|---|---|
 | `supabase-yellow-mirror` | `etwunirahuucodcxydgs` (ap-south-1) | **Current production database** |
-| Old Supabase project | `cparpinmalqsimninyfw` | Archive; read-only |
+| `supabase-byzantium-battery` | `cparpinmalqsimninyfw` (ap-south-1) | **Writable preview database** (repurposed 2026-11-23; pre-migration public tables backed up outside the repo) |
 | Airtable folk base | `appqea9DRLOXqErXb` | Source archive; read-only |
 | Airtable Gita Life base | `appzbssqNK53yqjZH` | Source archive; read-only |
 
-The Airtable bases and the old Supabase project are never written to, truncated,
-or deleted. The loader only sends `GET` requests to Airtable.
+The Airtable bases are never written to, truncated, or deleted. The loader only
+sends `GET` requests to Airtable. The preview project is **writable**: it
+receives migrations, Auth configuration, and tagged `preview-fixture-` rows
+independently of production; it is never a production fallback. Wipe it with
+the fixture seeder, never with a truncate. Never point the Vercel Preview
+environment at the production ref. See
+[Preview Environment](./preview-environment.md).
 
 ## Preconditions
 
@@ -395,20 +403,23 @@ wipe again. Do not leave fixtures in production.
 ## Rollback
 
 **Code:** use Vercel's instant rollback to the previous production deployment.
-If the database is the problem, also repoint the Production environment to the
-old project (owner action).
+If the database is the problem, restore the pre-migration dump; the preview
+project is not a production fallback.
 
 **Data:** the loader's rollback deletes exactly the rows named by
 `airtable_id_map`, their storage objects, and the map rows. It does not touch
-auth users, the old project, or Airtable.
+auth users, the preview project, or Airtable.
 
 ```bash
 node scripts/migrate-airtable-data.mjs --rollback --program folk --dry-run
 node scripts/migrate-airtable-data.mjs --rollback --program folk
 ```
 
-**Full restore:** restore the pre-migration dump with `pg_restore`. Keep the old
-Supabase project and both Airtable bases as the archive and fallback.
+**Full restore:** restore the pre-migration dump with `pg_restore`. Keep the
+pre-migration dump and both Airtable bases as the archive and fallback. The
+byzantium project is the preview database now; its legacy public tables were
+replaced by the current schema, so it is not a production fallback. See
+[Preview Environment](./preview-environment.md).
 
 ## Known constraints
 

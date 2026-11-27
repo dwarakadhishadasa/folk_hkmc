@@ -25,7 +25,11 @@ let lastAuthCallbackHandoff = ""
 const MIN_EMAIL_OTP_LENGTH = 6
 const MAX_EMAIL_OTP_LENGTH = 10
 
-export function LoginPageClient() {
+interface LoginPageClientProps {
+  previewPasswordLoginEnabled?: boolean
+}
+
+export function LoginPageClient({ previewPasswordLoginEnabled = false }: LoginPageClientProps) {
   const [email, setEmail] = useState("")
   const [verificationCode, setVerificationCode] = useState("")
   const [error, setError] = useState("")
@@ -37,6 +41,9 @@ export function LoginPageClient() {
 
   const requestedRedirectUrl = searchParams.get("redirect")
   const redirectUrl = safeStaffRedirectPath(requestedRedirectUrl, role)
+  const previewPasswordLoginHref = previewPasswordLoginEnabled
+    ? `/preview-login${requestedRedirectUrl ? `?redirect=${encodeURIComponent(requestedRedirectUrl)}` : ""}`
+    : null
   const didJustSignOut = searchParams.get("signedOut") === "1"
   const authCallbackCode = searchParams.get("code")
   const authCallbackTokenHash = searchParams.get("token_hash")
@@ -222,6 +229,18 @@ export function LoginPageClient() {
                   {isVerifying ? "Verifying..." : "Verify Code"}
                 </button>
               </form>
+            )}
+
+            {previewPasswordLoginHref && (
+              <p className="mt-6 border-t border-border pt-4 text-center text-sm text-muted-foreground">
+                Preview QA?{" "}
+                <Link
+                  href={previewPasswordLoginHref}
+                  className="font-semibold text-[var(--program-accent)] underline-offset-4 hover:underline"
+                >
+                  Sign in with a password
+                </Link>
+              </p>
             )}
           </div>
         </div>

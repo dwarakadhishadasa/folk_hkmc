@@ -206,7 +206,10 @@ Invite audit log written by `lib/invite-log.ts`.
 
 `public.staff_memberships`, `public.staff_profiles`, `public.airtable_identities`, and `public.airtable_sync_state` were the Airtable→Supabase synchronization bridge. No runtime code read or wrote them once `public.users` became authoritative, and `supabase/migrations/20261007000000_retire_airtable_named_columns.sql` dropped all four on the hosted project. The migration files that created them remain in `supabase/migrations/` as applied history and must not be deleted; the tables themselves no longer exist.
 
-Use `public.users`. If you need the pre-migration data, it survives in the read-only archive project (`cparpinmalqsimninyfw`), never in this one.
+Use `public.users`. If you need the pre-migration data, it lives in the
+pre-cutover backup taken before `cparpinmalqsimninyfw` was repurposed as the
+preview database; see [Preview Environment](./preview-environment.md). The
+preview project no longer holds those legacy public tables.
 
 ## Row-Level Security
 

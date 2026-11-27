@@ -47,10 +47,7 @@ as operator actions.
   perform no write on either project.
 - Secrets are read from `.env.migration.local` / `.env` only and are **never** printed:
   no `encrypted_password` value, no SMTP password, no token, no fixture password.
-- The **old project and both Airtable bases are read-only archives.** Only `SELECT` runs
-  against them. The one deliberate exception is deleting conflicting *development* auth
-  users on the **new** project, which is reported row-by-row and gated behind an explicit
-  flag.
+- The **old project and both Airtable bases were read-only archives at story time.** Only `SELECT` ran against them. **Superseded 2026-11-23:** the old project is now the writable preview database; the Airtable bases remain read-only. See `docs/preview-environment.md`. The one deliberate exception was deleting conflicting *development* auth users on the **new** project, which is reported row-by-row and gated behind an explicit flag.
 - The write-freeze, the production redeploy, the delivering SMTP swap, link distribution
   and per-staff sign-in checks are **operator** actions. This story never stands up
   production traffic and never asserts an operator outcome it did not observe.
@@ -60,7 +57,9 @@ as operator actions.
 
 **Never:**
 - Never wipe the new project. The disposable privilege ended at this story.
-- Never write to, or delete from, `cparpinmalqsimninyfw` or either Airtable base.
+- Never write to, or delete from, either Airtable base. The old project `cparpinmalqsimninyfw`
+  is the preview database now; writes there are limited to committed migrations and
+  `preview-fixture-` rows through `seed-preview-fixtures.mjs`.
 - Never invent a value the source does not carry: a contact whose phone does not normalize
   to 10 digits is quarantined and reported, not coerced; an attendance row with no linked
   contact is quarantined, not attached to a placeholder.

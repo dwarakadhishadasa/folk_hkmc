@@ -42,7 +42,7 @@ deferred: []
 - No changes to `lib/authz.ts`, routes, pages, or any app code — that is stories 3–5. App-layer scoping stays as-is in parallel.
 - No authenticated write policies, and no use of `collected_by_id`, session `location_id`, or role+location session scoping as RLS keys.
 - No pg enums; role/status stay TEXT + CHECK as created in story 1.
-- No writes to the old Supabase project (`cparpinmalqsimninyfw`) or the Airtable bases — read-only archives.
+- No writes to the old Supabase project (`cparpinmalqsimninyfw`) or the Airtable bases — they were read-only archives at story time. **Superseded 2026-11-23:** the old project is now the writable preview database; the Airtable bases remain read-only. See `docs/preview-environment.md`.
 - No `supabase config push` (config.toml's `[auth]` is local-mailpit; story 8 owns auth config).
 
 ## I/O & Edge-Case Matrix

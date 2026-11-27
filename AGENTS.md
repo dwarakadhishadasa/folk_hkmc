@@ -7,7 +7,7 @@ HKMC program-operations monorepo for the FOLK Chennai and Gita Life web apps. Ne
 
 ## Policy
 
-- Never push to `main` or `dev`; open a PR from `feature/*` or `fix/*` (`preview` is retired). `.github/workflows/pr-branch-policy.yml` enforces the branch and label rules — read it rather than working around it.
+- Never push to `main` or `dev`; open a PR from `feature/*` or `fix/*`. `preview` is deployment-only (tracks `dev`, never a PR source) and runs against the byzantium database — see `docs/preview-environment.md`. `.github/workflows/pr-branch-policy.yml` enforces the branch and label rules — read it rather than working around it.
 - `main` is owner-controlled production; Dwaraka alone merges and promotes.
 - Ask Dwaraka before inviting collaborators, changing repository roles or branch protection, deleting branches, touching production settings, merging, or any direct remote branch update.
 - Never run `pnpm deploy:prod`, `deploy:folk:prod`, or `deploy:gita-life:prod`, and never read or modify production secrets or production environment config, without asking Dwaraka.
