@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Copy,
   Landmark,
-  Loader2,
   Smartphone,
   Upload,
 } from "lucide-react"
@@ -17,6 +16,8 @@ import {
   type PaymentMethod,
 } from "@/components/folk-home/course-data"
 import type { RegistrationDraft } from "@/components/folk-home/types"
+
+import { ButtonLoading } from "../../apps/folk/app/_components/loading/loaders"
 
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024
 
@@ -42,6 +43,7 @@ export function PaymentStep({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [outcomeUnknown, setOutcomeUnknown] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -73,6 +75,10 @@ export function PaymentStep({
   }
 
   const submit = async () => {
+    if (submitting || outcomeUnknown) {
+      return
+    }
+
     if (!method || !screenshot) {
       setError("Please select a payment method and upload payment screenshot")
       return
@@ -94,22 +100,26 @@ export function PaymentStep({
       body.set("screenshot", screenshot)
 
       const response = await fetch("/api/gita-life/registration", { method: "POST", body })
-      const data = (await response.json().catch(() => ({}))) as {
+      const data = (await response.json().catch(() => null)) as {
         error?: string
         registrationId?: string
+      } | null
+
+      if (!response.ok) {
+        setError(
+          data?.error || "We couldn't complete your registration. Please check your details and try again.",
+        )
+        return
       }
 
-      if (!response.ok || !data.registrationId) {
-        throw new Error(data.error || "Something went wrong. Please try again.")
+      if (!data?.registrationId) {
+        setOutcomeUnknown(true)
+        return
       }
 
       onSuccess(data.registrationId)
-    } catch (submissionError) {
-      setError(
-        submissionError instanceof Error
-          ? submissionError.message
-          : "Something went wrong. Please try again.",
-      )
+    } catch {
+      setOutcomeUnknown(true)
     } finally {
       setSubmitting(false)
     }
@@ -121,7 +131,8 @@ export function PaymentStep({
         <button
           type="button"
           onClick={onBack}
-          className="mb-6 flex items-center gap-2 text-amber-700 transition-colors hover:text-amber-900"
+          disabled={submitting}
+          className="mb-6 flex items-center gap-2 text-amber-700 transition-colors hover:text-amber-900 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ArrowLeft className="h-5 w-5" />
           Back to Form
@@ -139,7 +150,8 @@ export function PaymentStep({
               <button
                 type="button"
                 onClick={() => setMethod("gpay")}
-                className={`rounded-xl border-2 p-4 transition-all ${
+                disabled={submitting}
+                className={`rounded-xl border-2 p-4 transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                   method === "gpay"
                     ? "border-amber-500 bg-amber-50"
                     : "border-gray-200 hover:border-amber-300"
@@ -157,7 +169,8 @@ export function PaymentStep({
               <button
                 type="button"
                 onClick={() => setMethod("neft")}
-                className={`rounded-xl border-2 p-4 transition-all ${
+                disabled={submitting}
+                className={`rounded-xl border-2 p-4 transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                   method === "neft"
                     ? "border-amber-500 bg-amber-50"
                     : "border-gray-200 hover:border-amber-300"
@@ -210,7 +223,8 @@ export function PaymentStep({
                         type="button"
                         onClick={() => copyValue(row.value, row.key)}
                         aria-label={`Copy ${row.label}`}
-                        className="rounded-lg p-2 transition-colors hover:bg-amber-100"
+                        disabled={submitting}
+                        className="rounded-lg p-2 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {copiedKey === row.key ? (
                           <Check className="h-4 w-4 text-green-600" />
@@ -232,6 +246,7 @@ export function PaymentStep({
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
+                  disabled={submitting}
                   className="hidden"
                 />
                 {previewUrl ? (
@@ -245,7 +260,8 @@ export function PaymentStep({
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="absolute right-2 bottom-2 rounded-lg bg-white/90 px-3 py-1 text-sm font-medium text-amber-700 backdrop-blur-sm transition-colors hover:bg-white"
+                      disabled={submitting}
+                      className="absolute right-2 bottom-2 rounded-lg bg-white/90 px-3 py-1 text-sm font-medium text-amber-700 backdrop-blur-sm transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Change
                     </button>
@@ -254,7 +270,8 @@ export function PaymentStep({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-amber-300 transition-colors hover:border-amber-500 hover:bg-amber-50"
+                    disabled={submitting}
+                    className="flex h-32 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-amber-300 transition-colors hover:border-amber-500 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Upload className="h-8 w-8 text-amber-400" />
                     <span className="font-medium text-amber-600">Click to upload screenshot</span>
@@ -264,28 +281,41 @@ export function PaymentStep({
               </div>
             )}
 
-            {error && (
-              <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+            {outcomeUnknown && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+              >
+                <p className="font-semibold">We couldn&apos;t confirm your registration</p>
+                <p className="mt-1">
+                  The server didn&apos;t confirm your registration. Your payment may already be
+                  recorded, so please call{" "}
+                  <a href={COURSE_FACTS.phoneHref} className="font-semibold underline">
+                    {COURSE_FACTS.phone}
+                  </a>{" "}
+                  before submitting again.
+                </p>
+              </div>
             )}
 
-            <button
+            {error && (
+              <div role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <ButtonLoading
               type="button"
               onClick={submit}
-              disabled={!method || !screenshot || submitting}
+              busy={submitting}
+              loadingLabel="Submitting..."
+              disabled={!method || !screenshot || outcomeUnknown}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-orange-500 py-4 font-semibold text-white transition-colors hover:from-amber-500 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-5 w-5" />
-                  Complete Registration
-                </>
-              )}
-            </button>
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+              {outcomeUnknown ? "Registration not confirmed" : "Complete Registration"}
+            </ButtonLoading>
           </div>
         </div>
       </div>

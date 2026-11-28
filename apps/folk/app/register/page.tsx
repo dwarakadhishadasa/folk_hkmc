@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
+import { CloudOff } from "lucide-react"
 import { Header } from "@/components/header"
 import {
   AUTH_ERROR_CLASS,
@@ -16,6 +17,12 @@ import {
 } from "@/components/auth-form-styles"
 import { cn } from "@/lib/utils"
 
+import { AuthFormSkeleton, ButtonLoading, LoadingRegion } from "../_components/loading"
+
+const SERVER_FAILURE_MESSAGE = "We couldn't submit your registration. Please try again."
+const UNKNOWN_OUTCOME_MESSAGE =
+  "We couldn't confirm whether your registration was received. Please check with us before submitting again."
+
 interface FormData {
   name: string
   mobile: string
@@ -26,10 +33,35 @@ interface FormData {
   address: string
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
+}
+
+function requestBackgroundSync() {
+  if (!("serviceWorker" in navigator) || typeof ServiceWorkerRegistration === "undefined") {
+    return
+  }
+
+  if (!("sync" in ServiceWorkerRegistration.prototype)) {
+    return
+  }
+
+  void navigator.serviceWorker.ready
+    .then((registration) =>
+      (
+        registration as ServiceWorkerRegistration & {
+          sync: { register: (tag: string) => Promise<void> }
+        }
+      ).sync.register("sync-requests"),
+    )
+    .catch(() => undefined)
+}
+
 function RegisterForm() {
   const searchParams = useSearchParams()
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [queued, setQueued] = useState(false)
   const [error, setError] = useState("")
   const [sessionId, setSessionId] = useState("")
   const [successMessage, setSuccessMessage] = useState("Registration Successful")
@@ -73,6 +105,9 @@ function RegisterForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLoading) {
+      return
+    }
     setError("")
     setIsLoading(true)
 
@@ -83,50 +118,92 @@ function RegisterForm() {
         body: JSON.stringify({ ...formData, sessionId }),
       })
 
-      const data = await res.json()
+      const data: unknown = await res.json().catch(() => null)
 
-      if (res.status === 202 && data.queued) {
-        setError("You are offline. Your registration will be submitted when you're back online.")
-        setIsLoading(false)
-
-        if ("serviceWorker" in navigator && "sync" in ServiceWorkerRegistration.prototype) {
-          const registration = await navigator.serviceWorker.ready
-          await (registration as ServiceWorkerRegistration & { sync: { register: (tag: string) => Promise<void> } }).sync.register(
-            "sync-requests",
-          )
-        }
+      if (res.status === 202 && isRecord(data) && data.queued === true) {
+        setQueued(true)
+        requestBackgroundSync()
         return
       }
 
-      if (res.status === 409 && data.alreadyRegistered) {
+      if (res.status === 409 && isRecord(data) && data.alreadyRegistered === true) {
         setError("You are already registered. Please use your session attendance link to mark attendance.")
         return
       }
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to register")
+        setError(
+          res.status < 500 && isRecord(data) && typeof data.error === "string" && data.error.trim()
+            ? data.error
+            : SERVER_FAILURE_MESSAGE,
+        )
+        return
+      }
+
+      if (!isRecord(data)) {
+        setError(UNKNOWN_OUTCOME_MESSAGE)
+        return
+      }
+
+      if (sessionId && (data.completed !== true || !isRecord(data.contact))) {
+        setError("Your registration was received, but attendance was not confirmed. Contact us before trying again.")
+        return
+      }
+
+      if (!sessionId && !isRecord(data.contact)) {
+        setError(UNKNOWN_OUTCOME_MESSAGE)
+        return
       }
 
       if (sessionId) {
-        if (!data.completed) {
-          throw new Error("Registration completed, but attendance status was not confirmed.")
-        }
         setSuccessMessage("Registration complete and attendance marked")
-        setSuccess(true)
       } else {
         setSuccessMessage("Registration Successful")
-        setSuccess(true)
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to register. Please try again.")
+      setSuccess(true)
+    } catch {
+      setError(UNKNOWN_OUTCOME_MESSAGE)
     } finally {
       setIsLoading(false)
     }
   }
 
+  if (queued) {
+    return (
+      <div
+        className={cn(AUTH_PANEL_CLASS, "animate-fade-in-up p-8 text-center motion-reduce:animate-none")}
+        role="status"
+        aria-live="polite"
+      >
+        <div className="mx-auto mb-4 flex size-20 items-center justify-center rounded-full bg-amber-500/10">
+          <CloudOff className="size-12 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+        </div>
+        <h2 className="mb-2 font-[family-name:var(--font-poppins)] text-2xl font-bold text-foreground">
+          Registration queued
+        </h2>
+        <p className="font-medium text-amber-700 dark:text-amber-300">
+          You&apos;re offline. Your registration is saved on this device and will be sent automatically when
+          you&apos;re back online.
+        </p>
+        {sessionId ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Your attendance is not marked yet. It will be marked once your registration reaches the server.
+          </p>
+        ) : null}
+        <p className="mt-4 text-sm text-muted-foreground">
+          You can close this page. The saved registration will still be sent.
+        </p>
+      </div>
+    )
+  }
+
   if (success) {
     return (
-      <div className={cn(AUTH_PANEL_CLASS, "animate-fade-in-up p-8 text-center")}>
+      <div
+        className={cn(AUTH_PANEL_CLASS, "animate-fade-in-up p-8 text-center motion-reduce:animate-none")}
+        role="status"
+        aria-live="polite"
+      >
         <div className="mx-auto mb-4 flex size-20 items-center justify-center rounded-full bg-emerald-500/10">
           <svg
             className="size-12 text-emerald-600 dark:text-emerald-400"
@@ -290,13 +367,15 @@ function RegisterForm() {
             </div>
           )}
 
-          <button
+          <ButtonLoading
             type="submit"
-            disabled={isLoading || !isMobileValid}
+            busy={isLoading}
+            loadingLabel="Registering..."
+            disabled={!isMobileValid}
             className={AUTH_PRIMARY_BUTTON_CLASS}
           >
-            {isLoading ? "Registering..." : "Register"}
-          </button>
+            Register
+          </ButtonLoading>
         </form>
       </div>
     </div>
@@ -309,7 +388,11 @@ export default function RegisterPage() {
       <Header />
       <main className="container mx-auto max-w-lg px-4 py-6 sm:py-10">
         <Suspense
-          fallback={<div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>}
+          fallback={
+            <LoadingRegion label="Loading the registration form">
+              <AuthFormSkeleton fields={4} />
+            </LoadingRegion>
+          }
         >
           <RegisterForm />
         </Suspense>

@@ -18,9 +18,12 @@ import { useAuth } from "@/lib/auth-context"
 import { safeStaffRedirectPath } from "@/lib/staff-routes"
 import { cn } from "@/lib/utils"
 
+import { ButtonLoading, LoadingSpinner, LoginPageSkeleton } from "../_components/loading"
+
 let lastAuthCallbackHandoff = ""
 const MIN_EMAIL_OTP_LENGTH = 6
 const MAX_EMAIL_OTP_LENGTH = 10
+const LOGIN_BOOT_TIMEOUT_MS = 6000
 
 interface LoginPageClientProps {
   previewPasswordLoginEnabled?: boolean
@@ -33,7 +36,9 @@ export function LoginPageClient({ previewPasswordLoginEnabled = false }: LoginPa
   const [isCodeStep, setIsCodeStep] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
-  const { login, verifyLoginCode, isLoggedIn, isHydrated, role } = useAuth()
+  const [bootstrapTimedOut, setBootstrapTimedOut] = useState(false)
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0)
+  const { login, verifyLoginCode, isLoggedIn, isHydrated, role, refresh } = useAuth()
   const searchParams = useSearchParams()
 
   const requestedRedirectUrl = searchParams.get("redirect")
@@ -80,20 +85,78 @@ export function LoginPageClient({ previewPasswordLoginEnabled = false }: LoginPa
     }
   }, [didJustSignOut, isLoggedIn, isHydrated, redirectUrl])
 
+  useEffect(() => {
+    if (isHydrated) {
+      setBootstrapTimedOut(false)
+      return
+    }
+
+    const timeout = window.setTimeout(() => setBootstrapTimedOut(true), LOGIN_BOOT_TIMEOUT_MS)
+    return () => window.clearTimeout(timeout)
+  }, [bootstrapAttempt, isHydrated])
+
   if (!isHydrated || authCallbackCode || authCallbackTokenHash) {
+    const isAuthCallback = Boolean(authCallbackCode || authCallbackTokenHash)
+
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
-        <div className="text-center text-sm font-semibold text-muted-foreground">Loading...</div>
-      </div>
+      <LoginPageSkeleton label={isAuthCallback ? "Completing sign-in" : "Checking your session"}>
+        {bootstrapTimedOut && !isAuthCallback ? (
+          <div className="mt-4 rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+            <p>We&apos;re still checking your session. This is taking longer than usual.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setBootstrapAttempt((attempt) => attempt + 1)
+                void refresh()
+              }}
+              className="mt-3 inline-flex h-10 items-center justify-center rounded-full border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+      </LoginPageSkeleton>
     )
   }
 
   if (isLoggedIn && !didJustSignOut) {
-    return null
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto max-w-md px-4 py-8 sm:py-12" aria-busy="true">
+          <div className={AUTH_PANEL_CLASS}>
+            <div className={AUTH_PANEL_HEADER_CLASS}>
+              <h2 className="font-[family-name:var(--font-poppins)] text-xl font-bold">Welcome Back</h2>
+              <p className="mt-1 text-sm text-white/75">Your staff session is active</p>
+            </div>
+            <div className={AUTH_PANEL_BODY_CLASS}>
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 px-4 py-3"
+              >
+                <LoadingSpinner />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Already signed in; opening your portal…
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This page will close automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLoading) {
+      return
+    }
     setError("")
     setIsCodeStep(false)
     setIsLoading(true)
@@ -114,6 +177,9 @@ export function LoginPageClient({ previewPasswordLoginEnabled = false }: LoginPa
 
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isVerifying) {
+      return
+    }
     setError("")
     setIsVerifying(true)
 
@@ -122,7 +188,6 @@ export function LoginPageClient({ previewPasswordLoginEnabled = false }: LoginPa
       window.location.replace(safeStaffRedirectPath(requestedRedirectUrl, staff.role))
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to verify the sign-in code.")
-    } finally {
       setIsVerifying(false)
     }
   }
@@ -165,9 +230,14 @@ export function LoginPageClient({ previewPasswordLoginEnabled = false }: LoginPa
                   />
                 </div>
 
-                <button type="submit" disabled={isLoading} className={AUTH_PRIMARY_BUTTON_CLASS}>
-                  {isLoading ? "Sending code..." : "Send Code"}
-                </button>
+                <ButtonLoading
+                  type="submit"
+                  busy={isLoading}
+                  loadingLabel="Sending code..."
+                  className={AUTH_PRIMARY_BUTTON_CLASS}
+                >
+                  Send Code
+                </ButtonLoading>
               </form>
             )}
 
@@ -198,13 +268,15 @@ export function LoginPageClient({ previewPasswordLoginEnabled = false }: LoginPa
                   />
                 </div>
 
-                <button
+                <ButtonLoading
                   type="submit"
-                  disabled={isVerifying || verificationCode.length < MIN_EMAIL_OTP_LENGTH}
+                  busy={isVerifying}
+                  loadingLabel="Verifying..."
+                  disabled={verificationCode.length < MIN_EMAIL_OTP_LENGTH}
                   className={AUTH_PRIMARY_BUTTON_CLASS}
                 >
-                  {isVerifying ? "Verifying..." : "Verify Code"}
-                </button>
+                  Verify Code
+                </ButtonLoading>
               </form>
             )}
 

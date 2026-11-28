@@ -1,10 +1,12 @@
 "use client"
 
-import type { CSSProperties } from "react"
+import type { CSSProperties, MouseEvent } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { LogIn, LogOut } from "lucide-react"
+import { RouteProgressBar } from "@/components/route-progress-bar"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { useNavigationFeedback } from "@/components/navigation-feedback-provider"
 import { useAuth } from "@/lib/auth-context"
 import { currentProgramProfile } from "@/lib/current-program"
 
@@ -21,9 +23,21 @@ const headerThemeVars = {
   "--header-focus-ring": "#701a1a",
 } as CSSProperties
 
+function isOrdinaryNavigationClick(event: MouseEvent<HTMLAnchorElement>) {
+  return (
+    !event.defaultPrevented &&
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.shiftKey
+  )
+}
+
 export function CourseHeader() {
   const { isLoggedIn, logout, isAdmin, isPreacher, isAssistant, isVolunteer, username, role, isHydrated } =
     useAuth()
+  const { startNavigation } = useNavigationFeedback()
   const { branding } = currentProgramProfile
 
   const isStaffMember = isAdmin || isPreacher || isAssistant
@@ -62,6 +76,11 @@ export function CourseHeader() {
                 </span>
                 <Link
                   href={portalHref}
+                  onClick={(event) => {
+                    if (isOrdinaryNavigationClick(event)) {
+                      startNavigation(portalHref)
+                    }
+                  }}
                   className="inline-flex h-10 items-center rounded-full bg-[var(--header-login-bg)] px-4 text-xs font-semibold whitespace-nowrap text-[var(--header-login-text)] shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-login-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] sm:text-sm"
                 >
                   Portal
@@ -79,6 +98,11 @@ export function CourseHeader() {
             ) : (
               <Link
                 href="/login"
+                onClick={(event) => {
+                  if (isOrdinaryNavigationClick(event)) {
+                    startNavigation("/login")
+                  }
+                }}
                 className="inline-flex h-10 items-center gap-2 rounded-full bg-[var(--header-login-bg)] px-3 text-xs font-semibold whitespace-nowrap text-[var(--header-login-text)] shadow-sm shadow-black/15 transition-[background-color,transform] hover:-translate-y-0.5 hover:bg-[var(--header-login-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--header-focus-ring)] min-[360px]:px-4 sm:text-sm"
               >
                 <LogIn className="h-4 w-4" aria-hidden="true" />
@@ -87,6 +111,7 @@ export function CourseHeader() {
             ))}
         </div>
       </div>
+      <RouteProgressBar />
     </header>
   )
 }

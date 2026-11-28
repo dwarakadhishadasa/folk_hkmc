@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
-import { CourseHeader } from "@/components/folk-home/course-header"
 import { FolkHome } from "@/components/folk-home/folk-home"
-import { listLocations } from "@/lib/supabase/data"
+
+import { loadHomeLocations } from "./staff"
 
 // The course venues are the programme's location rows, so the page reads them
 // per request rather than baking the list into the build.
@@ -39,18 +39,11 @@ export const metadata: Metadata = {
 }
 
 export default async function Home() {
-  const locations = await listLocations()
+  const locations = await loadHomeLocations()
   const attendAreas = locations
     .filter((location) => location.status !== "Inactive")
     .map((location) => location.name)
     .sort((left, right) => left.localeCompare(right))
 
-  return (
-    <>
-      <CourseHeader />
-      <main>
-        <FolkHome attendAreas={attendAreas} />
-      </main>
-    </>
-  )
+  return <FolkHome attendAreas={attendAreas} />
 }

@@ -33,7 +33,7 @@ Some active UI is implemented directly in pages rather than reusable components:
 
 | File | UI |
 | --- | --- |
-| `apps/folk/app/page.tsx` | FOLK landing page hero, topic cards, testimonials, footer |
+| `apps/folk/app/(home)/page.tsx` | FOLK landing page hero, topic cards, testimonials, footer |
 | `apps/gita-life/app/page.tsx` | Gita Life landing page and program-specific branding |
 | `apps/*/app/register/page.tsx` | Active public registration form and session-backed registration logic |
 | `apps/*/app/login/login-page-client.tsx` | Email OTP login and verification form |
