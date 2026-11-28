@@ -16,7 +16,7 @@ export default async function HomeLayout({ children }: { children: ReactNode }) 
 
   return (
     <HomeAuthShell staff={staff}>
-      <CourseHeader />
+      <CourseHeader initialStaff={staff} />
       <main>{children}</main>
     </HomeAuthShell>
   )
